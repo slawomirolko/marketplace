@@ -21,7 +21,14 @@
     },
     {
       "name": "olko-install-skill",
-      "category": "any",
+      "category": "marketplace",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-adapt-to-marketplace",
+      "category": "marketplace",
       "files": [
         "SKILL.md"
       ]
