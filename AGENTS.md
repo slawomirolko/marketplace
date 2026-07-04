@@ -1,6 +1,6 @@
 # Marketplace
 
-Catalog of opencode skills served via `registry.json`.
+Catalog of opencode skills, optimized for opencode, served via `registry.json`.
 
 ## Skill naming convention
 
@@ -8,7 +8,7 @@ See [`docs/naming.md`](docs/naming.md).
 
 ## Registry format
 
-`registry.json` follows the opencode Index shape (`{ skills: [{ name, files, version? }] }`) extended with a `category` field matching the `skills/<category>/` folder. Only list skills whose `SKILL.md` has valid frontmatter (`name` + `description`); empty stubs are excluded.
+`registry.json` extends the opencode Index shape (`{ skills: [{ name, files, version? }] }`) with a `category` field matching the `skills/<category>/` folder. Only list skills whose `SKILL.md` has valid frontmatter (`name` + `description`); exclude empty stubs.
 
 ## Serving
 
