@@ -124,11 +124,11 @@ For each new slice found across all changed files:
 
 ### Step 3 — Find affected test projects & Step 4 — Run tests
 
-Both steps are handled by the `smart-test` skill. Load it and provide the list of files changed in this session. The `smart-test` skill maps changed files to test projects, runs unit tests, stops conflicting services, runs integration tests, restarts services, and handles failures.
+Both steps are handled by the `olko-test` skill. Load it and provide the list of files changed in this session. The `olko-test` skill maps changed files to test projects, runs unit tests, stops conflicting services, runs integration tests, restarts services, and handles failures.
 
-Do NOT run `dotnet test` or `uv run pytest` directly in this skill. Always delegate to `smart-test`.
+Do NOT run `dotnet test` or `uv run pytest` directly in this skill. Always delegate to `olko-test`.
 
-If `smart-test` reports failures and user chooses "Skip and continue" or "Abort", follow that choice.
+If `olko-test` reports failures and user chooses "Skip and continue" or "Abort", follow that choice.
 
 ### Step 4 — Summarize changes
 Run `git diff HEAD` to see all changes. Produce a short summary (2–4 bullet points) of what changed and why. Keep it focused on intent, not file-by-file detail.
