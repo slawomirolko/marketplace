@@ -20,6 +20,27 @@
       ]
     },
     {
+      "name": "olko-commit-style",
+      "category": "any",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-commit-docs",
+      "category": "ai",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-commit-docker",
+      "category": "any",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
       "name": "olko-install-skill",
       "category": "marketplace",
       "files": [

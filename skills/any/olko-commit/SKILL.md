@@ -1,139 +1,99 @@
 ---
 name: olko-commit
-description: Verify coding style compliance, run affected tests, summarize changes, and commit + push. Off main, creates a scope-named branch + PR. With --force, commits directly to main.
+description: "Orchestrate the commit workflow: delegate style check, docs staleness, tests, and docker rebuild to sub-skills, then draft a conventional commit message, resolve branch policy, commit, push, and open/merge a PR. Off main, creates a scope-named branch + PR. With --force, commits directly to main. Triggers: 'commit', 'commit this', 'wrap up', 'summarize changes'."
 ---
 
+# Olko Commit
+
 ## What I do
-- Check changed files for compliance with project coding styles and architecture rules
-- Determine which test projects are affected by the changes and run only those tests
-- Handle test failures by presenting the reason and asking the user how to proceed
-- Summarize changes and draft a commit message
-- Commit and push to remote
-- **Branch policy:**
-  - Currently on `main`/`master` AND **no** `--force` flag → create a new branch named `<type>/<scope>-<short-hash-or-date>` from the current commit, commit there, push, and open a PR against `main`
-  - Currently on a non-main branch → commit and push to that branch (PR optional, see Step 7)
-  - `--force` flag explicitly passed → commit and push directly to the current `main`/`master` (legacy behavior)
+- Track files changed during the session
+- Delegate style compliance to `olko-commit-style`
+- Delegate AGENTS.md staleness/coverage to `olko-commit-docs`
+- Delegate test execution to `olko-test`
+- Delegate docker rebuild to `olko-commit-docker`
+- Draft a conventional commit message
+- Resolve branch policy, commit, push, and open/merge a PR
 
 ## When to use me
-**Always use this skill when the user says "commit" or any variant** (e.g. "commit this", "let's commit", "time to commit", "wrap up", "summarize changes", "run tests before commit"). Also use it when the user asks to finish a session and push changes.
+**Always use this skill when the user says "commit" or any variant** (e.g. "commit this", "let's commit", "time to commit", "wrap up", "summarize changes", "run tests before commit"). Also when the user asks to finish a session and push changes.
 
-### Flag detection
-- Inspect the user's message for `--force` (case-insensitive). If present, set `SMART_COMMIT_FORCE=true` for this run and follow the legacy direct-to-main path.
-- Any other token (e.g. `--scope=foo`, a free-form subject override) is recorded but does **not** enable force mode.
-- If the user is ambiguous about whether they want a PR or a direct push, default to the **PR path** (no force) and confirm before committing.
+## Dependencies (uses)
 
-### Empty session guard
-- If the session-tracked change list (Step 1) is empty: tell the user "No files changed in this session" and stop. Do NOT create a branch, do NOT open a PR, do NOT push.
+This skill orchestrates sub-skills. Declare them in `uses` in the project adapter (`.agents/skills/olko-commit/project.md`):
+
+```yaml
+uses:
+  - olko-commit-style
+  - olko-commit-docs
+  - olko-test
+  - olko-commit-docker
+```
+
+Each sub-skill is optional. If a sub-skill is **not** declared in `uses`, skip its phase and continue. If declared, delegate to it and follow its result. See [Explicit Skill Reuse](../../docs/explicit-skill-reuse.md).
+
+## Configuration keys
+
+Read from `.agents/skill-config.md`:
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `packageManager` | — | Package manager (e.g. NuGet, uv). Used for info only. |
+| `deploymentTarget` | — | Deployment target. If not "Docker", skip docker rebuild. |
+
+Layer control flags (`conventionDiscovery`, `projectAdapter`, `readArchitectureDocs`, `readTestingDocs`) are documented in the [Layered Skill Adaptation Pattern](../../docs/layered-skill-adaptation.md).
+
+## Flag & argument parsing
+
+Parse `$ARGUMENTS` for flags:
+
+| Token | Effect |
+|-------|--------|
+| `--force` | Commit directly to `main`/`master` (legacy path). Case-insensitive. |
+| `--scope=<foo>` | Override the commit scope. Does NOT enable force mode. |
+| `<free-form subject>` | Override the commit subject. Does NOT enable force mode. |
+
+If the user is ambiguous about PR vs. direct push, default to the **PR path** (no force) and confirm before committing.
 
 ## Prerequisites
-- The current directory must be a git worktree at the repo root (where `.csproj` files and `agents/` directory live)
-- `dotnet` CLI must be available for .NET tests and style checks
-- `uv` must be available for Python style checks and tests
-- `Shouldly` is used for .NET test assertions; NSubstitute for mocks
+- The current directory must be a git worktree at the repo root
+- `git` CLI must be available
+- `gh` CLI must be available for PR creation (fallback: print manual compare URL)
 
 ## Workflow — follow these steps in order
 
 ### Step 1 — Discover changed files (session-only)
-**Throughout the entire session**, track every file you create (Write tool) or modify (Edit tool) by maintaining a running list. This is the ONLY source of truth for "what changed." At the end of the session, use that tracked list — NOT `git diff` or `git status` — to determine which files to process.
 
-- ❌ NEVER use `git diff --name-only HEAD`, `git status`, or `git diff --cached` to discover changes
-- ✅ Only process files that YOU wrote or edited during this session
-- If the tracked list is empty, tell the user "No files changed in this session" and stop
+**Throughout the entire session**, track every file you create (Write tool) or modify (Edit tool) by maintaining a running list. This is the ONLY source of truth for "what changed."
 
-### Step 2 — Coding style compliance check
-For each changed file, check it against the project's coding rules:
+- NEVER use `git diff --name-only HEAD`, `git status`, or `git diff --cached` to discover changes
+- Only process files that YOU wrote or edited during this session
+- If the tracked list is empty: tell the user "No files changed in this session" and stop. Do NOT create a branch, open a PR, or push.
 
-**For .NET files** (`.cs`, `.csproj`):
-- Read and apply rules from `dotnet/AGENTS.md` and `dotnet/CODING_STYLE.md`
-- Key checks:
-  - No primary constructors for DI — explicit constructors required
-  - No method names containing `And`
-  - No `System.Text.Json.Serialization` attributes in Application layer models
-  - No hardcoded connection strings
-  - Settings types must be `sealed record` with explicit `{ get; init; }` properties
-  - No default values in `settings.cs` records
-  - Models use static factory methods returning `ErrorOr<T>`, not public setters/constructors
-  - IDs must be `Guid` via `Guid.CreateVersion7()`
-  - One public type per file
-  - Dependency direction: API → Application, API → Infrastructure; never Application → API or Application → Infrastructure
-  - Repositories operate on single tables; cross-table logic in Unit of Work or application service
-  - If running as part of a style fix step, run `dotnet format` on the changed projects
+### Step 2 — Style compliance (delegate)
 
-**For Python files** (`.py` under `agents/`):
-- Read and apply rules from `agents/AGENTS.md` and `agents/CODING_STYLE.md`
-- Key checks:
-  - Use `pathlib.Path` not `os.path`
-  - Explicit type hints on public functions
-  - Use `uv run --directory agents style_python` for Ruff formatting
-  - No hand-edited gRPC stubs
-  - Functions must have single responsibility
-  - Don't mutate shared input dicts unless documented
+If `olko-commit-style` is declared in `uses`, delegate to it: pass the list of changed files. The sub-skill reads style rules from the project's docs, runs the prescribed tools, and reports violations. Follow its result.
 
-**If any violation is found**, present it to the user clearly with the file path, line, rule broken, and ask: "Should I fix this before continuing, or skip?"
+If `olko-commit-style` is **not** in `uses`, skip style checking and continue.
 
-### Step 2.5 — Detect AGENTS.md staleness (existing docs) & cover new slices
+### Step 2.5 — Docs staleness (delegate)
 
-Follow `ai-optimization.md`: only flag/add non-inferable content. Skip architectural overviews, flow diagrams, property tables, dependency lists, file indexes, and test locations.
+If `olko-commit-docs` is declared in `uses`, delegate to it: pass the list of changed files. The sub-skill detects stale `AGENTS.md` sections and creates coverage for new feature slices. Follow its result.
 
-This step has two phases. Run **Phase A first**, then **Phase B**.
+If `olko-commit-docs` is **not** in `uses`, skip docs checking and continue.
 
-#### Phase A — Existing AGENTS.md staleness detection
+### Step 3 — Run tests (delegate)
 
-For each changed file, walk up its directory tree until you find the nearest `AGENTS.md`. If one exists, read it and check whether the code change invalidates any of its documented claims.
+If `olko-test` is declared in `uses`, delegate to it: pass the list of files changed in this session. The sub-skill maps changed files to test projects, runs tests, and handles failures.
 
-**How to detect staleness — only check these categories:**
-- **Non-inferable naming quirks** — interface name differs from entity, proto field mappings, method renames
-- **Custom tooling commands** — build, migration, format, lint invocation
-- **Optional service wiring** — nullable DI dependencies
-- **Configuration** — documented defaults vs. actual defaults
+If `olko-test` reports failures and the user chooses "Skip and continue" or "Abort", follow that choice.
 
-**Skip**: Behavior flows, architectural overviews, dependency lists, interface signatures, test file tables, location/folder structure — all inferable from code.
-
-**Do NOT flag stale for trivial refactors** (renaming a local variable, extracting a private helper that doesn't change observable behavior, formatting-only changes). Only flag when configuration, naming quirks, or tooling commands materially differ from what the AGENTS.md states.
-
-**If staleness is detected**, present findings to the user clearly — AGENTS.md path, stale section, what the document says vs. what the code now does. Then ask:
-
-> "Behavior documented in `X/AGENTS.md` (section: Y) is stale due to changes in `Z.cs`.
-> 
-> - **Update AGENTS.md** to match the new code?
-> - **Revert the code change** to keep documented behavior?
-
-If the user chooses **Update**, rewrite the affected AGENTS.md sections to match the new code. Keep the same section structure and formatting style as the existing AGENTS.md.
-
-If the user chooses **Revert**, undo the code change in that file and re-check.
-
-If no staleness is found: "No existing AGENTS.md documented behavior affected by these changes."
-
-#### Phase B — AGENTS.md coverage for new slices
-
-For each changed file, identify if it belongs to a **new** feature slice (a directory 2+ levels deep from a `.csproj` project root containing implementation code, e.g. `PricePredictor.Master/Workflows/Cleaner/`). A slice is "new" when no `AGENTS.md` exists in that directory.
-
-For each new slice found across all changed files:
-
-1. **Check sibling directories in the same parent** — if other slices under the same parent already have `AGENTS.md` files, use one as a template for the new slice. Otherwise use `PricePredictor.Master/Workflows/Cleaner/AGENTS.md` as the reference.
-2. **Create the slice-level `AGENTS.md`** — follow `ai-optimization.md`. Include only:
-   - Non-inferable naming quirks (interface/entity mismatches, proto field mappings)
-   - Cross-boundary validation rules (logic spanning multiple files)
-   - Custom tooling commands (build, migration, format invocation)
-   - Optional/nullable service wiring
-   - Configuration keys and their defaults
-   Do NOT include: Purpose, Behavior/Flow, Location, Dependencies, Interface, Testing sections — all inferable from code.
-3. **Check for a project-level `AGENTS.md`** — e.g. `PricePredictor.FinanceTrackerApp/AGENTS.md`. If it exists, update it only if non-inferable quirks need documenting. Do not create project-level AGENTS.md files for structure/folder overviews.
-4. **If the new slice added contracts** — check `PricePredictor.Contracts/AGENTS.md` and update its listing only for non-inferable mappings.
-5. **Present all proposed AGENTS.md changes** to the user and ask: "Create/update these AGENTS.md files? (y/n)"
-
-### Step 3 — Find affected test projects & Step 4 — Run tests
-
-Both steps are handled by the `olko-test` skill. Load it and provide the list of files changed in this session. The `olko-test` skill maps changed files to test projects, runs unit tests, stops conflicting services, runs integration tests, restarts services, and handles failures.
-
-Do NOT run `dotnet test` or `uv run pytest` directly in this skill. Always delegate to `olko-test`.
-
-If `olko-test` reports failures and user chooses "Skip and continue" or "Abort", follow that choice.
+If `olko-test` is **not** in `uses`, skip tests and continue.
 
 ### Step 4 — Summarize changes
+
 Run `git diff HEAD` to see all changes. Produce a short summary (2–4 bullet points) of what changed and why. Keep it focused on intent, not file-by-file detail.
 
-Then draft a commit message using the **caveman-commit** style:
+Then draft a commit message using the conventional-commit style:
 - **Subject**: `<type>(<scope>): <imperative summary>` — `<scope>` optional, ≤50 chars, hard cap 72
 - Types: `feat`, `fix`, `refactor`, `perf`, `docs`, `test`, `chore`, `build`, `ci`, `style`, `revert`
 - Imperative mood: "add", "fix", "remove"
@@ -143,7 +103,9 @@ Then draft a commit message using the **caveman-commit** style:
 - Always include body for: breaking changes, security fixes, data migrations, reverts
 
 ### Step 5 — Ask to commit
-Present the summary and commit message. If any AGENTS.md files were created or modified in Step 2.5, list them alongside a brief "why" (e.g. "New slice X added — documenting non-inferable tooling commands and cross-boundary validation"). Then ask: "Commit with this message? (y/n)"
+
+Present the summary and commit message. If any `AGENTS.md` files were created or modified in Step 2.5, list them with a brief "why." Then ask: "Commit with this message? (y/n)"
+
 If no, let the user edit the message before retrying.
 
 ### Step 6 — Commit
@@ -158,11 +120,11 @@ git rev-parse --abbrev-ref HEAD
 
 Capture `<current-branch>`. Then:
 
-- If `SMART_COMMIT_FORCE=true` (see **Flag detection** above):
+- If `--force` was set:
   - Stay on the current branch (must be `main`/`master` if forced).
   - Proceed straight to staging: `git add -A && git commit -m "<message>"`.
 - Else if `<current-branch>` is `main` or `master`:
-  - **Multiple smart-commits in one session**: if a PR branch was already created earlier in THIS session (track via a session flag `SMART_COMMIT_PR_BRANCH=<name>`), ask the user before creating another branch:
+  - **Multiple commits in one session**: if a PR branch was already created earlier in THIS session (track via a session flag `SMART_COMMIT_PR_BRANCH=<name>`), ask the user before creating another branch:
     > "A PR branch `<existing>` already exists from an earlier commit this session. Branch off `main` (fresh) or off `<existing>` (stacked)?"
     - **Fresh from main**: `git checkout main && git pull --ff-only origin main` before creating the new branch (only if working tree clean).
     - **Stacked**: `git checkout <existing>` and create the new branch from there.
@@ -189,7 +151,7 @@ Capture `<current-branch>`. Then:
 
 If `git commit` fails (e.g. hooks reject, nothing staged), report the failure and do not retry blindly. Fix the underlying issue and run Step 6 again with a fresh commit.
 
-**Note on tests after branch switch**: tests were already run green in Step 3/4 on the previous HEAD. Switching to a freshly created branch does not change file contents (same working tree, just a new ref label), so tests are NOT re-run. Green-to-green.
+**Note on tests after branch switch**: tests were already run green in Step 3 on the previous HEAD. Switching to a freshly created branch does not change file contents (same working tree, just a new ref label), so tests are NOT re-run. Green-to-green.
 
 #### 6b — Confirm branch action with the user
 
@@ -200,37 +162,11 @@ Before pushing (Step 7), state the resolved branch policy in plain text:
 
 If the user objects to the chosen path, abort the commit (reset staged files with `git reset` on the new branch only if a branch was just created) and re-resolve.
 
-### Step 6.5 — Rebuild docker compose services
-If any changed files map to a docker-compose-hosted service, rebuild and restart that service to reflect the committed changes.
+### Step 6.5 — Docker rebuild (delegate)
 
-**Mapping: changed project → compose service name:**
+If `olko-commit-docker` is declared in `uses` **and** `deploymentTarget` in config is "Docker", delegate to it: pass the list of changed files. The sub-skill reads the service mapping from the project adapter, discovers the compose file, and rebuilds affected services. Follow its result.
 
-| Changed path | Compose service |
-|---|---|
-| `PricePredictor.Api/**` | `pricepredictor.api` |
-| `PricePredictor.Master/**` | `pricepredictor.master` |
-| `PricePredictor.FinanceTrackerApp/**` | `pricepredictor.finance_tracker` |
-| `agents/**` (Python) | `pricepredictor.army` |
-| `PricePredictor.Contracts/**` | All app services (shared contracts) |
-| `PricePredictor.Application/**` | All app services (shared logic) |
-| `PricePredictor.Infrastructure/**` | All app services (shared infra) |
-| `PricePredictor.Persistence/**` | All app services (shared data) |
-| `PricePredictor.ArticlesReaderApp/**` | — (Rider-only, no compose service) |
-| `PricePredictor.ArticlesFinderApp/**` | — (Rider-only, no compose service) |
-
-**Services to NEVER rebuild** (data loss risk or infrastructure):
-- `postgres`, `rabbitmq`, `ollama`, `otel-collector`, `tempo`, `loki`, `grafana`
-
-**Workflow:**
-1. Determine the set of compose service names affected by changed files using the table above
-2. Deduplicate the list
-3. If the list is empty, skip: "No docker compose services affected by these changes"
-4. Present the list to the user: "Rebuild compose services: `pricepredictor.api`, `pricepredictor.master` — proceed? (y/n)"
-5. If yes, for each service:
-   ```bash
-   docker compose build <service> && docker compose up -d <service>
-   ```
-6. If any build or restart fails, report the failure and ask whether to continue or abort
+If `olko-commit-docker` is **not** in `uses`, or `deploymentTarget` is not "Docker", skip docker rebuild and continue.
 
 ### Step 7 — Push & open PR (if applicable)
 
@@ -239,7 +175,7 @@ After committing, re-check the current branch:
 git rev-parse --abbrev-ref HEAD
 ```
 
-- **If `SMART_COMMIT_FORCE=true`** and current branch is `main`/`master`:
+- **If `--force` was set** and current branch is `main`/`master`:
   - Push directly: `git push origin <branch>`.
   - "Committed and pushed directly to `<branch>` (force mode)."
   - Done.
@@ -317,14 +253,10 @@ After a successful squash merge (Options 1 or 2):
 3. Clear `SMART_COMMIT_PR_BRANCH` session flag.
 4. "Merged PR #<num> into `main`. Local main updated. Branch `<branch-name>` deleted (local + remote). HEAD is now on `main`."
 
-**Worktree note**: this skill does NOT manage git worktrees. Creating/removing worktrees is handled by `smart-worktree-create` / `smart-worktree-merge`. If the user is working inside a non-root worktree, the branch/PR/merge flow above still works — only the local branch deletion happens inside that worktree's context.
-
-## Important project rules to remember during this workflow
-- .NET test assertions use **Shouldly** (e.g., `result.ShouldBe(expected)`)
-- .NET unit tests mock with **NSubstitute**
-- Integration tests use real `WebApplicationFactory` wiring
-- Never add skip logic to tests
-- Never create markdown files unless explicitly requested
+## Rules
+- Follow the resolution order and precedence: Configuration > Project Adapter > AGENTS.md > Marketplace Skill
+- Never hardcode project-specific behavior — put it in config or the project adapter
+- Sub-skills are loaded only when declared in `uses` in the project adapter; never auto-load
 - Never commit `.env` files or secrets
 - Remove temp `.txt`/`.log` files before finishing
-- Prefer feature slices and sub-slices in folder structure
+- This skill is itself adaptable: it reads `.agents/skill-config.md` and supports a project adapter at `.agents/skills/olko-commit/project.md`
