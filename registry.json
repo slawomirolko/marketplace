@@ -20,6 +20,13 @@
       ]
     },
     {
+      "name": "olko-install-skill",
+      "category": "any",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
       "name": "olko-test",
       "category": "testing",
       "files": [
