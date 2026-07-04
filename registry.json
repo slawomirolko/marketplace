@@ -60,6 +60,13 @@
       "files": [
         "SKILL.md"
       ]
+    },
+    {
+      "name": "olko-plan-editor",
+      "category": "any",
+      "files": [
+        "SKILL.md"
+      ]
     }
   ]
 }

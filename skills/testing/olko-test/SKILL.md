@@ -1,6 +1,6 @@
 ---
 name: olko-test
-description: Run affected or all tests for .NET, Python, and Android/Kotlin with smart scope detection, emulator management, service management, and failure handling. Use when asked to run tests, after implementation, or when called from plan-editor/olko-commit skills.
+description: Run affected or all tests for .NET, Python, and Android/Kotlin with smart scope detection, emulator management, service management, and failure handling. Use when asked to run tests, after implementation, or when called from olko-plan-editor/olko-commit skills.
 user_invocable: true
 ---
 
@@ -16,14 +16,14 @@ user_invocable: true
 - Handle test failures by asking user how to proceed
 
 ## When to use me
-User says "run tests", "test this", "/olko-test", or plan-editor/olko-commit delegates test execution to me.
+User says "run tests", "test this", "/olko-test", or olko-plan-editor/olko-commit delegates test execution to me.
 
 ## Scope detection
 
 Determine scope in this priority order:
 
 1. **`-all` / `-a` / "for all" / "all tests"** — run every test in the entire repo (architecture tests + all .NET test projects + all Python tests + all Kotlin tests: JVM unit `./gradlew test` and instrumentation `./gradlew connectedCheck`, including Android emulator management per Step 3b)
-2. **Called from plan-editor skill** — read the plan file at the path plan-editor passes in (do not assume a fixed location). Extract the **Tests** section — both unit and integration test names and their file paths. These are the scope.
+2. **Called from olko-plan-editor skill** — read the plan file at the path olko-plan-editor passes in (do not assume a fixed location). Extract the **Tests** section — both unit and integration test names and their file paths. These are the scope.
 3. **Called from olko-commit skill** — scope is the files changed in this session (tracked by olko-commit). Map changed files to affected test projects using the discovery rules below.
 4. **Default (standalone invocation)** — use `git status` to find modified/new files, then map to affected test projects.
 
