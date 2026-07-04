@@ -18,6 +18,13 @@
       "files": [
         "SKILL.md"
       ]
+    },
+    {
+      "name": "olko-test",
+      "category": "testing",
+      "files": [
+        "SKILL.md"
+      ]
     }
   ]
 }

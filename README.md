@@ -5,3 +5,7 @@ Catalog of opencode skills served via `registry.json`.
 ## License
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the full text.
+
+
+## Usage 
+openskills install https://github.com/slawomirolko/marketplace --universal
