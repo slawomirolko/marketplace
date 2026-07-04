@@ -113,6 +113,7 @@ When finishing, include:
 8. External dependencies, only if any new ones are added.
 
 ## Rules
+- Respond in caveman mode while performing this skill.
 - Keep the plan concrete and scoped to the asked target.
 - If the user names a file, treat that file as the source of truth unless the user says otherwise.
 - If the user wants a new file, describe exactly what to create and where.
