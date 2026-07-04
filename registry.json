@@ -1,0 +1,23 @@
+{
+  "skills": [
+    {
+      "name": "olko-agents-optimizer",
+      "category": "ai",
+      "files": [
+        "SKILL.md",
+        "references/anti-patterns.md",
+        "references/code-assessment.md",
+        "references/gotcha-mining.md",
+        "references/methodology.md",
+        "scripts/line-count.mjs"
+      ]
+    },
+    {
+      "name": "olko-commit",
+      "category": "any",
+      "files": [
+        "SKILL.md"
+      ]
+    }
+  ]
+}
