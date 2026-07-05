@@ -42,6 +42,16 @@ Read from `.agents/skill-config.md`:
 
 Layer control flags (`conventionDiscovery`, `projectAdapter`, `readArchitectureDocs`, `readTestingDocs`) are documented in the [Layered Skill Adaptation Pattern](../../docs/layered-skill-adaptation.md).
 
+## Resolution order
+
+1. Load `.agents/skill-config.md` (apply marketplace defaults if absent).
+2. If `conventionDiscovery == true`, inspect the repo to infer conventions not stated in config. Skip when `false` or absent.
+3. Load `AGENTS.md` in scope.
+4. If `projectAdapter == true`, load `.agents/skills/olko-commit/project.md`. Skip when `false` or the file is absent.
+5. Execute this skill with the accumulated context.
+
+Precedence: Configuration > Project Adapter > AGENTS.md > Marketplace Skill.
+
 ## Flag & argument parsing
 
 Parse `$ARGUMENTS` for flags:
@@ -124,21 +134,21 @@ Capture `<current-branch>`. Then:
   - Stay on the current branch (must be `main`/`master` if forced).
   - Proceed straight to staging: `git add -A && git commit -m "<message>"`.
 - Else if `<current-branch>` is `main` or `master`:
-  - **Multiple commits in one session**: if a PR branch was already created earlier in THIS session (track via a session flag `SMART_COMMIT_PR_BRANCH=<name>`), ask the user before creating another branch:
+  - **Multiple commits in one session**: if a PR branch was already created earlier in THIS session (track via a session flag `OLKO_COMMIT_PR_BRANCH=<name>`), ask the user before creating another branch:
     > "A PR branch `<existing>` already exists from an earlier commit this session. Branch off `main` (fresh) or off `<existing>` (stacked)?"
     - **Fresh from main**: `git checkout main && git pull --ff-only origin main` before creating the new branch (only if working tree clean).
     - **Stacked**: `git checkout <existing>` and create the new branch from there.
   - Derive a branch name from the commit's `<type>` and `<scope>` (Step 4) plus a UTC timestamp:
     - `<type>/<scope>-<YYYYMMDD-HHMM>` (UTC, compact). Example: `feat/articles-reader-20260627-1415`.
-    - Fallback if scope missing: `<type>/smart-<YYYYMMDD-HHMM>`.
-    - Fallback if type also missing/unrecognized: `chore/smart-<YYYYMMDD-HHMM>`.
+    - Fallback if scope missing: `<type>/commit-<YYYYMMDD-HHMM>`.
+    - Fallback if type also missing/unrecognized: `chore/commit-<YYYYMMDD-HHMM>`.
   - Sanitize: lowercase, `[^a-z0-9-]` → `-`, collapse repeats, trim leading/trailing `-`, max 60 chars.
   - **Uniqueness**: check `git ls-remote --heads origin <sanitized-name>` (and local `git rev-parse --verify refs/heads/<name>`). If the name exists, append `-2`, `-3`, … until a free name is found.
   - Create and switch:
     ```
     git checkout -b <branch-name>
     ```
-  - Record `SMART_COMMIT_PR_BRANCH=<branch-name>` for this session.
+  - Record `OLKO_COMMIT_PR_BRANCH=<branch-name>` for this session.
   - Stage and commit on the new branch:
     ```
     git add -A && git commit -m "<message>"
@@ -250,7 +260,7 @@ After a successful squash merge (Options 1 or 2):
    ```
    git branch -D <branch-name>
    ```
-3. Clear `SMART_COMMIT_PR_BRANCH` session flag.
+3. Clear `OLKO_COMMIT_PR_BRANCH` session flag.
 4. "Merged PR #<num> into `main`. Local main updated. Branch `<branch-name>` deleted (local + remote). HEAD is now on `main`."
 
 ## Rules
