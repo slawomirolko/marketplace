@@ -67,6 +67,13 @@
       "files": [
         "SKILL.md"
       ]
+    },
+    {
+      "name": "olko-investigate-existing",
+      "category": "any",
+      "files": [
+        "SKILL.md"
+      ]
     }
   ]
 }
