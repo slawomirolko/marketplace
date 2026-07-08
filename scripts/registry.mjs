@@ -139,8 +139,12 @@ function deriveCost(files) {
 }
 
 function shouldUseProgressiveLoading(entry, files) {
+  const hasSectionFiles = files.some((file) => progressiveSections.map((section) => `${section}.md`).includes(file));
+
+  // Honor an explicit progressive declaration only when the section files exist,
+  // so --fix self-heals stale loading blocks left behind after files are removed.
   if (entry.loading?.mode === "progressive") {
-    return true;
+    return hasSectionFiles;
   }
 
   const skillPath = path.join(skillsRoot, entry.category, entry.name, "SKILL.md");
@@ -148,13 +152,19 @@ function shouldUseProgressiveLoading(entry, files) {
     return false;
   }
 
-  const lineCount = fs.readFileSync(skillPath, "utf8").split(/\r?\n/).length;
-  return lineCount > largeSkillLineThreshold || files.some((file) => progressiveSections.map((section) => `${section}.md`).includes(file));
+  const content = fs.readFileSync(skillPath, "utf8");
+  // Vendored skills ship as-is and are not restructured — only use progressive
+  // loading when the section files already exist on disk.
+  if (parseFrontmatter(content, skillPath).origin === "vendored") {
+    return hasSectionFiles;
+  }
+  const lineCount = content.split(/\r?\n/).length;
+  return lineCount > largeSkillLineThreshold || hasSectionFiles;
 }
 
 function deriveLoading(entry, files) {
   if (!shouldUseProgressiveLoading(entry, files)) {
-    return entry.loading;
+    return undefined;
   }
 
   return {
@@ -220,10 +230,6 @@ function validateEntry(entry, seen) {
     }
   }
 
-  if (!entry.name?.startsWith("olko-")) {
-    errors.push(`${entry.name ?? "<missing>"}: name must start with olko-`);
-  }
-
   if (seen.has(entry.name)) {
     errors.push(`${entry.name}: duplicate registry entry`);
   }
@@ -246,6 +252,14 @@ function validateEntry(entry, seen) {
   }
   if (!frontmatter.description) {
     errors.push(`${entry.name}: SKILL.md frontmatter description is required`);
+  }
+
+  const isVendored = frontmatter.origin === "vendored";
+  if (!isVendored && !entry.name?.startsWith("olko-")) {
+    errors.push(`${entry.name}: name must start with olko- (set \`origin: vendored\` in SKILL.md frontmatter to keep an upstream name)`);
+  }
+  if (isVendored && entry.name?.startsWith("olko-")) {
+    errors.push(`${entry.name}: vendored skills keep upstream names — remove the olko- prefix or drop \`origin: vendored\``);
   }
 
   if (!entry.description) {
@@ -295,6 +309,7 @@ function normalizeRegistry(registry) {
       return {
         name: entry.name,
         category: entry.category,
+        ...Object.fromEntries([["origin", frontmatter.origin]].filter(([, value]) => value === "vendored")),
         version: entry.version ?? "1.0.0",
         description: entry.description ?? shortDescription(frontmatter.description),
         tags: entry.tags ?? deriveTags(entry),
@@ -354,7 +369,7 @@ function relatedCapabilities(capability, allCapabilities) {
 function buildCapabilityGraph(registry) {
   const skillsByCapability = new Map();
   for (const entry of registry.skills) {
-    for (const capability of entry.capabilities) {
+    for (const capability of entry.capabilities ?? []) {
       if (!skillsByCapability.has(capability)) {
         skillsByCapability.set(capability, []);
       }

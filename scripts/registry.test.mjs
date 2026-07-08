@@ -215,3 +215,69 @@ test("validation rejects SKILL.md frontmatter name mismatches", () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /SKILL\.md frontmatter name must match registry name/);
 });
+
+function makeVendoredRepo() {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-registry-"));
+  const skillDir = path.join(repo, "skills", "any", "caveman-demo");
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(skillDir, "SKILL.md"),
+    [
+      "---",
+      "name: caveman-demo",
+      "description: Vendored demo skill.",
+      "origin: vendored",
+      "---",
+      "",
+      "# Demo",
+      "",
+    ].join("\n"),
+  );
+  fs.writeFileSync(
+    path.join(repo, "registry.json"),
+    JSON.stringify(
+      {
+        skills: [{ name: "caveman-demo", category: "any", files: ["SKILL.md"] }],
+      },
+      null,
+      2,
+    ),
+  );
+  return repo;
+}
+
+test("vendored skills bypass the olko- prefix and carry origin", () => {
+  const repo = makeVendoredRepo();
+
+  const result = runRegistry(repo, ["--fix"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /registry ok: 1 skills/);
+
+  const registry = readJson(path.join(repo, "registry.json"));
+  assert.equal(registry.skills[0].origin, "vendored");
+  assert.equal(registry.skills[0].name, "caveman-demo");
+  assert.deepEqual(registry.skills[0].tags, ["any", "caveman", "demo"]);
+});
+
+test("authored skills without olko- prefix are rejected", () => {
+  const repo = makeVendoredRepo();
+  assert.equal(runRegistry(repo, ["--fix"]).status, 0);
+  fs.writeFileSync(
+    path.join(repo, "skills", "any", "caveman-demo", "SKILL.md"),
+    [
+      "---",
+      "name: caveman-demo",
+      "description: Vendored demo skill.",
+      "---",
+      "",
+      "# Demo",
+      "",
+    ].join("\n"),
+  );
+
+  const result = runRegistry(repo);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /caveman-demo: name must start with olko-/);
+});

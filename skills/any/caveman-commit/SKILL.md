@@ -5,6 +5,7 @@ description: >
   intent and reasoning. Conventional Commits format. Subject ≤50 chars, body only when "why"
   isn't obvious. This skill provides the commit message FORMAT used by smart-commit;
   it should NOT be called directly when the user says "commit" or "smart-commit".
+origin: vendored
 ---
 
 Write commit messages terse and exact. Conventional Commits format. No fluff. Why over what.

@@ -59,6 +59,159 @@
       ]
     },
     {
+      "name": "cavecrew",
+      "category": "any",
+      "origin": "vendored",
+      "version": "1.0.0",
+      "description": "Decision guide for delegating to caveman-style subagents. Tells the main thread WHEN to spawn `cavecrew-investigator` (locate code), `cavecrew-builder` (1-2 file edit), or `cavecrew-reviewer` (diff review) instead of doing the work inline or using vanilla `Explore`. Subagent output is caveman-compressed so the tool-result injected back into main context is ~60% smaller — main context lasts longer across long sessions. Trigger: \"delegate to subagent\", \"use cavecrew\", \"spawn investigator/builder/reviewer\", \"save context\", \"compressed agent output\".",
+      "tags": [
+        "any",
+        "cavecrew"
+      ],
+      "capabilities": [
+        "any",
+        "any.cavecrew"
+      ],
+      "cost": 2,
+      "files": [
+        "SKILL.md",
+        "README.md"
+      ]
+    },
+    {
+      "name": "caveman",
+      "category": "any",
+      "origin": "vendored",
+      "version": "1.0.0",
+      "description": "Ultra-compressed communication mode. Cuts token usage ~75% by speaking like caveman while keeping full technical accuracy. Supports intensity levels: lite, full (default), ultra, wenyan-lite, wenyan-full, wenyan-ultra. Use when user says \"caveman mode\", \"talk like caveman\", \"use caveman\", \"less tokens\", \"be brief\", or invokes /caveman. Also auto-triggers when token efficiency is requested.",
+      "tags": [
+        "any",
+        "caveman"
+      ],
+      "capabilities": [
+        "any",
+        "any.caveman"
+      ],
+      "cost": 2,
+      "files": [
+        "SKILL.md",
+        "README.md"
+      ]
+    },
+    {
+      "name": "caveman-commit",
+      "category": "any",
+      "origin": "vendored",
+      "version": "1.0.0",
+      "description": "Ultra-compressed commit message style guide. Cuts noise from commit messages while preserving intent and reasoning. Conventional Commits format. Subject ≤50 chars, body only when \"why\" isn't obvious. This skill provides the commit message FORMAT used by smart-commit; it should NOT be called directly when the user says \"commit\" or \"smart-commit\".",
+      "tags": [
+        "any",
+        "caveman",
+        "commit"
+      ],
+      "capabilities": [
+        "any",
+        "any.caveman.commit"
+      ],
+      "cost": 2,
+      "files": [
+        "SKILL.md",
+        "README.md"
+      ]
+    },
+    {
+      "name": "caveman-compress",
+      "category": "any",
+      "origin": "vendored",
+      "version": "1.0.0",
+      "description": "Compress natural language memory files (CLAUDE.md, todos, preferences) into caveman format to save input tokens. Preserves all technical substance, code, URLs, and structure. Compressed version overwrites the original file. Human-readable backup saved as FILE.original.md. Trigger: /caveman-compress FILEPATH or \"compress memory file",
+      "tags": [
+        "any",
+        "caveman",
+        "compress"
+      ],
+      "capabilities": [
+        "any",
+        "any.caveman.compress"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "README.md",
+        "scripts/__init__.py",
+        "scripts/__main__.py",
+        "scripts/benchmark.py",
+        "scripts/cli.py",
+        "scripts/compress.py",
+        "scripts/detect.py",
+        "scripts/validate.py",
+        "SECURITY.md"
+      ]
+    },
+    {
+      "name": "caveman-help",
+      "category": "any",
+      "origin": "vendored",
+      "version": "1.0.0",
+      "description": "Quick-reference card for all caveman modes, skills, and commands. One-shot display, not a persistent mode. Trigger: /caveman-help, \"caveman help\", \"what caveman commands\", \"how do I use caveman\".",
+      "tags": [
+        "any",
+        "caveman",
+        "help"
+      ],
+      "capabilities": [
+        "any",
+        "any.caveman.help"
+      ],
+      "cost": 2,
+      "files": [
+        "SKILL.md",
+        "README.md"
+      ]
+    },
+    {
+      "name": "caveman-review",
+      "category": "any",
+      "origin": "vendored",
+      "version": "1.0.0",
+      "description": "Ultra-compressed code review comments. Cuts noise from PR feedback while preserving the actionable signal. Each comment is one line: location, problem, fix. Use when user says \"review this PR\", \"code review\", \"review the diff\", \"/review\", or invokes /caveman-review. Auto-triggers when reviewing pull requests.",
+      "tags": [
+        "any",
+        "caveman",
+        "review"
+      ],
+      "capabilities": [
+        "any",
+        "any.caveman.review"
+      ],
+      "cost": 2,
+      "files": [
+        "SKILL.md",
+        "README.md"
+      ]
+    },
+    {
+      "name": "caveman-stats",
+      "category": "any",
+      "origin": "vendored",
+      "version": "1.0.0",
+      "description": "Show real token usage and estimated savings for the current session. Reads directly from the Claude Code session log — no AI estimation. Triggers on /caveman-stats. Output is injected by the mode-tracker hook; the model itself does not compute the numbers.",
+      "tags": [
+        "any",
+        "caveman",
+        "stats"
+      ],
+      "capabilities": [
+        "any",
+        "any.caveman.stats"
+      ],
+      "cost": 2,
+      "files": [
+        "SKILL.md",
+        "README.md"
+      ]
+    },
+    {
       "name": "olko-commit",
       "category": "any",
       "version": "1.0.0",
@@ -207,6 +360,26 @@
           "edge-cases"
         ]
       }
+    },
+    {
+      "name": "smart-summary",
+      "category": "any",
+      "origin": "vendored",
+      "version": "1.0.0",
+      "description": "End-of-session summary — track session-affected files, list investigated docs, summarize changes and problems, outline solved/pending issues, future steps, improvement suggestions, and helpful links",
+      "tags": [
+        "any",
+        "smart",
+        "summary"
+      ],
+      "capabilities": [
+        "any",
+        "any.smart.summary"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
     },
     {
       "name": "olko-adapt-to-marketplace",
