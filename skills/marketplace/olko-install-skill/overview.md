@@ -9,6 +9,7 @@
 - Ask the user what to customize and what to keep (works on fresh installs **and** already-adapted skills)
 - Write/update `.agents/skill-config.md` and `.agents/skills/<skill-name>/project.md` following the Layered Skill Adaptation Pattern, Skill Adaptation Contract, and Explicit Skill Reuse rules
 - When an adaptation already exists, analyze it for optimization opportunities: token reduction, behavior improvement, and marketplace contribution suggestions
+- Print gitignore guidance: commit `.agents/skill-config.md` + project adapters + `.agents/context/memory/`; ignore regenerable `.agents/context/` state (scratchpad/summaries/cache)
 - Keep prompts and reports terse. No verbose restatement of marketplace docs.
 
 ## When to use me

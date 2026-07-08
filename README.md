@@ -43,6 +43,22 @@ Context compression files:
 - `.agents/context/summaries/archive/` keeps summaries up to the configured limit
 - `.agents/context/memory/<skill>.md` stores durable project-specific skill knowledge
 
+### Gitignore recommendation for consuming projects
+
+The `.agents/context/` directory lives in the consuming project, not in this marketplace. Commit durable knowledge, ignore regenerable state:
+
+```gitignore
+# Regenerable per-task state — ignore
+.agents/context/scratchpad/
+.agents/context/summaries/
+.agents/context/cache/
+
+# Durable project-specific skill knowledge — commit
+!.agents/context/memory/
+```
+
+`memory/<skill>.md` holds accumulated knowledge about how a skill applies to the project (e.g. test command, framework). Committing it benefits the whole team; the scratchpad, summaries, and cache are overwritten or regenerated and should stay local. If you prefer fully reproducible rebuilds via `conventionDiscovery`, ignore all of `.agents/context/` instead.
+
 ## Registry maintenance
 
 Validate the root registry, generated category indexes, capability graph, and search index:

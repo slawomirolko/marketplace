@@ -10,7 +10,11 @@ The inverse of `olko-install-skill`. That skill installs **from** the marketplac
 - Analyze the skill's scope and suggest splitting it into smaller sub-skills orchestrated by one parent skill (when the skill is "fullstack" / does too much)
 - Propose the marketplace category directory for the skill
 - Prepare the skill and/or sub-skills to follow the marketplace architecture: Layered Skill Adaptation Pattern, Skill Adaptation Contract, Explicit Skill Reuse
-- Register the prepared skill(s) in `registry.json`
+- Scaffold progressive loading (`overview` / `workflow` / `examples` / `edge-cases`) when the skill warrants it, reducing `SKILL.md` to a thin router
+- Optimize for token cost and routing quality (description + triggers, capabilities, tags, cost)
+- Write the **full** `registry.json` entry (no stubs)
+- Regenerate derived artifacts: per-category `index.json`, `capability-graph.json`, `search-index.json`
+- Run the validation gate (`registry.mjs` + tests) and loop on failures until the skill passes
 
 ## When to use me
 User says "adapt to marketplace", "onboard `<name>`", "split `<name>`", "prepare `<name>` for marketplace", or invokes `/olko-adapt-to-marketplace <name>`. Also when a skill exists locally but is not yet registered, or when a skill has grown too large and should be decomposed.
