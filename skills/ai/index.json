@@ -18,12 +18,26 @@
       "cost": 3,
       "files": [
         "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
         "references/anti-patterns.md",
         "references/code-assessment.md",
         "references/gotcha-mining.md",
         "references/methodology.md",
-        "scripts/line-count.mjs"
-      ]
+        "scripts/line-count.mjs",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-commit-docs",

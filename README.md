@@ -29,3 +29,15 @@ Run registry script tests:
 ```powershell
 node --test scripts/registry.test.mjs
 ```
+
+Route a request through metadata only, preferably through a category index first:
+
+```powershell
+node scripts/route-skill.mjs --category testing --intent "run affected tests" --limit 5
+```
+
+Run all marketplace tooling tests:
+
+```powershell
+node --test scripts/*.test.mjs
+```
