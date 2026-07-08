@@ -1,0 +1,48 @@
+{
+  "registrySchemaVersion": 1,
+  "skills": [
+    {
+      "name": "olko-agents-optimizer",
+      "category": "ai",
+      "version": "1.0.0",
+      "description": "Optimize agent context files (AGENTS.md, CLAUDE.md, .github/copilot-instructions.md, .windsurfrules, codex.md, etc.) using Addy Osmani's agents-md methodology. Triggers: 'optimize CLAUDE.md', 'streamline CLAUDE.md', 'agents-md', 'discoverability filter', 'add gotchas', 'optimize AGENTS.md', 'optimize context file', 'optimize .windsurfrules', 'optimize copilot-instructions', 'optimize codex.md'.",
+      "tags": [
+        "ai",
+        "agents",
+        "optimizer"
+      ],
+      "capabilities": [
+        "ai",
+        "ai.agents.optimizer"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "references/anti-patterns.md",
+        "references/code-assessment.md",
+        "references/gotcha-mining.md",
+        "references/methodology.md",
+        "scripts/line-count.mjs"
+      ]
+    },
+    {
+      "name": "olko-commit-docs",
+      "category": "ai",
+      "version": "1.0.0",
+      "description": "Detect stale AGENTS.md sections after code changes and create AGENTS.md coverage for new feature slices. Only flags non-inferable content (naming quirks, tooling commands, config defaults). Use when olko-commit delegates docs checking, or standalone to verify AGENTS.md is up to date.",
+      "tags": [
+        "ai",
+        "commit",
+        "docs"
+      ],
+      "capabilities": [
+        "ai",
+        "ai.commit.docs"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    }
+  ]
+}
