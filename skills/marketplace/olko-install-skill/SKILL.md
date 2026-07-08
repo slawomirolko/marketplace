@@ -1,20 +1,29 @@
 ---
 name: olko-install-skill
-description: "Install and adapt a marketplace skill to the current project. Takes a skill name, validates it exists in the marketplace, inspects existing .agents adaptation, asks what to customize vs. keep, and writes .agents/skill-config.md and .agents/skills/<skill-name>/project.md. Can update and optimize an already-adapted skill — proposes token reductions, behavior improvements, and marketplace contributions. Triggers: 'install skill', 'adapt skill', 'configure skill', 'setup skill', 'optimize adaptation', 'olko-install-skill <name>'."
+description: "Install and adapt a marketplace skill to the current project. Takes a skill name, validates it exists in the marketplace, inspects existing .agents adaptation, asks what to customize vs. keep, and writes .agents/skill-config.md and .agents/skills/<skill-name>/project.md. Uses strict caveman mode for prompts and low-context adaptation. Can update and optimize an already-adapted skill — proposes token reductions, behavior improvements, and marketplace contributions. Triggers: 'install skill', 'adapt skill', 'configure skill', 'setup skill', 'optimize adaptation', 'olko-install-skill <name>'."
 ---
 
 # Olko Install Skill
 
 ## What I do
 - Validate a skill name exists in the marketplace (`registry.json`)
-- Load the marketplace skill's `SKILL.md` to learn what it does and which config keys it recognizes
+- Load only the marketplace skill metadata needed to adapt it: `SKILL.md` frontmatter first, then the sections needed for config keys and defaults
 - Inspect the current project's `.agents/skill-config.md` and `.agents/skills/<skill-name>/project.md`
 - Ask the user what to customize and what to keep (works on fresh installs **and** already-adapted skills)
 - Write/update `.agents/skill-config.md` and `.agents/skills/<skill-name>/project.md` following the Layered Skill Adaptation Pattern, Skill Adaptation Contract, and Explicit Skill Reuse rules
 - When an adaptation already exists, analyze it for optimization opportunities: token reduction, behavior improvement, and marketplace contribution suggestions
+- Keep prompts and reports terse. No verbose restatement of marketplace docs.
 
 ## When to use me
 User says "install skill <name>", "adapt <name>", "configure <name>", "setup <name>", or invokes `/olko-install-skill <name>`. Also when the user wants to re-configure or review an already-adapted skill.
+
+## Context budget
+
+- Read registry metadata first. Do not open full skill bodies until the skill is validated.
+- Do not load reference files listed in `files` unless the skill explicitly needs them for adaptation.
+- Prefer the smallest set of config keys and adapter lines that solves the request.
+- If the target skill should run in caveman mode, encode that in the project adapter with `uses: [caveman]` instead of repeating prose in the adapter.
+- If the user wants both this installer and `olko-plan-editor` terse, apply the same `uses: [caveman]` pattern to the plan-editor project adapter too.
 
 ## Prerequisites
 - Run from the target project's repository root (where `.agents/` will live)
@@ -49,7 +58,7 @@ Find an entry whose `name` matches `<skill-name>`.
 
 ### Step 3 — Load the marketplace skill
 
-Read the skill's `SKILL.md` (and any reference files listed in `files` that look like config docs). Extract:
+Read the skill's `SKILL.md` only as much as needed. Extract:
 
 - What the skill does (description / "What I do" section).
 - Configuration keys the skill recognizes (look for a "Configuration keys", "Flags", "Config", or similar section, or the documented defaults).
@@ -201,6 +210,7 @@ Ask what goes into `.agents/skills/<skill-name>/project.md`:
 - **constraints & naming quirks** — free-form
 - **workflow specializations** — which steps to override or extend
 - **`uses` dependencies** — does this skill reuse another? If yes, collect skill names for the `uses` list (see Explicit Skill Reuse)
+- **caveman strict mode** — if the user wants terse output, add `caveman` to `uses` instead of duplicating compression rules in prose
 
 #### 5d — Update mode: keep / modify / drop
 
@@ -287,6 +297,7 @@ Tell the user how to verify: invoke the skill and confirm it reads the new confi
 - Never hardcode project-specific behavior into the marketplace skill — put it in config or the adapter
 - Adapter location is always `.agents/skills/<skill-name>/project.md` (universal `.agents` convention only)
 - `uses` is the only way to declare skill-to-skill reuse; never auto-load undeclared skills
+- Use caveman style for user-facing prompts unless exact detail is needed for safety or confirmation
 - When updating, preserve user choices unless they explicitly drop or modify them
 - Read `.agents/skill-config.md` and the target skill's documented config keys before asking — don't ask for keys the skill doesn't recognize
 - This skill is itself adaptable: it reads `.agents/skill-config.md` and supports its own project adapter at `.agents/skills/olko-install-skill/project.md`
