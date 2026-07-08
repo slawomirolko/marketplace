@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { buildSearchIndex, validateSearchIndex } from "./search-index.mjs";
 
 const root = process.cwd();
 const registryPath = path.join(root, "registry.json");
@@ -381,6 +382,10 @@ function writeCapabilityGraph(registry) {
   writeJson(capabilityGraphPath, buildCapabilityGraph(registry));
 }
 
+function writeSearchIndex(registry) {
+  writeJson(path.join(root, "search-index.json"), buildSearchIndex(registry));
+}
+
 function categoryIndexes(registry) {
   const byCategory = new Map();
   for (const entry of registry.skills) {
@@ -437,6 +442,7 @@ if (fix) {
   writeJson(registryPath, registry);
   writeCategoryIndexes(registry);
   writeCapabilityGraph(registry);
+  writeSearchIndex(registry);
 }
 
 const errors = [];
@@ -452,6 +458,7 @@ if (!Array.isArray(registry.skills)) {
   }
   errors.push(...validateCategoryIndexes(registry));
   errors.push(...validateCapabilityGraph(registry));
+  errors.push(...validateSearchIndex(registry));
 }
 
 if (errors.length > 0) {
