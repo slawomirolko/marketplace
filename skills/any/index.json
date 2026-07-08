@@ -1,0 +1,99 @@
+{
+  "registrySchemaVersion": 1,
+  "skills": [
+    {
+      "name": "olko-commit",
+      "category": "any",
+      "version": "1.0.0",
+      "description": "Orchestrate the commit workflow: delegate style check, docs staleness, tests, and docker rebuild to sub-skills, then draft a conventional commit message, resolve branch policy, commit, push, and open/merge a PR. Off main, creates a scope-named branch + PR. With --force, commits directly to main. Triggers: 'commit', 'commit this', 'wrap up', 'summarize changes'.",
+      "tags": [
+        "any",
+        "commit"
+      ],
+      "capabilities": [
+        "any",
+        "any.commit"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-commit-docker",
+      "category": "any",
+      "version": "1.0.0",
+      "description": "Rebuild and restart docker compose services affected by committed changes. Reads the service mapping from the project adapter — never hardcodes project names. Discovers the compose file by convention. Use when olko-commit delegates docker rebuild after commit, or standalone to rebuild affected services.",
+      "tags": [
+        "any",
+        "commit",
+        "docker"
+      ],
+      "capabilities": [
+        "any",
+        "any.commit.docker"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-commit-style",
+      "category": "any",
+      "version": "1.0.0",
+      "description": "Check coding style compliance for changed files across stacks. Reads style rules from project docs (AGENTS.md, CODING_STYLE.md), runs the prescribed style tools per stack, and reports violations with their rule source. Use when olko-commit delegates style checking, or standalone to verify style on changed files.",
+      "tags": [
+        "any",
+        "commit",
+        "style"
+      ],
+      "capabilities": [
+        "any",
+        "any.commit.style"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-investigate-existing",
+      "category": "any",
+      "version": "1.0.0",
+      "description": "Investigate an existing mechanism by name or description — find it, analyze its behavior, map its flow, verify AGENTS.md docs against the docs' own rules, assess optimization/extension opportunities and predict potential errors, then offer to create improvement plans via a declared plan skill. Use when the user wants to understand, document, or improve an existing mechanism in the codebase.",
+      "tags": [
+        "any",
+        "investigate",
+        "existing"
+      ],
+      "capabilities": [
+        "any",
+        "any.investigate.existing"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-plan-editor",
+      "category": "any",
+      "version": "1.0.0",
+      "description": "Create or edit implementation plans for a named item, an existing file, or a file to create. Produces a structured output with files to create, application flow, design patterns, tradeoffs, and new dependencies. Uses strict caveman mode and minimal context. Triggers: 'plan', 'make a plan', 'edit plan', 'review plan', 'refine plan', 'plan this'.",
+      "tags": [
+        "any",
+        "plan",
+        "editor"
+      ],
+      "capabilities": [
+        "any",
+        "any.plan.editor"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    }
+  ]
+}

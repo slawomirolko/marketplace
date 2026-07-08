@@ -1,0 +1,42 @@
+{
+  "registrySchemaVersion": 1,
+  "skills": [
+    {
+      "name": "olko-adapt-to-marketplace",
+      "category": "marketplace",
+      "version": "1.0.0",
+      "description": "Onboard a skill from a local directory into the marketplace, even if it is not yet registered. Adapts the name to the olko- convention, analyzes whether the skill should be split into smaller sub-skills orchestrated by one parent skill, proposes the marketplace category directory, and prepares the skill and/or sub-skills to follow the marketplace architecture (Layered Skill Adaptation Pattern, Skill Adaptation Contract, Explicit Skill Reuse). Triggers: 'adapt to marketplace', 'onboard skill', 'split skill', 'prepare skill for marketplace', 'olko-adapt-to-marketplace <name>'.",
+      "tags": [
+        "marketplace",
+        "adapt",
+        "to"
+      ],
+      "capabilities": [
+        "marketplace",
+        "marketplace.adapt.to.marketplace"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-install-skill",
+      "category": "marketplace",
+      "version": "1.0.0",
+      "description": "Install and adapt a marketplace skill to the current project. Takes a skill name, validates it exists in the marketplace, inspects existing .agents adaptation, asks what to customize vs. keep, and writes .agents/skill-config.md and .agents/skills/<skill-name>/project.md. Uses strict caveman mode for prompts and low-context adaptation. Can update and optimize an already-adapted skill — proposes token reductions, behavior improvements, and marketplace contributions. Triggers: 'install skill', 'adapt skill', 'configure skill', 'setup skill', 'optimize adaptation', 'olko-install-skill <name>'.",
+      "tags": [
+        "marketplace",
+        "install"
+      ],
+      "capabilities": [
+        "marketplace",
+        "marketplace.install.skill"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    }
+  ]
+}

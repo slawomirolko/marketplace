@@ -9,3 +9,23 @@ Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the f
 
 ## Usage 
 openskills install https://github.com/slawomirolko/marketplace --universal
+
+## Registry maintenance
+
+Validate the root registry and generated category indexes:
+
+```powershell
+node scripts/registry.mjs
+```
+
+Regenerate registry metadata and `skills/<category>/index.json` files:
+
+```powershell
+node scripts/registry.mjs --fix
+```
+
+Run registry script tests:
+
+```powershell
+node --test scripts/registry.test.mjs
+```
