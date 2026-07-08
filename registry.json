@@ -1,8 +1,21 @@
 {
+  "registrySchemaVersion": 1,
   "skills": [
     {
       "name": "olko-agents-optimizer",
       "category": "ai",
+      "version": "1.0.0",
+      "description": "Optimize agent context files (AGENTS.md, CLAUDE.md, .github/copilot-instructions.md, .windsurfrules, codex.md, etc.) using Addy Osmani's agents-md methodology. Triggers: 'optimize CLAUDE.md', 'streamline CLAUDE.md', 'agents-md', 'discoverability filter', 'add gotchas', 'optimize AGENTS.md', 'optimize context file', 'optimize .windsurfrules', 'optimize copilot-instructions', 'optimize codex.md'.",
+      "tags": [
+        "ai",
+        "agents",
+        "optimizer"
+      ],
+      "capabilities": [
+        "ai",
+        "ai.agents.optimizer"
+      ],
+      "cost": 3,
       "files": [
         "SKILL.md",
         "references/anti-patterns.md",
@@ -13,22 +26,38 @@
       ]
     },
     {
-      "name": "olko-commit",
-      "category": "any",
-      "files": [
-        "SKILL.md"
-      ]
-    },
-    {
-      "name": "olko-commit-style",
-      "category": "any",
-      "files": [
-        "SKILL.md"
-      ]
-    },
-    {
       "name": "olko-commit-docs",
       "category": "ai",
+      "version": "1.0.0",
+      "description": "Detect stale AGENTS.md sections after code changes and create AGENTS.md coverage for new feature slices. Only flags non-inferable content (naming quirks, tooling commands, config defaults). Use when olko-commit delegates docs checking, or standalone to verify AGENTS.md is up to date.",
+      "tags": [
+        "ai",
+        "commit",
+        "docs"
+      ],
+      "capabilities": [
+        "ai",
+        "ai.commit.docs"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-commit",
+      "category": "any",
+      "version": "1.0.0",
+      "description": "Orchestrate the commit workflow: delegate style check, docs staleness, tests, and docker rebuild to sub-skills, then draft a conventional commit message, resolve branch policy, commit, push, and open/merge a PR. Off main, creates a scope-named branch + PR. With --force, commits directly to main. Triggers: 'commit', 'commit this', 'wrap up', 'summarize changes'.",
+      "tags": [
+        "any",
+        "commit"
+      ],
+      "capabilities": [
+        "any",
+        "any.commit"
+      ],
+      "cost": 1,
       "files": [
         "SKILL.md"
       ]
@@ -36,34 +65,37 @@
     {
       "name": "olko-commit-docker",
       "category": "any",
+      "version": "1.0.0",
+      "description": "Rebuild and restart docker compose services affected by committed changes. Reads the service mapping from the project adapter — never hardcodes project names. Discovers the compose file by convention. Use when olko-commit delegates docker rebuild after commit, or standalone to rebuild affected services.",
+      "tags": [
+        "any",
+        "commit",
+        "docker"
+      ],
+      "capabilities": [
+        "any",
+        "any.commit.docker"
+      ],
+      "cost": 1,
       "files": [
         "SKILL.md"
       ]
     },
     {
-      "name": "olko-install-skill",
-      "category": "marketplace",
-      "files": [
-        "SKILL.md"
-      ]
-    },
-    {
-      "name": "olko-adapt-to-marketplace",
-      "category": "marketplace",
-      "files": [
-        "SKILL.md"
-      ]
-    },
-    {
-      "name": "olko-test",
-      "category": "testing",
-      "files": [
-        "SKILL.md"
-      ]
-    },
-    {
-      "name": "olko-plan-editor",
+      "name": "olko-commit-style",
       "category": "any",
+      "version": "1.0.0",
+      "description": "Check coding style compliance for changed files across stacks. Reads style rules from project docs (AGENTS.md, CODING_STYLE.md), runs the prescribed style tools per stack, and reports violations with their rule source. Use when olko-commit delegates style checking, or standalone to verify style on changed files.",
+      "tags": [
+        "any",
+        "commit",
+        "style"
+      ],
+      "capabilities": [
+        "any",
+        "any.commit.style"
+      ],
+      "cost": 1,
       "files": [
         "SKILL.md"
       ]
@@ -71,6 +103,92 @@
     {
       "name": "olko-investigate-existing",
       "category": "any",
+      "version": "1.0.0",
+      "description": "Investigate an existing mechanism by name or description — find it, analyze its behavior, map its flow, verify AGENTS.md docs against the docs' own rules, assess optimization/extension opportunities and predict potential errors, then offer to create improvement plans via a declared plan skill. Use when the user wants to understand, document, or improve an existing mechanism in the codebase.",
+      "tags": [
+        "any",
+        "investigate",
+        "existing"
+      ],
+      "capabilities": [
+        "any",
+        "any.investigate.existing"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-plan-editor",
+      "category": "any",
+      "version": "1.0.0",
+      "description": "Create or edit implementation plans for a named item, an existing file, or a file to create. Produces a structured output with files to create, application flow, design patterns, tradeoffs, and new dependencies. Uses strict caveman mode and minimal context. Triggers: 'plan', 'make a plan', 'edit plan', 'review plan', 'refine plan', 'plan this'.",
+      "tags": [
+        "any",
+        "plan",
+        "editor"
+      ],
+      "capabilities": [
+        "any",
+        "any.plan.editor"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-adapt-to-marketplace",
+      "category": "marketplace",
+      "version": "1.0.0",
+      "description": "Onboard a skill from a local directory into the marketplace, even if it is not yet registered. Adapts the name to the olko- convention, analyzes whether the skill should be split into smaller sub-skills orchestrated by one parent skill, proposes the marketplace category directory, and prepares the skill and/or sub-skills to follow the marketplace architecture (Layered Skill Adaptation Pattern, Skill Adaptation Contract, Explicit Skill Reuse). Triggers: 'adapt to marketplace', 'onboard skill', 'split skill', 'prepare skill for marketplace', 'olko-adapt-to-marketplace <name>'.",
+      "tags": [
+        "marketplace",
+        "adapt",
+        "to"
+      ],
+      "capabilities": [
+        "marketplace",
+        "marketplace.adapt.to.marketplace"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-install-skill",
+      "category": "marketplace",
+      "version": "1.0.0",
+      "description": "Install and adapt a marketplace skill to the current project. Takes a skill name, validates it exists in the marketplace, inspects existing .agents adaptation, asks what to customize vs. keep, and writes .agents/skill-config.md and .agents/skills/<skill-name>/project.md. Uses strict caveman mode for prompts and low-context adaptation. Can update and optimize an already-adapted skill — proposes token reductions, behavior improvements, and marketplace contributions. Triggers: 'install skill', 'adapt skill', 'configure skill', 'setup skill', 'optimize adaptation', 'olko-install-skill <name>'.",
+      "tags": [
+        "marketplace",
+        "install"
+      ],
+      "capabilities": [
+        "marketplace",
+        "marketplace.install.skill"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-test",
+      "category": "testing",
+      "version": "1.0.0",
+      "description": "Run affected or all tests for .NET, Python, and Android/Kotlin with smart scope detection, emulator management, service management, and failure handling. Use when asked to run tests, after implementation, or when called from olko-plan-editor/olko-commit skills.",
+      "tags": [
+        "testing",
+        "test"
+      ],
+      "capabilities": [
+        "testing",
+        "testing.test"
+      ],
+      "cost": 1,
       "files": [
         "SKILL.md"
       ]

@@ -1,0 +1,23 @@
+{
+  "registrySchemaVersion": 1,
+  "skills": [
+    {
+      "name": "olko-test",
+      "category": "testing",
+      "version": "1.0.0",
+      "description": "Run affected or all tests for .NET, Python, and Android/Kotlin with smart scope detection, emulator management, service management, and failure handling. Use when asked to run tests, after implementation, or when called from olko-plan-editor/olko-commit skills.",
+      "tags": [
+        "testing",
+        "test"
+      ],
+      "capabilities": [
+        "testing",
+        "testing.test"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    }
+  ]
+}
