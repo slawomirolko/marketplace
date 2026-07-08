@@ -10,7 +10,8 @@
 - **Validation loop does not converge** — if Step 10 fails on the same error twice, stop, show the failing entry + error to the user, and ask how to proceed rather than looping indefinitely.
 
 ## Rules
-- Follow the [naming convention](../docs/naming.md): `olko-` prefix across folder, frontmatter, and registry
+- Follow the [naming convention](../docs/naming.md): `olko-` prefix across folder, frontmatter, and registry for **authored** skills; **vendored** skills keep their upstream name and declare `origin: vendored` in frontmatter (mirrored into the registry entry). Never combine `olko-` with `origin: vendored`.
+- Vendored skills are onboarded as-is — do not restructure them into progressive bundles or rewrite their bodies. They register single-file even when long; progressive loading applies only when their section files already exist.
 - Every prepared skill must satisfy the [Skill Adaptation Contract](../docs/skill-adaptation-contract.md) checklist before it is registered
 - Sub-skills are focused and independently invocable; the parent orchestrates them via `uses` (Explicit Skill Reuse)
 - Never auto-load skills — composition is explicit through `uses` declared in the project adapter
