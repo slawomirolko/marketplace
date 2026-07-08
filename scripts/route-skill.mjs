@@ -70,16 +70,58 @@ function loadCapabilityGraph() {
 }
 
 function scoreEntry(entry, intentTokens) {
-  const tagMatches = entry.tags.filter((tag) => intentTokens.has(tag)).length;
+  const reasons = [];
+  const tagMatches = entry.tags.filter((tag) => {
+    const matched = intentTokens.has(tag);
+    if (matched) {
+      reasons.push(`tag match: ${tag}`);
+    }
+    return matched;
+  }).length;
   const capabilityMatches = entry.capabilities.filter((capability) => {
     const parts = capability.split(".");
-    return intentTokens.has(capability) || parts.some((part) => intentTokens.has(part));
+    const matched = intentTokens.has(capability) || parts.some((part) => intentTokens.has(part));
+    if (matched) {
+      reasons.push(`capability match: ${capability}`);
+    }
+    return matched;
   }).length;
   const descriptionTokens = tokenize(entry.description);
-  const descriptionMatches = [...intentTokens].filter((token) => descriptionTokens.has(token)).length;
-  const nameMatches = tokenize(entry.name).size > 0 && [...tokenize(entry.name)].some((token) => intentTokens.has(token)) ? 1 : 0;
+  const descriptionMatches = [...intentTokens].filter((token) => {
+    const matched = descriptionTokens.has(token);
+    if (matched) {
+      reasons.push(`description match: ${token}`);
+    }
+    return matched;
+  }).length;
+  const nameTokens = tokenize(entry.name);
+  const nameMatches = nameTokens.size > 0 && [...nameTokens].some((token) => intentTokens.has(token)) ? 1 : 0;
+  if (nameMatches > 0) {
+    reasons.push(`name match: ${entry.name}`);
+  }
 
-  return tagMatches * 4 + capabilityMatches * 3 + nameMatches * 2 + descriptionMatches;
+  return {
+    score: tagMatches * 4 + capabilityMatches * 3 + nameMatches * 2 + descriptionMatches,
+    reasons,
+  };
+}
+
+function confidenceFor(candidate, index, candidates) {
+  if (candidate.score < 4) {
+    return "low";
+  }
+
+  const next = candidates[index + 1];
+  const lead = next ? candidate.score - next.score : candidate.score;
+  if (candidate.score >= 8 && lead >= 3) {
+    return "high";
+  }
+
+  if (candidate.score >= 4) {
+    return "medium";
+  }
+
+  return "low";
 }
 
 function adjacentSuggestions(entry, graph) {
@@ -129,24 +171,32 @@ if (!Number.isInteger(args.limit) || args.limit < 2 || args.limit > 5) {
 const intentTokens = tokenize(args.intent);
 const capabilityGraph = args.suggestAdjacent ? loadCapabilityGraph() : null;
 const candidates = loadCandidates(args.category)
-  .map((entry) => ({
-    name: entry.name,
-    category: entry.category,
-    score: scoreEntry(entry, intentTokens),
-    cost: entry.cost,
-    description: entry.description,
-    tags: entry.tags,
-    capabilities: entry.capabilities,
-    loading: entry.loading ?? {
-      mode: "single",
-      first: "SKILL.md",
-      sections: ["SKILL.md"],
-    },
-    adjacentSuggestions: args.suggestAdjacent ? adjacentSuggestions(entry, capabilityGraph) : undefined,
-  }))
+  .map((entry) => {
+    const scored = scoreEntry(entry, intentTokens);
+    return {
+      name: entry.name,
+      category: entry.category,
+      score: scored.score,
+      reasons: scored.reasons,
+      cost: entry.cost,
+      description: entry.description,
+      tags: entry.tags,
+      capabilities: entry.capabilities,
+      loading: entry.loading ?? {
+        mode: "single",
+        first: "SKILL.md",
+        sections: ["SKILL.md"],
+      },
+      adjacentSuggestions: args.suggestAdjacent ? adjacentSuggestions(entry, capabilityGraph) : undefined,
+    };
+  })
   .filter((entry) => entry.score > 0)
   .sort((a, b) => b.score - a.score || a.cost - b.cost || a.name.localeCompare(b.name))
-  .slice(0, args.limit);
+  .slice(0, args.limit)
+  .map((entry, index, entries) => ({
+    ...entry,
+    confidence: confidenceFor(entry, index, entries),
+  }));
 
 console.log(
   JSON.stringify(
