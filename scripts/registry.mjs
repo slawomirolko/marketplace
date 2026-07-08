@@ -8,6 +8,8 @@ const fix = process.argv.includes("--fix");
 
 const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const capabilityPattern = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
+const progressiveSections = ["overview", "workflow", "examples", "edge-cases"];
+const largeSkillLineThreshold = 100;
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -134,6 +136,66 @@ function deriveCost(files) {
   return 3;
 }
 
+function shouldUseProgressiveLoading(entry, files) {
+  if (entry.loading?.mode === "progressive") {
+    return true;
+  }
+
+  const skillPath = path.join(skillsRoot, entry.category, entry.name, "SKILL.md");
+  if (!fs.existsSync(skillPath)) {
+    return false;
+  }
+
+  const lineCount = fs.readFileSync(skillPath, "utf8").split(/\r?\n/).length;
+  return lineCount > largeSkillLineThreshold || files.some((file) => progressiveSections.map((section) => `${section}.md`).includes(file));
+}
+
+function deriveLoading(entry, files) {
+  if (!shouldUseProgressiveLoading(entry, files)) {
+    return entry.loading;
+  }
+
+  return {
+    mode: "progressive",
+    first: "overview.md",
+    sections: progressiveSections,
+  };
+}
+
+function validateLoading(entry, skillDir, errors) {
+  if (entry.loading === undefined) {
+    return;
+  }
+
+  if (entry.loading.mode !== "progressive") {
+    errors.push(`${entry.name}: loading.mode must be progressive when loading is present`);
+    return;
+  }
+
+  if (entry.loading.first !== "overview.md") {
+    errors.push(`${entry.name}: loading.first must be overview.md`);
+  }
+
+  if (!Array.isArray(entry.loading.sections) || entry.loading.sections.length === 0) {
+    errors.push(`${entry.name}: loading.sections must be a non-empty array`);
+    return;
+  }
+
+  for (const section of progressiveSections) {
+    if (!entry.loading.sections.includes(section)) {
+      errors.push(`${entry.name}: loading.sections must include ${section}`);
+    }
+
+    const file = `${section}.md`;
+    if (!entry.files.includes(file)) {
+      errors.push(`${entry.name}: progressive loading must list ${file} in files`);
+    }
+    if (!fs.existsSync(path.join(skillDir, file))) {
+      errors.push(`${entry.name}: progressive loading file is missing: ${file}`);
+    }
+  }
+}
+
 function validateCompatibility(entry, errors) {
   for (const field of ["compatibleWith", "requires"]) {
     if (entry[field] !== undefined && !Array.isArray(entry[field])) {
@@ -214,6 +276,7 @@ function validateEntry(entry, seen) {
       }
     }
   }
+  validateLoading(entry, skillDir, errors);
 
   validateCompatibility(entry, errors);
   return errors;
@@ -236,6 +299,9 @@ function normalizeRegistry(registry) {
         capabilities: entry.capabilities ?? deriveCapabilities(entry),
         cost: entry.cost ?? deriveCost(files),
         files,
+        ...Object.fromEntries(
+          [["loading", deriveLoading(entry, files)]].filter(([, value]) => value !== undefined),
+        ),
         ...Object.fromEntries(
           ["compatibleWith", "requires", "replaces", "deprecatedBy"]
             .filter((field) => entry[field] !== undefined)

@@ -45,6 +45,32 @@ function makeRepo() {
   return repo;
 }
 
+function makeProgressiveRepo() {
+  const repo = makeRepo();
+  const skillDir = path.join(repo, "skills", "any", "olko-demo");
+
+  for (const file of ["overview.md", "workflow.md", "examples.md", "edge-cases.md"]) {
+    fs.writeFileSync(path.join(skillDir, file), `# ${file}\n`);
+  }
+
+  fs.writeFileSync(
+    path.join(skillDir, "SKILL.md"),
+    [
+      "---",
+      "name: olko-demo",
+      "description: Demo skill for registry validation.",
+      "---",
+      "",
+      "# Demo",
+      "",
+      ...Array.from({ length: 105 }, (_, index) => `Line ${index + 1}`),
+      "",
+    ].join("\n"),
+  );
+
+  return repo;
+}
+
 function runRegistry(repo, args = []) {
   return spawnSync(process.execPath, [scriptPath, ...args], {
     cwd: repo,
@@ -75,6 +101,42 @@ test("fix mode adds registry metadata and writes category indexes", () => {
 
   const categoryIndex = readJson(path.join(repo, "skills", "any", "index.json"));
   assert.deepEqual(categoryIndex, registry);
+});
+
+test("fix mode adds progressive loading metadata for large skills", () => {
+  const repo = makeProgressiveRepo();
+
+  const result = runRegistry(repo, ["--fix"]);
+
+  assert.equal(result.status, 0, result.stderr);
+
+  const registry = readJson(path.join(repo, "registry.json"));
+  assert.deepEqual(registry.skills[0].loading, {
+    mode: "progressive",
+    first: "overview.md",
+    sections: ["overview", "workflow", "examples", "edge-cases"],
+  });
+  assert.deepEqual(registry.skills[0].files, [
+    "SKILL.md",
+    "edge-cases.md",
+    "examples.md",
+    "overview.md",
+    "references/guide.md",
+    "workflow.md",
+  ]);
+});
+
+test("validation rejects progressive entries with missing files", () => {
+  const repo = makeProgressiveRepo();
+  assert.equal(runRegistry(repo, ["--fix"]).status, 0);
+
+  fs.rmSync(path.join(repo, "skills", "any", "olko-demo", "edge-cases.md"));
+
+  const result = runRegistry(repo);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /olko-demo: listed file does not exist: edge-cases\.md/);
+  assert.match(result.stderr, /olko-demo: progressive loading file is missing: edge-cases\.md/);
 });
 
 test("validation rejects runtime dependency fields in registry entries", () => {
