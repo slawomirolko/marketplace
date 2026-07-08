@@ -1,0 +1,163 @@
+{
+  "capabilityGraphSchemaVersion": 1,
+  "purpose": "routing-suggestions-only",
+  "maxTraversalDepth": 1,
+  "capabilities": [
+    {
+      "id": "ai",
+      "skills": [
+        "olko-agents-optimizer",
+        "olko-commit-docs"
+      ],
+      "related": [
+        "ai.agents.optimizer",
+        "ai.commit.docs"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "ai.agents.optimizer",
+      "skills": [
+        "olko-agents-optimizer"
+      ],
+      "related": [
+        "ai"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "ai.commit.docs",
+      "skills": [
+        "olko-commit-docs"
+      ],
+      "related": [
+        "ai"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "any",
+      "skills": [
+        "olko-commit",
+        "olko-commit-docker",
+        "olko-commit-style",
+        "olko-investigate-existing",
+        "olko-plan-editor"
+      ],
+      "related": [
+        "any.commit",
+        "any.commit.docker",
+        "any.commit.style",
+        "any.investigate.existing",
+        "any.plan.editor"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "any.commit",
+      "skills": [
+        "olko-commit"
+      ],
+      "related": [
+        "any",
+        "any.commit.docker",
+        "any.commit.style"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "any.commit.docker",
+      "skills": [
+        "olko-commit-docker"
+      ],
+      "related": [
+        "any",
+        "any.commit"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "any.commit.style",
+      "skills": [
+        "olko-commit-style"
+      ],
+      "related": [
+        "any",
+        "any.commit"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "any.investigate.existing",
+      "skills": [
+        "olko-investigate-existing"
+      ],
+      "related": [
+        "any"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "any.plan.editor",
+      "skills": [
+        "olko-plan-editor"
+      ],
+      "related": [
+        "any"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "marketplace",
+      "skills": [
+        "olko-adapt-to-marketplace",
+        "olko-install-skill"
+      ],
+      "related": [
+        "marketplace.install.skill",
+        "marketplace.adapt.to.marketplace"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "marketplace.adapt.to.marketplace",
+      "skills": [
+        "olko-adapt-to-marketplace"
+      ],
+      "related": [
+        "marketplace"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "marketplace.install.skill",
+      "skills": [
+        "olko-install-skill"
+      ],
+      "related": [
+        "marketplace"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "testing",
+      "skills": [
+        "olko-test"
+      ],
+      "related": [
+        "testing.test"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "testing.test",
+      "skills": [
+        "olko-test"
+      ],
+      "related": [
+        "testing"
+      ],
+      "prerequisites": []
+    }
+  ]
+}
