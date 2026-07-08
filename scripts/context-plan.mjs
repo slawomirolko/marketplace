@@ -5,6 +5,32 @@ const root = process.cwd();
 const registryPath = path.join(root, "registry.json");
 const defaultBudget = 4000;
 const defaultMaxDepth = 1;
+const defaultSourceBudgets = {
+  "registry-metadata": 300,
+  "category-index": 300,
+  "route-candidates": 300,
+  "skill-body": 1200,
+  "project-adapter": 600,
+  "skill-memory": 600,
+  "project-summary": 800,
+  "project-conventions": 600,
+  workflow: 1200,
+  example: 600,
+  "edge-case": 400,
+};
+const sourceScores = {
+  "registry-metadata": 100,
+  "category-index": 100,
+  "route-candidates": 100,
+  "skill-body": 100,
+  "project-adapter": 95,
+  "skill-memory": 90,
+  "project-summary": 80,
+  "project-conventions": 75,
+  workflow: 70,
+  example: 45,
+  "edge-case": 35,
+};
 const phaseFractions = {
   routing: 0.1,
   selection: 0.2,
@@ -14,7 +40,7 @@ const phaseFractions = {
 
 function usage() {
   console.error(
-    "Usage: node scripts/context-plan.mjs --skill <name> [--project <path>] [--budget 4000] [--max-depth 1]",
+    "Usage: node scripts/context-plan.mjs --skill <name> [--project <path>] [--budget 4000] [--max-depth 1] [--include-examples] [--include-edge-cases]",
   );
 }
 
@@ -35,6 +61,10 @@ function parseArgs(argv) {
       args.budget = Number.parseInt(argv[++index], 10);
     } else if (token === "--max-depth") {
       args.maxDepth = Number.parseInt(argv[++index], 10);
+    } else if (token === "--include-examples") {
+      args.includeExamples = true;
+    } else if (token === "--include-edge-cases") {
+      args.includeEdgeCases = true;
     } else if (token === "--help") {
       args.help = true;
     }
@@ -49,6 +79,21 @@ function readJson(filePath) {
 
 function normalizeSlashes(value) {
   return value.replaceAll("\\", "/");
+}
+
+function relativeProjectPath(projectRoot, filePath) {
+  return normalizeSlashes(path.relative(projectRoot, filePath));
+}
+
+function sourceEntry(source, kind, required, reason) {
+  return {
+    source: normalizeSlashes(source),
+    kind,
+    required,
+    score: sourceScores[kind],
+    budget: defaultSourceBudgets[kind],
+    reason,
+  };
 }
 
 function parseUses(markdown) {
@@ -155,10 +200,103 @@ function executionFiles(entry, role) {
   return ["SKILL.md"];
 }
 
-function contextPlanFor(entry, role) {
+function skillFile(entry, file) {
+  return path.join("skills", entry.category, entry.name, file);
+}
+
+function hasSkillFile(entry, file) {
+  return entry.files?.includes(file);
+}
+
+function existingSource(projectRoot, source, kind, required, reason) {
+  const filePath = path.join(projectRoot, source);
+  if (!fs.existsSync(filePath)) {
+    return undefined;
+  }
+
+  return sourceEntry(source, kind, required, reason);
+}
+
+function conventionSources(projectRoot) {
+  return [
+    existingSource(projectRoot, "AGENTS.md", "project-conventions", false, "project-wide agent instructions"),
+    existingSource(
+      projectRoot,
+      path.join(".agents", "skill-config.md"),
+      "project-conventions",
+      false,
+      "project-wide skill configuration",
+    ),
+  ].filter(Boolean);
+}
+
+function skillContextSources(projectRoot, entry, role, options = {}) {
+  const sources = [
+    sourceEntry("registry.json", "registry-metadata", true, "selected skill metadata"),
+    sourceEntry(path.join("skills", entry.category, "index.json"), "category-index", true, "category index for selected skill"),
+    sourceEntry("registry.json#skills", "route-candidates", true, "route candidates used before skill selection"),
+    sourceEntry(skillFile(entry, "SKILL.md"), "skill-body", true, role === "primary" ? "selected SKILL.md" : "support SKILL.md"),
+  ];
+
+  const adapter = existingSource(
+    projectRoot,
+    path.join(".agents", "skills", entry.name, "project.md"),
+    "project-adapter",
+    false,
+    "project adapter for selected skill",
+  );
+  if (adapter) {
+    sources.push(adapter);
+  }
+
+  const memory = existingSource(
+    projectRoot,
+    path.join(".agents", "context", "memory", `${entry.name}.md`),
+    "skill-memory",
+    false,
+    "project-specific memory for selected skill",
+  );
+  if (memory) {
+    sources.push(memory);
+  }
+
+  const summary = existingSource(
+    projectRoot,
+    path.join(".agents", "context", "summaries", "latest.md"),
+    "project-summary",
+    false,
+    "latest project summary",
+  );
+  if (summary) {
+    sources.push(summary);
+  }
+
+  sources.push(...conventionSources(projectRoot));
+
+  if (entry.loading?.mode === "progressive" && hasSkillFile(entry, "overview.md")) {
+    sources.push(sourceEntry(skillFile(entry, "overview.md"), "skill-body", true, "progressive overview loads before workflow"));
+  }
+
+  if (entry.loading?.mode === "progressive" && role === "primary" && hasSkillFile(entry, "workflow.md")) {
+    sources.push(sourceEntry(skillFile(entry, "workflow.md"), "workflow", true, "workflow loads after skill selection"));
+  }
+
+  if (options.includeExamples && hasSkillFile(entry, "examples.md")) {
+    sources.push(sourceEntry(skillFile(entry, "examples.md"), "example", false, "selected because task or routing matched examples"));
+  }
+
+  if (options.includeEdgeCases && hasSkillFile(entry, "edge-cases.md")) {
+    sources.push(sourceEntry(skillFile(entry, "edge-cases.md"), "edge-case", false, "selected because risk signals or failure handling were requested"));
+  }
+
+  return sources;
+}
+
+function contextPlanFor(entry, role, projectRoot, options = {}) {
   return {
     name: entry.name,
     role,
+    sources: skillContextSources(projectRoot, entry, role, options),
     routing: {
       load: ["name", "category", "description", "tags", "capabilities", "cost", "loading"],
       mode: "metadata-only",
@@ -173,6 +311,21 @@ function contextPlanFor(entry, role) {
       preserve: ["decisions", "outputs", "openIssues", "filePaths"],
     },
   };
+}
+
+function existingProjectContext(projectRoot, skillName) {
+  const contextRoot = path.join(projectRoot, ".agents", "context");
+  const candidates = [
+    ["summary", path.join(contextRoot, "summaries", "latest.md")],
+    ["scratchpad", path.join(contextRoot, "scratchpad", "current.json")],
+    ["skillMemory", path.join(contextRoot, "memory", `${skillName}.md`)],
+  ];
+
+  return Object.fromEntries(
+    candidates
+      .filter(([, filePath]) => fs.existsSync(filePath))
+      .map(([name, filePath]) => [name, relativeProjectPath(projectRoot, filePath)]),
+  );
 }
 
 const args = parseArgs(process.argv.slice(2));
@@ -219,12 +372,17 @@ console.log(
       project: normalizeSlashes(args.project),
       totalBudget: args.budget,
       phaseBudgets: phaseBudgets(args.budget),
+      sourceBudgets: defaultSourceBudgets,
       composition: {
         allowed: support.length > 0,
         maxDepth: args.maxDepth,
         dependencies: support.map(({ name, declaredBy, depth }) => ({ name, declaredBy, depth })),
       },
-      loadPlan: [contextPlanFor(active, "primary"), ...support.map(({ entry }) => contextPlanFor(entry, "support"))],
+      projectContext: existingProjectContext(args.project, args.skill),
+      loadPlan: [
+        contextPlanFor(active, "primary", args.project, args),
+        ...support.map(({ entry }) => contextPlanFor(entry, "support", args.project, args)),
+      ],
       compression: {
         prefer: "summaries-over-raw-context",
         summarizeCompletedRunsAs: ["decision", "reason", "loaded", "output", "openIssue"],

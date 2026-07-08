@@ -61,6 +61,10 @@ function runContextPlan(repo, args) {
   });
 }
 
+function primarySources(output) {
+  return output.loadPlan.find((entry) => entry.role === "primary").sources;
+}
+
 test("creates a compressed context plan from explicit project adapter uses", () => {
   const repo = makeRepo();
   const adapterDir = path.join(repo, ".agents", "skills", "olko-commit");
@@ -88,6 +92,37 @@ test("creates a compressed context plan from explicit project adapter uses", () 
   assert.deepEqual(output.compression.dropUnlessDebugging, ["fullHistory", "fullToolLogs", "unusedCandidates"]);
 });
 
+test("includes existing project context files in the load plan output", () => {
+  const repo = makeRepo();
+  const contextRoot = path.join(repo, ".agents", "context");
+  fs.mkdirSync(path.join(contextRoot, "summaries"), { recursive: true });
+  fs.mkdirSync(path.join(contextRoot, "scratchpad"), { recursive: true });
+  fs.mkdirSync(path.join(contextRoot, "memory"), { recursive: true });
+  fs.writeFileSync(path.join(contextRoot, "summaries", "latest.md"), "decision: keep summary\n");
+  fs.writeFileSync(path.join(contextRoot, "scratchpad", "current.json"), '{"task":"active"}\n');
+  fs.writeFileSync(path.join(contextRoot, "memory", "olko-commit.md"), "memory: local preference\n");
+
+  const result = runContextPlan(repo, ["--skill", "olko-commit", "--budget", "2000"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.deepEqual(output.projectContext, {
+    summary: ".agents/context/summaries/latest.md",
+    scratchpad: ".agents/context/scratchpad/current.json",
+    skillMemory: ".agents/context/memory/olko-commit.md",
+  });
+});
+
+test("handles missing project context gracefully", () => {
+  const repo = makeRepo();
+
+  const result = runContextPlan(repo, ["--skill", "olko-commit", "--budget", "2000"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.deepEqual(output.projectContext, {});
+});
+
 test("rejects undeclared registry skills in project adapter uses", () => {
   const repo = makeRepo();
   const adapterDir = path.join(repo, ".agents", "skills", "olko-commit");
@@ -98,4 +133,136 @@ test("rejects undeclared registry skills in project adapter uses", () => {
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /declared uses entry does not exist in registry: olko-missing/);
+});
+
+test("emits deterministic source ordering for selected skill context", () => {
+  const repo = makeRepo();
+  const adapterDir = path.join(repo, ".agents", "skills", "olko-commit");
+  const contextRoot = path.join(repo, ".agents", "context");
+  fs.mkdirSync(adapterDir, { recursive: true });
+  fs.mkdirSync(path.join(repo, ".agents"), { recursive: true });
+  fs.mkdirSync(path.join(contextRoot, "summaries"), { recursive: true });
+  fs.mkdirSync(path.join(contextRoot, "memory"), { recursive: true });
+  fs.writeFileSync(path.join(repo, "AGENTS.md"), "# Instructions\n");
+  fs.writeFileSync(path.join(repo, ".agents", "skill-config.md"), "# Skill config\n");
+  fs.writeFileSync(path.join(adapterDir, "project.md"), "uses: []\n");
+  fs.writeFileSync(path.join(contextRoot, "memory", "olko-commit.md"), "memory\n");
+  fs.writeFileSync(path.join(contextRoot, "summaries", "latest.md"), "summary\n");
+
+  const result = runContextPlan(repo, ["--skill", "olko-commit", "--budget", "2000"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const sources = primarySources(JSON.parse(result.stdout));
+  assert.deepEqual(
+    sources.map((source) => [source.kind, source.source]),
+    [
+      ["registry-metadata", "registry.json"],
+      ["category-index", "skills/any/index.json"],
+      ["route-candidates", "registry.json#skills"],
+      ["skill-body", "skills/any/olko-commit/SKILL.md"],
+      ["project-adapter", ".agents/skills/olko-commit/project.md"],
+      ["skill-memory", ".agents/context/memory/olko-commit.md"],
+      ["project-summary", ".agents/context/summaries/latest.md"],
+      ["project-conventions", "AGENTS.md"],
+      ["project-conventions", ".agents/skill-config.md"],
+      ["skill-body", "skills/any/olko-commit/overview.md"],
+      ["workflow", "skills/any/olko-commit/workflow.md"],
+    ],
+  );
+});
+
+test("emits source scoring and per-source budget metadata", () => {
+  const repo = makeRepo();
+
+  const result = runContextPlan(repo, ["--skill", "olko-commit", "--budget", "2000"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.deepEqual(output.sourceBudgets, {
+    "registry-metadata": 300,
+    "category-index": 300,
+    "route-candidates": 300,
+    "skill-body": 1200,
+    "project-adapter": 600,
+    "skill-memory": 600,
+    "project-summary": 800,
+    "project-conventions": 600,
+    workflow: 1200,
+    example: 600,
+    "edge-case": 400,
+  });
+  assert.deepEqual(
+    primarySources(output).map(({ kind, score, budget }) => ({ kind, score, budget })),
+    [
+      { kind: "registry-metadata", score: 100, budget: 300 },
+      { kind: "category-index", score: 100, budget: 300 },
+      { kind: "route-candidates", score: 100, budget: 300 },
+      { kind: "skill-body", score: 100, budget: 1200 },
+      { kind: "skill-body", score: 100, budget: 1200 },
+      { kind: "workflow", score: 70, budget: 1200 },
+    ],
+  );
+});
+
+test("excludes missing project convention files from source list", () => {
+  const repo = makeRepo();
+
+  const result = runContextPlan(repo, ["--skill", "olko-commit", "--budget", "2000"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(
+    primarySources(JSON.parse(result.stdout)).filter((source) => source.kind === "project-conventions"),
+    [],
+  );
+});
+
+test("includes present AGENTS.md and skill-config project conventions", () => {
+  const repo = makeRepo();
+  fs.mkdirSync(path.join(repo, ".agents"), { recursive: true });
+  fs.writeFileSync(path.join(repo, "AGENTS.md"), "# Instructions\n");
+  fs.writeFileSync(path.join(repo, ".agents", "skill-config.md"), "# Skill config\n");
+
+  const result = runContextPlan(repo, ["--skill", "olko-commit", "--budget", "2000"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(
+    primarySources(JSON.parse(result.stdout))
+      .filter((source) => source.kind === "project-conventions")
+      .map((source) => source.source),
+    ["AGENTS.md", ".agents/skill-config.md"],
+  );
+});
+
+test("excludes optional example and edge-case sources by default", () => {
+  const repo = makeRepo();
+
+  const result = runContextPlan(repo, ["--skill", "olko-commit", "--budget", "2000"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(primarySources(JSON.parse(result.stdout)).some((source) => source.kind === "example"), false);
+  assert.equal(primarySources(JSON.parse(result.stdout)).some((source) => source.kind === "edge-case"), false);
+});
+
+test("includes optional example and edge-case sources when selected", () => {
+  const repo = makeRepo();
+
+  const result = runContextPlan(repo, [
+    "--skill",
+    "olko-commit",
+    "--budget",
+    "2000",
+    "--include-examples",
+    "--include-edge-cases",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(
+    primarySources(JSON.parse(result.stdout))
+      .filter((source) => ["example", "edge-case"].includes(source.kind))
+      .map((source) => [source.kind, source.source, source.required]),
+    [
+      ["example", "skills/any/olko-commit/examples.md", false],
+      ["edge-case", "skills/any/olko-commit/edge-cases.md", false],
+    ],
+  );
 });
