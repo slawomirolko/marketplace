@@ -1,6 +1,6 @@
 ---
 name: olko-plan-editor
-description: "Create or edit implementation plans for a named item, an existing file, or a file to create. Produces a structured output with files to create, application flow, design patterns, tradeoffs, and new dependencies. Apply caveman mode while performing this skill. Triggers: 'plan', 'make a plan', 'edit plan', 'review plan', 'refine plan', 'plan this'."
+description: "Create or edit implementation plans for a named item, an existing file, or a file to create. Produces a structured output with files to create, application flow, design patterns, tradeoffs, and new dependencies. Uses strict caveman mode and minimal context. Triggers: 'plan', 'make a plan', 'edit plan', 'review plan', 'refine plan', 'plan this'."
 user_invocable: true
 ---
 
@@ -13,10 +13,18 @@ Use this skill for plan creation or plan edits.
 - Gather only the minimum context needed from the repo
 - Produce a structured output: files to create, application flow, design patterns, tradeoffs, tests, and new dependencies
 - Persist the plan to a file before the final reply
-- Apply caveman mode while performing this skill
+- Apply strict caveman mode while performing this skill
 
 ## When to use me
 User says "make a plan", "edit plan", "review plan", "refine plan", "plan this", or invokes `/olko-plan-editor <target>`. Also when the user wants a structured implementation plan with files to create, flow, design patterns, and tests.
+
+## Context budget
+
+- Read only the target file, the nearest `AGENTS.md`, `.agents/skill-config.md`, and the project adapter if enabled.
+- Do not scan the whole repo unless the user explicitly asks for wider discovery.
+- If the project adapter declares `uses: [caveman]`, load `caveman` first and keep this skill in caveman mode.
+- If `caveman` is not declared, still respond in caveman mode and keep prose terse.
+- Prefer short bullets, short headings, and short file lists. No extra explanation unless the user asks for it.
 
 ## Dependencies (uses)
 
@@ -90,7 +98,7 @@ Clean the plan so it reflects the earlier review steps and removes anything no l
 4. Never leave the plan only in chat if a file target exists or can be created.
 
 ### Step 11 — Caveman mode
-While using this skill, respond in caveman mode.
+While using this skill, respond in strict caveman mode.
 
 ### Step 12 — Delegate test execution (optional)
 After the plan is approved and implementation is done, if a test skill (e.g. `olko-test`) is declared in `uses`, delegate test execution to it. Provide:
@@ -113,11 +121,12 @@ When finishing, include:
 8. External dependencies, only if any new ones are added.
 
 ## Rules
-- Respond in caveman mode while performing this skill.
+- Respond in strict caveman mode while performing this skill.
 - Keep the plan concrete and scoped to the asked target.
 - If the user names a file, treat that file as the source of truth unless the user says otherwise.
 - If the user wants a new file, describe exactly what to create and where.
 - Avoid unnecessary detail outside the requested sections.
+- Prefer the smallest set of files and steps that still solves the target.
 - Final reply must name the saved or updated plan file.
 - Final reply must show the test list in the response, not only in the saved file.
 - Final reply test list should not center on logs checking unless the user asked for it.
