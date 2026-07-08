@@ -31,14 +31,26 @@ Read `registry.json`. Determine whether the source skill is already registered:
 
 ### Step 4 — Adapt the name
 
-Apply the [naming convention](../docs/naming.md):
+First decide the skill **origin** (see [naming convention](../docs/naming.md)):
+
+- **authored** (default) — written for this marketplace. Apply the `olko-` prefix.
+- **vendored** — copied from an external source to track upstream. Keep the upstream name; do **not** add `olko-`.
+
+Vendored signals: the user says "copy / vendored / imported from `<repo>`", the skill references sibling skills by their upstream (non-`olko-`) names, or the source README points to an external repository. When unsure, ask: "Authored for this marketplace, or vendored from elsewhere? (authored/vendored)".
+
+#### Authored
 
 1. If the name already starts with `olko-`, keep it.
 2. If it does not, propose the `olko-` prefixed form. Preserve the meaningful part: `smart-commit` → `olko-commit`, `test-runner` → `olko-test-runner`.
-3. If the name is ambiguous, ask the user to confirm the proposed name.
-4. Record the old name (if any) and the new name — Step 8 updates it across folder, frontmatter, and registry.
+3. Sanitize: lowercase, `[^a-z0-9-]` → `-`, collapse repeats, trim leading/trailing `-`, max 64 chars, must match `^[a-z0-9]+(-[a-z0-9]+)*$` and start with `olko-`.
 
-Sanitize: lowercase, `[^a-z0-9-]` → `-`, collapse repeats, trim leading/trailing `-`, max 64 chars, must start with `olko-`.
+#### Vendored
+
+1. Keep the upstream name as-is. Do not rename.
+2. Sanitize only for filesystem safety (lowercase, normalize path separators) but preserve the upstream identity.
+3. Set `origin: vendored` in the frontmatter — Step 7a records it; Step 8 carries it into the registry entry so `registry.mjs` exempts it from the `olko-` check. A vendored skill must **not** carry the `olko-` prefix (the validator rejects the combination).
+
+Record the origin decision and the (possibly unchanged) name — Step 7a and Step 8 apply it across folder, frontmatter, and registry. If the name is ambiguous, ask the user to confirm.
 
 ### Step 5 — Analyze scope and propose split
 
@@ -287,15 +299,16 @@ Field rules (enforced by `scripts/registry.mjs`):
 
 | Field | Rule |
 |-------|------|
-| `name` | `olko-` prefix; matches folder + frontmatter |
+| `name` | `olko-` prefix for authored skills; upstream name kept for vendored. Matches folder + frontmatter. |
 | `category` | existing `skills/<category>/` directory |
+| `origin` | set to `vendored` when the skill is vendored (Step 4); omit for authored. `--fix` mirrors it from frontmatter. |
 | `version` | semver `MAJOR.MINOR.PATCH`; `1.0.0` for new skills; bump per semver for re-onboarded skills |
 | `description` | non-empty; prefer the optimized version with triggers |
 | `tags` | non-empty array; ≤ 6; default-derivable from name + category |
 | `capabilities` | non-empty; normalized `^[a-z0-9]+(?:[.-][a-z0-9]+)*$`; default-derivable as `[<category>, <category>.<scope>]` |
 | `cost` | positive int; 1 file → 1, ≤ 4 files → 2, else 3 |
 | `files` | every shipped file; all must exist on disk; `SKILL.md` first |
-| `loading` | omit for single-file skills; for progressive bundles must be `{mode: progressive, first: overview.md, sections: [overview, workflow, examples, edge-cases]}` |
+| `loading` | omit for single-file skills; for progressive bundles must be `{mode: progressive, first: overview.md, sections: [overview, workflow, examples, edge-cases]}`. Vendored skills are not auto-promoted — only progressive when their section files already exist. |
 | **forbidden** | `uses`, `dependencies`, `runtimeDependencies` — never in registry entries |
 
 `scripts/registry.mjs --fix` (Step 9) preserves explicit `tags`/`capabilities`/`cost` via `??` and only fills gaps, so optimized values survive.

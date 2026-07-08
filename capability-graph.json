@@ -38,18 +38,107 @@
     {
       "id": "any",
       "skills": [
+        "cavecrew",
+        "caveman",
+        "caveman-commit",
+        "caveman-compress",
+        "caveman-help",
+        "caveman-review",
+        "caveman-stats",
         "olko-commit",
         "olko-commit-docker",
         "olko-commit-style",
         "olko-investigate-existing",
-        "olko-plan-editor"
+        "olko-plan-editor",
+        "smart-summary"
       ],
       "related": [
+        "any.cavecrew",
+        "any.caveman",
         "any.commit",
-        "any.commit.docker",
-        "any.commit.style",
-        "any.investigate.existing",
-        "any.plan.editor"
+        "any.caveman.commit",
+        "any.caveman.compress",
+        "any.caveman.help"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "any.cavecrew",
+      "skills": [
+        "cavecrew"
+      ],
+      "related": [
+        "any"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "any.caveman",
+      "skills": [
+        "caveman"
+      ],
+      "related": [
+        "any",
+        "any.caveman.commit",
+        "any.caveman.compress",
+        "any.caveman.help",
+        "any.caveman.review",
+        "any.caveman.stats"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "any.caveman.commit",
+      "skills": [
+        "caveman-commit"
+      ],
+      "related": [
+        "any",
+        "any.caveman"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "any.caveman.compress",
+      "skills": [
+        "caveman-compress"
+      ],
+      "related": [
+        "any",
+        "any.caveman"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "any.caveman.help",
+      "skills": [
+        "caveman-help"
+      ],
+      "related": [
+        "any",
+        "any.caveman"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "any.caveman.review",
+      "skills": [
+        "caveman-review"
+      ],
+      "related": [
+        "any",
+        "any.caveman"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "any.caveman.stats",
+      "skills": [
+        "caveman-stats"
+      ],
+      "related": [
+        "any",
+        "any.caveman"
       ],
       "prerequisites": []
     },
@@ -101,6 +190,16 @@
       "id": "any.plan.editor",
       "skills": [
         "olko-plan-editor"
+      ],
+      "related": [
+        "any"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "any.smart.summary",
+      "skills": [
+        "smart-summary"
       ],
       "related": [
         "any"

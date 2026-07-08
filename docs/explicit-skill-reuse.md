@@ -31,6 +31,12 @@ uses:
 not in `.agents/skill-config.md`. It is a per-skill composition concern, not a
 project-wide configuration concern.
 
+> **Naming:** authored marketplace skills use the `olko-` prefix
+> (see [naming](naming.md)). Vendored skills (copied from external sources, marked
+> `origin: vendored`) keep their upstream names — e.g. `uses: [caveman]`. The
+> examples below use unprefixed names for brevity; substitute the real skill name
+> (`olko-...` or the vendored upstream name) as appropriate.
+
 ## Resolution Rule
 
 When executing a skill:

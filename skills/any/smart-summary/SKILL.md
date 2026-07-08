@@ -2,6 +2,7 @@
 name: smart-summary
 description: End-of-session summary — track session-affected files, list investigated docs, summarize changes and problems, outline solved/pending issues, future steps, improvement suggestions, and helpful links
 user_invocable: true
+origin: vendored
 ---
 
 # Smart Summary
