@@ -16,8 +16,22 @@
       ],
       "cost": 1,
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-commit-docker",
@@ -35,8 +49,22 @@
       ],
       "cost": 1,
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-commit-style",
@@ -73,8 +101,22 @@
       ],
       "cost": 1,
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-plan-editor",
@@ -92,8 +134,22 @@
       ],
       "cost": 1,
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     }
   ]
 }

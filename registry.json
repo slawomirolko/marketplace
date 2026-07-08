@@ -18,12 +18,26 @@
       "cost": 3,
       "files": [
         "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
         "references/anti-patterns.md",
         "references/code-assessment.md",
         "references/gotcha-mining.md",
         "references/methodology.md",
-        "scripts/line-count.mjs"
-      ]
+        "scripts/line-count.mjs",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-commit-docs",
@@ -59,8 +73,22 @@
       ],
       "cost": 1,
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-commit-docker",
@@ -78,8 +106,22 @@
       ],
       "cost": 1,
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-commit-style",
@@ -116,8 +158,22 @@
       ],
       "cost": 1,
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-plan-editor",
@@ -135,8 +191,22 @@
       ],
       "cost": 1,
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-adapt-to-marketplace",
@@ -154,8 +224,22 @@
       ],
       "cost": 1,
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-install-skill",
@@ -172,8 +256,22 @@
       ],
       "cost": 1,
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-test",
@@ -190,8 +288,22 @@
       ],
       "cost": 1,
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     }
   ]
 }
