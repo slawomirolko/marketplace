@@ -101,6 +101,15 @@ test("fix mode adds registry metadata and writes category indexes", () => {
 
   const categoryIndex = readJson(path.join(repo, "skills", "any", "index.json"));
   assert.deepEqual(categoryIndex, registry);
+
+  const graph = readJson(path.join(repo, "capability-graph.json"));
+  assert.equal(graph.capabilityGraphSchemaVersion, 1);
+  assert.equal(graph.purpose, "routing-suggestions-only");
+  assert.deepEqual(
+    graph.capabilities.map((capability) => capability.id),
+    ["any", "any.demo"],
+  );
+  assert.deepEqual(graph.capabilities.find((capability) => capability.id === "any").related, ["any.demo"]);
 });
 
 test("fix mode adds progressive loading metadata for large skills", () => {
@@ -167,6 +176,21 @@ test("validation rejects stale category indexes", () => {
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /skills\/any\/index\.json: category index is stale/);
+});
+
+test("validation rejects stale capability graph", () => {
+  const repo = makeRepo();
+  assert.equal(runRegistry(repo, ["--fix"]).status, 0);
+
+  fs.writeFileSync(
+    path.join(repo, "capability-graph.json"),
+    `${JSON.stringify({ capabilityGraphSchemaVersion: 1, capabilities: [] }, null, 2)}\n`,
+  );
+
+  const result = runRegistry(repo);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /capability-graph\.json: capability graph is stale/);
 });
 
 test("validation rejects SKILL.md frontmatter name mismatches", () => {

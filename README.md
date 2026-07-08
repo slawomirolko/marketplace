@@ -12,13 +12,13 @@ openskills install https://github.com/slawomirolko/marketplace --universal
 
 ## Registry maintenance
 
-Validate the root registry and generated category indexes:
+Validate the root registry, generated category indexes, and capability graph:
 
 ```powershell
 node scripts/registry.mjs
 ```
 
-Regenerate registry metadata and `skills/<category>/index.json` files:
+Regenerate registry metadata, `skills/<category>/index.json` files, and `capability-graph.json`:
 
 ```powershell
 node scripts/registry.mjs --fix
@@ -34,6 +34,12 @@ Route a request through metadata only, preferably through a category index first
 
 ```powershell
 node scripts/route-skill.mjs --category testing --intent "run affected tests" --limit 5
+```
+
+Create a bounded context loading plan for a skill and any explicit `uses` dependencies declared in `.agents/skills/<skill-name>/project.md`:
+
+```powershell
+node scripts/context-plan.mjs --skill olko-commit --budget 4000
 ```
 
 Run all marketplace tooling tests:

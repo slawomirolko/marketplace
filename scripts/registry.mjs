@@ -3,6 +3,7 @@ import path from "node:path";
 
 const root = process.cwd();
 const registryPath = path.join(root, "registry.json");
+const capabilityGraphPath = path.join(root, "capability-graph.json");
 const skillsRoot = path.join(root, "skills");
 const fix = process.argv.includes("--fix");
 
@@ -324,6 +325,62 @@ function writeCategoryIndexes(registry) {
   }
 }
 
+function capabilityDepth(capability) {
+  return capability.split(".").length;
+}
+
+function relatedCapabilities(capability, allCapabilities) {
+  const parts = capability.split(".");
+  const relations = new Set();
+
+  for (let index = parts.length - 1; index > 0; index -= 1) {
+    const parent = parts.slice(0, index).join(".");
+    if (allCapabilities.has(parent)) {
+      relations.add(parent);
+    }
+  }
+
+  const prefix = `${capability}.`;
+  for (const other of allCapabilities) {
+    if (other !== capability && other.startsWith(prefix)) {
+      relations.add(other);
+    }
+  }
+
+  return [...relations].sort((a, b) => capabilityDepth(a) - capabilityDepth(b) || a.localeCompare(b)).slice(0, 6);
+}
+
+function buildCapabilityGraph(registry) {
+  const skillsByCapability = new Map();
+  for (const entry of registry.skills) {
+    for (const capability of entry.capabilities) {
+      if (!skillsByCapability.has(capability)) {
+        skillsByCapability.set(capability, []);
+      }
+      skillsByCapability.get(capability).push(entry.name);
+    }
+  }
+
+  const allCapabilities = new Set(skillsByCapability.keys());
+  const capabilities = [...allCapabilities].sort().map((capability) => ({
+    id: capability,
+    skills: skillsByCapability.get(capability).sort(),
+    related: relatedCapabilities(capability, allCapabilities),
+    prerequisites: [],
+  }));
+
+  return {
+    capabilityGraphSchemaVersion: 1,
+    purpose: "routing-suggestions-only",
+    maxTraversalDepth: 1,
+    capabilities,
+  };
+}
+
+function writeCapabilityGraph(registry) {
+  writeJson(capabilityGraphPath, buildCapabilityGraph(registry));
+}
+
 function categoryIndexes(registry) {
   const byCategory = new Map();
   for (const entry of registry.skills) {
@@ -359,12 +416,27 @@ function validateCategoryIndexes(registry) {
   return errors;
 }
 
+function validateCapabilityGraph(registry) {
+  const expected = buildCapabilityGraph(registry);
+  if (!fs.existsSync(capabilityGraphPath)) {
+    return ["capability-graph.json: capability graph is missing"];
+  }
+
+  const actual = readJson(capabilityGraphPath);
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    return ["capability-graph.json: capability graph is stale"];
+  }
+
+  return [];
+}
+
 let registry = readJson(registryPath);
 
 if (fix) {
   registry = normalizeRegistry(registry);
   writeJson(registryPath, registry);
   writeCategoryIndexes(registry);
+  writeCapabilityGraph(registry);
 }
 
 const errors = [];
@@ -379,6 +451,7 @@ if (!Array.isArray(registry.skills)) {
     errors.push(...validateEntry(entry, seen));
   }
   errors.push(...validateCategoryIndexes(registry));
+  errors.push(...validateCapabilityGraph(registry));
 }
 
 if (errors.length > 0) {
