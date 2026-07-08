@@ -5,7 +5,7 @@
       "name": "olko-adapt-to-marketplace",
       "category": "marketplace",
       "version": "1.0.0",
-      "description": "Onboard a skill from a local directory into the marketplace, even if it is not yet registered. Adapts the name to the olko- convention, analyzes whether the skill should be split into smaller sub-skills orchestrated by one parent skill, proposes the marketplace category directory, and prepares the skill and/or sub-skills to follow the marketplace architecture (Layered Skill Adaptation Pattern, Skill Adaptation Contract, Explicit Skill Reuse). Triggers: 'adapt to marketplace', 'onboard skill', 'split skill', 'prepare skill for marketplace', 'olko-adapt-to-marketplace <name>'.",
+      "description": "Onboard a skill from a local directory into the marketplace and run the full release cycle, even if the skill is not yet registered. Adapts the name to the olko- convention, analyzes whether the skill should be split into smaller sub-skills orchestrated by one parent skill, proposes the marketplace category directory, prepares the skill(s) to follow the marketplace architecture (Layered Skill Adaptation Pattern, Skill Adaptation Contract, Explicit Skill Reuse), scaffolds progressive loading when warranted, optimizes for token cost and routing quality, writes the full registry entry, regenerates derived artifacts (index.json, capability-graph.json, search-index.json), and runs the validation gate until the skill passes. Triggers: 'adapt to marketplace', 'onboard skill', 'split skill', 'prepare skill for marketplace', 'register skill', 'olko-adapt-to-marketplace <name>'.",
       "tags": [
         "marketplace",
         "adapt",

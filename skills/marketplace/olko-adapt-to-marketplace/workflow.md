@@ -112,9 +112,9 @@ For a split, each sub-skill may land in a different category (e.g. `olko-test-do
 
 If a new category is needed, propose the directory name (lowercase, `[^a-z0-9-]` → `-`), create the `skills/<new-category>/` directory, and note it for Step 7.
 
-### Step 7 — Prepare the skill(s)
+### Step 7 — Prepare and optimize the skill(s)
 
-For the single skill (no split) **or** each skill in the decomposition (parent + sub-skills), prepare the `SKILL.md` so it follows the marketplace architecture. Do this per skill:
+For the single skill (no split) **or** each skill in the decomposition (parent + sub-skills), prepare the skill so it follows the marketplace architecture and is optimized for token cost and routing. Do this per skill, in order.
 
 #### 7a — Frontmatter
 
@@ -162,59 +162,227 @@ skills/python/olko-test-python/SKILL.md
 skills/testing/olko-test-kotlin/SKILL.md
 ```
 
-#### 7e — Present for confirmation
+#### 7e — Progressive loading structure
 
-Present the prepared `SKILL.md`(s) to the user. Ask: "Write these files? (y/n)". With `--dry-run`, show the proposed content but do not write.
+Decide whether the skill ships as a single `SKILL.md` or as a progressive bundle. Measure the prepared `SKILL.md` line count against the `largeSkillLineThreshold` (100 lines) in `scripts/registry.mjs`:
 
-### Step 8 — Register in registry.json
+| Signal | Structure | `loading` block |
+|--------|-----------|-----------------|
+| `SKILL.md` ≤ 100 lines AND no existing section files | Single `SKILL.md` | omit |
+| `SKILL.md` > 100 lines OR any of `overview.md` / `workflow.md` / `examples.md` / `edge-cases.md` already exists | Progressive bundle | required |
 
-Add or update one entry per skill in `registry.json`:
+`registry.mjs` auto-promotes a skill to progressive when the threshold is crossed, so prefer deciding deliberately here. When progressive is chosen, **all four** section files must exist and be listed in `files` — a partial set is rejected.
+
+For a progressive bundle, split the source `SKILL.md` content into:
+
+- `overview.md` — smallest useful summary: what the skill does, when to use it, prerequisites.
+- `workflow.md` — the normal execution path (ordered steps). Holds the bulk of the detail.
+- `examples.md` — concrete output shapes, prompt wording, command snippets. Keep terse.
+- `edge-cases.md` — failure handling, uncommon branches, strict rules.
+
+Then reduce `SKILL.md` to a thin router (mirror this skill's own `SKILL.md`):
+
+````markdown
+---
+name: olko-<name>
+description: "..."
+---
+
+# olko-<name>
+
+## Routing Summary
+<one-paragraph description with triggers>
+
+## Progressive Loading
+- Load `overview.md` first after registry/category routing.
+- Load `workflow.md` only after this skill is selected.
+- Load `examples.md` only when output shape or command examples are needed.
+- Load `edge-cases.md` only for uncommon branches, failure handling, and strict rules.
+
+## Files
+- `overview.md` - ...
+- `workflow.md` - ...
+- `examples.md` - ...
+- `edge-cases.md` - ...
+````
+
+Token goal: a routed-but-not-selected skill loads only `overview.md`, not the full workflow. Keep `SKILL.md` + `overview.md` small; push depth into `workflow.md`.
+
+#### 7f — Optimization pass
+
+Before confirming, run a four-dimension optimization (extends the `olko-install-skill` framework with an authoring-style pass). Present findings as one table.
+
+**Dimension 1 — Token reduction**
+
+| Signal | Suggestion |
+|--------|------------|
+| Section restates the Layered Skill Adaptation Pattern / Skill Adaptation Contract / Explicit Skill Reuse verbatim | Drop it — precedence gives the skill default anyway |
+| Verbose prose, hedging, filler | Compress to terse commands / bullet points |
+| Duplicate content across `SKILL.md` and a section file | Keep the canonical copy in the section file; trim the router |
+| `overview.md` exceeds ~40 lines | Push detail into `workflow.md` |
+| Reference file that nothing references | Drop from `files` and delete |
+
+**Dimension 2 — Routing quality**
+
+| Signal | Suggestion |
+|--------|------------|
+| `description` lacks trigger phrases the router matches on | Add `Triggers: '...', '...'` |
+| `description` is vague ("helps with tests") | Make it specific (what + when + scope) |
+| `capabilities` do not form a clean hierarchy | Normalize to `[<category>, <category>.<scope>]` |
+| `tags` include the literal token `skill` or exceed 6 | Trim; keep meaningful name parts + category |
+| Sub-skill `description` duplicates the parent | Make each sub-skill's description scoped to its stack/phase |
+
+**Dimension 3 — Marketplace contribution**
+
+| Signal | Suggestion |
+|--------|------------|
+| A config key the skill should recognize but doesn't document | Add it to the marketplace skill (don't leave it project-only) |
+| A hardcoded project value that survived 7b | Move it to config documentation, not the body |
+| A `uses` dependency the skill inherently needs | Document it; do **not** put `uses` in the registry entry |
+
+**Dimension 4 — Authoring style (scoped caveman)**
+
+Apply the [`caveman`](../../any/caveman/SKILL.md) mode **by file type**, not blanket. Skill content is high-traffic context, so compress prose where it is safe and keep clear prose where ambiguity is risky (this is caveman's own Auto-Clarity carve-out, applied to skill authoring).
+
+| File / content | Style | Why |
+|----------------|-------|-----|
+| `SKILL.md` (router) + `overview.md` | **caveman full** — drop articles/filler, fragments OK | Routing/summary; terse lowers routing token cost |
+| Prompts shown to the user, `examples.md` snippets | **caveman full** | Already terse by nature; consistency |
+| `workflow.md` (multi-step procedures) | **clear prose** (no caveman) | Ordered steps; caveman's Auto-Clarity rule forbids compression where fragment order risks misread |
+| `edge-cases.md` (rules, failure handling, security) | **clear prose** | Ambiguity here is dangerous; irreversible ops (commit/push/merge) need unambiguous wording |
+| `description` / trigger phrases (registry + frontmatter) | **clear prose, never caveman** | Router must match triggers; stripping hurts routing |
+| Commands, file paths, error strings, code blocks | **unchanged** | caveman already preserves these exact |
+
+Rules for the caveman pass:
+- Keep every technical term, symbol, command, path, and error string exact.
+- One meaning per fragment — if a fragment could be read two ways, restore the conjunction/article.
+- Never cavemanize a step that performs an irreversible action (push, merge, delete, force); keep it in clear prose with the confirmation wording intact.
+- When in doubt, prefer clarity over compression — the progressive loading structure (7e) already prevents the heavy content from loading during routing, so the marginal token cost of clear prose in `workflow.md`/`edge-cases.md` is paid only when the skill is actually selected.
+
+Apply accepted optimizations unless `--dry-run`. Record the final `description`, `tags`, `capabilities`, `cost`, `loading`, and the per-file style choices for Step 8.
+
+#### 7g — Present for confirmation
+
+Present the prepared `SKILL.md` + progressive files (or single `SKILL.md`) plus the optimization table to the user. Ask: "Write these files? (y/n)". With `--dry-run`, show the proposed content but do not write.
+
+### Step 8 — Register in registry.json (full entry)
+
+Add or update one entry per skill in `registry.json`. Write a **complete** entry, not a stub:
 
 ```json
 {
-  "name": "<skill-name>",
+  "name": "olko-<name>",
   "category": "<category>",
-  "files": [ "SKILL.md", ... ]
+  "version": "1.0.0",
+  "description": "<optimized description from 7f>",
+  "tags": ["<category>", "<part>"],
+  "capabilities": ["<category>", "<category>.<scope>"],
+  "cost": 1,
+  "files": ["SKILL.md", "..."],
+  "loading": { "mode": "progressive", "first": "overview.md", "sections": ["overview", "workflow", "examples", "edge-cases"] }
 }
 ```
 
-- `name` — the adapted name (must start with `olko-`).
-- `category` — the directory from Step 6.
-- `files` — every file the skill ships (at minimum `SKILL.md`, plus reference files / scripts copied in Step 7d).
+Field rules (enforced by `scripts/registry.mjs`):
 
-For a split, add one entry per sub-skill plus the parent. If the source skill was already registered (Step 3), update its entry (name, category, files) rather than adding a duplicate.
+| Field | Rule |
+|-------|------|
+| `name` | `olko-` prefix; matches folder + frontmatter |
+| `category` | existing `skills/<category>/` directory |
+| `version` | semver `MAJOR.MINOR.PATCH`; `1.0.0` for new skills; bump per semver for re-onboarded skills |
+| `description` | non-empty; prefer the optimized version with triggers |
+| `tags` | non-empty array; ≤ 6; default-derivable from name + category |
+| `capabilities` | non-empty; normalized `^[a-z0-9]+(?:[.-][a-z0-9]+)*$`; default-derivable as `[<category>, <category>.<scope>]` |
+| `cost` | positive int; 1 file → 1, ≤ 4 files → 2, else 3 |
+| `files` | every shipped file; all must exist on disk; `SKILL.md` first |
+| `loading` | omit for single-file skills; for progressive bundles must be `{mode: progressive, first: overview.md, sections: [overview, workflow, examples, edge-cases]}` |
+| **forbidden** | `uses`, `dependencies`, `runtimeDependencies` — never in registry entries |
+
+`scripts/registry.mjs --fix` (Step 9) preserves explicit `tags`/`capabilities`/`cost` via `??` and only fills gaps, so optimized values survive.
+
+For a split, add one entry per sub-skill plus the parent. If the source skill was already registered (Step 3), update its entry in place rather than adding a duplicate.
 
 Validate `registry.json` is valid JSON after editing. With `--dry-run`, show the proposed diff but do not write.
 
-### Step 9 — Verify and report
+### Step 9 — Regenerate marketplace metadata
+
+After writing files and `registry.json`, regenerate the derived artifacts so the registry is consistent. Run from the marketplace root:
+
+```powershell
+node scripts/registry.mjs --fix
+```
+
+This re-derives any missing fields, sorts entries, and regenerates:
+
+- `skills/<category>/index.json` (one per category)
+- `capability-graph.json`
+- `search-index.json`
+
+With `--dry-run`, skip this step and print the command instead.
+
+### Step 10 — Validate (the cycle every skill must pass)
+
+Run the validation gate:
+
+```powershell
+node scripts/registry.mjs
+node --test scripts/*.test.mjs
+```
+
+Interpret results:
+
+- `registry ok: N skills` → pass.
+- Any error line → map it to the offending skill/field, fix it, return to the relevant step, and re-run Step 9 then Step 10. Loop until clean.
+- A failing `.test.mjs` → fix the tooling or the skill data, re-run.
+
+With `--dry-run`, validate the in-memory plan and report predicted errors without writing.
+
+Common failure → fix map:
+
+| Error from `registry.mjs` | Fix step |
+|---------------------------|----------|
+| `name must start with olko-` | Step 4 |
+| `category must match skills/<category>/` | Step 6 / create the directory |
+| `frontmatter name must match registry name` | align folder / frontmatter / entry (7a, 8) |
+| `version must be MAJOR.MINOR.PATCH` | Step 8 |
+| `capability '<x>' is not normalized` | Step 7f capabilities |
+| `progressive loading file is missing: <f>.md` | Step 7e (create it) or remove `loading` |
+| `progressive loading must list <f>.md in files` | Step 8 `files` |
+| `category index is stale` / `capability graph is stale` / search index stale | Step 9 `--fix` |
+| `<field> must not be declared in registry entries` | remove `uses` / `dependencies` / `runtimeDependencies` from the entry |
+
+### Step 11 — Verify and report
 
 Show the final state:
 
 ```
-Skill <old-name> → <new-name> onboarded to the marketplace.
+Skill <old-name> → <new-name> onboarded and validated.
 
 Category: <category>
 Directory: skills/<category>/<skill-name>/
+Structure: <single SKILL.md | progressive (overview/workflow/examples/edge-cases)>
 Registered: registry.json (#<index>)
+Derived artifacts: index.json, capability-graph.json, search-index.json regenerated
+Validation: registry ok | tests ok
 
 Adaptation contract: ✅ compliant
 Explicit skill reuse: ✅ isolated (no undeclared dependencies)
 ```
 
-For a split, show the full decomposition:
+For a split, show the full decomposition with each skill's structure and `uses` wiring:
 
 ```
 Skill <old-name> → split into <N> skills:
 
 Parent:
-  olko-test               skills/testing/         uses: [olko-test-dotnet, olko-test-python, olko-test-kotlin]
+  olko-test               skills/testing/   progressive   uses: [olko-test-dotnet, olko-test-python, olko-test-kotlin]
 
 Sub-skills:
-  olko-test-dotnet        skills/dotnet/
-  olko-test-python        skills/python/
-  olko-test-kotlin        skills/testing/
+  olko-test-dotnet        skills/dotnet/    single
+  olko-test-python        skills/python/    single
+  olko-test-kotlin        skills/testing/   single
 
 All registered in registry.json. Each sub-skill is independently invocable; the parent delegates via `uses`.
 ```
 
-Tell the user how to verify: run `olko-install-skill <skill-name>` from a target project to confirm the onboarded skill installs and adapts correctly.
+Tell the user how to verify end-to-end: run `olko-install-skill <skill-name>` from a target project to confirm the onboarded skill installs and adapts correctly.

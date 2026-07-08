@@ -230,10 +230,36 @@ Configuration (.agents/skill-config.md):
 Project adapter (.agents/skills/<skill-name>/project.md):
   - Build: dotnet build
   - Test: dotnet test --no-restore
-  - uses: testing-dotnet
+  - uses: olko-test-dotnet
 
 Next: invoke <skill-name> in your workflow. It will load this adaptation automatically.
 ```
+
+#### Gitignore guidance
+
+The files this skill writes are **shared project knowledge** — commit them so the whole team and every AI tool gets the same adaptation. Do **not** gitignore `.agents/skill-config.md` or `.agents/skills/*/project.md`.
+
+The `.agents/context/` tree is a separate concern (created by the context-store tooling, not by this skill). It mixes durable and regenerable state — follow the rule from the marketplace README:
+
+| Path in the consuming project | Commit / Ignore |
+|-------------------------------|-----------------|
+| `.agents/skill-config.md` | commit |
+| `.agents/skills/*/project.md` | commit |
+| `.agents/context/memory/*.md` | commit (durable skill knowledge) |
+| `.agents/context/scratchpad/` | ignore (regenerable per-task state) |
+| `.agents/context/summaries/` | ignore (regenerated after each task) |
+| `.agents/context/cache/` | ignore (cache) |
+
+Suggested `.gitignore` snippet to print for the user:
+
+```gitignore
+# Regenerable per-task context state
+.agents/context/scratchpad/
+.agents/context/summaries/
+.agents/context/cache/
+```
+
+Print this guidance once per install. On update mode, only re-print it if `.agents/context/` is new or the user asks. Keep it terse (caveman is fine here — it is a report, not a procedure).
 
 #### Marketplace contribution reminders
 
