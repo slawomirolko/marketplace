@@ -64,7 +64,7 @@ function runRoute(repo, args) {
 test("routes through category index before ranking candidates", () => {
   const repo = makeRepo();
 
-  const result = runRoute(repo, ["--category", "testing", "--intent", "run tests", "--limit", "2"]);
+  const result = runRoute(repo, ["--category", "testing", "--intent", "run test", "--limit", "2"]);
 
   assert.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
@@ -74,6 +74,13 @@ test("routes through category index before ranking candidates", () => {
     ["olko-test"],
   );
   assert.equal(output.candidates[0].loading.first, "SKILL.md");
+  assert.equal(output.candidates[0].confidence, "high");
+  assert.deepEqual(output.candidates[0].reasons, [
+    "tag match: test",
+    "capability match: testing.test",
+    "description match: run",
+    "name match: olko-test",
+  ]);
 });
 
 test("can suggest adjacent skills from the capability graph without loading them", () => {
@@ -100,4 +107,16 @@ test("rejects candidate limits outside the progressive routing range", () => {
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /--limit must be an integer from 2 to 5/);
+});
+
+test("marks nearby alternatives as medium confidence", () => {
+  const repo = makeRepo();
+
+  const result = runRoute(repo, ["--intent", "commit", "--limit", "2"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.equal(output.candidates[0].name, "olko-commit");
+  assert.equal(output.candidates[0].confidence, "medium");
+  assert.equal(output.candidates[1].name, "olko-commit-docker");
 });
