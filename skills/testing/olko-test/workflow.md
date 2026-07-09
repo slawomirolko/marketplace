@@ -16,6 +16,19 @@ Proceeding...
 ### Step 1a — Architecture & coding-style compliance gate
 Before running any tests, verify the changed code complies with the conventions defined in the repo's `AGENTS.md` / `CODING_STYLE.md` / `TESTING.md` reference files. This step is a **delegation gate** — it does not encode rules. It loads the rules from the docs and runs the appropriate tools.
 
+If stack-specific skills are declared in `.agents/skills/olko-test/project.md`, delegate the matching changed files and follow their result before running tests:
+
+```yaml
+uses:
+  - olko-dotnet-style
+  - olko-dotnet-architecture
+  - olko-dotnet-testing
+  - olko-python-architecture
+  - olko-python-style
+```
+
+If a dependency is not declared, run the built-in document-based checks below.
+
 **Skip this step** only when there are no staged/unstaged source files:
 ```bash
 git status --porcelain

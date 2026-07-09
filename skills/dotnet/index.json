@@ -1,0 +1,101 @@
+{
+  "registrySchemaVersion": 1,
+  "skills": [
+    {
+      "name": "olko-dotnet-architecture",
+      "category": "dotnet",
+      "version": "1.0.0",
+      "description": "Check .NET architecture compliance for changed C# projects. Reads project docs and adapters, maps changed .cs/.csproj files to source projects, verifies layer boundaries, dependency direction, contracts ownership, architecture-test availability, and reports violations with rule sources. Use when validating .NET architecture, before commit/test gates, during plan review, or when olko-commit-style/olko-test/olko-plan-editor delegates .NET architecture checks.",
+      "tags": [
+        "dotnet",
+        "architecture"
+      ],
+      "capabilities": [
+        "dotnet",
+        "dotnet.dotnet.architecture"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
+      "name": "olko-dotnet-style",
+      "category": "dotnet",
+      "version": "1.0.0",
+      "description": "Check .NET/C# style compliance for changed C# projects with marketplace defaults. Maps .cs/.csproj files to source projects, reads project docs/adapters, runs dotnet format by default when no project command is configured, checks common C# style expectations that docs enable, and reports violations with rule sources. Use when validating .NET style, linting C# changes, before commit/test gates, or when olko-commit-style delegates .NET style checks.",
+      "tags": [
+        "dotnet",
+        "style"
+      ],
+      "capabilities": [
+        "dotnet",
+        "dotnet.dotnet.style"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
+      "name": "olko-dotnet-testing",
+      "category": "dotnet",
+      "version": "1.0.0",
+      "description": "Check .NET test conventions for changed C# projects with marketplace defaults. Reads project docs/adapters, maps source changes to test projects, verifies InternalsVisibleTo usage, test visibility boundaries, smart enum coverage, saga JSON/ErrorOr assertion conventions, performance validation expectations, and reports violations with rule sources. Use when validating .NET tests, before commit/test gates, or when olko-test delegates .NET test-convention checks.",
+      "tags": [
+        "dotnet",
+        "testing"
+      ],
+      "capabilities": [
+        "dotnet",
+        "dotnet.dotnet.testing"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    }
+  ]
+}

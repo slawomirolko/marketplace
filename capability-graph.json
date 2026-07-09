@@ -207,6 +207,50 @@
       "prerequisites": []
     },
     {
+      "id": "dotnet",
+      "skills": [
+        "olko-dotnet-architecture",
+        "olko-dotnet-style",
+        "olko-dotnet-testing"
+      ],
+      "related": [
+        "dotnet.dotnet.architecture",
+        "dotnet.dotnet.style",
+        "dotnet.dotnet.testing"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "dotnet.dotnet.architecture",
+      "skills": [
+        "olko-dotnet-architecture"
+      ],
+      "related": [
+        "dotnet"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "dotnet.dotnet.style",
+      "skills": [
+        "olko-dotnet-style"
+      ],
+      "related": [
+        "dotnet"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "dotnet.dotnet.testing",
+      "skills": [
+        "olko-dotnet-testing"
+      ],
+      "related": [
+        "dotnet"
+      ],
+      "prerequisites": []
+    },
+    {
       "id": "marketplace",
       "skills": [
         "olko-adapt-to-marketplace",
@@ -235,6 +279,38 @@
       ],
       "related": [
         "marketplace"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "python",
+      "skills": [
+        "olko-python-architecture",
+        "olko-python-style"
+      ],
+      "related": [
+        "python.python.architecture",
+        "python.python.style"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "python.python.architecture",
+      "skills": [
+        "olko-python-architecture"
+      ],
+      "related": [
+        "python"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "python.python.style",
+      "skills": [
+        "olko-python-style"
+      ],
+      "related": [
+        "python"
       ],
       "prerequisites": []
     },
