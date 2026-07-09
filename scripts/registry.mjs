@@ -58,8 +58,10 @@ function parseFrontmatter(markdown, filePath) {
 
     const key = match[1];
     let value = match[2] ?? "";
+    let isBlockScalar = false;
 
     if (value === ">" || value === "|") {
+      isBlockScalar = true;
       const blockLines = [];
       i += 1;
       while (i < end && /^(?:\s+|$)/.test(lines[i])) {
@@ -70,7 +72,7 @@ function parseFrontmatter(markdown, filePath) {
       value = blockLines.filter(Boolean).join(" ");
     }
 
-    data[key] = value.replace(/^["']|["']$/g, "").trim();
+    data[key] = isBlockScalar ? value.trim() : value.replace(/^["']|["']$/g, "").trim();
   }
 
   return data;
@@ -209,6 +211,10 @@ function validateLoading(entry, skillDir, errors) {
 }
 
 function validateCompatibility(entry, errors) {
+  if (entry.direct !== undefined && typeof entry.direct !== "boolean") {
+    errors.push(`${entry.name}: direct must be a boolean when present`);
+  }
+
   for (const field of ["compatibleWith", "requires"]) {
     if (entry[field] !== undefined && !Array.isArray(entry[field])) {
       errors.push(`${entry.name}: ${field} must be an array when present`);
@@ -320,7 +326,7 @@ function normalizeRegistry(registry) {
           [["loading", deriveLoading(entry, files)]].filter(([, value]) => value !== undefined),
         ),
         ...Object.fromEntries(
-          ["compatibleWith", "requires", "replaces", "deprecatedBy"]
+          ["direct", "compatibleWith", "requires", "replaces", "deprecatedBy"]
             .filter((field) => entry[field] !== undefined)
             .map((field) => [field, entry[field]]),
         ),
