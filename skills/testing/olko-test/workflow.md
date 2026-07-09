@@ -26,6 +26,7 @@ uses:
   - olko-docker-style
   - olko-python-architecture
   - olko-python-style
+  - olko-python-testing
 ```
 
 If a dependency is not declared, run the built-in document-based checks below.
@@ -56,7 +57,7 @@ git diff --name-only HEAD
 **Python:**
 1. Read the nearest `AGENTS.md` / `CODING_STYLE.md` / `TESTING.md` to learn the current rules.
 2. Run the style tool the docs reference (typically `ruff check` + `ruff format --check`, or a project-specific task — use what the docs prescribe, run from the discovered Python project root).
-3. Cross-check changed files against architecture + test rules in the docs (e.g. dependency direction, no hand-edited gRPC stubs). Report violations.
+3. Cross-check changed files against architecture + test rules in the docs (e.g. dependency direction, no hand-edited gRPC stubs, integration vs unit tier boundaries, no-skip/no-silent-pass, parametrization, fixture reuse). Report violations.
 
 **Docker:**
 1. Read the nearest `AGENTS.md` / `DOCKER.md` / `CODING_STYLE.md` / `TESTING.md` and repo root `AGENTS.md` to learn the current Docker rules.
