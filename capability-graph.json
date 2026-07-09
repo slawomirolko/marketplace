@@ -241,14 +241,28 @@
     {
       "id": "dotnet",
       "skills": [
+        "olko-create-saga",
         "olko-dotnet-architecture",
+        "olko-dotnet-build",
         "olko-dotnet-style",
         "olko-dotnet-testing"
       ],
       "related": [
+        "dotnet.create.saga",
         "dotnet.dotnet.architecture",
+        "dotnet.dotnet.build",
         "dotnet.dotnet.style",
         "dotnet.dotnet.testing"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "dotnet.create.saga",
+      "skills": [
+        "olko-create-saga"
+      ],
+      "related": [
+        "dotnet"
       ],
       "prerequisites": []
     },
@@ -256,6 +270,16 @@
       "id": "dotnet.dotnet.architecture",
       "skills": [
         "olko-dotnet-architecture"
+      ],
+      "related": [
+        "dotnet"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "dotnet.dotnet.build",
+      "skills": [
+        "olko-dotnet-build"
       ],
       "related": [
         "dotnet"
@@ -374,8 +398,7 @@
         "olko-project-architecture"
       ],
       "related": [
-        "project",
-        "ai.ai.architecture"
+        "project"
       ],
       "prerequisites": []
     },

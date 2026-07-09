@@ -15,12 +15,23 @@
         "project.project.architecture"
       ],
       "cost": 1,
-      "uses": [
-        "olko-ai-architecture"
-      ],
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     }
   ]
 }
