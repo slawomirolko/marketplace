@@ -212,7 +212,7 @@
     {
       "name": "caveman-commit",
       "category": "any",
-      "text": "caveman-commit any Ultra-compressed commit message style guide. Cuts noise from commit messages while preserving intent and reasoning. Conventional Commits format. Subject ≤50 chars, body only when \"why\" isn't obvious. This skill provides the commit message FORMAT used by smart-commit; it should NOT be called directly when the user says \"commit\" or \"smart-commit\". any caveman commit any any.caveman.commit",
+      "text": "caveman-commit any Ultra-compressed commit message style guide. Cuts noise from commit messages while preserving intent and reasoning. Conventional Commits format. Subject <=50 chars, body only when \"why\" isn't obvious. This helper skill is consumed by commit workflow skills; it should NOT be called directly when the user says \"commit\". any caveman commit any any.caveman.commit",
       "tokens": [
         "caveman",
         "commit",
@@ -245,22 +245,22 @@
         "t",
         "obvious.",
         "this",
+        "helper",
         "skill",
-        "provides",
-        "the",
-        "format",
-        "used",
+        "is",
+        "consumed",
         "by",
-        "smart",
+        "workflow",
+        "skills",
         "it",
         "should",
         "not",
         "be",
         "called",
         "directly",
+        "the",
         "user",
         "says",
-        "or",
         ".",
         "any.caveman.commit"
       ]
@@ -268,7 +268,7 @@
     {
       "name": "caveman-compress",
       "category": "any",
-      "text": "caveman-compress any Compress natural language memory files (CLAUDE.md, todos, preferences) into caveman format to save input tokens. Preserves all technical substance, code, URLs, and structure. Compressed version overwrites the original file. Human-readable backup saved as FILE.original.md. Trigger: /caveman-compress FILEPATH or \"compress memory file any caveman compress any any.caveman.compress",
+      "text": "caveman-compress any Compress natural language memory files (CLAUDE.md, todos, preferences) into caveman format to save input tokens. Preserves all technical substance, code, URLs, and structure. Compressed version overwrites the original file. Human-readable backup saved as FILE.original.md. Trigger: /caveman-compress FILEPATH or \"compress memory file\". any caveman compress any any.caveman.compress",
       "tokens": [
         "caveman",
         "compress",
@@ -310,6 +310,7 @@
         "filepath",
         "or",
         "file",
+        ".",
         "any.caveman.compress"
       ]
     },
@@ -702,11 +703,11 @@
       ]
     },
     {
-      "name": "smart-summary",
+      "name": "olko-summary",
       "category": "any",
-      "text": "smart-summary any End-of-session summary — track session-affected files, list investigated docs, summarize changes and problems, outline solved/pending issues, future steps, improvement suggestions, and helpful links any smart summary any any.smart.summary",
+      "text": "olko-summary any End-of-session summary — track session-affected files, list investigated docs, summarize changes and problems, outline solved/pending issues, future steps, improvement suggestions, and helpful links any olko summary any any.summary",
       "tokens": [
-        "smart",
+        "olko",
         "summary",
         "any",
         "end",
@@ -732,7 +733,7 @@
         "suggestions",
         "helpful",
         "links",
-        "any.smart.summary"
+        "any.summary"
       ]
     },
     {
