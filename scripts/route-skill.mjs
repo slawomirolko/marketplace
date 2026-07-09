@@ -113,7 +113,7 @@ function confidenceFor(candidate, index, candidates) {
 
   const next = candidates[index + 1];
   const lead = next ? candidate.score - next.score : candidate.score;
-  if (candidate.score >= 8 && lead >= 3) {
+  if (index === 0 && candidate.score >= 8 && lead >= 3) {
     return "high";
   }
 
@@ -171,6 +171,7 @@ if (!Number.isInteger(args.limit) || args.limit < 2 || args.limit > 5) {
 const intentTokens = tokenize(args.intent);
 const capabilityGraph = args.suggestAdjacent ? loadCapabilityGraph() : null;
 const candidates = loadCandidates(args.category)
+  .filter((entry) => entry.direct !== false)
   .map((entry) => {
     const scored = scoreEntry(entry, intentTokens);
     return {
@@ -192,11 +193,11 @@ const candidates = loadCandidates(args.category)
   })
   .filter((entry) => entry.score > 0)
   .sort((a, b) => b.score - a.score || a.cost - b.cost || a.name.localeCompare(b.name))
-  .slice(0, args.limit)
   .map((entry, index, entries) => ({
     ...entry,
     confidence: confidenceFor(entry, index, entries),
-  }));
+  }))
+  .slice(0, args.limit);
 
 console.log(
   JSON.stringify(

@@ -163,6 +163,42 @@ test("validation rejects runtime dependency fields in registry entries", () => {
   assert.match(result.stderr, /olko-demo: uses must not be declared in registry entries/);
 });
 
+test("fix mode preserves direct routing metadata", () => {
+  const repo = makeRepo();
+  const registryPath = path.join(repo, "registry.json");
+  const registry = readJson(registryPath);
+  registry.skills[0].direct = false;
+  fs.writeFileSync(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
+
+  const result = runRegistry(repo, ["--fix"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(readJson(registryPath).skills[0].direct, false);
+});
+
+test("block scalar frontmatter preserves trailing quotes", () => {
+  const repo = makeRepo();
+  const skillPath = path.join(repo, "skills", "any", "olko-demo", "SKILL.md");
+  fs.writeFileSync(
+    skillPath,
+    [
+      "---",
+      "name: olko-demo",
+      "description: >",
+      '  Demo trigger "quoted phrase"',
+      "---",
+      "",
+      "# Demo",
+      "",
+    ].join("\n"),
+  );
+
+  const result = runRegistry(repo, ["--fix"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(readJson(path.join(repo, "registry.json")).skills[0].description, 'Demo trigger "quoted phrase"');
+});
+
 test("validation rejects stale category indexes", () => {
   const repo = makeRepo();
   assert.equal(runRegistry(repo, ["--fix"]).status, 0);

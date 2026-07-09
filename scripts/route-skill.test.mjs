@@ -120,3 +120,76 @@ test("marks nearby alternatives as medium confidence", () => {
   assert.equal(output.candidates[0].confidence, "medium");
   assert.equal(output.candidates[1].name, "olko-commit-docker");
 });
+
+test("computes confidence before applying the candidate limit", () => {
+  const repo = makeRepo();
+  const registryPath = path.join(repo, "registry.json");
+  const registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
+  registry.skills.push({
+    name: "olko-commit-docs",
+    category: "any",
+    files: ["SKILL.md"],
+  });
+  writeSkill(repo, "any", "olko-commit-docs", "Check docs after commit.");
+  fs.writeFileSync(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
+  assert.equal(spawnSync(process.execPath, [registryScriptPath, "--fix"], { cwd: repo }).status, 0);
+
+  const result = runRoute(repo, ["--intent", "commit", "--limit", "2"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.equal(output.candidates[1].name, "olko-commit-docker");
+  assert.equal(output.candidates[1].confidence, "medium");
+});
+
+test("only the top candidate can be high confidence", () => {
+  const repo = makeRepo();
+
+  const result = runRoute(repo, ["--intent", "commit", "--limit", "2"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.equal(output.candidates[0].confidence, "medium");
+  assert.equal(output.candidates[1].confidence, "medium");
+});
+
+test("excludes non-direct helper skills from routing", () => {
+  const repo = makeRepo();
+  const registryPath = path.join(repo, "registry.json");
+  const registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
+  registry.skills.push({
+    name: "caveman-commit",
+    category: "any",
+    origin: "vendored",
+    version: "1.0.0",
+    description: "Commit message format helper. Should not be called directly for commit.",
+    tags: ["any", "caveman", "commit"],
+    capabilities: ["any", "any.caveman.commit"],
+    cost: 1,
+    direct: false,
+    files: ["SKILL.md"],
+  });
+  const skillDir = path.join(repo, "skills", "any", "caveman-commit");
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(skillDir, "SKILL.md"),
+    [
+      "---",
+      "name: caveman-commit",
+      "description: Commit message format helper.",
+      "origin: vendored",
+      "---",
+      "",
+      "# caveman-commit",
+      "",
+    ].join("\n"),
+  );
+  fs.writeFileSync(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
+  assert.equal(spawnSync(process.execPath, [registryScriptPath, "--fix"], { cwd: repo }).status, 0);
+
+  const result = runRoute(repo, ["--intent", "commit", "--limit", "5"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert(!output.candidates.some((candidate) => candidate.name === "caveman-commit"));
+});

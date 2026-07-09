@@ -50,15 +50,15 @@
         "olko-commit-style",
         "olko-investigate-existing",
         "olko-plan-editor",
-        "smart-summary"
+        "olko-summary"
       ],
       "related": [
         "any.cavecrew",
         "any.caveman",
         "any.commit",
+        "any.summary",
         "any.caveman.commit",
-        "any.caveman.compress",
-        "any.caveman.help"
+        "any.caveman.compress"
       ],
       "prerequisites": []
     },
@@ -197,9 +197,9 @@
       "prerequisites": []
     },
     {
-      "id": "any.smart.summary",
+      "id": "any.summary",
       "skills": [
-        "smart-summary"
+        "olko-summary"
       ],
       "related": [
         "any"

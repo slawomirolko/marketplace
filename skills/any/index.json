@@ -46,7 +46,7 @@
       "category": "any",
       "origin": "vendored",
       "version": "1.0.0",
-      "description": "Ultra-compressed commit message style guide. Cuts noise from commit messages while preserving intent and reasoning. Conventional Commits format. Subject ≤50 chars, body only when \"why\" isn't obvious. This skill provides the commit message FORMAT used by smart-commit; it should NOT be called directly when the user says \"commit\" or \"smart-commit\".",
+      "description": "Ultra-compressed commit message style guide. Cuts noise from commit messages while preserving intent and reasoning. Conventional Commits format. Subject <=50 chars, body only when \"why\" isn't obvious. This helper skill is consumed by commit workflow skills; it should NOT be called directly when the user says \"commit\".",
       "tags": [
         "any",
         "caveman",
@@ -60,14 +60,15 @@
       "files": [
         "SKILL.md",
         "README.md"
-      ]
+      ],
+      "direct": false
     },
     {
       "name": "caveman-compress",
       "category": "any",
       "origin": "vendored",
       "version": "1.0.0",
-      "description": "Compress natural language memory files (CLAUDE.md, todos, preferences) into caveman format to save input tokens. Preserves all technical substance, code, URLs, and structure. Compressed version overwrites the original file. Human-readable backup saved as FILE.original.md. Trigger: /caveman-compress FILEPATH or \"compress memory file",
+      "description": "Compress natural language memory files (CLAUDE.md, todos, preferences) into caveman format to save input tokens. Preserves all technical substance, code, URLs, and structure. Compressed version overwrites the original file. Human-readable backup saved as FILE.original.md. Trigger: /caveman-compress FILEPATH or \"compress memory file\".",
       "tags": [
         "any",
         "caveman",
@@ -305,24 +306,37 @@
       }
     },
     {
-      "name": "smart-summary",
+      "name": "olko-summary",
       "category": "any",
-      "origin": "vendored",
       "version": "1.0.0",
       "description": "End-of-session summary — track session-affected files, list investigated docs, summarize changes and problems, outline solved/pending issues, future steps, improvement suggestions, and helpful links",
       "tags": [
         "any",
-        "smart",
+        "olko",
         "summary"
       ],
       "capabilities": [
         "any",
-        "any.smart.summary"
+        "any.summary"
       ],
       "cost": 1,
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     }
   ]
 }
