@@ -23,7 +23,7 @@
       "name": "olko-python-style",
       "category": "python",
       "version": "1.0.0",
-      "description": "Check Python style compliance for changed Python files. Reads project docs and adapters, maps .py files to pyproject.toml roots, runs documented format/lint/type commands such as ruff/mypy/pyright/pytest-style gates when configured, and reports violations with rule sources. Use when validating Python style, linting Python changes, before commit/test gates, or when olko-commit-style delegates Python style checks.",
+      "description": "Check Python style compliance for changed Python files with marketplace defaults. Reads project docs and adapters, maps .py files to pyproject.toml roots, runs documented format/lint/type commands such as ruff/mypy/pyright when configured, checks common Python style expectations that docs enable, and reports violations with rule sources. Use when validating Python style, linting Python changes, before commit/test gates, or when olko-commit-style delegates Python style checks.",
       "tags": [
         "python",
         "style"
@@ -36,6 +36,38 @@
       "files": [
         "SKILL.md"
       ]
+    },
+    {
+      "name": "olko-python-testing",
+      "category": "python",
+      "version": "1.0.0",
+      "description": "Check Python test conventions for changed Python projects with marketplace defaults. Reads project docs/adapters, maps source changes to test files, verifies integration vs unit tier rules, pytest harness conventions, no-skip/no-silent-pass policy, monkeypatch/unit-only doubles, parametrization, fixture reuse, integration boundary rules, new-component test requirements, contract tests, and reports violations with rule sources. Use when validating Python tests, before commit/test gates, or when olko-test/olko-commit-style delegates Python test-convention checks.",
+      "tags": [
+        "python",
+        "testing"
+      ],
+      "capabilities": [
+        "python",
+        "python.python.testing"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     }
   ]
 }

@@ -28,6 +28,7 @@ uses:
   - olko-docker-style
   - olko-python-architecture
   - olko-python-style
+  - olko-python-testing
 ```
 
 If a dependency is not declared, run the built-in document-based checks below.
@@ -81,6 +82,7 @@ If a matching stack-specific skill is declared in `uses`, delegate the relevant 
 - Docker conventions: `olko-docker-style`
 - Python architecture: `olko-python-architecture`
 - Python style: `olko-python-style`
+- Python test conventions: `olko-python-testing`
 
 If no matching dependency is declared, inspect locally:
 

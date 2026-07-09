@@ -306,11 +306,13 @@
       "id": "python",
       "skills": [
         "olko-python-architecture",
-        "olko-python-style"
+        "olko-python-style",
+        "olko-python-testing"
       ],
       "related": [
         "python.python.architecture",
-        "python.python.style"
+        "python.python.style",
+        "python.python.testing"
       ],
       "prerequisites": []
     },
@@ -328,6 +330,16 @@
       "id": "python.python.style",
       "skills": [
         "olko-python-style"
+      ],
+      "related": [
+        "python"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "python.python.testing",
+      "skills": [
+        "olko-python-testing"
       ],
       "related": [
         "python"
