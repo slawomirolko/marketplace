@@ -27,6 +27,9 @@ uses:
   - olko-python-architecture
   - olko-python-style
   - olko-python-testing
+  - olko-kotlin-architecture
+  - olko-kotlin-style
+  - olko-kotlin-testing
 ```
 
 If a dependency is not declared, run the built-in document-based checks below.
@@ -67,7 +70,7 @@ git diff --name-only HEAD
 **Kotlin/Android:**
 1. Read the nearest `AGENTS.md` / `CODING_STYLE.md` / `Testing.md` to learn the current rules.
 2. Run the style/test-tool task the docs reference (e.g. `./gradlew ktlintCheck`, `./gradlew :app:detekt`, or `./gradlew test` — whichever the docs prescribe, from the Android project root). If no linter is configured, the docs will say so; skip the linter and continue.
-3. Cross-check changed files against architecture + test rules in the docs (e.g. MVVM, repository pattern, no business logic in composables, no `!!` in production). Report violations.
+3. Cross-check changed files against architecture + test rules in the docs (e.g. MVVM/repository boundaries, no `!!` in production, no business logic in composables, instrumentation vs unit tier boundaries, no-skip/no-silent-pass, parametrization, fixture reuse, Compose UI testing conventions). Report violations.
 
 **If the gate fails** (style tool non-zero, or a documented rule violation is found):
 Show the offending file(s), a snippet of the error, and the source rule (with the AGENTS.md / CODING_STYLE.md / TESTING.md file and line that defines it). Then ask via question tool:
