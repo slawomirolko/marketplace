@@ -24,6 +24,12 @@ Read from `.agents/skill-config.md` first, then the project adapter:
 | `dotnetPromptHelperPath` | — | Optional central prompt helper path when prompt text must be centralized. |
 | `readArchitectureDocs` | `true` | Whether to read architecture docs. |
 
+For PricePredictor project adapters, set:
+
+```yaml
+dotnetProjectPrefix: PricePredictor.
+```
+
 ## Default .NET architecture rules
 
 Apply these defaults unless config, adapter, or project docs override them.
@@ -41,12 +47,15 @@ Apply these defaults unless config, adapter, or project docs override them.
 - Organize code by feature slice and sub-slice folders, not generic layer blobs.
 - Keep feature namespaces aligned with the feature folder tree.
 - Treat each domain application project as a bounded module inside a modular monolith.
+- Keep domain application modules isolated from each other.
 - Runtime modules should communicate through contracts, application service interfaces, Unit of Work orchestration, or messaging.
 - Host projects are composition roots. They wire modules together and delegate behavior instead of holding business rules.
+- Keep hosts thin and use them only as composition roots for dependency injection, configuration, endpoint wiring, hosted services, and transport setup.
 - Keep shared abstractions small, business-neutral, and stable.
 - Do not add direct runtime references from one domain application module to another.
 - Do not use `Shared` as a hidden dependency bucket for module-specific behavior.
 - Do not cross module boundaries by reaching into another module's internals, repositories, or EF configuration.
+- Do not bypass module boundaries through repositories, EF configuration, or another module's internals.
 - Use integration messages for workflows that cross module or host boundaries.
 - Use contracts and application services for in-process orchestration when the workflow must stay synchronous.
 - Keep module-specific DTOs, validators, domain methods, and repositories inside the owning module.
@@ -58,6 +67,7 @@ Apply these defaults unless config, adapter, or project docs override them.
 
 ### Layer defaults
 - Application projects should be divided into vertical slices.
+- Prefer feature slices and sub-slices in folder structure.
 - Shared behavior used by multiple apps/APIs should live in a documented shared area, not duplicated across slices.
 - Keep one contracts area for shared message contracts and integration message types when the project uses shared contracts.
 - Application layer should define service interfaces, service implementations, repository interfaces, application DTOs, and domain logic unless project docs split these differently.
@@ -77,6 +87,7 @@ Apply these defaults unless config, adapter, or project docs override them.
 - API/host layers may reference Application and Infrastructure.
 - Application defines interfaces.
 - Application must not reference API/host or Infrastructure.
+- Application must stay free of API, Infrastructure, and Persistence dependencies.
 - Infrastructure may implement Application abstractions when project docs use that pattern.
 
 ### Reliability
@@ -213,6 +224,8 @@ Apply these defaults unless config, adapter, or project docs override them.
 
 ### Project naming
 - If `dotnetProjectPrefix` is configured, every project in the solution must start with that prefix.
+- For PricePredictor, every project in the solution must start with the `PricePredictor.` prefix.
+- Do not create .NET projects without the configured project prefix.
 
 ### Sagas
 - Saga handlers should return messages wrapped in `ErrorOr<TMessage>` when the saga can fail.

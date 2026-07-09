@@ -207,6 +207,26 @@
       "prerequisites": []
     },
     {
+      "id": "docker",
+      "skills": [
+        "olko-docker-style"
+      ],
+      "related": [
+        "docker.docker.style"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "docker.docker.style",
+      "skills": [
+        "olko-docker-style"
+      ],
+      "related": [
+        "docker"
+      ],
+      "prerequisites": []
+    },
+    {
       "id": "dotnet",
       "skills": [
         "olko-dotnet-architecture",
