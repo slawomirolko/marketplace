@@ -54,8 +54,22 @@
       ],
       "cost": 1,
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-commit-docs",
@@ -460,6 +474,39 @@
       }
     },
     {
+      "name": "olko-create-saga",
+      "category": "dotnet",
+      "version": "1.0.0",
+      "description": "Create or update Wolverine saga implementations for .NET projects. Asks for missing saga name, message flow, message contracts, timeout, file locations, and host listener wiring before implementing, then applies the repo's Wolverine saga conventions (ErrorOr wrapping, ActivitySource instrumentation, NotFound handlers, single-active-saga guard, timeout-from-config, JSON tests). Triggers: 'create saga', 'add saga', 'update saga', 'new wolverine saga', 'olko-create-saga'.",
+      "tags": [
+        "dotnet",
+        "saga",
+        "wolverine"
+      ],
+      "capabilities": [
+        "dotnet",
+        "dotnet.create.saga"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
       "name": "olko-dotnet-architecture",
       "category": "dotnet",
       "version": "1.0.0",
@@ -490,6 +537,24 @@
           "edge-cases"
         ]
       }
+    },
+    {
+      "name": "olko-dotnet-build",
+      "category": "dotnet",
+      "version": "1.0.0",
+      "description": "Build and diagnose .NET solutions with the dotnet CLI only. Starts from the most relevant solution entry point, runs a single restore then build --no-restore, isolates the first failing project, and reports the exact compiler error before any fix is attempted. Triggers: 'build', 'dotnet build', 'restore .net', 'verify build', 'olko-dotnet-build'.",
+      "tags": [
+        "dotnet",
+        "build"
+      ],
+      "capabilities": [
+        "dotnet",
+        "dotnet.dotnet.build"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
     },
     {
       "name": "olko-dotnet-style",
@@ -634,12 +699,23 @@
         "project.project.architecture"
       ],
       "cost": 1,
-      "uses": [
-        "olko-ai-architecture"
-      ],
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-python-architecture",
@@ -656,8 +732,22 @@
       ],
       "cost": 1,
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-python-style",
@@ -674,8 +764,22 @@
       ],
       "cost": 1,
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-python-testing",
@@ -724,8 +828,22 @@
       ],
       "cost": 1,
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-kotlin-style",
@@ -742,8 +860,22 @@
       ],
       "cost": 1,
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-kotlin-testing",
