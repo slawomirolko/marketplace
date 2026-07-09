@@ -671,6 +671,74 @@
       }
     },
     {
+      "name": "olko-kotlin-architecture",
+      "category": "kotlin",
+      "version": "1.0.0",
+      "description": "Check Kotlin/Android architecture compliance for changed Kotlin projects with marketplace defaults. Reads project docs and adapters, maps changed .kt/.kts files to Gradle module roots, verifies source-set layout, module boundaries, dependency direction, MVVM/ViewModel-StateFlow separation, networking singleton ownership, Gradle dependency configuration, build/dependency management, security boundaries, external-service client configuration, and reports violations with rule sources. Use when validating Kotlin/Android architecture, before commit/test gates, during plan review, or when olko-commit-style/olko-test/olko-plan-editor delegates Kotlin architecture checks.",
+      "tags": [
+        "kotlin",
+        "architecture"
+      ],
+      "capabilities": [
+        "kotlin",
+        "kotlin.kotlin.architecture"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-kotlin-style",
+      "category": "kotlin",
+      "version": "1.0.0",
+      "description": "Check Kotlin/Android style compliance for changed Kotlin files with marketplace defaults. Reads project docs and adapters, maps .kt/.kts files to Gradle module roots, runs documented format/lint commands such as ktlint/detekt when configured, checks common Kotlin style expectations that docs enable (naming, formatting, imports, classes, value classes, extension/scope functions, collection ops, nullability, coroutines/Flow, Compose, networking), and reports violations with rule sources. Use when validating Kotlin style, linting Kotlin changes, before commit/test gates, or when olko-commit-style delegates Kotlin style checks.",
+      "tags": [
+        "kotlin",
+        "style"
+      ],
+      "capabilities": [
+        "kotlin",
+        "kotlin.kotlin.style"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-kotlin-testing",
+      "category": "kotlin",
+      "version": "1.0.0",
+      "description": "Check Kotlin/Android test conventions for changed Kotlin projects with marketplace defaults. Reads project docs/adapters, maps source changes to test files, verifies instrumentation vs unit tier rules, Gradle harness conventions, no-skip/no-silent-pass policy, MockK/fake test-double boundaries, parametrization, fixture reuse, Compose UI testing conventions, Windows Gradle hang handling, new-component test requirements, cross-boundary contract tests, and reports violations with rule sources. Use when validating Kotlin/Android tests, before commit/test gates, or when olko-test/olko-commit-style delegates Kotlin test-convention checks.",
+      "tags": [
+        "kotlin",
+        "testing"
+      ],
+      "capabilities": [
+        "kotlin",
+        "kotlin.kotlin.testing"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
       "name": "olko-test",
       "category": "testing",
       "version": "1.0.0",

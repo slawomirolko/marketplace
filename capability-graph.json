@@ -271,6 +271,50 @@
       "prerequisites": []
     },
     {
+      "id": "kotlin",
+      "skills": [
+        "olko-kotlin-architecture",
+        "olko-kotlin-style",
+        "olko-kotlin-testing"
+      ],
+      "related": [
+        "kotlin.kotlin.architecture",
+        "kotlin.kotlin.style",
+        "kotlin.kotlin.testing"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "kotlin.kotlin.architecture",
+      "skills": [
+        "olko-kotlin-architecture"
+      ],
+      "related": [
+        "kotlin"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "kotlin.kotlin.style",
+      "skills": [
+        "olko-kotlin-style"
+      ],
+      "related": [
+        "kotlin"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "kotlin.kotlin.testing",
+      "skills": [
+        "olko-kotlin-testing"
+      ],
+      "related": [
+        "kotlin"
+      ],
+      "prerequisites": []
+    },
+    {
       "id": "marketplace",
       "skills": [
         "olko-adapt-to-marketplace",
