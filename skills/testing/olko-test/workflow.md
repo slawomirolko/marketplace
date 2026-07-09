@@ -23,6 +23,7 @@ uses:
   - olko-dotnet-style
   - olko-dotnet-architecture
   - olko-dotnet-testing
+  - olko-docker-style
   - olko-python-architecture
   - olko-python-style
 ```
@@ -40,6 +41,7 @@ git diff --name-only HEAD
 | Stack | Markers (file / project root) | Reference docs (walk up the tree from each changed file) |
 |---|---|---|
 | .NET | changed `.cs`/`.csproj`; belongs to nearest `*.csproj` | nearest `AGENTS.md`, `CODING_STYLE.md`, `TESTING.md` up the dir tree + repo root |
+| Docker | changed `Dockerfile*`, `*.Dockerfile`, `.dockerignore`, `compose*.yml`, `compose*.yaml`, `docker-compose*.yml`, `docker-compose*.yaml` | nearest `AGENTS.md`, `DOCKER.md`, `CODING_STYLE.md`, `TESTING.md` up the dir tree + repo root |
 | Python | changed `.py`; belongs to nearest `pyproject.toml` dir | nearest `AGENTS.md`, `CODING_STYLE.md`, `TESTING.md` up the dir tree + repo root |
 | Kotlin/Android | changed `.kt`/`.kts`; belongs to nearest `gradlew` dir | nearest `AGENTS.md`, `CODING_STYLE.md`, `Testing.md` up the dir tree + repo root |
 
@@ -55,6 +57,11 @@ git diff --name-only HEAD
 1. Read the nearest `AGENTS.md` / `CODING_STYLE.md` / `TESTING.md` to learn the current rules.
 2. Run the style tool the docs reference (typically `ruff check` + `ruff format --check`, or a project-specific task — use what the docs prescribe, run from the discovered Python project root).
 3. Cross-check changed files against architecture + test rules in the docs (e.g. dependency direction, no hand-edited gRPC stubs). Report violations.
+
+**Docker:**
+1. Read the nearest `AGENTS.md` / `DOCKER.md` / `CODING_STYLE.md` / `TESTING.md` and repo root `AGENTS.md` to learn the current Docker rules.
+2. Run the Docker style/validation tool the docs reference. If a Compose file changed and docs do not override it, run `docker compose config` from the documented Compose working directory.
+3. Cross-check changed Dockerfiles, `.dockerignore`, and Compose files against documented Docker rules. Report violations for build stage separation, base image tags, layer caching, non-root runtime users, healthchecks, exec-form entrypoints, minimal runtime packages, build-context exclusions, Compose secrets, service healthchecks, restart policy, volumes, and networking.
 
 **Kotlin/Android:**
 1. Read the nearest `AGENTS.md` / `CODING_STYLE.md` / `Testing.md` to learn the current rules.

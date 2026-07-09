@@ -25,6 +25,7 @@ uses:
   - olko-dotnet-style
   - olko-dotnet-architecture
   - olko-dotnet-testing
+  - olko-docker-style
   - olko-python-architecture
   - olko-python-style
 ```
@@ -48,6 +49,7 @@ For each changed file, determine its stack using project markers (not fixed path
 | Stack | Markers |
 |-------|---------|
 | .NET | changed `.cs` / `.csproj`; belongs to nearest `*.csproj` |
+| Docker | changed `Dockerfile*`, `*.Dockerfile`, `.dockerignore`, `compose*.yml`, `compose*.yaml`, `docker-compose*.yml`, `docker-compose*.yaml` |
 | Python | changed `.py`; belongs to nearest `pyproject.toml` dir |
 | Kotlin/Android | changed `.kt` / `.kts`; belongs to nearest `gradlew` dir |
 
@@ -76,6 +78,7 @@ If a matching stack-specific skill is declared in `uses`, delegate the relevant 
 - `.NET` style: `olko-dotnet-style`
 - `.NET` architecture: `olko-dotnet-architecture`
 - `.NET` test conventions: `olko-dotnet-testing`
+- Docker conventions: `olko-docker-style`
 - Python architecture: `olko-python-architecture`
 - Python style: `olko-python-style`
 

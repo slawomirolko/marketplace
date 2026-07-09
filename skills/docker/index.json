@@ -1,0 +1,37 @@
+{
+  "registrySchemaVersion": 1,
+  "skills": [
+    {
+      "name": "olko-docker-style",
+      "category": "docker",
+      "version": "1.0.0",
+      "description": "Check Dockerfile, .dockerignore, and Docker Compose conventions for changed container files with marketplace defaults. Reads project docs/adapters, verifies multi-stage .NET Dockerfiles, pinned base images, layer caching, non-root runtime users, healthchecks, exec-form entrypoints, minimal runtime images, build-context exclusions, compose secrets, healthchecks, restart policies, volumes, networking, and reports violations with rule sources. Use when validating Docker/container changes, before commit/test gates, or when olko-commit-style/olko-test delegates Docker checks.",
+      "tags": [
+        "docker",
+        "style"
+      ],
+      "capabilities": [
+        "docker",
+        "docker.docker.style"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    }
+  ]
+}
