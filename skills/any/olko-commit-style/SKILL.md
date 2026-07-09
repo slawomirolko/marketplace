@@ -29,6 +29,9 @@ uses:
   - olko-python-architecture
   - olko-python-style
   - olko-python-testing
+  - olko-kotlin-architecture
+  - olko-kotlin-style
+  - olko-kotlin-testing
 ```
 
 If a dependency is not declared, run the built-in document-based checks below.
@@ -83,6 +86,9 @@ If a matching stack-specific skill is declared in `uses`, delegate the relevant 
 - Python architecture: `olko-python-architecture`
 - Python style: `olko-python-style`
 - Python test conventions: `olko-python-testing`
+- Kotlin/Android architecture: `olko-kotlin-architecture`
+- Kotlin/Android style: `olko-kotlin-style`
+- Kotlin/Android test conventions: `olko-kotlin-testing`
 
 If no matching dependency is declared, inspect locally:
 

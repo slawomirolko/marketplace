@@ -9,3 +9,6 @@ Optional `uses` delegates:
 - `olko-python-architecture`
 - `olko-python-style`
 - `olko-python-testing`
+- `olko-kotlin-architecture`
+- `olko-kotlin-style`
+- `olko-kotlin-testing`
