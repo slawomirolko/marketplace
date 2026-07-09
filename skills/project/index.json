@@ -1,0 +1,26 @@
+{
+  "registrySchemaVersion": 1,
+  "skills": [
+    {
+      "name": "olko-project-architecture",
+      "category": "project",
+      "version": "1.0.0",
+      "description": "Check whole-monorepo architecture compliance for a project with marketplace defaults. Reads project docs and adapters, discovers the top-level layout (apps/*, services/*, platform/*, ai/*, docs/*, infrastructure/*, tests/*), verifies the apps-vs-services-vs-platform separation, DDD module layering (api/application/domain/infrastructure/contracts) and dependency direction, cross-module/cross-service communication through platform contracts and messaging, shared-code ownership, independent buildability, and delegates the ai/ subtree check to olko-ai-architecture. Use when validating overall project architecture, during plan review, when onboarding a new app/service/module, or standalone to verify the repo layout and layering are not drifting.",
+      "tags": [
+        "project",
+        "architecture"
+      ],
+      "capabilities": [
+        "project",
+        "project.project.architecture"
+      ],
+      "cost": 1,
+      "uses": [
+        "olko-ai-architecture"
+      ],
+      "files": [
+        "SKILL.md"
+      ]
+    }
+  ]
+}

@@ -40,6 +40,24 @@
       }
     },
     {
+      "name": "olko-ai-architecture",
+      "category": "ai",
+      "version": "1.0.0",
+      "description": "Check AI context architecture compliance for a project's ai/ tree with marketplace defaults. Reads project docs and adapters, discovers the repo's buildable surfaces (apps/*, services/*, platform/*), verifies the ai/context + ai/skills + ai/prompts + ai/templates layout, surface-split context files, surface-split skill directories, global vs surface separation, no stale/orphaned artifacts, and that the AI tree stays in sync with the codebase surfaces, and reports violations with rule sources. Use when validating AI context organization, during plan review, when onboarding a new app/service surface, or standalone to verify the ai/ tree is complete and not drifting from the codebase.",
+      "tags": [
+        "ai",
+        "architecture"
+      ],
+      "capabilities": [
+        "ai",
+        "ai.ai.architecture"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
       "name": "olko-commit-docs",
       "category": "ai",
       "version": "1.0.0",

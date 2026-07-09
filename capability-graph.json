@@ -7,10 +7,12 @@
       "id": "ai",
       "skills": [
         "olko-agents-optimizer",
+        "olko-ai-architecture",
         "olko-commit-docs"
       ],
       "related": [
         "ai.agents.optimizer",
+        "ai.ai.architecture",
         "ai.commit.docs"
       ],
       "prerequisites": []
@@ -19,6 +21,16 @@
       "id": "ai.agents.optimizer",
       "skills": [
         "olko-agents-optimizer"
+      ],
+      "related": [
+        "ai"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "ai.ai.architecture",
+      "skills": [
+        "olko-ai-architecture"
       ],
       "related": [
         "ai"
@@ -343,6 +355,27 @@
       ],
       "related": [
         "marketplace"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "project",
+      "skills": [
+        "olko-project-architecture"
+      ],
+      "related": [
+        "project.project.architecture"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "project.project.architecture",
+      "skills": [
+        "olko-project-architecture"
+      ],
+      "related": [
+        "project",
+        "ai.ai.architecture"
       ],
       "prerequisites": []
     },
