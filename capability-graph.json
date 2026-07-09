@@ -221,10 +221,22 @@
     {
       "id": "docker",
       "skills": [
+        "olko-clean-docker",
         "olko-docker-style"
       ],
       "related": [
+        "docker.clean",
         "docker.docker.style"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "docker.clean",
+      "skills": [
+        "olko-clean-docker"
+      ],
+      "related": [
+        "docker"
       ],
       "prerequisites": []
     },
