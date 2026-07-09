@@ -244,6 +244,7 @@
         "olko-create-saga",
         "olko-dotnet-architecture",
         "olko-dotnet-build",
+        "olko-dotnet-migration",
         "olko-dotnet-style",
         "olko-dotnet-testing"
       ],
@@ -251,6 +252,7 @@
         "dotnet.create.saga",
         "dotnet.dotnet.architecture",
         "dotnet.dotnet.build",
+        "dotnet.dotnet.migration",
         "dotnet.dotnet.style",
         "dotnet.dotnet.testing"
       ],
@@ -280,6 +282,16 @@
       "id": "dotnet.dotnet.build",
       "skills": [
         "olko-dotnet-build"
+      ],
+      "related": [
+        "dotnet"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "dotnet.dotnet.migration",
+      "skills": [
+        "olko-dotnet-migration"
       ],
       "related": [
         "dotnet"

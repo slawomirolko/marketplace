@@ -85,6 +85,25 @@
       ]
     },
     {
+      "name": "olko-dotnet-migration",
+      "category": "dotnet",
+      "version": "1.0.0",
+      "description": "Create and inspect .NET EF Core database migrations using dotnet ef and the dotnet CLI only. Resolves the DbContext project and startup host from config or by asking, runs migrations add/remove/list and database update, then verifies by applying and reverting the migration via the EF CLI. Never hand-writes migrations or raw SQL unless asked. Triggers: 'add migration', 'ef migration', 'database update', 'scaffold migration', 'remove migration', 'list migrations', 'dotnet ef', 'olko-dotnet-migration'.",
+      "tags": [
+        "dotnet",
+        "migration",
+        "ef"
+      ],
+      "capabilities": [
+        "dotnet",
+        "dotnet.dotnet.migration"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
       "name": "olko-dotnet-style",
       "category": "dotnet",
       "version": "1.0.0",
