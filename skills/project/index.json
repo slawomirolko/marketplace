@@ -2,6 +2,40 @@
   "registrySchemaVersion": 1,
   "skills": [
     {
+      "name": "olko-mobile-network-sync",
+      "category": "project",
+      "version": "1.0.0",
+      "description": "Detect the host LAN IP, update configured mobile app and compose network URLs, fix container auth authority, rebuild configured services, verify WiFi sign-in reachability, and report manual OAuth redirect actions. Triggers: 'sync mobile network', 'fix phone login over WiFi', 'make app work on my network', 'update mobile IP', 'mobile network sync'.",
+      "tags": [
+        "project",
+        "mobile",
+        "network",
+        "sync"
+      ],
+      "capabilities": [
+        "project",
+        "project.mobile.network.sync"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
       "name": "olko-project-architecture",
       "category": "project",
       "version": "1.0.0",
