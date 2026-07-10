@@ -377,6 +377,39 @@
       }
     },
     {
+      "name": "olko-implement-current-code",
+      "category": "any",
+      "version": "1.0.0",
+      "description": "Move already-written session changes into a fresh worktree, track resumable progress, run configured style and tests, rebuild affected services, verify logs/traces, then delegate commit and worktree merge. Triggers: 'olko-implement-current-code', 'implement current code', 'transfer my session changes to a worktree', 'resume implement-current-code', 'continue current-code implementation'.",
+      "tags": [
+        "any",
+        "implement",
+        "worktree"
+      ],
+      "capabilities": [
+        "any",
+        "any.implement.current-code"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
       "name": "olko-investigate-existing",
       "category": "any",
       "version": "1.0.0",
