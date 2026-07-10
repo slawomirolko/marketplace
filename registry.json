@@ -474,6 +474,39 @@
       }
     },
     {
+      "name": "olko-worktree-merge",
+      "category": "any",
+      "version": "1.0.0",
+      "description": "Merge a git worktree branch into the default branch through a GitHub PR, including commit/push handoff, CI and review checks, worktree compose teardown, main checkout update, optional main compose rebuild, and local worktree/branch cleanup. Triggers: 'merge worktree', 'olko-worktree-merge', 'merge this branch to main', 'create PR for this worktree', 'finish worktree', 'close worktree'.",
+      "tags": [
+        "any",
+        "worktree",
+        "merge"
+      ],
+      "capabilities": [
+        "any",
+        "any.worktree.merge"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
       "name": "olko-clean-docker",
       "category": "docker",
       "version": "1.0.0",
