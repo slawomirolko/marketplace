@@ -69,10 +69,10 @@ Capture `<current-branch>`. Then:
     > "A PR branch `<existing>` already exists from an earlier commit this session. Branch off `main` (fresh) or off `<existing>` (stacked)?"
     - **Fresh from main**: `git checkout main && git pull --ff-only origin main` before creating the new branch (only if working tree clean).
     - **Stacked**: `git checkout <existing>` and create the new branch from there.
-  - Derive a branch name from the commit's `<type>` and `<scope>` (Step 4) plus a UTC timestamp:
-    - `<type>/<scope>-<YYYYMMDD-HHMM>` (UTC, compact). Example: `feat/articles-reader-20260627-1415`.
-    - Fallback if scope missing: `<type>/commit-<YYYYMMDD-HHMM>`.
-    - Fallback if type also missing/unrecognized: `chore/commit-<YYYYMMDD-HHMM>`.
+  - Derive a branch name from the commit's `<scope>` only (Step 4):
+    - `<scope>`. Example: `articles-reader`.
+    - Fallback if scope missing: `commit`.
+    - Never add commit type, date, time, author, ticket, or timestamp automatically.
   - Sanitize: lowercase, `[^a-z0-9-]` → `-`, collapse repeats, trim leading/trailing `-`, max 60 chars.
   - **Uniqueness**: check `git ls-remote --heads origin <sanitized-name>` (and local `git rev-parse --verify refs/heads/<name>`). If the name exists, append `-2`, `-3`, … until a free name is found.
   - Create and switch:

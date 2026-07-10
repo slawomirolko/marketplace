@@ -454,10 +454,22 @@
     {
       "id": "project",
       "skills": [
+        "olko-mobile-network-sync",
         "olko-project-architecture"
       ],
       "related": [
-        "project.project.architecture"
+        "project.project.architecture",
+        "project.mobile.network.sync"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "project.mobile.network.sync",
+      "skills": [
+        "olko-mobile-network-sync"
+      ],
+      "related": [
+        "project"
       ],
       "prerequisites": []
     },
