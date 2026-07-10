@@ -351,6 +351,38 @@
           "edge-cases"
         ]
       }
+    },
+    {
+      "name": "olko-worktree-create",
+      "category": "any",
+      "version": "1.0.0",
+      "description": "Create a git worktree branched from the freshly fetched remote default branch, deriving the branch name from active plan context or asking the user when no context exists. Triggers: 'create worktree', 'olko-worktree-create', 'worktree-create', 'new worktree', 'open worktree for this plan'.",
+      "tags": [
+        "any",
+        "worktree"
+      ],
+      "capabilities": [
+        "any",
+        "any.worktree.create"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     }
   ]
 }
