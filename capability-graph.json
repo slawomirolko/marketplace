@@ -62,7 +62,8 @@
         "olko-commit-style",
         "olko-investigate-existing",
         "olko-plan-editor",
-        "olko-summary"
+        "olko-summary",
+        "olko-worktree-create"
       ],
       "related": [
         "any.cavecrew",
@@ -212,6 +213,16 @@
       "id": "any.summary",
       "skills": [
         "olko-summary"
+      ],
+      "related": [
+        "any"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "any.worktree.create",
+      "skills": [
+        "olko-worktree-create"
       ],
       "related": [
         "any"
