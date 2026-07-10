@@ -320,6 +320,42 @@
       }
     },
     {
+      "name": "olko-pr-check",
+      "category": "any",
+      "version": "1.0.0",
+      "description": "Check the latest CI/CD status and newest actionable review feedback on a GitHub PR, then ask which findings to fix. Resolves the PR from the current branch or user-supplied number, waits for required bot workflows when needed, summarizes only current failures/comments, and can hand off selected fixes to project testing and commit skills. Triggers: 'check PR', 'PR check', 'olko-pr-check', 'sprawdz PR', 'sprawdź PR', 'review PR status', 'what is wrong with the PR', 'fix PR comments', 'fix PR findings'.",
+      "tags": [
+        "any",
+        "pr",
+        "check",
+        "github",
+        "ci",
+        "review"
+      ],
+      "capabilities": [
+        "any",
+        "any.pr.check"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
       "name": "olko-summary",
       "category": "any",
       "version": "1.0.0",

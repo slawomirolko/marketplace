@@ -74,6 +74,7 @@
         "olko-commit-style",
         "olko-investigate-existing",
         "olko-plan-editor",
+        "olko-pr-check",
         "olko-summary",
         "olko-worktree-create",
         "olko-worktree-merge"
@@ -216,6 +217,16 @@
       "id": "any.plan.editor",
       "skills": [
         "olko-plan-editor"
+      ],
+      "related": [
+        "any"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "any.pr.check",
+      "skills": [
+        "olko-pr-check"
       ],
       "related": [
         "any"
