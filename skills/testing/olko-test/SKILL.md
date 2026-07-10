@@ -1,13 +1,13 @@
 ---
 name: olko-test
-description: Run affected or all tests for .NET, Python, and Android/Kotlin with smart scope detection, emulator management, service management, and failure handling. Use when asked to run tests, after implementation, or when called from olko-plan-editor/olko-commit skills.
+description: Run affected or all tests for .NET, Python, and Android/Kotlin with change-aware scope detection, emulator management, service management, and failure handling. Use when asked to run tests, after implementation, or when called from olko-plan-editor/olko-commit skills.
 user_invocable: true
 ---
 
 # olko-test
 
 ## Routing Summary
-Run affected or all tests for .NET, Python, and Android/Kotlin with smart scope detection, emulator management, service management, and failure handling. Use when asked to run tests, after implementation, or when called from olko-plan-editor/olko-commit skills.
+Run affected or all tests for .NET, Python, and Android/Kotlin with change-aware scope detection, emulator management, service management, and failure handling. Use when asked to run tests, after implementation, or when called from olko-plan-editor/olko-commit skills.
 
 ## Progressive Loading
 - Load `overview.md` first after registry/category routing.
