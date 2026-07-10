@@ -2,6 +2,40 @@
   "registrySchemaVersion": 1,
   "skills": [
     {
+      "name": "olko-heartbeat",
+      "category": "project",
+      "version": "1.0.0",
+      "description": "End-to-end heartbeat for a mechanism, service, or flow: locate code from docker compose service or mechanism name, trace implementation, check logs/traces, supervise two iterations, run configured tests, validate AGENTS.md docs, suggest fixes, re-verify, and commit when the project adapter explicitly enables commit handoff. Triggers: 'heartbeat', 'health-check', 'verify flow', 'trace flow', 'verify service', 'olko-heartbeat'.",
+      "tags": [
+        "project",
+        "heartbeat",
+        "observability",
+        "docker"
+      ],
+      "capabilities": [
+        "project",
+        "project.heartbeat"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
       "name": "olko-mobile-network-sync",
       "category": "project",
       "version": "1.0.0",
