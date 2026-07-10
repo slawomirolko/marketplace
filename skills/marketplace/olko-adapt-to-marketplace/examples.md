@@ -10,7 +10,7 @@ Load this file only when concrete output shape, prompt wording, or command examp
   "name": "olko-test",
   "category": "testing",
   "version": "1.0.0",
-  "description": "Run affected or all tests for .NET, Python, and Android/Kotlin with smart scope detection. Triggers: 'run tests', 'run affected tests', 'olko-test'.",
+  "description": "Run affected or all tests for .NET, Python, and Android/Kotlin with change-aware scope detection. Triggers: 'run tests', 'run affected tests', 'olko-test'.",
   "tags": ["testing", "test"],
   "capabilities": ["testing", "testing.test"],
   "cost": 2,

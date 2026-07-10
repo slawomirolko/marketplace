@@ -2071,7 +2071,7 @@
     {
       "name": "olko-test",
       "category": "testing",
-      "text": "olko-test testing Run affected or all tests for .NET, Python, and Android/Kotlin with smart scope detection, emulator management, service management, and failure handling. Use when asked to run tests, after implementation, or when called from olko-plan-editor/olko-commit skills. testing test testing testing.test",
+      "text": "olko-test testing Run affected or all tests for .NET, Python, and Android/Kotlin with change-aware scope detection, emulator management, service management, and failure handling. Use when asked to run tests, after implementation, or when called from olko-plan-editor/olko-commit skills. testing test testing testing.test",
       "tokens": [
         "olko",
         "test",
@@ -2088,7 +2088,8 @@
         "android",
         "kotlin",
         "with",
-        "smart",
+        "change",
+        "aware",
         "scope",
         "detection",
         "emulator",
