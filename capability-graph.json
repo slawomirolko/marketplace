@@ -454,12 +454,24 @@
     {
       "id": "project",
       "skills": [
+        "olko-heartbeat",
         "olko-mobile-network-sync",
         "olko-project-architecture"
       ],
       "related": [
+        "project.heartbeat",
         "project.project.architecture",
         "project.mobile.network.sync"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "project.heartbeat",
+      "skills": [
+        "olko-heartbeat"
+      ],
+      "related": [
+        "project"
       ],
       "prerequisites": []
     },
