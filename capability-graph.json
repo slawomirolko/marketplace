@@ -73,6 +73,7 @@
         "olko-commit-docker",
         "olko-commit-style",
         "olko-implement-current-code",
+        "olko-implement-new",
         "olko-investigate-existing",
         "olko-plan-editor",
         "olko-pr-check",
@@ -208,6 +209,16 @@
       "id": "any.implement.current-code",
       "skills": [
         "olko-implement-current-code"
+      ],
+      "related": [
+        "any"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "any.implement.new",
+      "skills": [
+        "olko-implement-new"
       ],
       "related": [
         "any"
