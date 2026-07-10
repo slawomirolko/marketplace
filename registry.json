@@ -91,6 +91,40 @@
       ]
     },
     {
+      "name": "olko-update-ai-tech-docs",
+      "category": "ai",
+      "version": "1.0.0",
+      "description": "Investigate a technology, map it to existing AI-facing project docs, search community AI-skill and convention sources, compare gaps, present an update plan for approval, then apply approved documentation changes. Triggers: 'update AI tech docs', 'update technology docs', 'review technology conventions', 'improve coding style docs', 'compare technology against community standards', 'olko-update-ai-tech-docs <technology>'.",
+      "tags": [
+        "ai",
+        "update",
+        "tech",
+        "docs"
+      ],
+      "capabilities": [
+        "ai",
+        "ai.update.tech.docs"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
       "name": "cavecrew",
       "category": "any",
       "origin": "vendored",
