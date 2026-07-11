@@ -23,6 +23,23 @@ User says "adapt to marketplace", "onboard `<name>`", "split `<name>`", "prepare
 - Run from the marketplace repository root (where `registry.json`, `skills/`, and `docs/` live), **or** provide the marketplace root path as the first resolved input
 - The source skill directory must be readable on disk
 
+## Adaptation
+
+Read `.agents/skill-config.md` first. If `projectAdapter` is not `false`, load `.agents/skills/olko-adapt-to-marketplace/project.md` when present. Precedence:
+
+```text
+Configuration > Project Adapter > AGENTS.md > Marketplace Skill
+```
+
+Recognized keys:
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `projectAdapter` | `true` | Whether to load `.agents/skills/olko-adapt-to-marketplace/project.md` |
+| `sourceSkillRoots` | `[]` | Additional directories to search for source skills |
+| `largeSkillLineThreshold` | `100` | Line threshold for progressive loading decisions |
+| `marketplaceRoot` | discovered from current/parent dirs | Marketplace root override |
+
 ## Flag & argument parsing
 
 Parse `$ARGUMENTS`:

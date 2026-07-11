@@ -8,6 +8,7 @@
 - **`--fix` overwrites a field I optimized** — it does not. `scripts/registry.mjs` normalizer uses `??`, so explicit `tags` / `capabilities` / `cost` are preserved; only absent fields are derived. If a value looks reverted, it failed validation (e.g. capability not normalized) and was dropped — fix the value, do not blame `--fix`.
 - **Progressive threshold is crossed mid-edit** — if `SKILL.md` grows past 100 lines during 7b/7c fixes, re-evaluate at 7e and scaffold the four section files; a partial set (e.g. only `overview.md`) is rejected by `registry.mjs`.
 - **Validation loop does not converge** — if Step 10 fails on the same error twice, stop, show the failing entry + error to the user, and ask how to proceed rather than looping indefinitely.
+- **Source installed outside the marketplace** — add its parent directory to `sourceSkillRoots` in `.agents/skill-config.md` or the project adapter, or pass `--source <path>`.
 
 ## Rules
 - Follow the [naming convention](../docs/naming.md): `olko-` prefix across folder, frontmatter, and registry for **authored** skills; **vendored** skills keep their upstream name and declare `origin: vendored` in frontmatter (mirrored into the registry entry). Never combine `olko-` with `origin: vendored`.

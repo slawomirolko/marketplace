@@ -4,11 +4,17 @@
 
 ### Phase 0: Setup
 
+**Adaptation Loading**: Read `.agents/skill-config.md` first. If `projectAdapter` is not `false`, load `.agents/skills/olko-agents-optimizer/project.md` when present. Apply this precedence:
+
+```text
+Configuration > Project Adapter > AGENTS.md > Marketplace Skill
+```
+
 **Language Detection**: Detect the user's language from conversation history. Present all analysis results and messages in the user's language.
 
 **Target File Resolution** (when `--path` is not specified):
 
-Search for the first existing file in this priority order:
+Search for the first existing file in `agentsOptimizerTargets` from config/adapter. If unset, use this marketplace default order:
 1. `AGENTS.md`
 2. `CLAUDE.md`
 3. `.github/copilot-instructions.md`
@@ -26,12 +32,9 @@ Read the target file. Collect line statistics.
 **Script Location**: Find the line-count script by searching for it:
 
 ```powershell
-# Search in common skill installation paths
-$SCRIPT_PATH = (Get-ChildItem -Path "$env:USERPROFILE/.claude/skills","$env:USERPROFILE/.codex/skills","$env:USERPROFILE/skills" -Filter "line-count.mjs" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
-if (-not $SCRIPT_PATH) {
-  # Fallback: search in current directory
-  $SCRIPT_PATH = (Get-ChildItem -Path . -Filter "line-count.mjs" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
-}
+# Prefer agentsOptimizerLineCountScript from .agents/skill-config.md or the project adapter.
+# Otherwise use the bundled scripts/line-count.mjs from this skill's loaded files.
+$SCRIPT_PATH = '<resolved agentsOptimizerLineCountScript or bundled scripts/line-count.mjs>'
 ```
 
 Run the script if found:

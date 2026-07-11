@@ -2,6 +2,9 @@
 
 ## Edge Cases
 ## Rules
+- If no `.agents/skill-config.md` exists, use marketplace defaults and discover commands from repo docs.
+- If `projectAdapter: false`, do not load `.agents/skills/olko-test/project.md`.
+- Do not auto-load stack-specific skills; load them only when `.agents/skills/olko-test/project.md` declares them in `uses`.
 - Use the project's existing assertion/mock libraries (e.g. Shouldly/NSubstitute for .NET) — don't introduce new ones
 - Never add skip logic to tests
 - Never modify gRPC stubs or generated files

@@ -4,7 +4,7 @@
 
 Look for a branch name from context, in this priority order:
 
-1. Active plan file: if the user is working on a plan from `.claude/skills/plan-editor/plans/`, `.agents/`, or any `.md` plan path mentioned in this session, derive the branch name from the plan title or filename. Prefer the filename without extension. Use the full plan title only if the filename is generic, such as `plan.md`.
+1. Active plan file: if the user is working on a plan from configured `planDirectories`, `.agents/`, or any `.md` plan path mentioned in this session, derive the branch name from the plan title or filename. Prefer the filename without extension. Use the full plan title only if the filename is generic, such as `plan.md`.
 2. User-provided name: if no plan is in context, ask:
 
    ```text
