@@ -27,7 +27,7 @@ function writeSkill(repo, category, name, description, progressive = false) {
 
 function makeRepo() {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-context-plan-"));
-  writeSkill(repo, "any", "olko-commit", "Commit workflow orchestration.", true);
+  writeSkill(repo, "git", "olko-commit", "Commit workflow orchestration.", true);
   writeSkill(repo, "testing", "olko-test", "Run affected tests.", true);
   fs.writeFileSync(
     path.join(repo, "registry.json"),
@@ -36,7 +36,7 @@ function makeRepo() {
         skills: [
           {
             name: "olko-commit",
-            category: "any",
+            category: "git",
             files: ["SKILL.md"],
           },
           {
@@ -210,16 +210,16 @@ test("emits deterministic source ordering for selected skill context", () => {
     sources.map((source) => [source.kind, source.source]),
     [
       ["registry-metadata", "registry.json"],
-      ["category-index", "skills/any/index.json"],
+      ["category-index", "skills/git/index.json"],
       ["route-candidates", "registry.json#skills"],
-      ["skill-body", "skills/any/olko-commit/SKILL.md"],
+      ["skill-body", "skills/git/olko-commit/SKILL.md"],
       ["project-adapter", ".agents/skills/olko-commit/project.md"],
       ["skill-memory", ".agents/context/memory/olko-commit.md"],
       ["project-summary", ".agents/context/summaries/latest.md"],
       ["project-conventions", "AGENTS.md"],
       ["project-conventions", ".agents/skill-config.md"],
-      ["skill-body", "skills/any/olko-commit/overview.md"],
-      ["workflow", "skills/any/olko-commit/workflow.md"],
+      ["skill-body", "skills/git/olko-commit/overview.md"],
+      ["workflow", "skills/git/olko-commit/workflow.md"],
     ],
   );
 });
@@ -315,8 +315,8 @@ test("includes optional example and edge-case sources when selected", () => {
       .filter((source) => ["example", "edge-case"].includes(source.kind))
       .map((source) => [source.kind, source.source, source.required]),
     [
-      ["example", "skills/any/olko-commit/examples.md", false],
-      ["edge-case", "skills/any/olko-commit/edge-cases.md", false],
+      ["example", "skills/git/olko-commit/examples.md", false],
+      ["edge-case", "skills/git/olko-commit/edge-cases.md", false],
     ],
   );
 });
