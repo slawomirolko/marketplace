@@ -11,6 +11,8 @@
 
 Do not switch into the marketplace repo unless the target path points there. This skill optimizes the consuming project's copy or project-oriented source.
 
+Read `.agents/skill-config.md` from the resolved project root. If `projectAdapter` is not `false`, read this skill's own adapter at `.agents/skills/olko-optimize-project-skill/project.md` when present. Apply optimizer-specific defaults from that adapter before resolving the target skill.
+
 ### Step 2 - Locate target skill
 
 Resolve `<name-or-path>` in this order:
@@ -30,6 +32,7 @@ Read:
 - Progressive files listed by the target (`overview.md`, `workflow.md`, `examples.md`, `edge-cases.md`) when present.
 - Target references/scripts only when `SKILL.md` links to them or the optimization finding depends on them.
 - `.agents/skill-config.md` when present.
+- `.agents/skills/olko-optimize-project-skill/project.md` when present and adapters are enabled.
 - `.agents/skills/<target-name>/project.md` when present.
 
 Do not read unrelated marketplace skills except the already-known patterns from `olko-adapt-to-marketplace` and `olko-install-skill`.
