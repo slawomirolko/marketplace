@@ -1199,8 +1199,8 @@
     {
       "name": "olko-investigate-existing",
       "category": "workflow",
-      "version": "1.0.0",
-      "description": "Investigate an existing mechanism by name or description — find it, analyze its behavior, map its flow, verify AGENTS.md docs against the docs' own rules, assess optimization/extension opportunities and predict potential errors, then offer to create improvement plans via a declared plan skill. Use when the user wants to understand, document, or improve an existing mechanism in the codebase.",
+      "version": "1.1.0",
+      "description": "Investigate an existing mechanism by name or description — find it, analyze its behavior, map its flow, verify AGENTS.md docs, check technology architecture and coding style compliance, assess optimization/extension opportunities and predict potential errors, then offer to create improvement plans via a declared plan skill. Use when the user wants to understand, document, or improve an existing mechanism in the codebase.",
       "tags": [
         "workflow",
         "investigate",

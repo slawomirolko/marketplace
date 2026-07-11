@@ -1,13 +1,13 @@
 ---
 name: olko-investigate-existing
-description: Investigate an existing mechanism by name or description — find it, analyze its behavior, map its flow, verify AGENTS.md docs against the docs' own rules, assess optimization/extension opportunities and predict potential errors, then offer to create improvement plans via a declared plan skill. Use when the user wants to understand, document, or improve an existing mechanism in the codebase.
+description: Investigate an existing mechanism by name or description — find it, analyze its behavior, map its flow, verify AGENTS.md docs, check technology architecture and coding style compliance, assess optimization/extension opportunities and predict potential errors, then offer to create improvement plans via a declared plan skill. Use when the user wants to understand, document, or improve an existing mechanism in the codebase.
 user_invocable: true
 ---
 
 # olko-investigate-existing
 
 ## Routing Summary
-Investigate an existing mechanism by name or description — find it, analyze its behavior, map its flow, verify AGENTS.md docs against the docs' own rules, assess optimization/extension opportunities and predict potential errors, then offer to create improvement plans via a declared plan skill. Use when the user wants to understand, document, or improve an existing mechanism in the codebase.
+Investigate an existing mechanism by name or description — find it, analyze its behavior, map its flow, verify AGENTS.md docs, check technology architecture and coding style compliance, assess optimization/extension opportunities and predict potential errors, then offer to create improvement plans via a declared plan skill. Use when the user wants to understand, document, or improve an existing mechanism in the codebase.
 
 ## Progressive Loading
 - Load `overview.md` first after registry/category routing.

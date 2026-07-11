@@ -10,7 +10,8 @@
 - Before planning new tests, prove existing tests cannot be modified, parameterized, or merged to cover the behavior.
 - Prefer merging tests with the same Arrange across every test tier the repo uses.
 - Include merge opportunities from touched test files in improvement plans; do not append duplicate tests beside them.
-- Architecture compliance rules come from the repo's docs, not from this skill; cite the doc `file:line` for every violation.
+- Architecture and coding style compliance rules come from the repo's docs or declared stack-specific review skills, not from this skill; cite the doc `file:line` or delegated skill source for every violation.
+- Do not auto-load technology architecture/style skills from file extensions. Use matching stack-specific skills only when declared in `uses`; otherwise report the review gap.
 - Never create an AGENTS.md where none exists — only update existing ones.
 - Only suggest non-inferable AGENTS.md content (skip overviews, flow diagrams, property tables, dependency lists, file indexes, test locations).
 - Remove any temp files created during the investigation.
