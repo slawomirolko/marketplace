@@ -118,6 +118,24 @@ test("accepts requires entries selected through explicit project adapter uses", 
   assert.deepEqual(output.explicitUses.dependencies, [{ name: "olko-test", declaredBy: "olko-commit", depth: 1 }]);
 });
 
+test("projectAdapter false ignores declared uses in execution plan", () => {
+  const repo = makeRepo({
+    "olko-commit": {
+      requires: ["olko-test@1.0.0"],
+    },
+  });
+  const adapterDir = path.join(repo, ".agents", "skills", "olko-commit");
+  fs.mkdirSync(path.join(repo, ".agents"), { recursive: true });
+  fs.mkdirSync(adapterDir, { recursive: true });
+  fs.writeFileSync(path.join(repo, ".agents", "skill-config.md"), "projectAdapter: false\n");
+  fs.writeFileSync(path.join(adapterDir, "project.md"), "uses: [olko-test]\n");
+
+  const result = runExecutionPlan(repo, ["--intent", "commit", "--project", repo, "--category", "any"]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /required skill is not selected via explicit uses: olko-test/);
+});
+
 test("parallel work planner rejects same-file write conflicts", () => {
   const parallelWork = planParallelWork([
     {
