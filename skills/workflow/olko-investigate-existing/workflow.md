@@ -82,8 +82,32 @@ Before suggesting any new test: inspect existing tests in every touched test fil
 
 For every planned test, label it: `Modify existing` / `Add case to existing parameterized test` / `Merge existing tests` / `New test required`. For `New test required`, state why no existing test can absorb the coverage.
 
-#### Architecture compliance (delegation gate)
-This step does **not** encode rules. Read the applicable `AGENTS.md` / `CODING_STYLE.md` / architecture docs discovered by walking the tree from each touched file (and the architecture docs when `readArchitectureDocs` is enabled). Check the mechanism against **every rule those docs define**. Flag each violation with the specific rule and the doc `file:line` that defines it. If a rule here ever contradicts a doc, the doc wins — surface the conflict.
+#### Technology architecture and coding style compliance (delegation gate)
+Use the relevant `AGENTS.md`, `CODING_STYLE.md`, `ARCHITECTURE.md`, and technology docs discovered by walking the tree from each touched file (and architecture docs when `readArchitectureDocs` is enabled) to verify the mechanism against:
+
+- the solution architecture
+- the mechanism's technology architecture
+- the coding style rules for the stack
+- the local project conventions where the mechanism lives
+
+This step does **not** encode project-specific rules. Check the mechanism against **every rule those docs define**. Flag each violation with the specific rule and the doc `file:line` that defines it. If a rule here ever contradicts a doc, the doc wins — surface the conflict.
+
+If `readArchitectureDocs` or `readTestingDocs` is disabled, do not invent missing rules. Instead, delegate review to matching stack-specific skills declared in `.agents/skills/olko-investigate-existing/project.md`:
+
+| Stack | Architecture | Coding style |
+|-------|--------------|--------------|
+| .NET | `olko-dotnet-architecture` | `olko-dotnet-style` |
+| Docker | — | `olko-docker-style` |
+| Python | `olko-python-architecture` | `olko-python-style` |
+| Kotlin/Android | `olko-kotlin-architecture` | `olko-kotlin-style` |
+
+Pass the mechanism summary, touched files, flow graph, and known stack context to each matching declared skill. Ask it to review for rule impact only; do not ask it to implement. Fold returned violations, constraints, or review gaps into the investigation summary.
+
+If no matching stack skill is declared in `uses`, fall back to the minimal loaded context (`.agents/skill-config.md`, scoped `AGENTS.md`, and project adapter). State the review gap under architecture/coding style findings.
+
+Use broader declared skills only when the investigated mechanism requires them:
+- If the mechanism crosses top-level layout, module boundaries, app/service/platform separation, or shared contracts, delegate structural review to `olko-project-architecture`.
+- If the mechanism touches `ai/`, `.agents/`, skill adapters, prompts, templates, or context files, delegate AI-context review to `olko-ai-architecture`.
 
 #### Error prediction
 Identify potential failure points: external dependency unavailability, timeouts/retry exhaustion, cross-context data inconsistency, race conditions/concurrency, missing input validation, saga timeout/orphaned-state risks, configuration misconfiguration, resource exhaustion, poison-message gaps, idempotency gaps. For each: the triggering scenario, current handling (or lack thereof), blast radius.
@@ -108,8 +132,11 @@ Display a structured summary:
 ### Extension Opportunities
 <each with file:line references>
 
-### Architecture Violations
-<each with rule reference (doc file:line) and code file:line>
+### Architecture and Technology Violations
+<each with rule reference (doc file:line or delegated skill) and code file:line>
+
+### Coding Style Violations
+<each with rule reference (doc file:line or delegated skill) and code file:line>
 
 ### Predicted Errors
 <each with scenario, handling, blast radius>
@@ -132,7 +159,7 @@ If Step 4 identified updates, ask: "Add the AGENTS.md updates to the plan (appli
 Ask: "For the improvement items below — create new plans or update existing ones?" Store the answer as `plan_mode`. (If no plan skill is declared in `uses`, skip 6b/6c and go to 6d.)
 
 #### 6c — Improvement items
-For each item from Step 5 (optimization, extension, architecture violations, predicted errors), ask one at a time whether to create a new plan, extend an existing plan, or skip. When a plan skill is declared in `uses`, delegate plan creation/extension to it and pass the Step 5 test-reuse analysis in (plans must prefer modifying, parameterizing, or merging existing tests). The plan skill decides the plan file location — do not assume one. If no plan skill is declared, present items in chat only. Process one at a time.
+For each item from Step 5 (optimization, extension, architecture/technology violations, coding style violations, predicted errors), ask one at a time whether to create a new plan, extend an existing plan, or skip. When a plan skill is declared in `uses`, delegate plan creation/extension to it and pass the Step 5 test-reuse analysis in (plans must prefer modifying, parameterizing, or merging existing tests). The plan skill decides the plan file location — do not assume one. If no plan skill is declared, present items in chat only. Process one at a time.
 
 #### 6d — Done
 ```
