@@ -21,8 +21,28 @@ Draft or revise the plan so it matches the requested scope and the current codeb
 4. Do not make tests focus on log checking or log assertions unless the user explicitly asks for that.
 5. If `readTestingDocs` is enabled, read the repo's testing docs to inform test naming and location conventions.
 
-### Step 6 — Review against architecture
+### Step 6 — Review against architecture, style, and test conventions
 Use the relevant `AGENTS.md` files (and architecture docs when `readArchitectureDocs` is enabled) to verify the approach against the solution architecture, coding style, and the local project conventions where the change will land.
+
+If `readArchitectureDocs` or `readTestingDocs` is disabled, do not invent missing rules. Instead, delegate review to matching stack-specific skills declared in `.agents/skills/olko-plan-editor/project.md`:
+
+| Stack | Architecture | Coding style | Test conventions |
+|-------|--------------|--------------|------------------|
+| .NET | `olko-dotnet-architecture` | `olko-dotnet-style` | `olko-dotnet-testing` |
+| Docker | — | `olko-docker-style` | — |
+| Python | `olko-python-architecture` | `olko-python-style` | `olko-python-testing` |
+| Kotlin/Android | `olko-kotlin-architecture` | `olko-kotlin-style` | `olko-kotlin-testing` |
+
+Pass the draft plan, target files, and known stack context to each matching declared skill. Ask it to review the plan for rule impact only; do not ask it to implement. Fold returned violations or constraints into the plan before persisting it.
+
+If no matching stack skill is declared in `uses`, fall back to the minimal loaded context (`.agents/skill-config.md`, scoped `AGENTS.md`, and project adapter). State the gap in the plan's tradeoffs or assumptions section.
+
+Use broader or specialized declared skills only when the target scope requires them:
+- If the plan changes top-level layout, module boundaries, app/service/platform separation, or shared contracts, delegate structural review to `olko-project-architecture`.
+- If the plan touches `ai/`, `.agents/`, skill adapters, prompts, templates, or context files, delegate AI-context review to `olko-ai-architecture`.
+- If a .NET plan changes `.csproj`, target frameworks, package references, generated code wiring, or build entry points, use `olko-dotnet-build` for feasibility review.
+- If a .NET plan creates or changes EF Core migrations/schema, use `olko-dotnet-migration` to shape the migration steps and verification.
+- If a .NET plan creates or updates a Wolverine saga, use `olko-create-saga` to shape the saga message flow, timeout, contracts, host wiring, and tests.
 
 ### Step 7 — Fold compatible pieces
 After the plan is finalized, review the code again for similar existing mechanisms and related functionality, then fold compatible pieces together where possible.
