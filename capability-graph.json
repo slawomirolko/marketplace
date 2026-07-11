@@ -60,7 +60,7 @@
       "prerequisites": []
     },
     {
-      "id": "any",
+      "id": "caveman",
       "skills": [
         "cavecrew",
         "caveman",
@@ -68,220 +68,95 @@
         "caveman-compress",
         "caveman-help",
         "caveman-review",
-        "caveman-stats",
-        "olko-commit",
-        "olko-commit-docker",
-        "olko-commit-style",
-        "olko-implement-current-code",
-        "olko-implement-new",
-        "olko-investigate-existing",
-        "olko-plan-editor",
-        "olko-pr-check",
-        "olko-summary",
-        "olko-worktree-create",
-        "olko-worktree-merge"
+        "caveman-stats"
       ],
       "related": [
-        "any.cavecrew",
-        "any.caveman",
-        "any.commit",
-        "any.summary",
-        "any.caveman.commit",
-        "any.caveman.compress"
+        "caveman.cavecrew",
+        "caveman.caveman",
+        "caveman.caveman.commit",
+        "caveman.caveman.compress",
+        "caveman.caveman.help",
+        "caveman.caveman.review"
       ],
       "prerequisites": []
     },
     {
-      "id": "any.cavecrew",
+      "id": "caveman.cavecrew",
       "skills": [
         "cavecrew"
       ],
       "related": [
-        "any"
+        "caveman"
       ],
       "prerequisites": []
     },
     {
-      "id": "any.caveman",
+      "id": "caveman.caveman",
       "skills": [
         "caveman"
       ],
       "related": [
-        "any",
-        "any.caveman.commit",
-        "any.caveman.compress",
-        "any.caveman.help",
-        "any.caveman.review",
-        "any.caveman.stats"
+        "caveman",
+        "caveman.caveman.commit",
+        "caveman.caveman.compress",
+        "caveman.caveman.help",
+        "caveman.caveman.review",
+        "caveman.caveman.stats"
       ],
       "prerequisites": []
     },
     {
-      "id": "any.caveman.commit",
+      "id": "caveman.caveman.commit",
       "skills": [
         "caveman-commit"
       ],
       "related": [
-        "any",
-        "any.caveman"
+        "caveman",
+        "caveman.caveman"
       ],
       "prerequisites": []
     },
     {
-      "id": "any.caveman.compress",
+      "id": "caveman.caveman.compress",
       "skills": [
         "caveman-compress"
       ],
       "related": [
-        "any",
-        "any.caveman"
+        "caveman",
+        "caveman.caveman"
       ],
       "prerequisites": []
     },
     {
-      "id": "any.caveman.help",
+      "id": "caveman.caveman.help",
       "skills": [
         "caveman-help"
       ],
       "related": [
-        "any",
-        "any.caveman"
+        "caveman",
+        "caveman.caveman"
       ],
       "prerequisites": []
     },
     {
-      "id": "any.caveman.review",
+      "id": "caveman.caveman.review",
       "skills": [
         "caveman-review"
       ],
       "related": [
-        "any",
-        "any.caveman"
+        "caveman",
+        "caveman.caveman"
       ],
       "prerequisites": []
     },
     {
-      "id": "any.caveman.stats",
+      "id": "caveman.caveman.stats",
       "skills": [
         "caveman-stats"
       ],
       "related": [
-        "any",
-        "any.caveman"
-      ],
-      "prerequisites": []
-    },
-    {
-      "id": "any.commit",
-      "skills": [
-        "olko-commit"
-      ],
-      "related": [
-        "any",
-        "any.commit.docker",
-        "any.commit.style"
-      ],
-      "prerequisites": []
-    },
-    {
-      "id": "any.commit.docker",
-      "skills": [
-        "olko-commit-docker"
-      ],
-      "related": [
-        "any",
-        "any.commit"
-      ],
-      "prerequisites": []
-    },
-    {
-      "id": "any.commit.style",
-      "skills": [
-        "olko-commit-style"
-      ],
-      "related": [
-        "any",
-        "any.commit"
-      ],
-      "prerequisites": []
-    },
-    {
-      "id": "any.implement.current-code",
-      "skills": [
-        "olko-implement-current-code"
-      ],
-      "related": [
-        "any"
-      ],
-      "prerequisites": []
-    },
-    {
-      "id": "any.implement.new",
-      "skills": [
-        "olko-implement-new"
-      ],
-      "related": [
-        "any"
-      ],
-      "prerequisites": []
-    },
-    {
-      "id": "any.investigate.existing",
-      "skills": [
-        "olko-investigate-existing"
-      ],
-      "related": [
-        "any"
-      ],
-      "prerequisites": []
-    },
-    {
-      "id": "any.plan.editor",
-      "skills": [
-        "olko-plan-editor"
-      ],
-      "related": [
-        "any"
-      ],
-      "prerequisites": []
-    },
-    {
-      "id": "any.pr.check",
-      "skills": [
-        "olko-pr-check"
-      ],
-      "related": [
-        "any"
-      ],
-      "prerequisites": []
-    },
-    {
-      "id": "any.summary",
-      "skills": [
-        "olko-summary"
-      ],
-      "related": [
-        "any"
-      ],
-      "prerequisites": []
-    },
-    {
-      "id": "any.worktree.create",
-      "skills": [
-        "olko-worktree-create"
-      ],
-      "related": [
-        "any"
-      ],
-      "prerequisites": []
-    },
-    {
-      "id": "any.worktree.merge",
-      "skills": [
-        "olko-worktree-merge"
-      ],
-      "related": [
-        "any"
+        "caveman",
+        "caveman.caveman"
       ],
       "prerequisites": []
     },
@@ -394,6 +269,90 @@
       ],
       "related": [
         "dotnet"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "git",
+      "skills": [
+        "olko-commit",
+        "olko-commit-docker",
+        "olko-commit-style",
+        "olko-pr-check",
+        "olko-worktree-create",
+        "olko-worktree-merge"
+      ],
+      "related": [
+        "git.commit",
+        "git.commit.docker",
+        "git.commit.style",
+        "git.pr.check",
+        "git.worktree.create",
+        "git.worktree.merge"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "git.commit",
+      "skills": [
+        "olko-commit"
+      ],
+      "related": [
+        "git",
+        "git.commit.docker",
+        "git.commit.style"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "git.commit.docker",
+      "skills": [
+        "olko-commit-docker"
+      ],
+      "related": [
+        "git",
+        "git.commit"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "git.commit.style",
+      "skills": [
+        "olko-commit-style"
+      ],
+      "related": [
+        "git",
+        "git.commit"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "git.pr.check",
+      "skills": [
+        "olko-pr-check"
+      ],
+      "related": [
+        "git"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "git.worktree.create",
+      "skills": [
+        "olko-worktree-create"
+      ],
+      "related": [
+        "git"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "git.worktree.merge",
+      "skills": [
+        "olko-worktree-merge"
+      ],
+      "related": [
+        "git"
       ],
       "prerequisites": []
     },
@@ -590,6 +549,74 @@
       ],
       "related": [
         "testing"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "workflow",
+      "skills": [
+        "olko-implement-current-code",
+        "olko-implement-new",
+        "olko-investigate-existing",
+        "olko-plan-editor",
+        "olko-summary"
+      ],
+      "related": [
+        "workflow.summary",
+        "workflow.implement.current-code",
+        "workflow.implement.new",
+        "workflow.investigate.existing",
+        "workflow.plan.editor"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "workflow.implement.current-code",
+      "skills": [
+        "olko-implement-current-code"
+      ],
+      "related": [
+        "workflow"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "workflow.implement.new",
+      "skills": [
+        "olko-implement-new"
+      ],
+      "related": [
+        "workflow"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "workflow.investigate.existing",
+      "skills": [
+        "olko-investigate-existing"
+      ],
+      "related": [
+        "workflow"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "workflow.plan.editor",
+      "skills": [
+        "olko-plan-editor"
+      ],
+      "related": [
+        "workflow"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "workflow.summary",
+      "skills": [
+        "olko-summary"
+      ],
+      "related": [
+        "workflow"
       ],
       "prerequisites": []
     }
