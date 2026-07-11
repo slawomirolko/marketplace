@@ -445,11 +445,13 @@
       "id": "marketplace",
       "skills": [
         "olko-adapt-to-marketplace",
-        "olko-install-skill"
+        "olko-install-skill",
+        "olko-optimize-project-skill"
       ],
       "related": [
         "marketplace.install.skill",
-        "marketplace.adapt.to.marketplace"
+        "marketplace.adapt.to.marketplace",
+        "marketplace.optimize.project.skill"
       ],
       "prerequisites": []
     },
@@ -467,6 +469,16 @@
       "id": "marketplace.install.skill",
       "skills": [
         "olko-install-skill"
+      ],
+      "related": [
+        "marketplace"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "marketplace.optimize.project.skill",
+      "skills": [
+        "olko-optimize-project-skill"
       ],
       "related": [
         "marketplace"

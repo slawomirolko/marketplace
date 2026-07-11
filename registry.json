@@ -1035,6 +1035,39 @@
       }
     },
     {
+      "name": "olko-optimize-project-skill",
+      "category": "marketplace",
+      "version": "1.0.0",
+      "description": "Optimize an already-finished project-oriented skill in place without generalizing it for the marketplace. Reads the target skill plus any .agents project adaptation, compares it against olko-adapt-to-marketplace and olko-install-skill optimization patterns, then applies only project-scope improvements: token reduction, routing clarity, stale adapter cleanup, config alignment, and behavior preservation. Does not rename, split, onboard, register, or make the skill reusable across projects. Triggers: 'optimize project skill', 'optimize project-oriented skill', 'optymalizuj project-oriented skilla', 'optimize existing adapted skill', 'olko-optimize-project-skill name-or-path'.",
+      "tags": [
+        "marketplace",
+        "optimize",
+        "project"
+      ],
+      "capabilities": [
+        "marketplace",
+        "marketplace.optimize.project.skill"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
       "name": "olko-heartbeat",
       "category": "project",
       "version": "1.0.0",
