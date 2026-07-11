@@ -24,14 +24,36 @@ User says "make a plan", "edit plan", "review plan", "refine plan", "plan this",
 
 ## Dependencies (uses)
 
-This skill may delegate test execution to a test skill after the plan is implemented. Declare it in `uses` in the project adapter (`.agents/skills/olko-plan-editor/project.md`):
+This skill may delegate plan review and test execution to other skills. Declare dependencies in `uses` in the project adapter (`.agents/skills/olko-plan-editor/project.md`):
 
 ```yaml
 uses:
+  - olko-project-architecture
+  - olko-ai-architecture
+  - olko-dotnet-style
+  - olko-dotnet-architecture
+  - olko-dotnet-testing
+  - olko-dotnet-build
+  - olko-dotnet-migration
+  - olko-create-saga
+  - olko-docker-style
+  - olko-python-architecture
+  - olko-python-style
+  - olko-python-testing
+  - olko-kotlin-architecture
+  - olko-kotlin-style
+  - olko-kotlin-testing
   - olko-test
 ```
 
-If a test skill is **not** declared in `uses`, skip test-execution delegation and continue. If declared, delegate to it and follow its result. Do not auto-load skills — composition is explicit through `uses`. See [Explicit Skill Reuse](../../docs/explicit-skill-reuse.md).
+If `readArchitectureDocs` or `readTestingDocs` is disabled, use declared stack-specific skills to review architecture, coding style, and test-convention impact for the detected stack. If a matching stack skill is not declared in `uses`, fall back to the minimal local `AGENTS.md` and project adapter context; do not auto-load skills. If `olko-test` is declared, delegate test execution to it after implementation. See [Explicit Skill Reuse](../../docs/explicit-skill-reuse.md).
+
+Use broader or specialized dependencies only when the plan scope calls for them:
+- `olko-project-architecture`: plans that change repo structure, app/service/platform boundaries, module layering, or cross-surface contracts.
+- `olko-ai-architecture`: plans that touch `ai/`, `.agents/`, skill adapters, context files, prompts, or templates.
+- `olko-dotnet-build`: .NET feasibility checks when the plan changes project files, target frameworks, package references, or build wiring.
+- `olko-dotnet-migration`: EF Core schema or migration plans.
+- `olko-create-saga`: Wolverine saga creation or update plans.
 
 ## Configuration keys
 
