@@ -2,6 +2,15 @@
 
 ## Workflow
 
+### Step 0 — Load adaptation
+Read `.agents/skill-config.md` first. If `projectAdapter` is not `false`, load `.agents/skills/olko-test/project.md` when present. Apply precedence:
+
+```text
+Configuration > Project Adapter > AGENTS.md > Marketplace Skill
+```
+
+Use configured test commands, arguments, emulator timeout, and explicit `uses` dependencies from those layers before applying marketplace defaults.
+
 ### Step 1 — Announce scope
 Tell the user what tests will run and why, listing the discovered project paths:
 ```

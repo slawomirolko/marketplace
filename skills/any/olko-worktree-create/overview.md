@@ -19,5 +19,5 @@ Use when user says "create worktree", "olko-worktree-create", "worktree-create",
 ## Adaptation
 - Load `.agents/skill-config.md` when present.
 - Load `.agents/skills/olko-worktree-create/project.md` when present and project adapters are enabled.
-- Recognized optional keys: `remoteName`, `defaultBranch`, `worktreeParent`, `branchPrefixes`.
+- Recognized optional keys: `remoteName`, `defaultBranch`, `worktreeParent`, `branchPrefixes`, `planDirectories`.
 - Default behavior: remote `origin`, remote HEAD or `main`, sibling directory beside repo root, prefixes `feature`, `fix`, `issue`, `chore`, `refactor`, `test`, `docs`.

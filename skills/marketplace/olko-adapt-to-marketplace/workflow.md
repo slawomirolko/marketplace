@@ -4,10 +4,17 @@
 
 ### Step 1 — Resolve the marketplace root
 
+Read `.agents/skill-config.md` first. If `projectAdapter` is not `false`, load `.agents/skills/olko-adapt-to-marketplace/project.md` when present. Apply precedence:
+
+```text
+Configuration > Project Adapter > AGENTS.md > Marketplace Skill
+```
+
 1. If `--marketplace-root <path>` was passed, use it.
-2. Otherwise, if `registry.json` exists in the current directory, assume this is the marketplace root.
-3. Otherwise, walk up the directory tree looking for `registry.json` + `skills/` + `docs/`.
-4. Otherwise, ask the user for the marketplace root path.
+2. Otherwise, if `marketplaceRoot` is configured, use it.
+3. Otherwise, if `registry.json` exists in the current directory, assume this is the marketplace root.
+4. Otherwise, walk up the directory tree looking for `registry.json` + `skills/` + `docs/`.
+5. Otherwise, ask the user for the marketplace root path.
 
 Verify the root contains `registry.json` and `skills/`. If not, stop: "Not a marketplace root: `<path>`."
 
@@ -17,7 +24,7 @@ Verify the root contains `registry.json` and `skills/`. If not, stop: "Not a mar
 2. Otherwise, search for a directory matching `<skill-name>`:
    - under `skills/<category>/` for every category
    - under the current directory
-   - under common skill install paths (`~/.claude/skills/`, `~/.codex/skills/`, `~/.config/opencode/skills/`)
+   - under each configured `sourceSkillRoots` directory
 3. If not found anywhere, ask the user for the source path. If the user cannot provide one, stop: "Skill `<skill-name>` not found on disk."
 
 Read the source directory. If `SKILL.md` exists, parse its frontmatter (`name`, `description`, any other fields) and body. If no `SKILL.md`, the skill is a stub — note that for Step 7.

@@ -14,6 +14,29 @@
 ## When to use me
 User says "run tests", "test this", "/olko-test", or olko-plan-editor/olko-commit delegates test execution to me.
 
+## Adaptation
+
+Read `.agents/skill-config.md` first. If `projectAdapter` is not `false`, load `.agents/skills/olko-test/project.md` when present. Precedence:
+
+```text
+Configuration > Project Adapter > AGENTS.md > Marketplace Skill
+```
+
+Recognized keys:
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `projectAdapter` | `true` | Whether to load `.agents/skills/olko-test/project.md` |
+| `testCommand` | discovered from repo/docs | Project-wide test command override |
+| `testScopeCommand` | `git status` + `git diff --name-only HEAD` | Command used to discover changed files |
+| `dotnetTestArgs` | `--no-restore` | Extra .NET test args |
+| `pythonTestCommand` | `uv run --directory <py-root> pytest` | Python test runner command |
+| `androidUnitTestTask` | `test` | Gradle unit test task |
+| `androidInstrumentationTask` | `connectedCheck` | Gradle instrumentation task |
+| `androidEmulatorTimeoutSeconds` | `120` | Emulator boot timeout |
+
+Stack-specific checks may be delegated only through `uses` in `.agents/skills/olko-test/project.md`.
+
 ## Scope detection
 
 Determine scope in this priority order:
