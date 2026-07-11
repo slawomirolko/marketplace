@@ -92,7 +92,7 @@ deploymentTarget: "Docker"
 | Flag | Type | Default | Meaning |
 |------|------|---------|---------|
 | `conventionDiscovery` | `true \| false` | `false` | Enables Convention Discovery. When `false`, the agent must not inspect the repository to infer conventions unless the user explicitly requests it. |
-| `projectAdapter` | `true \| false` | `false` | Loads `.agents/skills/<skill-name>/project.md` for the active skill. |
+| `projectAdapter` | `true \| false` | `true` | Loads `.agents/skills/<skill-name>/project.md` for the active skill. Set `false` to disable project adapters even when files exist. |
 | `readArchitectureDocs` | `true \| false` | marketplace default | Hints that architecture documentation should be read as part of the workflow. |
 | `readTestingDocs` | `true \| false` | marketplace default | Hints that testing documentation should be read as part of the workflow. |
 
@@ -145,7 +145,12 @@ A Project Adapter:
   vendor-specific directories;
 - overrides, narrows, or extends the marketplace skill's workflow with
   project-specific commands, constraints, and conventions;
-- is loaded only when `projectAdapter: true` in `.agents/skill-config.md`.
+- may declare `contextSources` for project files the planner must load before
+  skill execution;
+- may declare `ownedFiles` for project files the skill is expected to update or
+  optimize;
+- overrides the marketplace skill when present and is loaded unless
+  `projectAdapter: false` is set in `.agents/skill-config.md`.
 
 The Project Adapter is the middle layer in precedence: it wins over the
 marketplace skill but loses to explicit configuration.
@@ -163,9 +168,9 @@ fixed order:
    conventions not stated in config. Skip entirely when the flag is `false` or
    absent.
 4. **Load `AGENTS.md`.** — read the universal agent context file(s) in scope.
-5. **If `projectAdapter == true`, load `.agents/skills/<skill-name>/project.md`.**
+5. **Unless `projectAdapter == false`, load `.agents/skills/<skill-name>/project.md`.**
    — apply the Project Adapter for the active skill. Skip when the flag is
-   `false` or the file is absent.
+   explicitly `false` or the file is absent.
 6. **Execute the marketplace skill.** — run the skill's workflow with the
    accumulated context.
 
@@ -227,7 +232,9 @@ A Project Adapter (`.agents/skills/<skill-name>/project.md`) should contain:
 - project-specific commands (build, test, lint, migrate, deploy);
 - project-specific constraints, naming quirks, and cross-boundary rules;
 - overrides or specializations of the marketplace skill's workflow steps;
-- references to project documentation the skill should read.
+- references to project documentation the skill should read;
+- `contextSources` and `ownedFiles` lists for project-owned docs or config files
+  that should outrank marketplace defaults.
 
 A Project Adapter should **not** contain:
 

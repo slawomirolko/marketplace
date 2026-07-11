@@ -36,10 +36,10 @@ vendor-specific directories are referenced.
   marketplace skill.
 - **If no adapter exists**, the marketplace skill runs with its default behavior.
 
-Loading assumes project adaptation is enabled for the project (the
-`projectAdapter` flag in `.agents/skill-config.md`, see the Layered Skill
-Adaptation Pattern). When adaptation is disabled, the adapter is not loaded even
-if the file is present.
+Loading assumes project adaptation is enabled for the project, which is the
+default (see the `projectAdapter` flag in the Layered Skill Adaptation Pattern).
+When adaptation is disabled with `projectAdapter: false`, the adapter is not
+loaded even if the file is present.
 
 ## 4. No hardcoded project-specific behavior
 

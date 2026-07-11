@@ -11,6 +11,7 @@ const defaultSourceBudgets = {
   "route-candidates": 300,
   "skill-body": 1200,
   "project-adapter": 600,
+  "project-adapter-source": 1000,
   "skill-memory": 600,
   "project-summary": 800,
   "project-conventions": 600,
@@ -23,6 +24,7 @@ const sourceScores = {
   "category-index": 100,
   "route-candidates": 100,
   "skill-body": 100,
+  "project-adapter-source": 98,
   "project-adapter": 95,
   "skill-memory": 90,
   "project-summary": 80,
@@ -77,6 +79,37 @@ function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
+function parseScalar(value) {
+  const trimmed = value.replace(/\s+#.*$/, "").trim().replace(/^["']|["']$/g, "");
+  if (trimmed === "true") {
+    return true;
+  }
+  if (trimmed === "false") {
+    return false;
+  }
+  return trimmed;
+}
+
+function parseSkillConfig(markdown) {
+  const config = {};
+  for (const line of markdown.split(/\r?\n/)) {
+    const match = line.match(/^([A-Za-z][A-Za-z0-9_.-]*):\s*(.*?)\s*$/);
+    if (!match) {
+      continue;
+    }
+    config[match[1]] = parseScalar(match[2]);
+  }
+  return config;
+}
+
+function readProjectConfig(projectRoot) {
+  const filePath = path.join(projectRoot, ".agents", "skill-config.md");
+  if (!fs.existsSync(filePath)) {
+    return {};
+  }
+  return parseSkillConfig(fs.readFileSync(filePath, "utf8"));
+}
+
 function normalizeSlashes(value) {
   return value.replaceAll("\\", "/");
 }
@@ -96,13 +129,14 @@ function sourceEntry(source, kind, required, reason) {
   };
 }
 
-function parseUses(markdown) {
+function parseListField(markdown, fieldName) {
   const lines = markdown.split(/\r?\n/);
-  const uses = [];
+  const values = [];
+  const fieldPattern = fieldName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
-    const inline = line.match(/^uses:\s*\[(.*)\]\s*$/);
+    const inline = line.match(new RegExp(`^${fieldPattern}:\\s*\\[(.*)\\]\\s*$`));
     if (inline) {
       return inline[1]
         .split(",")
@@ -110,37 +144,76 @@ function parseUses(markdown) {
         .filter(Boolean);
     }
 
-    if (/^uses:\s*$/.test(line)) {
+    if (new RegExp(`^${fieldPattern}:\\s*$`).test(line)) {
       index += 1;
       while (index < lines.length) {
         const item = lines[index].match(/^\s*-\s*([^#\s].*?)\s*$/);
         if (!item) {
           break;
         }
-        uses.push(item[1].replace(/^["']|["']$/g, "").trim());
+        values.push(item[1].replace(/^["']|["']$/g, "").trim());
         index += 1;
       }
-      return uses;
+      return values;
     }
   }
 
-  return uses;
+  return values;
+}
+
+function parseUses(markdown) {
+  return parseListField(markdown, "uses");
 }
 
 function adapterPath(projectRoot, skillName) {
   return path.join(projectRoot, ".agents", "skills", skillName, "project.md");
 }
 
-function declaredUses(projectRoot, skillName) {
+function projectAdapterEnabled(projectConfig) {
+  return projectConfig.projectAdapter !== false;
+}
+
+function readAdapter(projectRoot, skillName, projectConfig) {
+  if (!projectAdapterEnabled(projectConfig)) {
+    return null;
+  }
+
   const filePath = adapterPath(projectRoot, skillName);
   if (!fs.existsSync(filePath)) {
+    return null;
+  }
+
+  return {
+    filePath,
+    markdown: fs.readFileSync(filePath, "utf8"),
+  };
+}
+
+function declaredUses(projectRoot, skillName, projectConfig) {
+  const adapter = readAdapter(projectRoot, skillName, projectConfig);
+  if (!adapter) {
     return [];
   }
 
-  return parseUses(fs.readFileSync(filePath, "utf8"));
+  return parseUses(adapter.markdown);
 }
 
-function resolveUses(projectRoot, skillName, knownSkills, maxDepth, stack = []) {
+function adapterLists(projectRoot, skillName, projectConfig) {
+  const adapter = readAdapter(projectRoot, skillName, projectConfig);
+  if (!adapter) {
+    return {
+      contextSources: [],
+      ownedFiles: [],
+    };
+  }
+
+  return {
+    contextSources: parseListField(adapter.markdown, "contextSources"),
+    ownedFiles: parseListField(adapter.markdown, "ownedFiles"),
+  };
+}
+
+function resolveUses(projectRoot, skillName, knownSkills, maxDepth, projectConfig, stack = []) {
   if (stack.includes(skillName)) {
     throw new Error(`Cycle detected in uses: ${[...stack, skillName].join(" -> ")}`);
   }
@@ -150,7 +223,7 @@ function resolveUses(projectRoot, skillName, knownSkills, maxDepth, stack = []) 
   }
 
   const resolved = [];
-  for (const dependency of declaredUses(projectRoot, skillName)) {
+  for (const dependency of declaredUses(projectRoot, skillName, projectConfig)) {
     if (!knownSkills.has(dependency)) {
       throw new Error(`${skillName}: declared uses entry does not exist in registry: ${dependency}`);
     }
@@ -161,7 +234,7 @@ function resolveUses(projectRoot, skillName, knownSkills, maxDepth, stack = []) 
       depth: stack.length + 1,
     });
 
-    resolved.push(...resolveUses(projectRoot, dependency, knownSkills, maxDepth, [...stack, skillName]));
+    resolved.push(...resolveUses(projectRoot, dependency, knownSkills, maxDepth, projectConfig, [...stack, skillName]));
   }
 
   return resolved;
@@ -217,6 +290,14 @@ function existingSource(projectRoot, source, kind, required, reason) {
   return sourceEntry(source, kind, required, reason);
 }
 
+function adapterContextSources(projectRoot, entry, projectConfig) {
+  return adapterLists(projectRoot, entry.name, projectConfig).contextSources
+    .map((source) =>
+      existingSource(projectRoot, source, "project-adapter-source", true, "project source declared by adapter"),
+    )
+    .filter(Boolean);
+}
+
 function conventionSources(projectRoot) {
   return [
     existingSource(projectRoot, "AGENTS.md", "project-conventions", false, "project-wide agent instructions"),
@@ -238,15 +319,18 @@ function skillContextSources(projectRoot, entry, role, options = {}) {
     sourceEntry(skillFile(entry, "SKILL.md"), "skill-body", true, role === "primary" ? "selected SKILL.md" : "support SKILL.md"),
   ];
 
-  const adapter = existingSource(
-    projectRoot,
-    path.join(".agents", "skills", entry.name, "project.md"),
-    "project-adapter",
-    false,
-    "project adapter for selected skill",
-  );
-  if (adapter) {
-    sources.push(adapter);
+  if (projectAdapterEnabled(options.projectConfig ?? {})) {
+    const adapter = existingSource(
+      projectRoot,
+      path.join(".agents", "skills", entry.name, "project.md"),
+      "project-adapter",
+      false,
+      "project adapter for selected skill",
+    );
+    if (adapter) {
+      sources.push(adapter);
+    }
+    sources.push(...adapterContextSources(projectRoot, entry, options.projectConfig ?? {}));
   }
 
   const memory = existingSource(
@@ -351,9 +435,10 @@ if (!skills.has(args.skill)) {
   process.exit(1);
 }
 
+const projectConfig = readProjectConfig(args.project);
 let dependencies;
 try {
-  dependencies = uniqueByName(resolveUses(args.project, args.skill, skills, args.maxDepth));
+  dependencies = uniqueByName(resolveUses(args.project, args.skill, skills, args.maxDepth, projectConfig));
 } catch (error) {
   console.error(error.message);
   process.exit(1);
@@ -373,6 +458,10 @@ console.log(
       totalBudget: args.budget,
       phaseBudgets: phaseBudgets(args.budget),
       sourceBudgets: defaultSourceBudgets,
+      adaptation: {
+        projectAdapter: projectAdapterEnabled(projectConfig),
+        ownedFiles: adapterLists(args.project, args.skill, projectConfig).ownedFiles,
+      },
       composition: {
         allowed: support.length > 0,
         maxDepth: args.maxDepth,
@@ -380,8 +469,8 @@ console.log(
       },
       projectContext: existingProjectContext(args.project, args.skill),
       loadPlan: [
-        contextPlanFor(active, "primary", args.project, args),
-        ...support.map(({ entry }) => contextPlanFor(entry, "support", args.project, args)),
+        contextPlanFor(active, "primary", args.project, { ...args, projectConfig }),
+        ...support.map(({ entry }) => contextPlanFor(entry, "support", args.project, { ...args, projectConfig })),
       ],
       compression: {
         prefer: "summaries-over-raw-context",
