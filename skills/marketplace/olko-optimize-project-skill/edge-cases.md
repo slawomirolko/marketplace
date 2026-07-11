@@ -5,7 +5,8 @@
 - **Target is not project-oriented** - stop and ask whether the user wants `olko-adapt-to-marketplace` instead.
 - **Target is not installed/adapted yet** - stop and suggest `olko-install-skill`.
 - **Target path is inside marketplace source** - optimize only if the user explicitly wants that local source edited; otherwise explain that marketplace publication belongs to `olko-adapt-to-marketplace`.
-- **No project adapter exists** - optimize the skill files only. Do not create `.agents/skills/<name>/project.md` unless the user asks.
+- **No optimizer adapter exists** - use marketplace defaults for `olko-optimize-project-skill`.
+- **No target project adapter exists** - optimize the target skill files only. Do not create `.agents/skills/<target-name>/project.md` unless the user asks.
 - **Duplicate text includes a project fact** - keep one authoritative copy. Prefer config for scalar facts, project adapter for local workflow quirks, skill body for default behavior.
 - **General improvement found** - report as `Possible upstream contribution`; do not change marketplace source automatically.
 - **Safety step is verbose** - clarity wins. Do not cavemanize or compress confirmations, deletes, pushes, deploys, migrations, or other irreversible actions.
