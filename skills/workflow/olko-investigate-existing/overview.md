@@ -7,6 +7,7 @@
 - Analyze its behavior end-to-end
 - Produce a flow graph of directories and classes involved
 - Verify and update per-slice AGENTS.md documentation (only non-inferable content)
+- Verify technology architecture and coding style compliance for the mechanism's stack
 - Assess optimization/extension opportunities and predict potential errors
 - Summarize findings and, for each improvement, offer to create a plan via a declared plan skill
 
@@ -15,16 +16,26 @@ User says "investigate X", "analyze how Y works", "explain the Z flow", "documen
 
 ## Dependencies (uses)
 
-This skill integrates with two optional skills. Declare them in `uses` in the project adapter (`.agents/skills/olko-investigate-existing/project.md`):
+This skill integrates with optional skills. Declare them in `uses` in the project adapter (`.agents/skills/olko-investigate-existing/project.md`):
 
 ```yaml
 uses:
   - olko-plan-editor       # delegate improvement-plan creation
   - olko-agents-optimizer  # AGENTS.md content methodology
+  - olko-project-architecture
+  - olko-ai-architecture
+  - olko-dotnet-architecture
+  - olko-dotnet-style
+  - olko-docker-style
+  - olko-python-architecture
+  - olko-python-style
+  - olko-kotlin-architecture
+  - olko-kotlin-style
 ```
 
 - If a **plan skill** (e.g. `olko-plan-editor`) is declared, delegate plan creation to it (Step 6). If not declared, skip plan creation and present the summary only.
 - If an **agents-optimizer skill** (e.g. `olko-agents-optimizer`) is declared, follow its methodology for AGENTS.md content decisions (Step 4). If not declared, apply the universal rule below.
+- If matching **technology architecture/style skills** are declared, delegate review to them when docs are disabled or when the mechanism's stack needs stack-specific validation (Step 5). If not declared, fall back to loaded docs/config and report the review gap. Do not auto-load skills; composition is explicit through `uses`.
 - Universal AGENTS.md rule: only suggest **non-inferable** content (naming quirks, cross-boundary rules, custom tooling commands, optional wiring). Never add overviews, flow diagrams, property tables, dependency lists, file indexes, or test tables.
 
 If neither skill is declared, this skill still runs end-to-end; it skips plan creation and uses the universal AGENTS.md rule. Do not auto-load skills — composition is explicit through `uses`. See [Explicit Skill Reuse](../../docs/explicit-skill-reuse.md).
