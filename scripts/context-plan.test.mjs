@@ -135,6 +135,59 @@ test("rejects undeclared registry skills in project adapter uses", () => {
   assert.match(result.stderr, /declared uses entry does not exist in registry: olko-missing/);
 });
 
+test("projectAdapter false disables adapter sources and uses", () => {
+  const repo = makeRepo();
+  const adapterDir = path.join(repo, ".agents", "skills", "olko-commit");
+  fs.mkdirSync(path.join(repo, ".agents"), { recursive: true });
+  fs.mkdirSync(adapterDir, { recursive: true });
+  fs.writeFileSync(path.join(repo, ".agents", "skill-config.md"), "projectAdapter: false\n");
+  fs.writeFileSync(
+    path.join(adapterDir, "project.md"),
+    ["uses: [olko-missing]", "contextSources: [ai/dotnet/ARCHITECTURE.md]", "ownedFiles: [ai/dotnet/ARCHITECTURE.md]", ""].join("\n"),
+  );
+
+  const result = runContextPlan(repo, ["--skill", "olko-commit"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.equal(output.adaptation.projectAdapter, false);
+  assert.deepEqual(output.adaptation.ownedFiles, []);
+  assert.deepEqual(output.composition.dependencies, []);
+  assert.equal(primarySources(output).some((source) => source.kind === "project-adapter"), false);
+  assert.equal(primarySources(output).some((source) => source.kind === "project-adapter-source"), false);
+});
+
+test("loads adapter-declared project context sources before memory and summaries", () => {
+  const repo = makeRepo();
+  const adapterDir = path.join(repo, ".agents", "skills", "olko-commit");
+  const contextRoot = path.join(repo, ".agents", "context");
+  fs.mkdirSync(adapterDir, { recursive: true });
+  fs.mkdirSync(path.join(repo, "ai", "dotnet"), { recursive: true });
+  fs.mkdirSync(path.join(contextRoot, "summaries"), { recursive: true });
+  fs.writeFileSync(path.join(repo, "ai", "dotnet", "ARCHITECTURE.md"), "# Project architecture\n");
+  fs.writeFileSync(path.join(contextRoot, "summaries", "latest.md"), "summary\n");
+  fs.writeFileSync(
+    path.join(adapterDir, "project.md"),
+    ["contextSources:", "  - ai/dotnet/ARCHITECTURE.md", "ownedFiles:", "  - ai/dotnet/ARCHITECTURE.md", ""].join("\n"),
+  );
+
+  const result = runContextPlan(repo, ["--skill", "olko-commit"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.deepEqual(output.adaptation.ownedFiles, ["ai/dotnet/ARCHITECTURE.md"]);
+  assert.deepEqual(
+    primarySources(output)
+      .filter((source) => ["project-adapter", "project-adapter-source", "project-summary"].includes(source.kind))
+      .map((source) => [source.kind, source.source, source.score, source.budget]),
+    [
+      ["project-adapter", ".agents/skills/olko-commit/project.md", 95, 600],
+      ["project-adapter-source", "ai/dotnet/ARCHITECTURE.md", 98, 1000],
+      ["project-summary", ".agents/context/summaries/latest.md", 80, 800],
+    ],
+  );
+});
+
 test("emits deterministic source ordering for selected skill context", () => {
   const repo = makeRepo();
   const adapterDir = path.join(repo, ".agents", "skills", "olko-commit");
@@ -184,6 +237,7 @@ test("emits source scoring and per-source budget metadata", () => {
     "route-candidates": 300,
     "skill-body": 1200,
     "project-adapter": 600,
+    "project-adapter-source": 1000,
     "skill-memory": 600,
     "project-summary": 800,
     "project-conventions": 600,

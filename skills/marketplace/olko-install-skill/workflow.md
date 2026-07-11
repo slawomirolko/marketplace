@@ -144,7 +144,7 @@ Ask which flags to set (present current values when updating, marketplace defaul
 | Flag | Default | Question |
 |------|---------|----------|
 | `conventionDiscovery` | `false` | "Enable Convention Discovery (inspect repo to infer conventions)?" |
-| `projectAdapter` | `false` | "Create a Project Adapter for this skill?" |
+| `projectAdapter` | `true` | "Use the Project Adapter for this skill when present?" |
 | `readArchitectureDocs` | marketplace default | "Read architecture docs when this skill runs?" |
 | `readTestingDocs` | marketplace default | "Read testing docs when this skill runs?" |
 
@@ -168,8 +168,19 @@ Ask what goes into `.agents/skills/<skill-name>/project.md`:
 - **project-specific commands** (build, test, lint, migrate, deploy) — ask for each the skill needs
 - **constraints & naming quirks** — free-form
 - **workflow specializations** — which steps to override or extend
+- **contextSources** — project files the planner must load before skill execution (for example `ai/dotnet/ARCHITECTURE.md`)
+- **ownedFiles** — project files this skill is expected to update or optimize (for example `ai/dotnet/ARCHITECTURE.md`)
 - **`uses` dependencies** — does this skill reuse another? If yes, collect skill names for the `uses` list (see Explicit Skill Reuse)
 - **caveman strict mode** — if the user wants terse output, add `caveman` to `uses` instead of duplicating compression rules in prose
+
+Use this adapter shape for project-owned docs:
+
+```yaml
+contextSources:
+  - ai/dotnet/ARCHITECTURE.md
+ownedFiles:
+  - ai/dotnet/ARCHITECTURE.md
+```
 
 #### 5d — Update mode: keep / modify / drop
 
@@ -209,6 +220,8 @@ Only when `projectAdapter: true`.
 
 - Create the `.agents/skills/<skill-name>/` directory if needed.
 - Write `project.md` with the sections from Step 5c.
+- If `contextSources` were declared, include them as a YAML list near the top of `project.md`.
+- If `ownedFiles` were declared, include them as a YAML list near the top of `project.md`.
 - If `uses` dependencies were declared, include the `uses` block.
 - When updating: preserve kept sections, apply modified sections, remove dropped sections.
 

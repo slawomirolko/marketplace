@@ -47,6 +47,41 @@ function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
+function parseScalar(value) {
+  const trimmed = value.replace(/\s+#.*$/, "").trim().replace(/^["']|["']$/g, "");
+  if (trimmed === "true") {
+    return true;
+  }
+  if (trimmed === "false") {
+    return false;
+  }
+  return trimmed;
+}
+
+function parseSkillConfig(markdown) {
+  const config = {};
+  for (const line of markdown.split(/\r?\n/)) {
+    const match = line.match(/^([A-Za-z][A-Za-z0-9_.-]*):\s*(.*?)\s*$/);
+    if (!match) {
+      continue;
+    }
+    config[match[1]] = parseScalar(match[2]);
+  }
+  return config;
+}
+
+function readProjectConfig(projectRoot) {
+  const filePath = path.join(projectRoot, ".agents", "skill-config.md");
+  if (!fs.existsSync(filePath)) {
+    return {};
+  }
+  return parseSkillConfig(fs.readFileSync(filePath, "utf8"));
+}
+
+function projectAdapterEnabled(projectConfig) {
+  return projectConfig.projectAdapter !== false;
+}
+
 function normalizeSlashes(value) {
   return value.replaceAll("\\", "/");
 }
@@ -98,7 +133,11 @@ function adapterPath(projectRoot, skillName) {
   return path.join(projectRoot, ".agents", "skills", skillName, "project.md");
 }
 
-function declaredUses(projectRoot, skillName) {
+function declaredUses(projectRoot, skillName, projectConfig) {
+  if (!projectAdapterEnabled(projectConfig)) {
+    return [];
+  }
+
   const filePath = adapterPath(projectRoot, skillName);
   if (!fs.existsSync(filePath)) {
     return [];
@@ -313,6 +352,7 @@ function main() {
     contextArgs.push("--include-examples");
   }
   const contextPlan = runJson(contextPlanScriptPath, contextArgs);
+  const projectConfig = readProjectConfig(args.project);
 
   const registry = readJson(registryPath);
   const registrySkills = new Map(registry.skills.map((entry) => [entry.name, entry]));
@@ -345,8 +385,9 @@ function main() {
         explicitUses: {
           adapter: normalizeSlashes(adapterPath(args.project, selected.name)),
           dependencies: contextPlan.composition.dependencies,
-          declaredUses: declaredUses(args.project, selected.name),
+          declaredUses: declaredUses(args.project, selected.name, projectConfig),
         },
+        adaptation: contextPlan.adaptation,
         context: {
           sourceBudgets: contextPlan.sourceBudgets,
           phaseBudgets: contextPlan.phaseBudgets,
