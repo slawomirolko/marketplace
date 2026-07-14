@@ -5,7 +5,7 @@
       "name": "olko-commit",
       "category": "git",
       "version": "1.0.0",
-      "description": "Orchestrate the commit workflow: delegate style check, docs staleness, tests, and docker rebuild to sub-skills, then draft a conventional commit message, resolve branch policy, commit, push, and open/merge a PR. Off main, creates a scope-named branch + PR. With --force, commits directly to main. Triggers: 'commit', 'commit this', 'wrap up', 'summarize changes'.",
+      "description": "Orchestrate the commit workflow: delegate style check, docs staleness, tests, docker rebuild, and PR-description updates to sub-skills, then draft a conventional commit message, resolve branch policy, commit, push, open/update a PR, and optionally merge it. Off main, creates a scope-named branch + PR. With --force, commits directly to main. Triggers: 'commit', 'commit this', 'wrap up', 'summarize changes'.",
       "tags": [
         "git",
         "commit"
@@ -117,6 +117,39 @@
         "git.pr.check"
       ],
       "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
+      "name": "olko-pr-description-update",
+      "category": "git",
+      "version": "1.0.0",
+      "description": "Write or update a GitHub PR description after a PR is opened, especially when a linked Jira PBI or Bug exists. Produces a required 4-sentence PBI/Bug context block and a Mermaid flow diagram, then keeps the rest of the PR body concise. Triggers: 'update PR description', 'write PR body', 'PR description', 'PBI context', 'Bug context', 'Mermaid PR flow'.",
+      "tags": [
+        "git",
+        "pr",
+        "description"
+      ],
+      "capabilities": [
+        "git",
+        "git.pr.description"
+      ],
+      "cost": 1,
       "files": [
         "SKILL.md",
         "edge-cases.md",

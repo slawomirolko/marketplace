@@ -279,6 +279,7 @@
         "olko-commit-docker",
         "olko-commit-style",
         "olko-pr-check",
+        "olko-pr-description-update",
         "olko-worktree-create",
         "olko-worktree-merge"
       ],
@@ -287,8 +288,8 @@
         "git.commit.docker",
         "git.commit.style",
         "git.pr.check",
-        "git.worktree.create",
-        "git.worktree.merge"
+        "git.pr.description",
+        "git.worktree.create"
       ],
       "prerequisites": []
     },
@@ -330,6 +331,16 @@
       "id": "git.pr.check",
       "skills": [
         "olko-pr-check"
+      ],
+      "related": [
+        "git"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "git.pr.description",
+      "skills": [
+        "olko-pr-description-update"
       ],
       "related": [
         "git"
@@ -555,6 +566,8 @@
     {
       "id": "workflow",
       "skills": [
+        "grill-me-base",
+        "grill-with-docs",
         "olko-implement-current-code",
         "olko-implement-new",
         "olko-investigate-existing",
@@ -563,10 +576,31 @@
       ],
       "related": [
         "workflow.summary",
+        "workflow.grill.docs",
+        "workflow.grill.me",
         "workflow.implement.current-code",
         "workflow.implement.new",
-        "workflow.investigate.existing",
-        "workflow.plan.editor"
+        "workflow.investigate.existing"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "workflow.grill.docs",
+      "skills": [
+        "grill-with-docs"
+      ],
+      "related": [
+        "workflow"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "workflow.grill.me",
+      "skills": [
+        "grill-me-base"
+      ],
+      "related": [
+        "workflow"
       ],
       "prerequisites": []
     },
