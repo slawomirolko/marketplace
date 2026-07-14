@@ -11,6 +11,18 @@ Configuration > Project Adapter > AGENTS.md > Marketplace Skill
 
 Use configured test commands, arguments, emulator timeout, and explicit `uses` dependencies from those layers before applying marketplace defaults.
 
+### Step 0a - Detect and prepare a Git worktree Compose stack
+
+Before running any test stage:
+
+1. Resolve the current repository, `git-dir`, and `git-common-dir`. The current directory is a linked worktree only when the resolved `git-dir` differs from the resolved common directory. Do not classify the main checkout from its folder name.
+2. Discover the configured wrapper, default `scripts/tests/worktree-compose.ps1`, and matching scripts, default `scripts/tests/worktree-compose*.ps1`. Exclude the wrapper and sort remaining scripts deterministically.
+3. Resolve a shell-safe, worktree-specific Compose project name, env file, and port offset. The project name must not equal the main project name. Missing required values fail visibly; never fall back to the main project or ports.
+4. Invoke the wrapper with `COMPOSE_PROJECT_NAME` set and pass `-WorktreePath`, `-ProjectName`, `-EnvFile`, and `-PortOffset`. The wrapper owns the repository Compose file and services.
+5. Mark the isolated stack as owned by this run. Pass the same four values to every worktree test script and tear down the stack in the `finally` path.
+
+If no linked worktree, wrapper, or matching scripts are found, continue with the existing workflow unchanged.
+
 ### Step 1 — Announce scope
 Tell the user what tests will run and why, listing the discovered project paths:
 ```
@@ -200,6 +212,12 @@ For each discovered .NET integration test project in scope:
 ```bash
 dotnet test <project>.csproj --no-restore
 ```
+
+### Step 4a - Run worktree Compose scripts and clean up
+
+When Step 0a prepared a stack, run every discovered `worktree-compose*.ps1` test script with the resolved worktree path, isolated project name, env file, and port offset. Wrap startup, normal test execution, and script execution in `try/finally`.
+
+In `finally`, invoke wrapper teardown for only the isolated project with the same values. Never run an unqualified `docker compose down`. If a test or service command fails, retain its original exit code and output; cleanup still runs and cleanup errors are secondary context. Docker or service failures are never converted into skips or success.
 Collect results. If any fail, jump to Step 5.
 
 **Android emulator** (if started in Step 3b):
