@@ -136,16 +136,26 @@ git rev-parse --abbrev-ref HEAD
     - Body: the commit body if one was drafted; otherwise a 1–2 line summary of what changed. Keep it terse.
     - Return the PR URL to the user.
     - "Opened PR #<num>: <url>"
-  - Proceed to **Step 7.5 — Post-PR decision**.
+  - Proceed to **Step 7.4 — PR description update**.
 - **If current branch is any other non-main branch** (existed before Step 6):
   - Run `git push`. If the branch has no upstream, run `git push -u origin <branch>`.
-  - Optionally offer to open a PR: "Open a PR for `<branch>` against `main`? (y/n)". If yes, run the same `gh pr create` command as above and proceed to **Step 7.5**.
+  - Optionally offer to open a PR: "Open a PR for `<branch>` against `main`? (y/n)". If yes, run the same `gh pr create` command as above and proceed to **Step 7.4**.
 
 **`gh` fallback**: if `gh pr create` fails with "command not found" (exit 127) or auth error, do NOT abort. Print the manual compare URL:
 ```
 https://github.com/<owner>/<repo>/compare/main...<branch>?expand=1
 ```
 Extract `<owner>/<repo>` from `git remote get-url origin` (parse SSH or HTTPS form). Ask the user to open the PR manually, then skip Step 7.5 (no merge automation possible without `gh`).
+
+### Step 7.4 — PR description update (delegate)
+
+Only runs when a PR was successfully opened via `gh`.
+
+If `olko-pr-description-update` is declared in `uses`, delegate to it: pass the PR number/URL, current PR body, linked PBI/Bug context if known, change summary, and testing results. The sub-skill writes or updates the PR body with the required PBI/Bug context and Mermaid flow when issue context exists. Follow its result.
+
+If `olko-pr-description-update` is **not** in `uses`, keep the PR body created in Step 7 and continue.
+
+Proceed to **Step 7.5 — Post-PR decision**.
 
 ### Step 7.5 — Post-PR decision (squash merge flow)
 

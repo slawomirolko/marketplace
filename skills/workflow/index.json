@@ -2,6 +2,48 @@
   "registrySchemaVersion": 1,
   "skills": [
     {
+      "name": "grill-me-base",
+      "category": "workflow",
+      "origin": "vendored",
+      "version": "1.0.0",
+      "description": "Interview the user one question at a time to stress-test a plan, design, or decision tree until shared understanding is reached. Minimal domain-agnostic vendored variant; reads project adapters when available and does not auto-load documentation skills. Triggers: 'grill', 'grill me', 'stress-test plan', 'challenge this design', 'grill-me-base'.",
+      "tags": [
+        "workflow",
+        "grill",
+        "plan"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.grill.me"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "grill-with-docs",
+      "category": "workflow",
+      "origin": "vendored",
+      "version": "1.0.0",
+      "description": "Stress-test a plan against the project's documented domain model, sharpen fuzzy terminology, challenge glossary mismatches, cross-reference code, and update CONTEXT.md or ADRs as decisions crystallize. Domain-aware vendored variant of grill-me. Triggers: 'grill with docs', 'stress-test this against our domain model', 'does this match our language', 'check this against our glossary', 'grill this and update the docs'.",
+      "tags": [
+        "workflow",
+        "grill",
+        "docs"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.grill.docs"
+      ],
+      "cost": 2,
+      "files": [
+        "SKILL.md",
+        "ADR-FORMAT.md",
+        "CONTEXT-FORMAT.md"
+      ]
+    },
+    {
       "name": "olko-implement-current-code",
       "category": "workflow",
       "version": "1.0.0",
