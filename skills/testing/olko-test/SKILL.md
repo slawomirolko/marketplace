@@ -9,6 +9,8 @@ user_invocable: true
 ## Routing Summary
 Run affected or all tests for .NET, Python, and Android/Kotlin with change-aware scope detection, emulator management, service management, and failure handling. Use when asked to run tests, after implementation, or when called from olko-plan-editor/olko-commit skills.
 
+Git-worktree test runs use an isolated Compose project when the repository provides `scripts/tests/worktree-compose*.ps1`; the main Compose project and ports are never reused, and cleanup always runs after failures.
+
 ## Progressive Loading
 - Load `overview.md` first after registry/category routing.
 - Load `workflow.md` only after this skill is selected.

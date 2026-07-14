@@ -10,6 +10,9 @@
 - Run .NET integration tests
 - Run Android instrumentation tests (connectedCheck)
 - Handle test failures by asking user how to proceed
+- Detect linked Git worktrees and isolate their Compose test stack
+- Run repository-owned `scripts/tests/worktree-compose*.ps1` hooks with worktree context
+- Always clean up the isolated Compose project, including when tests fail
 
 ## When to use me
 User says "run tests", "test this", "/olko-test", or olko-plan-editor/olko-commit delegates test execution to me.
@@ -34,6 +37,12 @@ Recognized keys:
 | `androidUnitTestTask` | `test` | Gradle unit test task |
 | `androidInstrumentationTask` | `connectedCheck` | Gradle instrumentation task |
 | `androidEmulatorTimeoutSeconds` | `120` | Emulator boot timeout |
+| `worktreeCompose` | `true` | Enable worktree Compose detection and lifecycle |
+| `worktreeComposeWrapper` | `scripts/tests/worktree-compose.ps1` | Repository-relative wrapper path |
+| `worktreeComposeTestGlob` | `scripts/tests/worktree-compose*.ps1` | Repository-relative worktree test-script glob |
+| `worktreeComposeEnvFile` | wrapper/adapter resolution | Env file passed to wrapper and test scripts |
+| `worktreeComposeProjectPrefix` | `wt` | Prefix for isolated `COMPOSE_PROJECT_NAME` |
+| `worktreeComposePortOffset` | wrapper/adapter resolution | Offset for published test ports |
 
 Stack-specific checks may be delegated only through `uses` in `.agents/skills/olko-test/project.md`.
 
