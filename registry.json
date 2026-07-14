@@ -512,7 +512,7 @@
       "name": "olko-commit",
       "category": "git",
       "version": "1.0.0",
-      "description": "Orchestrate the commit workflow: delegate style check, docs staleness, tests, and docker rebuild to sub-skills, then draft a conventional commit message, resolve branch policy, commit, push, and open/merge a PR. Off main, creates a scope-named branch + PR. With --force, commits directly to main. Triggers: 'commit', 'commit this', 'wrap up', 'summarize changes'.",
+      "description": "Orchestrate the commit workflow: delegate style check, docs staleness, tests, docker rebuild, and PR-description updates to sub-skills, then draft a conventional commit message, resolve branch policy, commit, push, open/update a PR, and optionally merge it. Off main, creates a scope-named branch + PR. With --force, commits directly to main. Triggers: 'commit', 'commit this', 'wrap up', 'summarize changes'.",
       "tags": [
         "git",
         "commit"
@@ -624,6 +624,39 @@
         "git.pr.check"
       ],
       "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
+      "name": "olko-pr-description-update",
+      "category": "git",
+      "version": "1.0.0",
+      "description": "Write or update a GitHub PR description after a PR is opened, especially when a linked Jira PBI or Bug exists. Produces a required 4-sentence PBI/Bug context block and a Mermaid flow diagram, then keeps the rest of the PR body concise. Triggers: 'update PR description', 'write PR body', 'PR description', 'PBI context', 'Bug context', 'Mermaid PR flow'.",
+      "tags": [
+        "git",
+        "pr",
+        "description"
+      ],
+      "capabilities": [
+        "git",
+        "git.pr.description"
+      ],
+      "cost": 1,
       "files": [
         "SKILL.md",
         "edge-cases.md",
@@ -1128,6 +1161,48 @@
           "edge-cases"
         ]
       }
+    },
+    {
+      "name": "grill-me-base",
+      "category": "workflow",
+      "origin": "vendored",
+      "version": "1.0.0",
+      "description": "Interview the user one question at a time to stress-test a plan, design, or decision tree until shared understanding is reached. Minimal domain-agnostic vendored variant; reads project adapters when available and does not auto-load documentation skills. Triggers: 'grill', 'grill me', 'stress-test plan', 'challenge this design', 'grill-me-base'.",
+      "tags": [
+        "workflow",
+        "grill",
+        "plan"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.grill.me"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "grill-with-docs",
+      "category": "workflow",
+      "origin": "vendored",
+      "version": "1.0.0",
+      "description": "Stress-test a plan against the project's documented domain model, sharpen fuzzy terminology, challenge glossary mismatches, cross-reference code, and update CONTEXT.md or ADRs as decisions crystallize. Domain-aware vendored variant of grill-me. Triggers: 'grill with docs', 'stress-test this against our domain model', 'does this match our language', 'check this against our glossary', 'grill this and update the docs'.",
+      "tags": [
+        "workflow",
+        "grill",
+        "docs"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.grill.docs"
+      ],
+      "cost": 2,
+      "files": [
+        "SKILL.md",
+        "ADR-FORMAT.md",
+        "CONTEXT-FORMAT.md"
+      ]
     },
     {
       "name": "olko-implement-current-code",

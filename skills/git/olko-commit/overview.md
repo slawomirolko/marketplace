@@ -8,6 +8,7 @@
 - Delegate AGENTS.md staleness/coverage to `olko-commit-docs`
 - Delegate test execution to `olko-test`
 - Delegate docker rebuild to `olko-commit-docker`
+- Delegate PR description updates to `olko-pr-description-update` after a PR is opened
 - Draft a conventional commit message
 - Resolve branch policy, commit, push, and open/merge a PR
 
@@ -24,6 +25,7 @@ uses:
   - olko-commit-docs
   - olko-test
   - olko-commit-docker
+  - olko-pr-description-update
 ```
 
 Each sub-skill is optional. If a sub-skill is **not** declared in `uses`, skip its phase and continue. If declared, delegate to it and follow its result. See [Explicit Skill Reuse](../../docs/explicit-skill-reuse.md).
