@@ -1,7 +1,7 @@
 ---
 description: Creates persisted business and technical plan documents, investigates the current mechanism, and keeps both documents grounded in verified code.
 mode: primary
-model: ollama-cloud/deepseekv4flash
+model: ollama-cloud/deepseek-v4-flash:0731
 permission:
   edit: allow
   bash: deny

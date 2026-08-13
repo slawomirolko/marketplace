@@ -1,7 +1,7 @@
 ---
 description: Synchronizes approved project-local skill improvements to the marketplace, publishes them, and reinstalls the selected remote skills.
 mode: primary
-model: ollama-cloud/deepseekv4flash
+model: ollama-cloud/deepseek-v4-flash:0731
 permission:
   edit: allow
   bash:
