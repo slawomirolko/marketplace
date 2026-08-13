@@ -2,21 +2,23 @@
 
 ## Overview
 
-Use this skill for plan creation or plan edits.
+Use this skill for paired plan creation or edits.
 
 ## What I do
-- Create or revise an implementation plan for a named item, an existing file, or a file to create
-- Gather only the minimum context needed from the repo
-- Produce a structured output: files to create, application flow, design patterns, tradeoffs, tests, and new dependencies
-- Persist the plan to a file before the final reply
-- Apply strict caveman mode while performing this skill
+- Create or revise two linked documents for a named item or plan pair.
+- Write `<name>-business.md`: business purpose and mechanism description.
+- Write `<name>-technical.md`: technical delivery details.
+- Gather only the minimum context needed from the repo.
+- Keep business intent separate from code-level implementation detail.
+- Persist both documents before the final reply.
+- Apply strict caveman mode while performing this skill.
 
 ## When to use me
-User says "make a plan", "edit plan", "review plan", "refine plan", "plan this", or invokes `/olko-plan-editor <target>`. Also when the user wants a structured implementation plan with files to create, flow, design patterns, and tests.
+User says "make a plan", "edit plan", "review plan", "refine plan", "plan this", or invokes `/olko-plan-editor <target>`. Also use it when the user wants a business explanation plus a structured technical implementation plan.
 
 ## Context budget
 
-- Read only the target file, the nearest `AGENTS.md`, `.agents/skill-config.md`, and the project adapter if enabled.
+- Read only the target plan pair, the nearest `AGENTS.md`, `.agents/skill-config.md`, and the project adapter if enabled.
 - Do not scan the whole repo unless the user explicitly asks for wider discovery.
 - If the project adapter declares `uses: [caveman]`, load `caveman` first and keep this skill in caveman mode.
 - If `caveman` is not declared, still respond in caveman mode and keep prose terse.
@@ -61,10 +63,10 @@ Read from `.agents/skill-config.md`:
 
 | Key | Default | Meaning |
 |-----|---------|---------|
-| `readArchitectureDocs` | marketplace default | Hints that architecture docs should be read to verify the plan against the solution architecture. |
-| `readTestingDocs` | marketplace default | Hints that testing docs should be read to inform the Tests section (test names, locations, conventions). |
+| `readArchitectureDocs` | marketplace default | Hints that architecture docs should be read to verify the technical document against the solution architecture. |
+| `readTestingDocs` | marketplace default | Hints that testing docs should be read to inform the technical document's Tests section. |
 
-The plan file location is project-specific — never hardcode a path; let the user name it or read it from the project adapter. Layer control flags are documented in the [Layered Skill Adaptation Pattern](../../docs/layered-skill-adaptation.md).
+The plan-pair location is project-specific. A project adapter may override the file names and location. Otherwise, derive a same-directory pair from the user target: `<stem>-business.md` and `<stem>-technical.md`. Layer control flags are documented in the [Layered Skill Adaptation Pattern](../../docs/layered-skill-adaptation.md).
 
 ## Resolution order
 
