@@ -4,6 +4,7 @@
 
 ## What I do
 - Validate a skill name exists in the marketplace (`registry.json`)
+- With no requested skill name, install every registry skill missing from `.agents/skills/`, leaving existing local copies untouched
 - Load only the marketplace skill metadata needed to adapt it: `SKILL.md` frontmatter first, then the sections needed for config keys and defaults
 - Inspect the current project's `.agents/skill-config.md` and `.agents/skills/<skill-name>/project.md`
 - Ask the user what to customize and what to keep (works on fresh installs **and** already-adapted skills)
@@ -33,8 +34,9 @@ Parse `$ARGUMENTS`:
 
 | Token | Effect |
 |-------|--------|
-| `<skill-name>` | The marketplace skill to install/adapt (required) |
+| `<skill-name>` | The marketplace skill to install/adapt; omitted means bootstrap all missing skills |
+| `--bootstrap-missing` | Install every missing marketplace skill without overwriting existing copies |
 | `--help` | Display usage and exit |
 | `--force` | Overwrite existing adapter without asking per-field (still confirm once) |
 
-If `--help` or no skill name: display usage and stop.
+If `--help`: display usage and stop. If no skill name or `--bootstrap-missing`, run bootstrap mode before any named-skill adaptation flow.
