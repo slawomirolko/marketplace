@@ -2,7 +2,7 @@
 description: Read-only worker that finds runtime risks and configuration for a plan.
 mode: subagent
 hidden: true
-model: ollama-cloud/deepseekv4flash
+model: ollama-cloud/deepseek-v4-flash:0731
 permission:
   edit: deny
   bash: deny

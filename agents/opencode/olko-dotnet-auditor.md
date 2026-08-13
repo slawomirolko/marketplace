@@ -2,7 +2,7 @@
 description: Audits and improves .NET architecture, style, and test architecture using olko-dotnet skills.
 mode: subagent
 hidden: true
-model: ollama-cloud/deepseekv4flash
+model: ollama-cloud/deepseek-v4-flash:0731
 permission:
   edit: allow
   bash: deny

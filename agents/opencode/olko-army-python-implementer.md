@@ -2,7 +2,7 @@
 description: Implements scoped Python Army code and tests using olko-python skills, then runs affected verification.
 mode: subagent
 hidden: true
-model: ollama-cloud/deepseekv4flash
+model: ollama-cloud/deepseek-v4-flash:0731
 permission:
   edit: allow
   bash:
