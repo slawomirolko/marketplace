@@ -7,7 +7,10 @@ permission:
   bash:
     "*": ask
     "git reset *": deny
-  task: allow
+  task:
+    "*": deny
+    olko-marketplace-skill-bootstrapper: allow
+    olko-marketplace-skill-sync-comparator: allow
   external_directory: allow
   webfetch: deny
   websearch: deny

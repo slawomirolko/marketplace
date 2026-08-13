@@ -6,7 +6,18 @@ model: ollama-cloud/deepseekv4flash
 permission:
   edit: deny
   bash: deny
-  task: allow
+  task:
+    "*": deny
+    olko-marketplace-skill-bootstrapper: allow
+    olko-dotnet-auditor: allow
+    olko-dotnet-implementer: allow
+    olko-dotnet-test-runner: allow
+    olko-mobile-auditor: allow
+    olko-mobile-implementer: allow
+    olko-mobile-test-runner: allow
+    olko-army-python-auditor: allow
+    olko-army-python-implementer: allow
+    olko-army-python-test-runner: allow
   skill:
     "*": deny
     olko-implement-new: allow

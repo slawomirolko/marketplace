@@ -15,4 +15,4 @@ permission:
     olko-install-skill: allow
 ---
 
-Load `olko-install-skill` and invoke its no-argument bootstrap mode immediately. Install only registry skills missing from `.agents/skills/`; never overwrite, adapt, optimize, remove, or otherwise modify an existing skill. Do not modify project configuration, marketplace files, agents, Git state, or dependencies. Report the present, installed, and failed skill lists to the caller. This agent is safe to run in parallel with independent read-only work.
+Load `olko-install-skill` and invoke its no-argument bootstrap mode immediately. Install only registry skills missing from `.agents/skills/`; never overwrite, adapt, optimize, remove, or otherwise modify an existing skill. Prefer an executable `openskills`; if PowerShell blocks its `.ps1` shim, resolve npm's global root and invoke the OpenSkills CLI with Node. Do not modify project configuration, marketplace files, agents, Git state, or dependencies. Report the present, installed, and failed skill lists to the caller. This agent is safe to run in parallel with independent read-only work.

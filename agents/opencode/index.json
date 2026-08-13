@@ -7,7 +7,19 @@
       "file": "olko-implementation-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",
-      "skills": ["olko-implement-new"]
+      "skills": ["olko-implement-new"],
+      "delegates": [
+        "olko-marketplace-skill-bootstrapper",
+        "olko-dotnet-auditor",
+        "olko-dotnet-implementer",
+        "olko-dotnet-test-runner",
+        "olko-mobile-auditor",
+        "olko-mobile-implementer",
+        "olko-mobile-test-runner",
+        "olko-army-python-auditor",
+        "olko-army-python-implementer",
+        "olko-army-python-test-runner"
+      ]
     },
     {
       "name": "olko-marketplace-skill-sync-manager",
@@ -17,6 +29,10 @@
       "skills": [
         "olko-adapt-to-marketplace",
         "olko-commit"
+      ],
+      "delegates": [
+        "olko-marketplace-skill-bootstrapper",
+        "olko-marketplace-skill-sync-comparator"
       ]
     },
     {
