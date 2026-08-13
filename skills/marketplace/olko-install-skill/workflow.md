@@ -1,5 +1,22 @@
 # Olko Install Skill
 
+### Step 0 - Bootstrap missing marketplace skills
+
+Run this step when no skill name was supplied or `--bootstrap-missing` was supplied. It is safe to run in parallel with other agents because it never rewrites an existing skill.
+
+1. Resolve the marketplace registry as in Step 1. Read `registry.json` and enumerate every entry's `name` and `category`.
+2. Inspect `.agents/skills/<name>/SKILL.md` for every registry entry. Divide skills into `present` and `missing`. A directory without `SKILL.md` is treated as missing and must be reported as a malformed local install.
+3. If none are missing, report `Bootstrap complete - all marketplace skills are already installed.` and stop. Do not load, alter, adapt, or reinstall present skills.
+4. Verify the OpenSkills CLI supports `install`, `--universal`, and `--yes`. For each missing skill, run exactly:
+
+   ```text
+   openskills install slawomirolko/marketplace/skills/<category>/<skill-name> --universal --yes
+   ```
+
+   `--universal` installs into `.agents/skills/`; the per-skill source keeps `--yes` limited to that missing target. Never run a repository-level `openskills install .../marketplace --universal --yes` in bootstrap mode.
+5. Verify every newly installed skill contains `SKILL.md` and report present, installed, and failed lists. Do not create adapters or change `.agents/skill-config.md` in bootstrap mode. If any install fails, report it visibly and leave successful installations in place.
+6. Stop after the report. The named-skill adaptation workflow begins only when the caller supplied one explicit skill name.
+
 ## Workflow — follow these steps in order
 
 ### Step 1 — Resolve the marketplace registry
