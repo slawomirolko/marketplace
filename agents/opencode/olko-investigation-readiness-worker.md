@@ -2,7 +2,7 @@
 description: Read-only worker that verifies implementation readiness before code is written.
 mode: subagent
 hidden: true
-model: ollama-cloud/deepseekv4flash
+model: ollama-cloud/deepseek-v4-flash:0731
 permission:
   edit: deny
   bash: deny
