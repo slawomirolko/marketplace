@@ -6,6 +6,7 @@ description: "Install and adapt a marketplace skill to the current project. Take
 # olko-install-skill
 
 ## Routing Summary
+With no requested skill name, first bootstrap every missing marketplace skill without overwriting an existing local copy. With a skill name, use the named-skill adaptation workflow.
 Install and adapt a marketplace skill to the current project. Takes a skill name, validates it exists in the marketplace, inspects existing .agents adaptation, asks what to customize vs. keep, and writes .agents/skill-config.md and .agents/skills/<skill-name>/project.md. Uses strict caveman mode for prompts and low-context adaptation. Can update and optimize an already-adapted skill — proposes token reductions, behavior improvements, and marketplace contributions. Triggers: 'install skill', 'adapt skill', 'configure skill', 'setup skill', 'optimize adaptation', 'olko-install-skill <name>'.
 
 ## Progressive Loading
