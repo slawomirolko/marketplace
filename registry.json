@@ -872,8 +872,8 @@
     {
       "name": "olko-install-skill",
       "category": "marketplace",
-      "version": "1.0.0",
-      "description": "Install and adapt a marketplace skill to the current project. Takes a skill name, validates it exists in the marketplace, inspects existing .agents adaptation, asks what to customize vs. keep, and writes .agents/skill-config.md and .agents/skills/<skill-name>/project.md. Uses strict caveman mode for prompts and low-context adaptation. Can update and optimize an already-adapted skill — proposes token reductions, behavior improvements, and marketplace contributions. Triggers: 'install skill', 'adapt skill', 'configure skill', 'setup skill', 'optimize adaptation', 'olko-install-skill <name>'.",
+      "version": "1.1.0",
+      "description": "Install and adapt marketplace skills. With no skill name, bootstrap every missing skill without overwriting existing copies; with a name, install or reconfigure that skill.",
       "tags": [
         "marketplace",
         "install"
@@ -1307,8 +1307,8 @@
     {
       "name": "olko-plan-editor",
       "category": "workflow",
-      "version": "1.1.0",
-      "description": "Create or edit implementation plans for a named item, an existing file, or a file to create. Produces a structured output with files to create, application flow, design patterns, tradeoffs, and new dependencies. Uses strict caveman mode and minimal context. Triggers: 'plan', 'make a plan', 'edit plan', 'review plan', 'refine plan', 'plan this'.",
+      "version": "1.2.0",
+      "description": "Create or edit a paired business and technical implementation plan for a named item, an existing plan pair, or files to create. Produces a business mechanism document plus a technical delivery document. Uses strict caveman mode and minimal context. Triggers: 'plan', 'make a plan', 'edit plan', 'review plan', 'refine plan', 'plan this'.",
       "tags": [
         "workflow",
         "plan",

@@ -146,8 +146,8 @@
     {
       "name": "olko-plan-editor",
       "category": "workflow",
-      "version": "1.1.0",
-      "description": "Create or edit implementation plans for a named item, an existing file, or a file to create. Produces a structured output with files to create, application flow, design patterns, tradeoffs, and new dependencies. Uses strict caveman mode and minimal context. Triggers: 'plan', 'make a plan', 'edit plan', 'review plan', 'refine plan', 'plan this'.",
+      "version": "1.2.0",
+      "description": "Create or edit a paired business and technical implementation plan for a named item, an existing plan pair, or files to create. Produces a business mechanism document plus a technical delivery document. Uses strict caveman mode and minimal context. Triggers: 'plan', 'make a plan', 'edit plan', 'review plan', 'refine plan', 'plan this'.",
       "tags": [
         "workflow",
         "plan",

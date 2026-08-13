@@ -1,0 +1,199 @@
+{
+  "schemaVersion": 2,
+  "opencodeAgentFormat": "v1",
+  "agents": [
+    {
+      "name": "olko-implementation-orchestrator",
+      "file": "olko-implementation-orchestrator.md",
+      "stack": "cross-stack",
+      "role": "orchestrator",
+      "skills": ["olko-implement-new"],
+      "delegates": [
+        "olko-marketplace-skill-bootstrapper",
+        "olko-dotnet-auditor",
+        "olko-dotnet-implementer",
+        "olko-dotnet-test-runner",
+        "olko-mobile-auditor",
+        "olko-mobile-implementer",
+        "olko-mobile-test-runner",
+        "olko-army-python-auditor",
+        "olko-army-python-implementer",
+        "olko-army-python-test-runner"
+      ]
+    },
+    {
+      "name": "olko-marketplace-skill-sync-manager",
+      "file": "olko-marketplace-skill-sync-manager.md",
+      "stack": "cross-stack",
+      "role": "orchestrator",
+      "skills": [
+        "olko-adapt-to-marketplace",
+        "olko-commit"
+      ],
+      "delegates": [
+        "olko-marketplace-skill-bootstrapper",
+        "olko-marketplace-skill-sync-comparator"
+      ]
+    },
+    {
+      "name": "olko-marketplace-skill-sync-comparator",
+      "file": "olko-marketplace-skill-sync-comparator.md",
+      "stack": "cross-stack",
+      "role": "comparator",
+      "skills": []
+    },
+    {
+      "name": "olko-marketplace-skill-bootstrapper",
+      "file": "olko-marketplace-skill-bootstrapper.md",
+      "stack": "cross-stack",
+      "role": "bootstrapper",
+      "skills": ["olko-install-skill"]
+    },
+    {
+      "name": "olko-plan-documentation-orchestrator",
+      "file": "olko-plan-documentation-orchestrator.md",
+      "stack": "cross-stack",
+      "role": "orchestrator",
+      "skills": [
+        "olko-plan-editor",
+        "olko-investigate-existing",
+        "grill-with-docs"
+      ],
+      "delegates": [
+        "olko-plan-business-writer",
+        "olko-investigation-flow-worker",
+        "olko-investigation-runtime-worker",
+        "olko-investigation-test-worker",
+        "olko-investigation-readiness-worker",
+        "olko-dotnet-auditor",
+        "olko-mobile-auditor",
+        "olko-army-python-auditor"
+      ]
+    },
+    {
+      "name": "olko-plan-business-writer",
+      "file": "olko-plan-business-writer.md",
+      "stack": "cross-stack",
+      "role": "writer",
+      "skills": ["olko-plan-editor"]
+    },
+    {
+      "name": "olko-investigation-flow-worker",
+      "file": "olko-investigation-flow-worker.md",
+      "stack": "cross-stack",
+      "role": "investigator",
+      "skills": ["olko-investigate-existing"]
+    },
+    {
+      "name": "olko-investigation-runtime-worker",
+      "file": "olko-investigation-runtime-worker.md",
+      "stack": "cross-stack",
+      "role": "investigator",
+      "skills": ["olko-investigate-existing"]
+    },
+    {
+      "name": "olko-investigation-test-worker",
+      "file": "olko-investigation-test-worker.md",
+      "stack": "cross-stack",
+      "role": "investigator",
+      "skills": ["olko-investigate-existing"]
+    },
+    {
+      "name": "olko-investigation-readiness-worker",
+      "file": "olko-investigation-readiness-worker.md",
+      "stack": "cross-stack",
+      "role": "investigator",
+      "skills": ["olko-investigate-existing"]
+    },
+    {
+      "name": "olko-dotnet-auditor",
+      "file": "olko-dotnet-auditor.md",
+      "stack": "dotnet",
+      "role": "auditor",
+      "skills": [
+        "olko-dotnet-architecture",
+        "olko-dotnet-style",
+        "olko-dotnet-testing"
+      ]
+    },
+    {
+      "name": "olko-dotnet-test-runner",
+      "file": "olko-dotnet-test-runner.md",
+      "stack": "dotnet",
+      "role": "test-runner",
+      "skills": ["olko-test"]
+    },
+    {
+      "name": "olko-dotnet-implementer",
+      "file": "olko-dotnet-implementer.md",
+      "stack": "dotnet",
+      "role": "implementer",
+      "skills": [
+        "olko-dotnet-architecture",
+        "olko-dotnet-style",
+        "olko-dotnet-testing",
+        "olko-test"
+      ]
+    },
+    {
+      "name": "olko-mobile-auditor",
+      "file": "olko-mobile-auditor.md",
+      "stack": "mobile",
+      "role": "auditor",
+      "skills": [
+        "olko-kotlin-architecture",
+        "olko-kotlin-style",
+        "olko-kotlin-testing"
+      ]
+    },
+    {
+      "name": "olko-mobile-test-runner",
+      "file": "olko-mobile-test-runner.md",
+      "stack": "mobile",
+      "role": "test-runner",
+      "skills": ["olko-test"]
+    },
+    {
+      "name": "olko-mobile-implementer",
+      "file": "olko-mobile-implementer.md",
+      "stack": "mobile",
+      "role": "implementer",
+      "skills": [
+        "olko-kotlin-architecture",
+        "olko-kotlin-style",
+        "olko-kotlin-testing",
+        "olko-test"
+      ]
+    },
+    {
+      "name": "olko-army-python-auditor",
+      "file": "olko-army-python-auditor.md",
+      "stack": "army-python",
+      "role": "auditor",
+      "skills": [
+        "olko-python-architecture",
+        "olko-python-style",
+        "olko-python-testing"
+      ]
+    },
+    {
+      "name": "olko-army-python-test-runner",
+      "file": "olko-army-python-test-runner.md",
+      "stack": "army-python",
+      "role": "test-runner",
+      "skills": ["olko-test"]
+    },
+    {
+      "name": "olko-army-python-implementer",
+      "file": "olko-army-python-implementer.md",
+      "stack": "army-python",
+      "role": "implementer",
+      "skills": [
+        "olko-python-architecture",
+        "olko-python-style",
+        "olko-python-testing",
+        "olko-test"
+      ]
+    }
+  ]
+}
