@@ -115,10 +115,25 @@ test("installs the implementation orchestrator with delegation-only permissions"
   );
   assert.match(agent, /edit: deny/);
   assert.match(agent, /bash: deny/);
-  assert.match(agent, /task: allow/);
+  assert.match(agent, /task:\s+"\*": deny/);
+  for (const child of [
+    "olko-marketplace-skill-bootstrapper",
+    "olko-dotnet-auditor",
+    "olko-dotnet-implementer",
+    "olko-dotnet-test-runner",
+    "olko-mobile-auditor",
+    "olko-mobile-implementer",
+    "olko-mobile-test-runner",
+    "olko-army-python-auditor",
+    "olko-army-python-implementer",
+    "olko-army-python-test-runner",
+  ]) {
+    assert.ok(fs.existsSync(path.join(project, ".opencode", "agents", `${child}.md`)));
+  }
   assert.match(agent, /olko-implement-new: allow/);
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-implement-new", "SKILL.md")));
-  assert.ok(!fs.existsSync(path.join(project, "opencode.json")));
+  const config = JSON.parse(fs.readFileSync(path.join(project, "opencode.json"), "utf8"));
+  assert.deepEqual(config.plugin, ["opencode-agent-memory@0.2.0"]);
 });
 
 test("installs the plan documentation orchestrator with review-only stack delegates", () => {
@@ -175,12 +190,14 @@ test("installs the visible marketplace skill sync manager and its comparator", (
   );
   assert.match(manager, /mode: primary/);
   assert.doesNotMatch(manager, /hidden: true/);
-  assert.match(manager, /task: allow/);
+  assert.match(manager, /task:\s+"\*": deny/);
   assert.match(manager, /external_directory: allow/);
   assert.match(manager, /olko-adapt-to-marketplace: allow/);
   assert.match(manager, /olko-commit: allow/);
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-adapt-to-marketplace", "SKILL.md")));
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-commit", "SKILL.md")));
+  assert.ok(fs.existsSync(path.join(project, ".opencode", "agents", "olko-marketplace-skill-bootstrapper.md")));
+  assert.ok(fs.existsSync(path.join(project, ".opencode", "agents", "olko-marketplace-skill-sync-comparator.md")));
 
   const comparatorResult = run(project, "--agent", "olko-marketplace-skill-sync-comparator");
 
@@ -207,6 +224,7 @@ test("installs the hidden marketplace skill bootstrapper", () => {
   assert.match(agent, /edit: deny/);
   assert.match(agent, /task: deny/);
   assert.match(agent, /olko-install-skill: allow/);
+  assert.match(agent, /npm's global root/);
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-install-skill", "SKILL.md")));
 });
 

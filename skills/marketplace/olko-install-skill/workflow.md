@@ -7,10 +7,10 @@ Run this step when no skill name was supplied or `--bootstrap-missing` was suppl
 1. Resolve the marketplace registry as in Step 1. Read `registry.json` and enumerate every entry's `name` and `category`.
 2. Inspect `.agents/skills/<name>/SKILL.md` for every registry entry. Divide skills into `present` and `missing`. A directory without `SKILL.md` is treated as missing and must be reported as a malformed local install.
 3. If none are missing, report `Bootstrap complete - all marketplace skills are already installed.` and stop. Do not load, alter, adapt, or reinstall present skills.
-4. Verify the OpenSkills CLI supports `install`, `--universal`, and `--yes`. For each missing skill, run exactly:
+4. Verify the OpenSkills CLI supports `install`, `--universal`, and `--yes`. Prefer an executable `openskills` command. If it is unavailable or PowerShell blocks `openskills.ps1`, resolve the npm global root and invoke `node <npm-global-root>/openskills/dist/cli.js` instead. For each missing skill, run exactly:
 
    ```text
-   openskills install slawomirolko/marketplace/skills/<category>/<skill-name> --universal --yes
+   <openskills-cli> install slawomirolko/marketplace/skills/<category>/<skill-name> --universal --yes
    ```
 
    `--universal` installs into `.agents/skills/`; the per-skill source keeps `--yes` limited to that missing target. Never run a repository-level `openskills install .../marketplace --universal --yes` in bootstrap mode.
