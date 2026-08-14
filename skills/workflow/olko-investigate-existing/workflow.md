@@ -147,24 +147,84 @@ Display a structured summary:
 
 After displaying the summary, perform these interactive actions in sequence:
 
-#### 6a — AGENTS.md update confirmation
-If Step 4 identified updates, ask: "Add the AGENTS.md updates to the plan (applied during implementation), apply them now, or skip?" Options: `Add to plan` / `Apply now` / `Skip`.
-- `Add to plan`: hold the drafted updates for inclusion as a `## AGENTS.md Updates` section in the plan created in 6c (per file: exact addition). Do not apply now.
-- `Apply now`: apply immediately.
-- `Skip`: discard.
+#### 6a-pre — Grill open questions and suggestions (domain + style/arch gate)
 
-> When a plan file is created/updated in 6c and the user chose "Add to plan", fold the Step 4 updates into that plan as a `## AGENTS.md Updates` section. Do not silently drop them.
+For every open question or suggestion surfaced in Step 4 (AGENTS.md updates) and Step 5 (optimization, extension, architecture/technology violations, coding style violations, predicted errors), before presenting any decision options:
+
+1. **Invoke the `grill-with-docs` skill** to stress-test the suggestion against the project's documented domain model (CONTEXT.md glossary, ADRs, AGENTS.md, CODING_STYLE.md, architecture docs). Pass the suggestion text, the touched files, and the Step 3 flow graph as the grilling input. Let `grill-with-docs` run its own interview (its 3-option `question`-tool format) to sharpen terminology and cross-reference the docs; do not override its question format.
+2. **Apply extra consideration over style and architecture compliance** for each suggestion: after the domain grilling, cross-check every sharpened suggestion against the stack-specific style/architecture rules discovered in Step 5 (or the declared stack skills in `uses`). A suggestion that clears the domain grilling but violates a style/architecture rule is flagged `domain-OK, style/arch-BLOCK` with the violating rule + doc `file:line` (or delegated-skill source) attached. A suggestion that fails the domain grilling is flagged `domain-BLOCK` with the conflicting doc reference. Attach the flag to the option set in 6a/6c so the user sees it before deciding.
+3. **Present the decision using the 4-option format** below — this is `olko-investigate-existing`'s decision format, NOT `grill-with-docs`'s 3-option question format. Use the `question` tool with exactly 4 options; the tool auto-appends a "Type your own answer" field. Each option `description` MUST contain:
+   - **3 lines for junior developer explanation** — what this choice does concretely, which files/commands it touches, in plain terms a junior dev can act on without re-reading the investigation.
+   - **3 lines for business consequences** — impact on users, release cadence, deployment risk, cost, or product behavior.
+
+The 4 options (replaces the old 3-option `Add to plan` / `Apply now` / `Skip`):
+
+| # | Option | Meaning |
+|---|--------|---------|
+| 1 | Add to plan | Fold the suggestion into the plan created/updated in 6c (or hold it for the plan). |
+| 2 | Apply now | Apply the suggestion immediately. |
+| 3 | Skip | Discard the suggestion. |
+| 4 | Alternative approach | Adopt a different architecture and/or technology solution to solve the same problem — describe it in the option `description`, then route it through 6c as a new improvement item. |
+
+Option 4 (`Alternative approach`) MUST be a genuine re-design (different middleware, different split boundary, different data store, different messaging pattern, different library, different deployment topology), never a restatement of option 1/2/3. If no real alternative architecture/technology exists for a given suggestion, option 4 may be omitted for that one item and the omission noted ("no viable alternative architecture — option 4 skipped: <one-sentence reason>").
+
+If `grill-with-docs` is **not declared in `uses`**, fall back to manual cross-checking against the docs discovered in Step 5 (universal rule: do not invent rules; state the grilling gap and present the 4 options anyway).
+
+#### 6a — AGENTS.md update confirmation
+If Step 4 identified updates, present them using the 4-option format from 6a-pre — one option set per AGENTS.md file (or per coherent batch of updates). Option 1 (`Add to plan`) holds the drafted updates for inclusion as a `## AGENTS.md Updates` section in the plan created in 6c (per file: exact addition) — do not apply now. Option 4 (`Alternative approach`) reframes the AGENTS.md change as a code/structure change that makes the doc update unnecessary (e.g. rename a type so the doc quirk disappears, or move code so the cross-boundary rule no longer applies).
+
+> When a plan file is created/updated in 6c and the user chose option 1, fold the Step 4 updates into that plan as a `## AGENTS.md Updates` section. Do not silently drop them.
 
 #### 6b — Plan mode: new or update?
 Ask: "For the improvement items below — create new plans or update existing ones?" Store the answer as `plan_mode`. (If no plan skill is declared in `uses`, skip 6b/6c and go to 6d.)
 
 #### 6c — Improvement items
-For each item from Step 5 (optimization, extension, architecture/technology violations, coding style violations, predicted errors), ask one at a time whether to create a new plan, extend an existing plan, or skip. When a plan skill is declared in `uses`, delegate plan creation/extension to it and pass the Step 5 test-reuse analysis in (plans must prefer modifying, parameterizing, or merging existing tests). The plan skill decides the plan file location — do not assume one. If no plan skill is declared, present items in chat only. Process one at a time.
+For each item from Step 5 (optimization, extension, architecture/technology violations, coding style violations, predicted errors), present it using the 4-option format from 6a-pre — one option set per item, processed one at a time. When a plan skill is declared in `uses` and the user picks option 1 (`Add to plan`) or option 4 (`Alternative approach`), delegate plan creation/extension to the plan skill and pass the Step 5 test-reuse analysis in (plans must prefer modifying, parameterizing, or merging existing tests). The plan skill decides the plan file location — do not assume one. If no plan skill is declared, present items in chat only. Option 4 items are added to the plan as new improvement items with their alternative-architecture description.
 
-#### 6d — Done
+#### 6d — Auto-update report
+
+Before the closing summary, output an explicit auto-update report. The investigation may have written or modified artifacts (plan files, AGENTS.md sections held for the plan, test-reuse notes folded into a plan). List every such change so the user can audit what the skill touched without re-reading the files.
+
+Format (in chat, before 6e):
+
+```
+## Auto-updates made by this investigation
+
+### <artifact path, e.g. docs/plans/foo.md>
+- <change 1 — one line, concrete>
+  - Why: <one sentence — what was wrong/stale/missing in the prior version that this change fixes>
+- <change 2>
+  - Why: ...
+
+(repeat per artifact)
+
+## Alternatives considered (2 per material decision)
+
+### Decision: <short label>
+1. <Alternative A — what was rejected>
+   - Rejected because: <one sentence>
+2. <Alternative B — what was rejected>
+   - Rejected because: <one sentence>
+(Chosen: <what the skill actually did — one sentence>)
+```
+
+Rules:
+- List **every** file the skill created or modified during this run (plan files, AGENTS.md drafts held in a plan, any scratch file the skill wrote). If the skill only produced a chat summary and touched no files, state "No files modified — chat-only summary."
+- Each change line must be concrete (which section/step/line, what was added/removed/reworded) — never "updated plan" or "improved wording."
+- The "Why" is the *reason the change was needed*, not a description of the change (e.g. "stale assumption — scaffold split already merged at commit X" not "rewrote Step 5").
+- Material decisions = choices that shaped the update and had a viable rejected alternative (scope, format, what to fold vs leave in chat, which test to extend vs create). Trivial edits (typo, line-wrap) do not need alternatives.
+- Exactly 2 alternatives per material decision — not 1, not 3. If only 1 real alternative exists, the second is "leave unchanged" with the reason that was rejected.
+- If no artifacts were modified, still output the alternatives-considered block for any material decision in the chat summary (e.g. "decided to present findings in chat rather than create a plan — no plan skill declared").
+
+#### 6e — Translate to English
+
+Before producing the final output, translate the entire investigation summary, flow graph, AGENTS.md update drafts, plan edits, auto-update report, and alternatives-considered block into English. This step runs even when the user prompted in another language, when plan/source files are in another language, or when earlier turns of the investigation were written in another language. Preserve all `file:line` references, code identifiers, error codes, and any already-English quotes from source files verbatim — only translate prose. Do not change the structure, ordering, or content of the summary; only the language. The final chat output the user sees MUST be English.
+
+#### 6f — Done
 ```
 Investigation complete. Summary:
   - AGENTS.md files updated: <count or "none">
   - Plans created: <list of plan filenames, or "none — no plan skill declared">
   - Plans updated: <list of plan filenames>
+  - Auto-updates reported above (per-file changes + justification + 2 alternatives per material decision)
 ```

@@ -18,13 +18,16 @@
 - [x] 1 — Create worktree
 - [ ] 2 — Cross-check plans  CURRENT
 - [ ] 3 — Implement
+- [ ] 3a — Rules re-check
 - [ ] 4 — Run style checks
 - [ ] 5 — Run tests
 - [ ] 6 — Rebuild affected services
 - [ ] 7 — Verify in logs
 - [ ] 8 — Commit
+- [ ] 8a — Wait for opencode review comment
 - [ ] 9 — Merge worktree to main
 - [ ] 10 — Remove plans
+- [ ] 11 — Rebuild from main and verify
 
 ## Changed files
 
@@ -39,6 +42,7 @@
 Fix the plans first, implement anyway, or abort?
 Auto-fix, skip and continue, or abort?
 Rebuild: <services> — proceed? (y/n)
+Rebuild from main: <services> — proceed? (y/n)
 Ready for commit? (y/n)
 Remove plan files now? (y/n)
 Retry Step <N> now, or abort?
@@ -66,9 +70,6 @@ Retry Step <N> now, or abort?
 - styleCommands:
   - match: "**/*.cs"
     command: "dotnet format --verify-no-changes"
-- testCommands:
-  - match: "**/*.cs"
-    command: "dotnet test"
 - serviceMap:
   - path: "src/api/**"
     services: ["api"]

@@ -20,7 +20,7 @@ This skill delegates only when project adapter declares matching skills in `.age
 
 - `olko-worktree-create` for worktree creation.
 - `olko-commit-style` or stack style skills for style checks.
-- `olko-test` for affected tests.
+- `olko-test` for all tests in affected projects (always delegated — auto-detected when installed even if not in `uses`).
 - `olko-commit` for commit/push/PR workflow.
 - `olko-worktree-merge` for merge and cleanup.
 

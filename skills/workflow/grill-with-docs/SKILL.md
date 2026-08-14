@@ -10,6 +10,17 @@ Interview the user relentlessly about every aspect of the plan until you reach s
 
 Ask questions one at a time, waiting for feedback on each before continuing. If a question can be answered by exploring the codebase, explore instead of asking.
 
+## Question format (MANDATORY)
+
+Every grilling question MUST be asked via the `question` tool — NEVER as a wall of plain text. For each question render **exactly 3 options**:
+
+1. The **first** option is always the recommended answer; suffix its `label` with `(Recommended)`.
+2. The other two are genuine alternative paths the user might prefer.
+3. The tool auto-appends a "Type your own answer" field — do NOT add a manual catch-all option.
+4. Keep `header` ≤ 30 chars; keep each option `description` to one short sentence.
+
+A grilling turn that ships prose instead of 3 clickable options is a skill violation, even if the reasoning is correct. Exploration and findings prose may precede the tool call, but the decision itself is always the `question` tool with 3 options.
+
 This is the domain-aware sibling of `max:grill-me`. Where `grill-me` produces a per-dimension ambiguity report, `grill-with-docs` reconciles the plan with the project's documented language and decisions, and writes those docs inline as you go.
 
 ---

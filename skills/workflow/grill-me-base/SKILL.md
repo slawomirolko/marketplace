@@ -29,7 +29,14 @@ Recognized configuration keys:
 1. Identify the current plan, design, or decision under review.
 2. Build the next unresolved decision branch.
 3. Ask exactly one question and wait for the user's answer before continuing.
-4. Include a recommended answer with each question.
+4. Render every question via the `question` tool — NEVER as plain prose. Provide
+   exactly 3 options: the first is the recommended answer (suffix its `label` with
+   `(Recommended)`), the other two are genuine alternative paths. The tool auto-
+   appends a "Type your own answer" field — do NOT add a manual catch-all option.
+   Keep `header` ≤ 30 chars; one-sentence `description` per option. Exploration
+   and findings prose may precede the tool call, but the decision itself is always
+   the `question` tool with 3 options. A grilling turn that ships prose instead of
+   3 clickable options is a skill violation.
 5. If the question can be answered from the codebase and exploration is allowed, inspect the code instead of asking.
 6. Continue until the decision tree has no material unresolved branches.
 
@@ -38,3 +45,5 @@ Recognized configuration keys:
 - Domain-agnostic: do not assume stack, docs layout, or project commands.
 - Isolated: do not load other skills unless the project adapter explicitly declares `uses`.
 - Direct: keep questions specific, dependency-aware, and actionable.
+- Suggestions: every question must offer exactly three mutually exclusive,
+  actionable suggestions; do not ask an open question without the three choices.

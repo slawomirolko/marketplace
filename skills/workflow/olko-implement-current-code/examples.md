@@ -60,9 +60,6 @@ Ready for commit? (y/n)
 - styleCommands:
   - match: "**/*.cs"
     command: "dotnet format --verify-no-changes"
-- testCommands:
-  - match: "**/*.cs"
-    command: "dotnet test"
 - serviceMap:
   - path: "src/api/**"
     services: ["api"]
