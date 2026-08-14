@@ -9,6 +9,7 @@
 - Verify and update per-slice AGENTS.md documentation (only non-inferable content)
 - Verify technology architecture and coding style compliance for the mechanism's stack
 - Assess optimization/extension opportunities and predict potential errors
+- Stress-test open questions and suggestions against the documented domain model (via `grill-with-docs`, with an extra style/architecture-compliance pass) before presenting a 4-option decision — Add to plan / Apply now / Skip / Alternative architecture — each annotated with 3 lines for junior devs and 3 lines for business consequences
 - Summarize findings and, for each improvement, offer to create a plan via a declared plan skill
 
 ## When to use me
@@ -22,6 +23,7 @@ This skill integrates with optional skills. Declare them in `uses` in the projec
 uses:
   - olko-plan-editor       # delegate improvement-plan creation
   - olko-agents-optimizer  # AGENTS.md content methodology
+  - grill-with-docs        # stress-test suggestions against documented domain model
   - olko-project-architecture
   - olko-ai-architecture
   - olko-dotnet-architecture
@@ -34,6 +36,7 @@ uses:
 ```
 
 - If a **plan skill** (e.g. `olko-plan-editor`) is declared, delegate plan creation to it (Step 6). If not declared, skip plan creation and present the summary only.
+- If a **grill-with-docs** skill is declared, delegate suggestion stress-testing to it (Step 6a-pre) — it runs its own 3-option interview to sharpen the suggestion against the domain docs, then this skill applies an extra style/architecture-compliance pass and presents its own 4-option decision. If not declared, fall back to manual doc cross-checking and state the grilling gap.
 - If an **agents-optimizer skill** (e.g. `olko-agents-optimizer`) is declared, follow its methodology for AGENTS.md content decisions (Step 4). If not declared, apply the universal rule below.
 - If matching **technology architecture/style skills** are declared, delegate review to them when docs are disabled or when the mechanism's stack needs stack-specific validation (Step 5). If not declared, fall back to loaded docs/config and report the review gap. Do not auto-load skills; composition is explicit through `uses`.
 - Universal AGENTS.md rule: only suggest **non-inferable** content (naming quirks, cross-boundary rules, custom tooling commands, optional wiring). Never add overviews, flow diagrams, property tables, dependency lists, file indexes, or test tables.

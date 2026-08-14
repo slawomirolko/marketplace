@@ -7,7 +7,7 @@ user_invocable: true
 # olko-implement-new
 
 ## Routing Summary
-Implement plan files in fresh worktree. Ensure instrumentation. Track resume file. Run configured style, tests, service rebuild, logs/traces verification, commit, merge. Triggers: "olko-implement-new", "implement the plan", "implement plan", "resume implement-new", "continue implementation".
+Implement plan files in fresh worktree. Ensure instrumentation. Track resume file. Run configured style, tests, service rebuild, logs/traces verification, commit, merge, post-merge rebuild from main. Triggers: "olko-implement-new", "implement the plan", "implement plan", "resume implement-new", "continue implementation".
 
 ## Progressive Loading
 - Load `overview.md` first after registry/category routing.
