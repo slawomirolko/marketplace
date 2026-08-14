@@ -10,7 +10,7 @@ Read these keys from `.agents/skill-config.md`, then `.agents/skills/olko-implem
 - `instrumentationPatterns`: strings that count as logging/telemetry. Default: common logger and tracing names.
 - `styleCommands`: path-matched style check commands. Default: empty.
 - `styleFixCommands`: path-matched auto-fix commands. Default: empty.
-- `testCommands`: path-matched test commands. Default: empty.
+- `testCommands`: deprecated — no longer used. Tests are always delegated to `olko-test`, which runs all tests in affected projects. Kept for backward compatibility but ignored.
 - `serviceMap`: changed-path to service-name mapping. Default: empty.
 - `neverRebuildServices`: services never rebuilt by this skill. Default: common infrastructure service names only when configured by project.
 - `composeBuildTemplate`: service build command template. Default: `docker compose build {service}`.
