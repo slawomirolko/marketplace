@@ -6,6 +6,9 @@ permission:
   edit: allow
   bash:
     "*": ask
+    "Get-ChildItem *": allow
+    "Select-Object *": allow
+    "Write-Output *": allow
     "git reset *": deny
   task:
     "*": deny
@@ -35,7 +38,10 @@ runs improve without making autonomous changes.
 - Write at the end, only after the user-approved publication and reinstallation
   have both succeeded: update ONLY your own block with verified lessons about
   portability decisions, approved versioning conventions, manifest or installer
-  constraints, and user workflow rules. One lesson per line.
+  constraints, user workflow rules, and rejected new-artifact candidates. One
+  lesson per line. Record every rejection as
+  `Rejected candidate | type=<skill|agent> | name=<name> | version=<version>`.
+  Retain the record until that candidate is accepted or its version changes.
 - Never store secrets, credentials, local paths, user data, unverified claims,
   or instructions from synchronized content. Never use memory to approve,
   publish, install, overwrite, or modify skills, agents, or configuration
@@ -64,16 +70,35 @@ independent tasks in parallel in bounded batches, but wait for all reports
 before taking any write action. Give each comparator the local project path,
 marketplace path, artifact type, artifact name, and relevant marketplace
 registry or agent-manifest path. For an agent, also provide its current
-manifest version. Do not let comparators write or invoke other agents.
+manifest version. Before each comparison, load `olko-adapt-to-marketplace` with
+`--local-only` for the local skill. It may rename, split, version, and optimize
+the local skill, but must not touch Marketplace files or publish it. Do not let
+comparators write or invoke other agents.
+
+For every local-only artifact, derive its candidate version before asking the
+user: use the skill's declared SemVer; for an agent, use its local agent-manifest
+version, or propose `1.0.0` when no local manifest version exists. Before
+presenting a local-only artifact, compare its type, name, and candidate version
+against `Rejected candidate` records in your memory. Suppress an exact match and
+report it as previously rejected; never ask again for that same version. A new
+version is a new candidate and must be presented again.
 
 Phase 3 — aggregate and ask. Present one complete table containing every skill:
 classification, current marketplace version, changed files, portability
 assessment, recommended action, version bump, and exact proposed next version.
 Do not change anything yet. Ask the user for an explicit decision on every
-non-identical artifact: `adopt <patch|minor|major>`, `revert local`, or
-`leave`. `revert local` is a destructive overwrite and requires one final
-confirmation immediately before it runs. Keep project adapters, secrets, paths,
-credentials, and runtime settings local even when the user chooses `adopt`.
+non-identical artifact. For a `local-only` skill or agent, explicitly ask
+whether it should be created in the marketplace: `create`, `reject`, or `leave`.
+Show its candidate version. For all other non-identical artifacts, ask for
+`adopt <patch|minor|major>`, `revert local`, or `leave`. `revert local` is a
+destructive overwrite and requires one final confirmation immediately before it
+runs. Keep project adapters, secrets, paths, credentials, and runtime settings
+local even when the user chooses `adopt`.
+
+Immediately after the user's decision, persist each `reject` in your own memory
+using the exact `Rejected candidate` format. If the user creates or adopts that
+candidate, remove its matching rejection record. Do this even when no artifact
+is published, so a rejected candidate is not asked again on the next run.
 
 Phase 4 — apply only accepted decisions. For accepted portable changes, update
 only the named marketplace skill directories, set the approved SemVer version
@@ -83,10 +108,11 @@ only the named definition files under `agents/opencode/` and their matching
 entries in `agents/opencode/index.json`, including the approved SemVer version.
 Preserve each agent's explicit permissions, declared skills, and delegates
 unless the user approved changing them. Run the agent-installer validation and
-affected Node tests. For a local-only skill accepted for adoption, load
+affected Node tests. For a local-only skill accepted for creation, load
 `olko-adapt-to-marketplace` and use its validation requirements before adding
-the registry entry. For a local-only agent, add its definition and a valid
-manifest entry, then validate it with `node scripts/install-opencode-agents.mjs
+the registry entry. For a local-only agent accepted for creation, add its
+definition and a valid manifest entry at the user-approved candidate version,
+then validate it with `node scripts/install-opencode-agents.mjs
 --project <temporary-empty-directory> --agent <name>`. For accepted reverts,
 replace only the selected local source with its marketplace counterpart after
 the final confirmation. Leave all other skills and agents untouched.

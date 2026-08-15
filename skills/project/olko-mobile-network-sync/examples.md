@@ -13,11 +13,11 @@ mobileNetworkSync:
   healthWaitSeconds: 60
   urlUpdates:
     - name: oauth
-      path: mobile/app/src/main/java/com/pricepredictor/mobile/data/auth/OAuthConfig.kt
+      path: apps/mobile/app/src/main/java/com/pricepredictor/mobile/data/auth/OAuthConfig.kt
       regex: 'var baseUrl = "http://[^"]+:8081"'
       replacementTemplate: 'var baseUrl = "http://{hostDomain}:8081"'
     - name: api
-      path: mobile/app/src/main/java/com/pricepredictor/mobile/data/api/ApiClient.kt
+      path: apps/mobile/app/src/main/java/com/pricepredictor/mobile/data/api/ApiClient.kt
       regex: '\.baseUrl\("http://[^"]+:5000/"\)'
       replacementTemplate: '.baseUrl("http://{hostIp}:5000/")'
   composeEnvUpdates:

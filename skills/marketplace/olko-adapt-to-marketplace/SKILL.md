@@ -1,12 +1,12 @@
 ---
 name: olko-adapt-to-marketplace
-description: "Onboard a skill from a local directory into the marketplace and run the full release cycle, even if the skill is not yet registered. Adapts the name to the olko- convention, analyzes whether the skill should be split into smaller sub-skills orchestrated by one parent skill, proposes the marketplace category directory, prepares the skill(s) to follow the marketplace architecture (Layered Skill Adaptation Pattern, Skill Adaptation Contract, Explicit Skill Reuse), scaffolds progressive loading when warranted, optimizes for token cost and routing quality, writes the full registry entry, regenerates derived artifacts (index.json, capability-graph.json, search-index.json), and runs the validation gate until the skill passes. Triggers: 'adapt to marketplace', 'onboard skill', 'split skill', 'prepare skill for marketplace', 'register skill', 'olko-adapt-to-marketplace <name>'."
+description: "Adapt a local skill for Marketplace onboarding, or with --local-only restructure it in its project without publishing. Can rename, split into parent/sub-skills, add SemVer, optimize routing, and scaffold progressive loading. Local-only mode forbids Marketplace registry edits, copies, and publication. Triggers: 'adapt to marketplace', 'onboard skill', 'split skill', 'prepare skill for marketplace', 'adapt local skill', 'restructure local skill', 'olko-adapt-to-marketplace <name>'."
 ---
 
 # olko-adapt-to-marketplace
 
 ## Routing Summary
-Onboard a skill from a local directory into the marketplace and run the full release cycle, even if the skill is not yet registered. Adapts the name to the olko- convention, analyzes whether the skill should be split into smaller sub-skills orchestrated by one parent skill, proposes the marketplace category directory, prepares the skill(s) to follow the marketplace architecture (Layered Skill Adaptation Pattern, Skill Adaptation Contract, Explicit Skill Reuse), scaffolds progressive loading when warranted, optimizes for token cost and routing quality, writes the full registry entry, regenerates derived artifacts (index.json, capability-graph.json, search-index.json), and runs the validation gate until the skill passes. Triggers: 'adapt to marketplace', 'onboard skill', 'split skill', 'prepare skill for marketplace', 'register skill', 'olko-adapt-to-marketplace <name>'.
+Onboard a skill into the Marketplace, or use `--local-only` to rename, split, version, and optimize it in its project without registering or publishing it. Triggers: 'adapt to marketplace', 'onboard skill', 'split skill', 'prepare skill for marketplace', 'adapt local skill', 'restructure local skill', 'olko-adapt-to-marketplace <name>'.
 
 ## Progressive Loading
 - Load `overview.md` first after registry/category routing.

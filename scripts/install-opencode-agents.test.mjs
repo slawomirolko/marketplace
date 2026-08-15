@@ -80,7 +80,7 @@ test("installs the .NET test runner without unrelated skills", () => {
   const agent = fs.readFileSync(path.join(project, ".opencode", "agents", "olko-dotnet-test-runner.md"), "utf8");
   assert.match(agent, /model: ollama-cloud\/deepseek-v4-flash:0731/);
   assert.match(agent, /edit: deny/);
-  assert.match(agent, /bash: allow/);
+  assert.match(agent, /bash:\s+"\*": allow/);
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-test", "SKILL.md")));
   assert.ok(!fs.existsSync(path.join(project, ".agents", "skills", "olko-dotnet-architecture", "SKILL.md")));
   assert.ok(!fs.existsSync(path.join(project, "opencode.json")));
@@ -198,12 +198,18 @@ test("installs the visible marketplace skill sync manager and its comparator", (
     JSON.parse(fs.readFileSync(path.join(marketplaceRoot, "agents", "opencode", "index.json"), "utf8")).agents.find(
       (agent) => agent.name === "olko-marketplace-skill-sync-manager",
     ).version,
-    "1.3.0",
+    "1.6.0",
   );
+  assert.match(manager, /Get-ChildItem/);
+  assert.match(manager, /Select-Object/);
+  assert.match(manager, /Write-Output/);
   assert.match(manager, /skills and\s+OpenCode agents/);
   assert.match(manager, /agents\/opencode\/index\.json/);
   assert.match(manager, /including the approved SemVer version/);
   assert.match(manager, /RECURRING-LEARNING LAYER/);
+  assert.match(manager, /Rejected candidate/);
+  assert.match(manager, /never ask again for that same version/);
+  assert.match(manager, /whether it should be created in the marketplace/);
   assert.match(manager, /olko-marketplace-skill-sync-manager.*block/);
   assert.match(manager, /install-opencode-agents\.mjs --project/);
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-adapt-to-marketplace", "SKILL.md")));
@@ -212,7 +218,7 @@ test("installs the visible marketplace skill sync manager and its comparator", (
   assert.ok(fs.existsSync(path.join(project, ".opencode", "agents", "olko-marketplace-skill-sync-comparator.md")));
   assert.match(
     fs.readFileSync(path.join(project, ".opencode", "memory", "olko-marketplace-skill-sync-manager.md"), "utf8"),
-    /verified synchronization decisions/,
+    /version-keyed rejected new-artifact candidates/,
   );
 
   const comparatorResult = run(project, "--agent", "olko-marketplace-skill-sync-comparator");

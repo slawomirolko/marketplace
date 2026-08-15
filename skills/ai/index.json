@@ -4,7 +4,7 @@
     {
       "name": "olko-agents-optimizer",
       "category": "ai",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Optimize agent context files (AGENTS.md, CLAUDE.md, .github/copilot-instructions.md, .windsurfrules, codex.md, etc.) using Addy Osmani's agents-md methodology. Triggers: 'optimize CLAUDE.md', 'streamline CLAUDE.md', 'agents-md', 'discoverability filter', 'add gotchas', 'optimize AGENTS.md', 'optimize context file', 'optimize .windsurfrules', 'optimize copilot-instructions', 'optimize codex.md'.",
       "tags": [
         "ai",

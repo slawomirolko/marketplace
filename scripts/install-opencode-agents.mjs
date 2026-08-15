@@ -199,7 +199,7 @@ function enableMemory(projectRoot, agents) {
         "---",
         "",
         agent.name === "olko-marketplace-skill-sync-manager"
-          ? "Store only verified synchronization decisions, versioning conventions, installer constraints, and project workflow rules."
+          ? "Store only verified synchronization decisions, versioning conventions, installer constraints, project workflow rules, and version-keyed rejected new-artifact candidates."
           : "Store only verified architecture rules, test conventions, and project constraints.",
         "",
       ].join("\n"),

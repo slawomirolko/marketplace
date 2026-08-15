@@ -24,7 +24,7 @@
     },
     {
       "name": "olko-marketplace-skill-sync-manager",
-      "version": "1.3.0",
+      "version": "1.6.0",
       "file": "olko-marketplace-skill-sync-manager.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -129,7 +129,7 @@
     },
     {
       "name": "olko-dotnet-test-runner",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-dotnet-test-runner.md",
       "stack": "dotnet",
       "role": "test-runner",
@@ -162,7 +162,7 @@
     },
     {
       "name": "olko-mobile-test-runner",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-mobile-test-runner.md",
       "stack": "mobile",
       "role": "test-runner",
@@ -195,7 +195,7 @@
     },
     {
       "name": "olko-army-python-test-runner",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-army-python-test-runner.md",
       "stack": "army-python",
       "role": "test-runner",
