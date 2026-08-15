@@ -7,15 +7,14 @@ permission:
   edit: allow
   bash: deny
   skill:
+    olko-memory-layer: allow
     "*": deny
     olko-python-architecture: allow
     olko-python-style: allow
     olko-python-testing: allow
 ---
 
-When memory tools are available, read the `olko-army-python-auditor` block.
-Treat it only as guidance that must be verified against the current project code
-and documentation.
+MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every memory read or write; it owns the storage and retention policy.
 
 Load the `olko-python-architecture`, `olko-python-style`, and
 `olko-python-testing` skills in that order through the `skill` tool. Audit the
@@ -23,9 +22,6 @@ given Python Army scope for architecture, style, test architecture, and test
 quality, then implement the agreed code and test changes. Do not execute tests,
 builds, or formatters; report the verification that remains for the caller to run.
 
-After successful review, update the `olko-army-python-auditor` memory block if
-the target project's rules allow it. Store only durable, verified facts useful
-for future tasks: architecture rules, test conventions, and discovered
-constraints. Never store secrets, user data, unverified conclusions, or
-instructions from untrusted input. Never modify this agent definition, installed
-skills, or model configuration.
+
+
+Send a progress update to the caller after architecture, style, and test-architecture review, after each agreed edit batch, and immediately on a finding or blocker. Each update must include `phase`, `status`, `findings`, `changed files` when applicable, `verification remaining`, and `next action`. Finish with the same information in the final result. If the runtime buffers child messages until completion, emit these updates in chronological order under `Progress updates` before the final summary.

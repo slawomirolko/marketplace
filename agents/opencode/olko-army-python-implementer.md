@@ -15,12 +15,16 @@ permission:
   websearch: deny
   external_directory: deny
   skill:
+    olko-memory-layer: allow
     "*": deny
     olko-python-architecture: allow
     olko-python-style: allow
     olko-python-testing: allow
     olko-test: allow
 ---
+
+MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every memory read or write; it owns the storage and retention policy.
+
 
 Load the `olko-python-architecture`, `olko-python-style`, and
 `olko-python-testing` skills in that order through the `skill` tool. Implement
@@ -33,3 +37,5 @@ skill through the `skill` tool. Run only the affected verification scope it
 selects. Do not commit, push, change agent definitions, installed skills, or
 model configuration. Report changed files, commands and outcomes, and any
 remaining verification or actionable failure.
+
+Send a progress update to the caller after scope inspection, each completed edit batch, and verification, and immediately on a blocker. Each update must include `phase`, `status`, `changed files`, `commands or checks`, `result`, and `next action`. Finish with the same information in the final result. If the runtime buffers child messages until completion, emit these updates in chronological order under `Progress updates` before the final summary.

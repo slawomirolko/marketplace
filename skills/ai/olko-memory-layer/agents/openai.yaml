@@ -1,0 +1,4 @@
+interface:
+  display_name: "Memory Layer"
+  short_description: "Manage reusable agent memory safely"
+  default_prompt: "Use $olko-memory-layer to read or write this agent memory."
