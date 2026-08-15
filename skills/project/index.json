@@ -38,7 +38,7 @@
     {
       "name": "olko-mobile-network-sync",
       "category": "project",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Detect the host LAN IP, update configured mobile app and compose network URLs, fix container auth authority, rebuild configured services, verify WiFi sign-in reachability, and report manual OAuth redirect actions. Triggers: 'sync mobile network', 'fix phone login over WiFi', 'make app work on my network', 'update mobile IP', 'mobile network sync'.",
       "tags": [
         "project",

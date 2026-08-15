@@ -406,3 +406,7 @@ All registered in registry.json. Each sub-skill is independently invocable; the 
 ```
 
 Tell the user how to verify end-to-end: run `olko-install-skill <skill-name>` from a target project to confirm the onboarded skill installs and adapts correctly.
+
+## Local-only override
+
+When `--local-only` is set, resolve the project root from `--source` or the current directory; it must contain `.agents/`. Keep every output under `.agents/skills/`. Apply the naming, split, progressive-loading, and optimization analysis from this workflow, but do not read or edit Marketplace `registry.json`, `skills/`, generated indexes, Git state, or remotes. Skip category selection and registry steps. Add or update a valid SemVer `version` in each local skill's frontmatter: use `1.0.0` for a new skill and require an explicit SemVer bump decision for an existing skill. Validate only local frontmatter, parent/sub-skill paths, `uses` references, and progressive-file references. Never commit, push, or publish in this mode.

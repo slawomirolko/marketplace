@@ -50,6 +50,7 @@ Parse `$ARGUMENTS`:
 | `--source <path>` | Explicit source directory for the skill (skip discovery) |
 | `--marketplace-root <path>` | Explicit marketplace root (skip discovery) |
 | `--no-split` | Analyze but do not propose a split |
+| `--local-only` | Adapt in the source project's `.agents/skills/` only; do not register, copy, regenerate Marketplace metadata, commit, push, or publish. |
 | `--dry-run` | Show all proposed changes without writing files |
 | `--help` | Display usage and exit |
 
