@@ -194,10 +194,26 @@ test("installs the visible marketplace skill sync manager and its comparator", (
   assert.match(manager, /external_directory: allow/);
   assert.match(manager, /olko-adapt-to-marketplace: allow/);
   assert.match(manager, /olko-commit: allow/);
+  assert.equal(
+    JSON.parse(fs.readFileSync(path.join(marketplaceRoot, "agents", "opencode", "index.json"), "utf8")).agents.find(
+      (agent) => agent.name === "olko-marketplace-skill-sync-manager",
+    ).version,
+    "1.3.0",
+  );
+  assert.match(manager, /skills and\s+OpenCode agents/);
+  assert.match(manager, /agents\/opencode\/index\.json/);
+  assert.match(manager, /including the approved SemVer version/);
+  assert.match(manager, /RECURRING-LEARNING LAYER/);
+  assert.match(manager, /olko-marketplace-skill-sync-manager.*block/);
+  assert.match(manager, /install-opencode-agents\.mjs --project/);
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-adapt-to-marketplace", "SKILL.md")));
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-commit", "SKILL.md")));
   assert.ok(fs.existsSync(path.join(project, ".opencode", "agents", "olko-marketplace-skill-bootstrapper.md")));
   assert.ok(fs.existsSync(path.join(project, ".opencode", "agents", "olko-marketplace-skill-sync-comparator.md")));
+  assert.match(
+    fs.readFileSync(path.join(project, ".opencode", "memory", "olko-marketplace-skill-sync-manager.md"), "utf8"),
+    /verified synchronization decisions/,
+  );
 
   const comparatorResult = run(project, "--agent", "olko-marketplace-skill-sync-comparator");
 
@@ -209,6 +225,19 @@ test("installs the visible marketplace skill sync manager and its comparator", (
   assert.match(comparator, /edit: deny/);
   assert.match(comparator, /task: deny/);
   assert.match(comparator, /external_directory: allow/);
+  assert.match(comparator, /artifact specified by the calling manager/);
+  assert.match(comparator, /marketplace agent\s+manifest entry/);
+});
+
+test("declares a valid SemVer version for every OpenCode agent", () => {
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(marketplaceRoot, "agents", "opencode", "index.json"), "utf8"),
+  );
+  const semVer = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
+  for (const agent of manifest.agents) {
+    assert.match(agent.version, semVer, `${agent.name} must declare a valid SemVer version`);
+  }
 });
 
 test("installs the hidden marketplace skill bootstrapper", () => {

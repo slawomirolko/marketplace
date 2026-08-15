@@ -1,5 +1,5 @@
 ---
-description: Read-only comparison of one project-local skill against its marketplace source.
+description: Read-only comparison of one project-local skill or OpenCode agent against its marketplace source.
 mode: subagent
 hidden: true
 model: ollama-cloud/deepseek-v4-flash:0731
@@ -13,8 +13,10 @@ permission:
   skill: deny
 ---
 
-Compare exactly one skill directory specified by the calling manager. Read the
-local source, the marketplace registry entry, and the marketplace skill source.
+Compare exactly one artifact specified by the calling manager. For a skill,
+read the local source, marketplace registry entry, and marketplace skill source.
+For an OpenCode agent, read the local definition, the marketplace agent
+manifest entry, and the marketplace agent definition.
 Do not edit, install, fetch, pull, commit, push, switch branches, or run tests.
 
 Classify the result as exactly one of: `identical`, `local-only`,
@@ -25,6 +27,7 @@ and describe the behavior impact, whether it is compatible, and the minimum
 SemVer recommendation (`patch`, `minor`, or `major`). For a conflict, identify
 the conflicting files and why automated synchronization would be unsafe.
 
-Return only a structured report to the manager: skill name, local path,
-marketplace path, registry version, classification, changed files, portability
-findings, recommended action, recommended version bump, and blockers.
+Return only a structured report to the manager: artifact type, artifact name,
+local path, marketplace path, current marketplace version, classification,
+changed files, portability findings, recommended action, recommended version
+bump, exact proposed next version, and blockers.
