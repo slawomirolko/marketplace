@@ -22,7 +22,12 @@ permission:
     olko-army-python-auditor: allow
     olko-army-python-implementer: allow
     olko-army-python-test-runner: allow
+  skill:
+    olko-memory-layer: allow
 ---
+
+MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every memory read or write; it owns the storage and retention policy.
+
 
 Do not load or follow `olko-implement-new`. Coordinate the implementation directly from the user-supplied plan and this agent's allowed skills and task agents.
 
@@ -55,32 +60,32 @@ Own implementation tracking in the canonical technical plan, never in a separate
 - Delegation: <agent, scope, and status; one item per line>
 
 ### Step status
-- [ ] 0 — Read plans and ensure instrumentation
-- [ ] 1 — Create worktree
-- [ ] 2 — Cross-check plans
-- [ ] 3 — Implement
-- [ ] 3a — Rules re-check
-- [ ] 4 — Run style checks
-- [ ] 5 — Run tests
-- [ ] 6 — Rebuild affected services
-- [ ] 7 — Verify logs, traces, and DB state
-- [ ] 8 — Commit
-- [ ] 8a — Review PR feedback
-- [ ] 9 — Merge worktree
-- [ ] 10 — Remove plans
-- [ ] 11 — Rebuild and verify from main
+- [ ] 0 â€” Read plans and ensure instrumentation
+- [ ] 1 â€” Create worktree
+- [ ] 2 â€” Cross-check plans
+- [ ] 3 â€” Implement
+- [ ] 3a â€” Rules re-check
+- [ ] 4 â€” Run style checks
+- [ ] 5 â€” Run tests
+- [ ] 6 â€” Rebuild affected services
+- [ ] 7 â€” Verify logs, traces, and DB state
+- [ ] 8 â€” Commit
+- [ ] 8a â€” Review PR feedback
+- [ ] 9 â€” Merge worktree
+- [ ] 10 â€” Remove plans
+- [ ] 11 â€” Rebuild and verify from main
 
 ### Changed files
-- `<path>` — <agent or primary agent>; <purpose>; <status>
+- `<path>` â€” <agent or primary agent>; <purpose>; <status>
 
 ### Verification
-- <UTC timestamp> — <style/test/build/log/trace/DB command or check>: <pass/fail>; <evidence or concise result>
+- <UTC timestamp> â€” <style/test/build/log/trace/DB command or check>: <pass/fail>; <evidence or concise result>
 
 ### Decisions and approvals
-- <UTC timestamp> — <user decision, waiver, or approval>
+- <UTC timestamp> â€” <user decision, waiver, or approval>
 
 ### Failures and blockers
-- <UTC timestamp> — <step>; <failure or blocker>; <next action>
+- <UTC timestamp> â€” <step>; <failure or blocker>; <next action>
 
 ### Delivery
 - Commit: <hash or pending>
@@ -89,6 +94,8 @@ Own implementation tracking in the canonical technical plan, never in a separate
 ```
 
 On a resumed run, read this section first, use `Current step`, incomplete checklist items, changed files, failures, and delivery state to continue, and preserve all prior entries. Mark a step complete only after its gate passes. Never delete or rewrite history; append dated verification, decision, failure, and delegation entries, and update the Session fields plus checklist in place. The implementation journal is part of the plan and remains available after worktree cleanup; do not add it to `.git/info/exclude` or remove it with temporary files.
+
+When a child sends a progress update, immediately append its timestamped facts to the matching Implementation subsections and update Session status/current step. Do not wait for the child's final result. If the runtime delivers only a final result with chronological `Progress updates`, replay every update into the journal in order before recording the final summary.
 
 Treat this agent's `permission.task` allowlist as the authoritative runtime agent registry. The `uses` list in an implementation-skill project adapter declares installed workflow skills; it is not a list of task-agent names. Never attempt to dispatch a task named `olko-test`, `olko-commit`, `olko-worktree-create`, `olko-commit-style`, or `olko-worktree-merge` unless that exact name appears in this agent's `permission.task` allowlist.
 

@@ -8,9 +8,13 @@ permission:
   bash: deny
   task: deny
   skill:
+    olko-memory-layer: allow
     "*": deny
     olko-investigate-existing: allow
 ---
+
+MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every memory read or write; it owns the storage and retention policy.
+
 
 Load `olko-investigate-existing`. For the supplied implementation scope, produce a read-only implementation-readiness report with real `file:line` evidence:
 

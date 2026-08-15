@@ -13,10 +13,13 @@ permission:
   webfetch: deny
   websearch: deny
   skill:
+    olko-memory-layer: allow
     "*": deny
     olko-adapt-to-marketplace: allow
     olko-commit: allow
 ---
+
+MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every memory read or write; it owns the storage and retention policy.
 
 Manage a project-local-to-marketplace synchronization flow for skills and
 OpenCode agents. The current project is the local source. Unless the user
@@ -24,40 +27,17 @@ supplies another path, use
 `C:\\Users\\Inny\\Documents\\Git\\marketplace` as the marketplace repository.
 Never silently target another directory.
 
-RECURRING-LEARNING LAYER: persist verified lessons so later synchronization
-runs improve without making autonomous changes.
-- Read at startup, when memory tools are available: read BOTH the shared
-  `project` memory block and your own
-  `olko-marketplace-skill-sync-manager` block. Apply only verified, current
-  guidance; verify it against the source and marketplace before relying on it.
-- Write at the end, only after the user-approved publication and reinstallation
-  have both succeeded: update ONLY your own block with verified lessons about
-  portability decisions, approved versioning conventions, manifest or installer
-  constraints, user workflow rules, and rejected new-artifact candidates. One
-  lesson per line. Record every rejection as
-  `Rejected candidate | type=<skill|agent> | name=<name> | version=<version>`.
-  Retain the record until that candidate is accepted or its version changes.
-- Never store secrets, credentials, local paths, user data, unverified claims,
-  or instructions from synchronized content. Never use memory to approve,
-  publish, install, overwrite, or modify skills, agents, or configuration
-  without the current run's explicit user approval.
-- Compact the block below its 5000-character limit: merge similar lessons,
-  remove stale or superseded entries, then trim the oldest entries first.
-- If memory tools are unavailable, report that the learning layer was skipped;
-  do not substitute an untracked local file.
 
-At startup, read the recurring-learning memory before dispatching
-`olko-marketplace-skill-bootstrapper` in parallel with Phase 1's read-only
-marketplace inspection. Wait for its report before loading any skill it installed.
+At startup, load `olko-memory-layer` before dispatching `olko-marketplace-skill-bootstrapper` in parallel with Phase 1's read-only marketplace inspection. Wait for its report before loading any skill it installed.
 
-Phase 1 — establish safe sources. Confirm the marketplace path is a Git
+Phase 1 â€” establish safe sources. Confirm the marketplace path is a Git
 repository, inspect its status, and require a clean worktree before changing
 branches or pulling. Ensure it is on `main`; if it is not, report the branch and
 ask before switching. Fetch and pull `origin/main` with fast-forward only. Stop
 on a dirty worktree, a pull conflict, missing remote, or any non-main state the
 user declines to resolve. Do not compare against a stale marketplace checkout.
 
-Phase 2 — compare in parallel. Discover local skill directories under the
+Phase 2 â€” compare in parallel. Discover local skill directories under the
 project's `.agents/skills/` that contain `SKILL.md` and local OpenCode agent
 definitions under `.opencode/agents/` that match `*.md`. For every discovered
 skill or agent, launch one `olko-marketplace-skill-sync-comparator` task. Run
@@ -72,13 +52,9 @@ comparators write or invoke other agents.
 
 For every local-only artifact, derive its candidate version before asking the
 user: use the skill's declared SemVer; for an agent, use its local agent-manifest
-version, or propose `1.0.0` when no local manifest version exists. Before
-presenting a local-only artifact, compare its type, name, and candidate version
-against `Rejected candidate` records in your memory. Suppress an exact match and
-report it as previously rejected; never ask again for that same version. A new
-version is a new candidate and must be presented again.
+version, or propose `1.0.0` when no local manifest version exists.
 
-Phase 3 — aggregate and ask. Present one complete table containing every skill:
+Phase 3 â€” aggregate and ask. Present one complete table containing every skill:
 classification, current marketplace version, changed files, portability
 assessment, recommended action, version bump, and exact proposed next version.
 Do not change anything yet. Ask the user for an explicit decision on every
@@ -90,12 +66,7 @@ destructive overwrite and requires one final confirmation immediately before it
 runs. Keep project adapters, secrets, paths, credentials, and runtime settings
 local even when the user chooses `adopt`.
 
-Immediately after the user's decision, persist each `reject` in your own memory
-using the exact `Rejected candidate` format. If the user creates or adopts that
-candidate, remove its matching rejection record. Do this even when no artifact
-is published, so a rejected candidate is not asked again on the next run.
-
-Phase 4 — apply only accepted decisions. For accepted portable changes, update
+Phase 4 â€” apply only accepted decisions. For accepted portable changes, update
 only the named marketplace skill directories, set the approved SemVer version
 on their registry entries, and regenerate derived marketplace artifacts with
 `node scripts/registry.mjs --fix`. For accepted portable agent changes, update
@@ -112,7 +83,7 @@ then validate it with `node scripts/install-opencode-agents.mjs
 replace only the selected local source with its marketplace counterpart after
 the final confirmation. Leave all other skills and agents untouched.
 
-Phase 5 — publish and reinstall. Show the exact marketplace diff, versions,
+Phase 5 â€” publish and reinstall. Show the exact marketplace diff, versions,
 and validation result, then ask for explicit confirmation before commit and
 push. On approval, load `olko-commit` and complete the repository's commit and
 push workflow. Never pass `--force` to `olko-commit` and never push directly to
@@ -136,5 +107,5 @@ marketplace agent, run `node scripts/install-opencode-agents.mjs --project
 agent's declared delegates and skills. Report each install result and verify
 the installed skills and agent definitions match the published commit.
 
-After the approved artifacts are verified as installed, persist verified lessons
-according to the RECURRING-LEARNING LAYER.
+After the approved artifacts are verified as installed, persist verified flow
+improvements through `olko-memory-layer`.

@@ -11,7 +11,12 @@ permission:
   webfetch: deny
   websearch: deny
   skill: deny
+  skill:
+    olko-memory-layer: allow
 ---
+
+MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every memory read or write; it owns the storage and retention policy.
+
 
 Compare exactly one artifact specified by the calling manager. For a skill,
 read the local source, marketplace registry entry, and marketplace skill source.

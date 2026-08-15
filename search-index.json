@@ -171,6 +171,37 @@
       ]
     },
     {
+      "name": "olko-memory-layer",
+      "category": "ai",
+      "text": "olko-memory-layer ai Manage an OpenCode agent's recurring-learning memory. Use whenever an agent reads, writes, compacts, or defines a memory layer or persistent-memory block. ai agents memory ai ai.agents.memory",
+      "tokens": [
+        "olko",
+        "memory",
+        "layer",
+        "ai",
+        "manage",
+        "an",
+        "opencode",
+        "agent",
+        "s",
+        "recurring",
+        "learning",
+        "memory.",
+        "use",
+        "whenever",
+        "reads",
+        "writes",
+        "compacts",
+        "or",
+        "defines",
+        "a",
+        "persistent",
+        "block.",
+        "agents",
+        "ai.agents.memory"
+      ]
+    },
+    {
       "name": "olko-update-ai-tech-docs",
       "category": "ai",
       "text": "olko-update-ai-tech-docs ai Investigate a technology, map it to existing AI-facing project docs, search community AI-skill and convention sources, compare gaps, present an update plan for approval, then apply approved documentation changes. Triggers: 'update AI tech docs', 'update technology docs', 'review technology conventions', 'improve coding style docs', 'compare technology against community standards', 'olko-update-ai-tech-docs <technology>'. ai update tech docs ai ai.update.tech.docs",

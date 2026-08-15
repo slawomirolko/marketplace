@@ -36,7 +36,8 @@ test("installs the .NET audit agent with all its declared skills", () => {
   assert.match(agent, /edit: allow/);
   assert.match(agent, /bash: deny/);
   assert.match(agent, /Do not execute tests, builds, or\s+formatters/);
-  assert.match(agent, /`olko-dotnet-auditor` memory block/);
+  assert.match(agent, /MEMORY LAYER: Load `olko-memory-layer`/);
+  assert.match(agent, /olko-memory-layer: allow/);
   const config = JSON.parse(fs.readFileSync(path.join(project, "opencode.json"), "utf8"));
   assert.deepEqual(config.plugin, ["opencode-agent-memory@0.2.0"]);
   assert.match(
@@ -213,11 +214,11 @@ test("installs the visible marketplace skill sync manager and its comparator", (
   assert.match(manager, /skills and\s+OpenCode agents/);
   assert.match(manager, /agents\/opencode\/index\.json/);
   assert.match(manager, /including the approved SemVer version/);
-  assert.match(manager, /RECURRING-LEARNING LAYER/);
-  assert.match(manager, /Rejected candidate/);
-  assert.match(manager, /never ask again for that same version/);
+  assert.match(manager, /MEMORY LAYER: Load `olko-memory-layer`/);
+  assert.match(manager, /olko-memory-layer: allow/);
+  assert.doesNotMatch(manager, /Rejected candidate/);
   assert.match(manager, /whether it should be created in the marketplace/);
-  assert.match(manager, /olko-marketplace-skill-sync-manager.*block/);
+  assert.match(manager, /At startup, load `olko-memory-layer`/);
   assert.match(manager, /install-opencode-agents\.mjs --project/);
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-adapt-to-marketplace", "SKILL.md")));
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-commit", "SKILL.md")));

@@ -4,11 +4,14 @@
   "agents": [
     {
       "name": "olko-implementation-orchestrator",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "file": "olko-implementation-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",
-      "skills": ["olko-implement-new"],
+      "skills": [
+        "olko-implement-new",
+        "olko-memory-layer"
+      ],
       "delegates": [
         "olko-marketplace-skill-bootstrapper",
         "olko-dotnet-auditor",
@@ -30,7 +33,8 @@
       "role": "orchestrator",
       "skills": [
         "olko-adapt-to-marketplace",
-        "olko-commit"
+        "olko-commit",
+        "olko-memory-layer"
       ],
       "delegates": [
         "olko-marketplace-skill-bootstrapper",
@@ -43,7 +47,9 @@
       "file": "olko-marketplace-skill-sync-comparator.md",
       "stack": "cross-stack",
       "role": "comparator",
-      "skills": []
+      "skills": [
+        "olko-memory-layer"
+      ]
     },
     {
       "name": "olko-marketplace-skill-bootstrapper",
@@ -51,7 +57,35 @@
       "file": "olko-marketplace-skill-bootstrapper.md",
       "stack": "cross-stack",
       "role": "bootstrapper",
-      "skills": ["olko-install-skill"]
+      "skills": [
+        "olko-install-skill",
+        "olko-memory-layer"
+      ]
+    },
+    {
+      "name": "olko-git-delivery-manager",
+      "version": "1.0.0",
+      "file": "olko-git-delivery-manager.md",
+      "stack": "cross-stack",
+      "role": "orchestrator",
+      "skills": [
+        "olko-commit-style",
+        "olko-commit-docker",
+        "olko-commit",
+        "olko-memory-layer"
+      ]
+    },
+    {
+      "name": "olko-worktree-lifecycle-manager",
+      "version": "1.0.0",
+      "file": "olko-worktree-lifecycle-manager.md",
+      "stack": "cross-stack",
+      "role": "orchestrator",
+      "skills": [
+        "olko-worktree-create",
+        "olko-worktree-merge",
+        "olko-memory-layer"
+      ]
     },
     {
       "name": "olko-plan-documentation-orchestrator",
@@ -62,7 +96,8 @@
       "skills": [
         "olko-plan-editor",
         "olko-investigate-existing",
-        "grill-with-docs"
+        "grill-with-docs",
+        "olko-memory-layer"
       ],
       "delegates": [
         "olko-plan-business-writer",
@@ -81,7 +116,10 @@
       "file": "olko-plan-business-writer.md",
       "stack": "cross-stack",
       "role": "writer",
-      "skills": ["olko-plan-editor"]
+      "skills": [
+        "olko-plan-editor",
+        "olko-memory-layer"
+      ]
     },
     {
       "name": "olko-investigation-flow-worker",
@@ -89,7 +127,10 @@
       "file": "olko-investigation-flow-worker.md",
       "stack": "cross-stack",
       "role": "investigator",
-      "skills": ["olko-investigate-existing"]
+      "skills": [
+        "olko-investigate-existing",
+        "olko-memory-layer"
+      ]
     },
     {
       "name": "olko-investigation-runtime-worker",
@@ -97,7 +138,10 @@
       "file": "olko-investigation-runtime-worker.md",
       "stack": "cross-stack",
       "role": "investigator",
-      "skills": ["olko-investigate-existing"]
+      "skills": [
+        "olko-investigate-existing",
+        "olko-memory-layer"
+      ]
     },
     {
       "name": "olko-investigation-test-worker",
@@ -105,7 +149,10 @@
       "file": "olko-investigation-test-worker.md",
       "stack": "cross-stack",
       "role": "investigator",
-      "skills": ["olko-investigate-existing"]
+      "skills": [
+        "olko-investigate-existing",
+        "olko-memory-layer"
+      ]
     },
     {
       "name": "olko-investigation-readiness-worker",
@@ -113,31 +160,38 @@
       "file": "olko-investigation-readiness-worker.md",
       "stack": "cross-stack",
       "role": "investigator",
-      "skills": ["olko-investigate-existing"]
+      "skills": [
+        "olko-investigate-existing",
+        "olko-memory-layer"
+      ]
     },
     {
       "name": "olko-dotnet-auditor",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "file": "olko-dotnet-auditor.md",
       "stack": "dotnet",
       "role": "auditor",
       "skills": [
         "olko-dotnet-architecture",
         "olko-dotnet-style",
-        "olko-dotnet-testing"
+        "olko-dotnet-testing",
+        "olko-memory-layer"
       ]
     },
     {
       "name": "olko-dotnet-test-runner",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "file": "olko-dotnet-test-runner.md",
       "stack": "dotnet",
       "role": "test-runner",
-      "skills": ["olko-test"]
+      "skills": [
+        "olko-test",
+        "olko-memory-layer"
+      ]
     },
     {
       "name": "olko-dotnet-implementer",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "file": "olko-dotnet-implementer.md",
       "stack": "dotnet",
       "role": "implementer",
@@ -145,32 +199,37 @@
         "olko-dotnet-architecture",
         "olko-dotnet-style",
         "olko-dotnet-testing",
-        "olko-test"
+        "olko-test",
+        "olko-memory-layer"
       ]
     },
     {
       "name": "olko-mobile-auditor",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "file": "olko-mobile-auditor.md",
       "stack": "mobile",
       "role": "auditor",
       "skills": [
         "olko-kotlin-architecture",
         "olko-kotlin-style",
-        "olko-kotlin-testing"
+        "olko-kotlin-testing",
+        "olko-memory-layer"
       ]
     },
     {
       "name": "olko-mobile-test-runner",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "file": "olko-mobile-test-runner.md",
       "stack": "mobile",
       "role": "test-runner",
-      "skills": ["olko-test"]
+      "skills": [
+        "olko-test",
+        "olko-memory-layer"
+      ]
     },
     {
       "name": "olko-mobile-implementer",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "file": "olko-mobile-implementer.md",
       "stack": "mobile",
       "role": "implementer",
@@ -178,32 +237,37 @@
         "olko-kotlin-architecture",
         "olko-kotlin-style",
         "olko-kotlin-testing",
-        "olko-test"
+        "olko-test",
+        "olko-memory-layer"
       ]
     },
     {
       "name": "olko-army-python-auditor",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "file": "olko-army-python-auditor.md",
       "stack": "army-python",
       "role": "auditor",
       "skills": [
         "olko-python-architecture",
         "olko-python-style",
-        "olko-python-testing"
+        "olko-python-testing",
+        "olko-memory-layer"
       ]
     },
     {
       "name": "olko-army-python-test-runner",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "file": "olko-army-python-test-runner.md",
       "stack": "army-python",
       "role": "test-runner",
-      "skills": ["olko-test"]
+      "skills": [
+        "olko-test",
+        "olko-memory-layer"
+      ]
     },
     {
       "name": "olko-army-python-implementer",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "file": "olko-army-python-implementer.md",
       "stack": "army-python",
       "role": "implementer",
@@ -211,7 +275,8 @@
         "olko-python-architecture",
         "olko-python-style",
         "olko-python-testing",
-        "olko-test"
+        "olko-test",
+        "olko-memory-layer"
       ]
     }
   ]
