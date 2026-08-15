@@ -115,8 +115,15 @@ the final confirmation. Leave all other skills and agents untouched.
 Phase 5 — publish and reinstall. Show the exact marketplace diff, versions,
 and validation result, then ask for explicit confirmation before commit and
 push. On approval, load `olko-commit` and complete the repository's commit and
-push workflow. Re-check that the approved commit is visible on `origin/main`
-before installing. Verify the installed OpenSkills CLI help first. For each
+push workflow. Never pass `--force` to `olko-commit` and never push directly to
+`main`. Require its default scope-named feature branch and PR flow. Before the
+PR is opened, ensure its title is the approved conventional commit subject and
+its description concisely states the approved skills/agents, versions, and
+validation results. Report the PR URL and stop for the user's explicit decision:
+leave it open, wait for CI, or squash merge. Squash merge only after the user
+explicitly approves it; then update local `main` and delete the merged branch.
+Re-check that the approved commit is visible on `origin/main` before installing.
+Verify the installed OpenSkills CLI help first. For each
 approved marketplace skill, use its exact subpath and run:
 `openskills install slawomirolko/marketplace/skills/<category>/<skill> --universal --yes`.
 With the installed OpenSkills version, `--universal` targets `.agents/skills`
