@@ -51,12 +51,16 @@ function validateManifest(manifest, registry) {
   const registrySkills = new Set(registry.skills.map((skill) => skill.name));
   const names = new Set();
   const files = new Set();
+  const semVer = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
   const roles = new Set(["auditor", "bootstrapper", "comparator", "implementer", "investigator", "orchestrator", "test-runner", "writer"]);
   const stacks = new Set(["army-python", "cross-stack", "dotnet", "mobile"]);
 
   for (const agent of manifest.agents) {
     if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(agent.name) || names.has(agent.name)) {
       throw new Error(`Invalid or duplicate OpenCode agent name: ${agent.name}`);
+    }
+    if (typeof agent.version !== "string" || !semVer.test(agent.version)) {
+      throw new Error(`Invalid SemVer version for ${agent.name}`);
     }
     if (typeof agent.file !== "string" || path.basename(agent.file) !== agent.file || !agent.file.endsWith(".md") || files.has(agent.file)) {
       throw new Error(`Invalid or duplicate agent file for ${agent.name}`);
@@ -157,7 +161,9 @@ function copySkill(source, target, force) {
 }
 
 function enableMemory(projectRoot, agents) {
-  const memoryAgents = agents.filter((agent) => agent.name.endsWith("-auditor"));
+  const memoryAgents = agents.filter(
+    (agent) => agent.name.endsWith("-auditor") || agent.name === "olko-marketplace-skill-sync-manager",
+  );
   if (memoryAgents.length === 0) {
     return;
   }
@@ -192,7 +198,9 @@ function enableMemory(projectRoot, agents) {
         "limit: 5000",
         "---",
         "",
-        "Store only verified architecture rules, test conventions, and project constraints.",
+        agent.name === "olko-marketplace-skill-sync-manager"
+          ? "Store only verified synchronization decisions, versioning conventions, installer constraints, and project workflow rules."
+          : "Store only verified architecture rules, test conventions, and project constraints.",
         "",
       ].join("\n"),
     );
