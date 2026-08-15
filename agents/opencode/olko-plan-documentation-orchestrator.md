@@ -105,7 +105,23 @@ reduced to pointer stubs; never create flat pair files.
    produced no corrections, skip the rerun. Finish only after `grill-with-docs`
    receives explicit confirmation and the final pair still passes the
    consistency gate.
-8. Persist verified flow improvements through `olko-memory-layer`
+8. After explicit grill approval, make the final `implementation.md` concise and
+   implementation-ready:
+   - Remove every denied, rejected, superseded, or unchosen option, together
+     with its speculative rationale and duplicate detail. The final plan must
+     describe what to do, not preserve a history of alternatives.
+   - Before removing a denied option, verify that its corresponding approved
+     mechanism is present and concrete: planned files, behavior, contracts or
+     configuration, validation, and acceptance criteria as applicable. If no
+     approved replacement exists, keep the issue as an explicit blocker; never
+     silently delete a required mechanism.
+   - Keep only the scope, ordered implementation actions, required validation,
+     acceptance criteria, and unresolved blockers. Update `tracker.md` with the
+     final approved decisions and any remaining blocker.
+   - Run the business-to-technical consistency gate once more after this cleanup.
+     If it exposes a missing approved mechanism, correct the same pair and repeat
+     the gate before reporting completion.
+9. Persist verified flow improvements through `olko-memory-layer`
    (write only your own `olko-plan-documentation-orchestrator` block; if memory tools are unavailable, report that learning was skipped), then update
    `tracker.md` gate status to reflect grill approval.
 
