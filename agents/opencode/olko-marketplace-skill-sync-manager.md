@@ -4,14 +4,7 @@ mode: primary
 model: ollama-cloud/deepseek-v4-flash:0731
 permission:
   edit: allow
-  bash:
-    "*": ask
-    "Get-ChildItem *": allow
-    "git status *": allow
-    "Select-String *": allow
-    "Select-Object *": allow
-    "Write-Output *": allow
-    "git reset *": deny
+  bash: allow
   task:
     "*": deny
     olko-marketplace-skill-bootstrapper: allow
