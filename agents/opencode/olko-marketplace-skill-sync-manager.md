@@ -7,6 +7,8 @@ permission:
   bash:
     "*": ask
     "Get-ChildItem *": allow
+    "git status *": allow
+    "Select-String *": allow
     "Select-Object *": allow
     "Write-Output *": allow
     "git reset *": deny
