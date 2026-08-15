@@ -146,7 +146,7 @@
     {
       "name": "olko-plan-editor",
       "category": "workflow",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "description": "Create or edit a paired business and technical implementation plan for a named item, an existing plan pair, or files to create. Produces a business mechanism document plus a technical delivery document. Uses strict caveman mode and minimal context. Triggers: 'plan', 'make a plan', 'edit plan', 'review plan', 'refine plan', 'plan this'.",
       "tags": [
         "workflow",
@@ -158,6 +158,39 @@
         "workflow.plan.editor"
       ],
       "cost": 1,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "project.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
+      "name": "olko-research-new-functionality",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Research a proposed functionality in the current repository, trace existing flows and boundaries, compare suitable architecture patterns, estimate measurable impact, and produce an implementation-ready integration report. Use when the user asks to analyze, evaluate, scope, or design a new cross-cutting feature before implementation.",
+      "tags": [
+        "workflow",
+        "research"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.research"
+      ],
+      "cost": 3,
       "files": [
         "SKILL.md",
         "edge-cases.md",

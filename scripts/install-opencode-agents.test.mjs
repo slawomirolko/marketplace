@@ -93,7 +93,7 @@ test("installs the .NET implementer with its review and verification skills", ()
   assert.equal(result.status, 0, result.stderr);
   const agent = fs.readFileSync(path.join(project, ".opencode", "agents", "olko-dotnet-implementer.md"), "utf8");
   assert.match(agent, /edit: allow/);
-  assert.match(agent, /bash:\s+"\*": ask/);
+  assert.match(agent, /bash:\s+"\*": allow/);
   assert.match(agent, /"git commit \*": deny/);
   assert.match(agent, /"git push \*": deny/);
   assert.match(agent, /task: deny/);
@@ -113,9 +113,15 @@ test("installs the implementation orchestrator with delegation-only permissions"
     path.join(project, ".opencode", "agents", "olko-implementation-orchestrator.md"),
     "utf8",
   );
-  assert.match(agent, /edit: deny/);
-  assert.match(agent, /bash: deny/);
+  assert.match(agent, /edit: allow/);
+  assert.match(agent, /bash: allow/);
   assert.match(agent, /task:\s+"\*": deny/);
+  assert.match(agent, /olko-worktree-lifecycle-manager: allow/);
+  assert.match(agent, /olko-git-delivery-manager: allow/);
+  assert.match(agent, /Do not load or follow `olko-implement-new`/);
+  assert.match(agent, /Own implementation tracking in the canonical technical plan/);
+  assert.match(agent, /## Implementation/);
+  assert.match(agent, /Never dispatch two editing agents for the same file/);
   for (const child of [
     "olko-marketplace-skill-bootstrapper",
     "olko-dotnet-auditor",
@@ -130,7 +136,7 @@ test("installs the implementation orchestrator with delegation-only permissions"
   ]) {
     assert.ok(fs.existsSync(path.join(project, ".opencode", "agents", `${child}.md`)));
   }
-  assert.match(agent, /olko-implement-new: allow/);
+  assert.doesNotMatch(agent, /olko-implement-new: allow/);
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-implement-new", "SKILL.md")));
   const config = JSON.parse(fs.readFileSync(path.join(project, "opencode.json"), "utf8"));
   assert.deepEqual(config.plugin, ["opencode-agent-memory@0.2.0"]);

@@ -6,7 +6,7 @@ model: ollama-cloud/deepseek-v4-flash:0731
 permission:
   edit: allow
   bash:
-    "*": ask
+    "*": allow
     "git commit *": deny
     "git push *": deny
     "git reset *": deny

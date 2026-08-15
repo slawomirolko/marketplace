@@ -108,7 +108,25 @@ git -C "<worktreePath>" branch --set-upstream-to=origin/main "<branch-name>"
 
 This does not create `origin/<branch-name>`. First push still needs `git push -u origin <branch-name>`; commit skills may handle that.
 
-## Step 7 - Verify and report
+## Step 7 - Copy gitignored root `.env` into the worktree
+
+The repo root `.env` is gitignored (secrets: `OLLAMA_API_KEY`, `POSTGRES_PASSWORD`, NordVPN creds, FCM service account). `git worktree add` does NOT copy gitignored files, so the new worktree has no `.env` until this step runs. Without it, Python live integration tests (`test_ollama_cloud_auth_integration*`, `test_article_pipeline_integration`, `test_curator_similarity_integration`) fail with `401 Unauthorized`, docker compose services that use `env_file: ./.env` start with missing secrets, and `.NET` integration tests can't reach postgres.
+
+Run from the repo root (NOT the worktree):
+
+```powershell
+$repoRoot = git rev-parse --show-toplevel
+if (Test-Path -LiteralPath (Join-Path $repoRoot ".env")) {
+    Copy-Item -LiteralPath (Join-Path $repoRoot ".env") -Destination (Join-Path $worktreePath ".env") -Force
+}
+```
+
+Notes:
+- `.env` is gitignored (`.gitignore` line 6), so the copy never appears in `git status` and never lands in a commit.
+- Only copy from the repo root the user is branching from — never invent or generate secrets here.
+- If the repo root has no `.env`, skip silently and warn the user that live integration tests will fail until they create one.
+
+## Step 8 - Verify and report
 
 Run:
 
