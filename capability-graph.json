@@ -572,15 +572,16 @@
         "olko-implement-new",
         "olko-investigate-existing",
         "olko-plan-editor",
+        "olko-research-new-functionality",
         "olko-summary"
       ],
       "related": [
+        "workflow.research",
         "workflow.summary",
         "workflow.grill.docs",
         "workflow.grill.me",
         "workflow.implement.current-code",
-        "workflow.implement.new",
-        "workflow.investigate.existing"
+        "workflow.implement.new"
       ],
       "prerequisites": []
     },
@@ -638,6 +639,16 @@
       "id": "workflow.plan.editor",
       "skills": [
         "olko-plan-editor"
+      ],
+      "related": [
+        "workflow"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "workflow.research",
+      "skills": [
+        "olko-research-new-functionality"
       ],
       "related": [
         "workflow"

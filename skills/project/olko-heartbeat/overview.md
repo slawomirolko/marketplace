@@ -31,7 +31,7 @@ Read `.agents/skill-config.md` first. If `projectAdapter: true`, load `.agents/s
 - `tempoUrl`: Tempo API URL. Default: `http://localhost:3200`.
 - `observabilityServices`: expected observability compose services. Default: empty; adapter should set project names.
 - `testCommand`: project test command. Default: ask before running tests.
-- `docsPolicyFile`: documentation policy file. Default: `ai-optimization.md` when present, else AGENTS.md rules only.
+- `docsPolicyFile`: documentation policy file. Default: `docs/architecture/ai-optimization.md` when present, else AGENTS.md rules only.
 - `commitHandoffSkill`: skill to use for commit handoff. Default: none.
 - `heartbeatAutoFix`: allow automatic fix implementation after user approval. Default: `false`.
 
