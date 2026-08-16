@@ -27,7 +27,7 @@
     },
     {
       "name": "olko-marketplace-skill-sync-manager",
-      "version": "2.1.0",
+      "version": "2.2.0",
       "file": "olko-marketplace-skill-sync-manager.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -39,6 +39,18 @@
       "delegates": [
         "olko-marketplace-skill-bootstrapper",
         "olko-marketplace-skill-sync-comparator"
+      ]
+    },
+    {
+      "name": "olko-obsidian-knowledge-manager",
+      "version": "1.0.0",
+      "file": "olko-obsidian-knowledge-manager.md",
+      "stack": "cross-stack",
+      "role": "writer",
+      "skills": [
+        "olko-memory-layer",
+        "obsidian-best-practices",
+        "obsidian-cli"
       ]
     },
     {
