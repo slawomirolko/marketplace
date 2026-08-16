@@ -468,6 +468,38 @@
       "prerequisites": []
     },
     {
+      "id": "obsidian",
+      "skills": [
+        "obsidian-best-practices",
+        "obsidian-cli"
+      ],
+      "related": [
+        "obsidian.best-practices",
+        "obsidian.cli"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "obsidian.best-practices",
+      "skills": [
+        "obsidian-best-practices"
+      ],
+      "related": [
+        "obsidian"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "obsidian.cli",
+      "skills": [
+        "obsidian-cli"
+      ],
+      "related": [
+        "obsidian"
+      ],
+      "prerequisites": []
+    },
+    {
       "id": "project",
       "skills": [
         "olko-heartbeat",
