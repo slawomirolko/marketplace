@@ -45,10 +45,23 @@ independent tasks in parallel in bounded batches, but wait for all reports
 before taking any write action. Give each comparator the local project path,
 marketplace path, artifact type, artifact name, and relevant marketplace
 registry or agent-manifest path. For an agent, also provide its current
-manifest version. Before each comparison, load `olko-adapt-to-marketplace` with
-`--local-only` for the local skill. It may rename, split, version, and optimize
-the local skill, but must not touch Marketplace files or publish it. Do not let
-comparators write or invoke other agents.
+manifest version.
+
+MANDATORY pre-comparison step, no exceptions: before comparing ANY local
+skill, load `olko-adapt-to-marketplace` with `--local-only` for that skill. It
+may rename, split, version, and optimize the local skill, but must not touch
+Marketplace files or publish it. Its hard deliverable: every local skill's
+`SKILL.md` frontmatter carries a valid SemVer `version` (use `1.0.0` for a new
+skill; require an explicit SemVer bump decision for an existing skill). Do not
+let comparators write or invoke other agents.
+
+STOP-AND-SURFACE RULE: if any mandated step cannot run exactly as specified
+(e.g. the `olko-marketplace-skill-sync-comparator` agent type is unregistered,
+or `olko-adapt-to-marketplace --local-only` cannot be executed for a skill),
+STOP immediately, report the deviation to the user in plain text, and wait for
+the user's decision. Never silently substitute an abbreviated process, never
+skip a mandated step, and never report a phase complete while its deliverable
+(SemVer version in local SKILL.md frontmatter) is missing.
 
 For every local-only artifact, derive its candidate version before asking the
 user: use the skill's declared SemVer; for an agent, use its local agent-manifest
