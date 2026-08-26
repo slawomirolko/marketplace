@@ -1,10 +1,10 @@
 ---
 name: caveman-commit
 description: >
-  Ultra-compressed commit message style guide. Cuts noise from commit messages while preserving
+  Ultra-compressed commit message generator. Cuts noise from commit messages while preserving
   intent and reasoning. Conventional Commits format. Subject ≤50 chars, body only when "why"
-  isn't obvious. This helper skill is consumed by commit workflow skills;
-  it should NOT be called directly when the user says "commit".
+  isn't obvious. Use when user says "write a commit", "commit message", "generate commit",
+  "/commit", or invokes /caveman-commit. Auto-triggers when staging changes.
 origin: vendored
 ---
 
@@ -63,4 +63,4 @@ Always include body for: breaking changes, security fixes, data migrations, anyt
 
 ## Boundaries
 
-This skill is a **style guide consumed by commit workflow skills**, not a standalone action skill. When the user says "commit" or any commit variant, call the marketplace commit workflow skill (`olko-commit`). Do NOT call this skill directly for commit workflow.
+Only generates the commit message. Does not run `git commit`, does not stage files, does not amend. Output the message as a code block ready to paste. "stop caveman-commit" or "normal mode": revert to verbose commit style.
