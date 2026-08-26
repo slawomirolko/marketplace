@@ -45,8 +45,8 @@
       "name": "caveman-commit",
       "category": "caveman",
       "origin": "vendored",
-      "version": "1.0.0",
-      "description": "Ultra-compressed commit message style guide. Cuts noise from commit messages while preserving intent and reasoning. Conventional Commits format. Subject <=50 chars, body only when \"why\" isn't obvious. This helper skill is consumed by commit workflow skills; it should NOT be called directly when the user says \"commit\".",
+      "version": "2.0.0",
+      "description": "Ultra-compressed commit message generator. Cuts noise from commit messages while preserving intent and reasoning. Conventional Commits format. Subject <=50 chars, body only when \"why\" isn't obvious. Use when user says \"write a commit\", \"commit message\", \"generate commit\", \"/commit\", or invokes /caveman-commit. Auto-triggers when staging changes.",
       "tags": [
         "caveman",
         "caveman",
@@ -61,7 +61,7 @@
         "SKILL.md",
         "README.md"
       ],
-      "direct": false
+      "direct": true
     },
     {
       "name": "caveman-compress",
