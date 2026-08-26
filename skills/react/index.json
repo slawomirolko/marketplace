@@ -1,0 +1,101 @@
+{
+  "registrySchemaVersion": 1,
+  "skills": [
+    {
+      "name": "olko-react-architecture",
+      "category": "react",
+      "version": "1.0.0",
+      "description": "Check React architecture compliance for changed TypeScript/React projects with marketplace defaults. Reads project docs and adapters, maps changed .ts/.tsx files to the nearest package.json/Vite project root, verifies component/pages source layout, module boundaries, dependency direction, React Query data-layer separation, typed fetch-based API client ownership, React Hook Form boundaries, CSS Modules styling boundaries, TypeScript strictness, and security boundaries, and reports violations with rule sources. Use when validating React architecture, before commit/test gates, during plan review, or when olko-commit-style/olko-test/olko-plan-editor delegates React architecture checks.",
+      "tags": [
+        "react",
+        "architecture"
+      ],
+      "capabilities": [
+        "react",
+        "react.react.architecture"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
+      "name": "olko-react-style",
+      "category": "react",
+      "version": "1.0.0",
+      "description": "Check React/TypeScript style compliance for changed files with marketplace defaults. Reads project docs and adapters, maps .ts/.tsx files to Vite project roots, runs documented format/lint commands such as ESLint/Prettier when configured, checks common React style expectations that docs enable (naming, formatting, imports, component patterns, hooks rules, CSS Modules, React Query, React Hook Form, typed API client), and reports violations with rule sources. Use when validating React style, linting React/TypeScript changes, before commit/test gates, or when olko-commit-style delegates React style checks.",
+      "tags": [
+        "react",
+        "style"
+      ],
+      "capabilities": [
+        "react",
+        "react.react.style"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
+      "name": "olko-react-testing",
+      "category": "react",
+      "version": "1.0.0",
+      "description": "Check React test conventions for changed TypeScript/React projects with marketplace defaults. Reads project docs/adapters, maps source changes to test files, verifies Vitest + Testing Library + MSW harness conventions, no-skip/no-silent-pass policy, network-boundary test doubles, parametrization, fixture reuse, React Query/React Hook Form testing conventions, manual e2e verification on the dev machine via the agent-browser (Vercel) tool, new-component test requirements, cross-boundary contract tests, and reports violations with rule sources. Use when validating React tests, before commit/test gates, or when olko-test/olko-commit-style delegates React test-convention checks.",
+      "tags": [
+        "react",
+        "testing"
+      ],
+      "capabilities": [
+        "react",
+        "react.react.testing"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    }
+  ]
+}

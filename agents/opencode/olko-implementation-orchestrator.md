@@ -19,6 +19,9 @@ permission:
     olko-mobile-auditor: allow
     olko-mobile-implementer: allow
     olko-mobile-test-runner: allow
+    olko-react-auditor: allow
+    olko-react-implementer: allow
+    olko-react-test-runner: allow
     olko-army-python-auditor: allow
     olko-army-python-implementer: allow
     olko-army-python-test-runner: allow
@@ -99,7 +102,7 @@ When a child sends a progress update, immediately append its timestamped facts t
 
 Treat this agent's `permission.task` allowlist as the authoritative runtime agent registry. The `uses` list in an implementation-skill project adapter declares installed workflow skills; it is not a list of task-agent names. Never attempt to dispatch a task named `olko-test`, `olko-commit`, `olko-worktree-create`, `olko-commit-style`, or `olko-worktree-merge` unless that exact name appears in this agent's `permission.task` allowlist.
 
-Resolve work by stack and the allowlist: dispatch .NET implementation/audit/test work to the `olko-dotnet-*` agents, Army Python work to `olko-army-python-*`, and mobile work to `olko-mobile-*`. In particular, resolve the `olko-test` workflow to the affected stack's available `*-test-runner` agent; it is never itself a task-agent target. If an operation has no allowed matching agent, report that capability gap to the caller instead of inventing an agent name or treating the workflow as delegated.
+Resolve work by stack and the allowlist: dispatch .NET implementation/audit/test work to the `olko-dotnet-*` agents, Army Python work to `olko-army-python-*`, mobile work to `olko-mobile-*`, and React/TypeScript work to `olko-react-*`. In particular, resolve the `olko-test` workflow to the affected stack's available `*-test-runner` agent; it is never itself a task-agent target. If an operation has no allowed matching agent, report that capability gap to the caller instead of inventing an agent name or treating the workflow as delegated.
 
 At startup, dispatch `olko-marketplace-skill-bootstrapper` in parallel with any independent discovery work. Wait for its report before delegating a child that needs a skill it installed; do not block unrelated audits.
 

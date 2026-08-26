@@ -12,3 +12,6 @@ Optional `uses` delegates:
 - `olko-kotlin-architecture`
 - `olko-kotlin-style`
 - `olko-kotlin-testing`
+- `olko-react-architecture`
+- `olko-react-style`
+- `olko-react-testing`

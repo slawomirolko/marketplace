@@ -51,6 +51,9 @@ uses:
   - olko-kotlin-architecture
   - olko-kotlin-style
   - olko-kotlin-testing
+  - olko-react-architecture
+  - olko-react-style
+  - olko-react-testing
 ```
 
 If a dependency is not declared, run the built-in document-based checks below.
@@ -69,6 +72,7 @@ git diff --name-only HEAD
 | Docker | changed `Dockerfile*`, `*.Dockerfile`, `.dockerignore`, `compose*.yml`, `compose*.yaml`, `docker-compose*.yml`, `docker-compose*.yaml` | nearest `AGENTS.md`, `DOCKER.md`, `CODING_STYLE.md`, `TESTING.md` up the dir tree + repo root |
 | Python | changed `.py`; belongs to nearest `pyproject.toml` dir | nearest `AGENTS.md`, `CODING_STYLE.md`, `TESTING.md` up the dir tree + repo root |
 | Kotlin/Android | changed `.kt`/`.kts`; belongs to nearest `gradlew` dir | nearest `AGENTS.md`, `CODING_STYLE.md`, `Testing.md` up the dir tree + repo root |
+| React/TypeScript | changed `.ts`/`.tsx`; belongs to nearest `package.json` beside `vite.config.ts`/`.js` | nearest `AGENTS.md`, `CODING_STYLE.md`, `TESTING.md` up the dir tree + repo root |
 
 **Per-stack checks — read the reference docs above first, then run the tooling the docs prescribe.**
 
@@ -92,6 +96,11 @@ git diff --name-only HEAD
 1. Read the nearest `AGENTS.md` / `CODING_STYLE.md` / `Testing.md` to learn the current rules.
 2. Run the style/test-tool task the docs reference (e.g. `./gradlew ktlintCheck`, `./gradlew :app:detekt`, or `./gradlew test` — whichever the docs prescribe, from the Android project root). If no linter is configured, the docs will say so; skip the linter and continue.
 3. Cross-check changed files against architecture + test rules in the docs (e.g. MVVM/repository boundaries, no `!!` in production, no business logic in composables, instrumentation vs unit tier boundaries, no-skip/no-silent-pass, parametrization, fixture reuse, Compose UI testing conventions). Report violations.
+
+**React (TypeScript):**
+1. Read the nearest `AGENTS.md` / `CODING_STYLE.md` / `TESTING.md` to learn the current rules.
+2. Run the style tool those docs reference (typically `npm run lint` / `npx eslint .`, and `npx prettier --check .` when configured — use what the docs prescribe, run from the discovered Vite/React project root).
+3. Cross-check changed files against architecture + test rules in the docs (e.g. React Query data-layer ownership, typed API client centralization, CSS Modules boundaries, React Hook Form conventions, Vitest + Testing Library + MSW harness conventions, no-skip/no-silent-pass, parametrization, fixture reuse). Report violations.
 
 **If the gate fails** (style tool non-zero, or a documented rule violation is found):
 Show the offending file(s), a snippet of the error, and the source rule (with the AGENTS.md / CODING_STYLE.md / TESTING.md file and line that defines it). Then ask via question tool:
@@ -207,6 +216,15 @@ Working directory: the discovered Android project root.
 
 Collect results. If any fail, jump to Step 5.
 
+### Step 3d — Run unit/component tests (React/TypeScript)
+If React/TypeScript source changed, run the configured Vitest command from the discovered Vite/React project root:
+```bash
+npx vitest run
+```
+Use the explicit timeout from `reactTestTimeoutMs` (default `120000`) when invoking from an agent.
+
+Collect results. If any fail, **stop immediately**, report failures, and jump to Step 5. Manual e2e verification against the running dev server (`agent-browser`, per `olko-react-testing`) is on-demand only and is never run automatically here.
+
 ### Step 4 — Run .NET integration tests
 For each discovered .NET integration test project in scope:
 ```bash
@@ -245,5 +263,6 @@ Act based on user choice. If "Fix the tests" or "Fix the implementation", make c
 All tests passed:
   - Unit:     12 passed, 0 failed (<project>.Tests)
   - Unit:      3 passed, 0 failed (Python)
+  - Unit:      8 passed, 0 failed (React/Vitest)
   - Integration: 5 passed, 0 failed (<project>.Tests.Integration)
 ```

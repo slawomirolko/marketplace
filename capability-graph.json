@@ -588,6 +588,50 @@
       "prerequisites": []
     },
     {
+      "id": "react",
+      "skills": [
+        "olko-react-architecture",
+        "olko-react-style",
+        "olko-react-testing"
+      ],
+      "related": [
+        "react.react.architecture",
+        "react.react.style",
+        "react.react.testing"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "react.react.architecture",
+      "skills": [
+        "olko-react-architecture"
+      ],
+      "related": [
+        "react"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "react.react.style",
+      "skills": [
+        "olko-react-style"
+      ],
+      "related": [
+        "react"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "react.react.testing",
+      "skills": [
+        "olko-react-testing"
+      ],
+      "related": [
+        "react"
+      ],
+      "prerequisites": []
+    },
+    {
       "id": "testing",
       "skills": [
         "olko-test"

@@ -22,4 +22,5 @@
 - Missing Docker, missing services, wrapper errors, port collisions, and test errors are failures. Never add skip, xfail, or silent-success branches.
 - If startup fails, attempt scoped teardown anyway. Preserve a real test failure as primary when teardown also fails.
 - When a test failure is in a unit test for a main path, suggest adding an integration test covering that flow instead
-- Missing wrapper or matching scripts is not an error; preserve normal .NET, Python, and Kotlin/Android paths.
+- Missing wrapper or matching scripts is not an error; preserve normal .NET, Python, Kotlin/Android, and React/TypeScript paths.
+- Manual e2e verification (`agent-browser` against the running Vite dev server) is on-demand only, per `olko-react-testing`; never invoke it as part of the automated `olko-test` run.
