@@ -38,13 +38,13 @@ Apply these defaults unless config, adapter, or project docs override them.
 
 ### Context split by surface
 - Keep one `global.md` for cross-cutting conventions only (stack-agnostic rules, repo-wide gotchas, shared tooling). Do not put surface/stack-specific rules in `global.md`.
-- Keep one markdown file per major buildable surface under `ai/context/`, named after the surface or its stack (e.g. `dotnet-api.md` for the .NET API app, `python-services.md` for the Python services group, `mobile.md` for the mobile app, `workflows.md` for cross-surface process flows).
+- Keep one markdown file per major buildable surface under `ai/context/`, named after the surface or its stack (e.g. `dotnet-api.md` for the .NET API app, `python-services.md` for the Python services group, `mobile.md` for the mobile app, `react-app.md` for the React web app, `workflows.md` for cross-surface process flows).
 - A surface context file should exist for each major app/service surface. Grouping closely-related services (e.g. several Python services) into one file is acceptable; splitting one surface across many files is not.
 - Do not duplicate the same rule in `global.md` and a surface file. Cross-cutting rules live in `global.md`; surface-specific rules live in the surface file.
 - Do not keep one monolith context file in place of the surface split.
 
 ### Skills split by surface
-- Keep one skill directory per major stack/surface under `ai/skills/`, named `<surface>-architecture` (e.g. `dotnet-architecture`, `python-architecture`, `mobile-architecture`).
+- Keep one skill directory per major stack/surface under `ai/skills/`, named `<surface>-architecture` (e.g. `dotnet-architecture`, `python-architecture`, `mobile-architecture`, `react-architecture`).
 - Keep cross-cutting design skills in their own directories for concerns that span surfaces (e.g. `workflow-design`).
 - Each skill directory should carry a `SKILL.md` with valid frontmatter (`name` + `description`).
 - Do not create skill directories that have no `SKILL.md` or only stub content.

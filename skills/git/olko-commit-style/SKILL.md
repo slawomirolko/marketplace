@@ -32,6 +32,9 @@ uses:
   - olko-kotlin-architecture
   - olko-kotlin-style
   - olko-kotlin-testing
+  - olko-react-architecture
+  - olko-react-style
+  - olko-react-testing
 ```
 
 If a dependency is not declared, run the built-in document-based checks below.
@@ -56,6 +59,7 @@ For each changed file, determine its stack using project markers (not fixed path
 | Docker | changed `Dockerfile*`, `*.Dockerfile`, `.dockerignore`, `compose*.yml`, `compose*.yaml`, `docker-compose*.yml`, `docker-compose*.yaml` |
 | Python | changed `.py`; belongs to nearest `pyproject.toml` dir |
 | Kotlin/Android | changed `.kt` / `.kts`; belongs to nearest `gradlew` dir |
+| React/TypeScript | changed `.ts` / `.tsx`; belongs to nearest `package.json` beside `vite.config.ts`/`.js` |
 
 If a changed file matches no known stack, skip it.
 
@@ -89,6 +93,9 @@ If a matching stack-specific skill is declared in `uses`, delegate the relevant 
 - Kotlin/Android architecture: `olko-kotlin-architecture`
 - Kotlin/Android style: `olko-kotlin-style`
 - Kotlin/Android test conventions: `olko-kotlin-testing`
+- React/TypeScript architecture: `olko-react-architecture`
+- React/TypeScript style: `olko-react-style`
+- React/TypeScript test conventions: `olko-react-testing`
 
 If no matching dependency is declared, inspect locally:
 
