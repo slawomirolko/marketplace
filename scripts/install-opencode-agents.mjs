@@ -53,7 +53,7 @@ function validateManifest(manifest, registry) {
   const files = new Set();
   const semVer = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
   const roles = new Set(["auditor", "bootstrapper", "comparator", "implementer", "investigator", "orchestrator", "test-runner", "writer"]);
-  const stacks = new Set(["army-python", "cross-stack", "dotnet", "mobile"]);
+  const stacks = new Set(["army-python", "cross-stack", "dotnet", "mobile", "react"]);
 
   for (const agent of manifest.agents) {
     if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(agent.name) || names.has(agent.name)) {

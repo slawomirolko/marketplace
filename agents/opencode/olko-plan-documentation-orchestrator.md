@@ -14,6 +14,7 @@ permission:
     olko-investigation-readiness-worker: allow
     olko-dotnet-auditor: allow
     olko-mobile-auditor: allow
+    olko-react-auditor: allow
     olko-army-python-auditor: allow
   skill:
     olko-memory-layer: allow
@@ -65,6 +66,7 @@ reduced to pointer stubs; never create flat pair files.
    document says will be implemented:
    - .NET: `olko-dotnet-auditor`
    - Android/Kotlin: `olko-mobile-auditor`
+   - React/TypeScript: `olko-react-auditor`
    - Python Army: `olko-army-python-auditor`
 
    Give each selected auditor the technical document path, the planned file

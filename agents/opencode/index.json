@@ -20,6 +20,9 @@
         "olko-mobile-auditor",
         "olko-mobile-implementer",
         "olko-mobile-test-runner",
+        "olko-react-auditor",
+        "olko-react-implementer",
+        "olko-react-test-runner",
         "olko-army-python-auditor",
         "olko-army-python-implementer",
         "olko-army-python-test-runner"
@@ -119,6 +122,7 @@
         "olko-investigation-readiness-worker",
         "olko-dotnet-auditor",
         "olko-mobile-auditor",
+        "olko-react-auditor",
         "olko-army-python-auditor"
       ]
     },
@@ -249,6 +253,44 @@
         "olko-kotlin-architecture",
         "olko-kotlin-style",
         "olko-kotlin-testing",
+        "olko-test",
+        "olko-memory-layer"
+      ]
+    },
+    {
+      "name": "olko-react-auditor",
+      "version": "1.0.0",
+      "file": "olko-react-auditor.md",
+      "stack": "react",
+      "role": "auditor",
+      "skills": [
+        "olko-react-architecture",
+        "olko-react-style",
+        "olko-react-testing",
+        "olko-memory-layer"
+      ]
+    },
+    {
+      "name": "olko-react-test-runner",
+      "version": "1.0.0",
+      "file": "olko-react-test-runner.md",
+      "stack": "react",
+      "role": "test-runner",
+      "skills": [
+        "olko-test",
+        "olko-memory-layer"
+      ]
+    },
+    {
+      "name": "olko-react-implementer",
+      "version": "1.0.0",
+      "file": "olko-react-implementer.md",
+      "stack": "react",
+      "role": "implementer",
+      "skills": [
+        "olko-react-architecture",
+        "olko-react-style",
+        "olko-react-testing",
         "olko-test",
         "olko-memory-layer"
       ]
