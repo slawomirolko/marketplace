@@ -173,6 +173,26 @@
       "prerequisites": []
     },
     {
+      "id": "design",
+      "skills": [
+        "web-design-guidelines"
+      ],
+      "related": [
+        "design.review"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "design.review",
+      "skills": [
+        "web-design-guidelines"
+      ],
+      "related": [
+        "design"
+      ],
+      "prerequisites": []
+    },
+    {
       "id": "docker",
       "skills": [
         "olko-clean-docker",
@@ -592,12 +612,24 @@
       "skills": [
         "olko-react-architecture",
         "olko-react-style",
-        "olko-react-testing"
+        "olko-react-testing",
+        "vercel-react-view-transitions"
       ],
       "related": [
+        "react.animation",
         "react.react.architecture",
         "react.react.style",
         "react.react.testing"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "react.animation",
+      "skills": [
+        "vercel-react-view-transitions"
+      ],
+      "related": [
+        "react"
       ],
       "prerequisites": []
     },

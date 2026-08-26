@@ -188,8 +188,8 @@
       "name": "caveman-commit",
       "category": "caveman",
       "origin": "vendored",
-      "version": "1.0.0",
-      "description": "Ultra-compressed commit message style guide. Cuts noise from commit messages while preserving intent and reasoning. Conventional Commits format. Subject <=50 chars, body only when \"why\" isn't obvious. This helper skill is consumed by commit workflow skills; it should NOT be called directly when the user says \"commit\".",
+      "version": "2.0.0",
+      "description": "Ultra-compressed commit message generator. Cuts noise from commit messages while preserving intent and reasoning. Conventional Commits format. Subject <=50 chars, body only when \"why\" isn't obvious. Use when user says \"write a commit\", \"commit message\", \"generate commit\", \"/commit\", or invokes /caveman-commit. Auto-triggers when staging changes.",
       "tags": [
         "caveman",
         "caveman",
@@ -204,7 +204,7 @@
         "SKILL.md",
         "README.md"
       ],
-      "direct": false
+      "direct": true
     },
     {
       "name": "caveman-compress",
@@ -296,6 +296,26 @@
       "files": [
         "SKILL.md",
         "README.md"
+      ]
+    },
+    {
+      "name": "web-design-guidelines",
+      "category": "design",
+      "origin": "vendored",
+      "version": "1.0.0",
+      "description": "Review UI code for Web Interface Guidelines compliance. Use when asked to \"review my UI\", \"check accessibility\", \"audit design\", \"review UX\", or \"check my site against best practices\".",
+      "tags": [
+        "design",
+        "accessibility",
+        "review"
+      ],
+      "capabilities": [
+        "design",
+        "design.review"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
       ]
     },
     {
@@ -1285,6 +1305,33 @@
           "edge-cases"
         ]
       }
+    },
+    {
+      "name": "vercel-react-view-transitions",
+      "category": "react",
+      "origin": "vendored",
+      "version": "1.0.0",
+      "description": "Guide for implementing smooth, native-feeling animations using React’s View Transition API (<ViewTransition> component, addTransitionType, and CSS view transition pseudo-elements). Use this skill whenever the user wants to add page transitions, animate route changes, create shared element animations, animate enter/exit of components, animate list reorder, implement directional (forward/back) navigation animations, or integrate view transitions in Next.js. Also use when the user mentions view transitions, startViewTransition, ViewTransition, transition types, or asks about animating between UI states in React without third-party animation libraries.",
+      "tags": [
+        "react",
+        "animation",
+        "view-transitions"
+      ],
+      "capabilities": [
+        "react",
+        "react.animation"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "AGENTS.md",
+        "metadata.json",
+        "README.md",
+        "references/css-recipes.md",
+        "references/implementation.md",
+        "references/nextjs.md",
+        "references/patterns.md"
+      ]
     },
     {
       "name": "olko-test",
