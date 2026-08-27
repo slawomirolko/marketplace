@@ -259,7 +259,7 @@
     },
     {
       "name": "olko-react-auditor",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "file": "olko-react-auditor.md",
       "stack": "react",
       "role": "auditor",
@@ -267,7 +267,8 @@
         "olko-react-architecture",
         "olko-react-style",
         "olko-react-testing",
-        "olko-memory-layer"
+        "olko-memory-layer",
+        "web-design-guidelines"
       ]
     },
     {
@@ -283,7 +284,7 @@
     },
     {
       "name": "olko-react-implementer",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "file": "olko-react-implementer.md",
       "stack": "react",
       "role": "implementer",
@@ -292,7 +293,8 @@
         "olko-react-style",
         "olko-react-testing",
         "olko-test",
-        "olko-memory-layer"
+        "olko-memory-layer",
+        "vercel-react-view-transitions"
       ]
     },
     {

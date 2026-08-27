@@ -15,12 +15,13 @@ permission:
   websearch: deny
   external_directory: deny
   skill:
-    olko-memory-layer: allow
     "*": deny
+    olko-memory-layer: allow
     olko-react-architecture: allow
     olko-react-style: allow
     olko-react-testing: allow
     olko-test: allow
+    vercel-react-view-transitions: allow
 ---
 
 MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every memory read or write; it owns the storage and retention policy.
@@ -31,6 +32,10 @@ Load the `olko-react-architecture`, `olko-react-style`, and
 only the caller's explicitly scoped React or TypeScript code and test changes,
 preserving the target project's documented conventions. Add or update focused
 tests when the change needs coverage.
+
+When the scope involves page/route transitions, shared-element animations,
+enter/exit animations, or the React View Transition API, also load
+`vercel-react-view-transitions` through the `skill` tool before implementing.
 
 Before executing a formatter, build, or test command, load the `olko-test`
 skill through the `skill` tool. Run only the affected verification scope it
