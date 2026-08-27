@@ -11,8 +11,8 @@ permission:
     "git push *": deny
     "git reset *": deny
   skill:
-    olko-memory-layer: allow
     "*": deny
+    olko-memory-layer: allow
     olko-test: allow
 ---
 

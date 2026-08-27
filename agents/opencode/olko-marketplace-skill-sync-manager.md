@@ -13,8 +13,8 @@ permission:
   webfetch: deny
   websearch: deny
   skill:
-    olko-memory-layer: allow
     "*": deny
+    olko-memory-layer: allow
     olko-adapt-to-marketplace: allow
     olko-commit: allow
 ---

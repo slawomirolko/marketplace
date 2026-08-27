@@ -12,8 +12,8 @@ permission:
   webfetch: deny
   websearch: deny
   skill:
-    olko-memory-layer: allow
     "*": deny
+    olko-memory-layer: allow
     olko-commit-style: allow
     olko-commit-docker: allow
     olko-commit: allow

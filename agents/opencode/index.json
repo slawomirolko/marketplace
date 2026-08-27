@@ -30,7 +30,7 @@
     },
     {
       "name": "olko-marketplace-skill-sync-manager",
-      "version": "2.2.0",
+      "version": "2.2.1",
       "file": "olko-marketplace-skill-sync-manager.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -46,7 +46,7 @@
     },
     {
       "name": "olko-obsidian-knowledge-manager",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-obsidian-knowledge-manager.md",
       "stack": "cross-stack",
       "role": "writer",
@@ -68,7 +68,7 @@
     },
     {
       "name": "olko-marketplace-skill-bootstrapper",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-marketplace-skill-bootstrapper.md",
       "stack": "cross-stack",
       "role": "bootstrapper",
@@ -79,7 +79,7 @@
     },
     {
       "name": "olko-git-delivery-manager",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-git-delivery-manager.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -92,7 +92,7 @@
     },
     {
       "name": "olko-worktree-lifecycle-manager",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-worktree-lifecycle-manager.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -104,7 +104,7 @@
     },
     {
       "name": "olko-plan-documentation-orchestrator",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "file": "olko-plan-documentation-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -128,7 +128,7 @@
     },
     {
       "name": "olko-plan-business-writer",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-plan-business-writer.md",
       "stack": "cross-stack",
       "role": "writer",
@@ -139,7 +139,7 @@
     },
     {
       "name": "olko-investigation-flow-worker",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-investigation-flow-worker.md",
       "stack": "cross-stack",
       "role": "investigator",
@@ -150,7 +150,7 @@
     },
     {
       "name": "olko-investigation-runtime-worker",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-investigation-runtime-worker.md",
       "stack": "cross-stack",
       "role": "investigator",
@@ -161,7 +161,7 @@
     },
     {
       "name": "olko-investigation-test-worker",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-investigation-test-worker.md",
       "stack": "cross-stack",
       "role": "investigator",
@@ -172,7 +172,7 @@
     },
     {
       "name": "olko-investigation-readiness-worker",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-investigation-readiness-worker.md",
       "stack": "cross-stack",
       "role": "investigator",
@@ -183,7 +183,7 @@
     },
     {
       "name": "olko-dotnet-auditor",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "file": "olko-dotnet-auditor.md",
       "stack": "dotnet",
       "role": "auditor",
@@ -196,7 +196,7 @@
     },
     {
       "name": "olko-dotnet-test-runner",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "file": "olko-dotnet-test-runner.md",
       "stack": "dotnet",
       "role": "test-runner",
@@ -207,7 +207,7 @@
     },
     {
       "name": "olko-dotnet-implementer",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "file": "olko-dotnet-implementer.md",
       "stack": "dotnet",
       "role": "implementer",
@@ -221,7 +221,7 @@
     },
     {
       "name": "olko-mobile-auditor",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "file": "olko-mobile-auditor.md",
       "stack": "mobile",
       "role": "auditor",
@@ -234,7 +234,7 @@
     },
     {
       "name": "olko-mobile-test-runner",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "file": "olko-mobile-test-runner.md",
       "stack": "mobile",
       "role": "test-runner",
@@ -245,7 +245,7 @@
     },
     {
       "name": "olko-mobile-implementer",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "file": "olko-mobile-implementer.md",
       "stack": "mobile",
       "role": "implementer",
@@ -273,7 +273,7 @@
     },
     {
       "name": "olko-react-test-runner",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-react-test-runner.md",
       "stack": "react",
       "role": "test-runner",
@@ -299,7 +299,7 @@
     },
     {
       "name": "olko-army-python-auditor",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "file": "olko-army-python-auditor.md",
       "stack": "army-python",
       "role": "auditor",
@@ -312,7 +312,7 @@
     },
     {
       "name": "olko-army-python-test-runner",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "file": "olko-army-python-test-runner.md",
       "stack": "army-python",
       "role": "test-runner",
@@ -323,7 +323,7 @@
     },
     {
       "name": "olko-army-python-implementer",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "file": "olko-army-python-implementer.md",
       "stack": "army-python",
       "role": "implementer",
