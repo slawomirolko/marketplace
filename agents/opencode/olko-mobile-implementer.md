@@ -15,8 +15,8 @@ permission:
   websearch: deny
   external_directory: deny
   skill:
-    olko-memory-layer: allow
     "*": deny
+    olko-memory-layer: allow
     olko-kotlin-architecture: allow
     olko-kotlin-style: allow
     olko-kotlin-testing: allow

@@ -15,8 +15,8 @@ permission:
   websearch: deny
   external_directory: deny
   skill:
-    olko-memory-layer: allow
     "*": deny
+    olko-memory-layer: allow
     olko-dotnet-architecture: allow
     olko-dotnet-style: allow
     olko-dotnet-testing: allow

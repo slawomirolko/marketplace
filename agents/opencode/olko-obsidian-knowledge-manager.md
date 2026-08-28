@@ -8,10 +8,10 @@ permission:
   bash: allow
   task: deny
   skill:
+    "*": deny
     olko-memory-layer: allow
     obsidian-best-practices: allow
     obsidian-cli: allow
-    "*": deny
 ---
 
 MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every
