@@ -14,8 +14,8 @@ permission:
   webfetch: deny
   websearch: deny
   skill:
-    olko-memory-layer: allow
     "*": deny
+    olko-memory-layer: allow
     olko-worktree-create: allow
     olko-worktree-merge: allow
 ---

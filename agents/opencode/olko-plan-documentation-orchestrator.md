@@ -17,8 +17,8 @@ permission:
     olko-react-auditor: allow
     olko-army-python-auditor: allow
   skill:
-    olko-memory-layer: allow
     "*": deny
+    olko-memory-layer: allow
     olko-plan-editor: allow
     olko-investigate-existing: allow
     grill-with-docs: allow

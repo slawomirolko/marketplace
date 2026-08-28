@@ -8,8 +8,8 @@ permission:
   bash: deny
   task: deny
   skill:
-    olko-memory-layer: allow
     "*": deny
+    olko-memory-layer: allow
     olko-investigate-existing: allow
 ---
 

@@ -7,8 +7,8 @@ permission:
   edit: allow
   bash: deny
   skill:
-    olko-memory-layer: allow
     "*": deny
+    olko-memory-layer: allow
     olko-python-architecture: allow
     olko-python-style: allow
     olko-python-testing: allow
