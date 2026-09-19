@@ -8,6 +8,8 @@ const agentsRoot = path.join(marketplaceRoot, "agents", "opencode");
 const manifestPath = path.join(agentsRoot, "index.json");
 const registryPath = path.join(marketplaceRoot, "registry.json");
 const memoryPlugin = "opencode-agent-memory@0.2.0";
+const watchdogPlugin = "olko-subagent-rotation-watchdog.js";
+const watchdogPluginPath = path.join(agentsRoot, "plugins", watchdogPlugin);
 
 function usage() {
   console.error("Usage: node scripts/install-opencode-agents.mjs --project <path> [--agent <name>] [--force]");
@@ -208,6 +210,16 @@ function enableMemory(projectRoot, agents) {
   }
 }
 
+function installWatchdog(projectRoot, force) {
+  if (!fs.existsSync(watchdogPluginPath)) {
+    throw new Error(`Missing OpenCode watchdog plugin: ${watchdogPlugin}`);
+  }
+
+  const target = path.join(projectRoot, ".opencode", "plugins", watchdogPlugin);
+  const status = copyFile(watchdogPluginPath, target, force);
+  console.log(`subagent rotation watchdog ${status}`);
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const projectRoot = path.resolve(args.project);
@@ -223,6 +235,7 @@ function main() {
   const selected = resolveSelectedAgents(manifest, requested);
 
   enableMemory(projectRoot, selected);
+  installWatchdog(projectRoot, args.force);
 
   for (const agent of selected) {
     const sourceAgent = path.join(agentsRoot, agent.file);

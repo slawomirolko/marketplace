@@ -13,7 +13,8 @@ permission:
   task: deny
   webfetch: deny
   websearch: deny
-  external_directory: deny
+  external_directory:
+    "C:/Users/Inny/Documents/Git/pricePredictor-*": allow
   skill:
     "*": deny
     olko-memory-layer: allow
