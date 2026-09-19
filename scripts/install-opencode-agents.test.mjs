@@ -254,6 +254,16 @@ test("declares a valid SemVer version for every OpenCode agent", () => {
   }
 });
 
+test("installs the enabled subagent rotation watchdog", () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-opencode-agent-"));
+  const result = run(project, "--agent", "olko-dotnet-implementer");
+
+  assert.equal(result.status, 0, result.stderr);
+  const watchdog = path.join(project, ".opencode", "plugins", "olko-subagent-rotation-watchdog.js");
+  assert.ok(fs.existsSync(watchdog));
+  assert.match(fs.readFileSync(watchdog, "utf8"), /TOKEN_THRESHOLD = 100_000/);
+});
+
 test("installs the hidden marketplace skill bootstrapper", () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-opencode-agent-"));
   const result = run(project, "--agent", "olko-marketplace-skill-bootstrapper");
