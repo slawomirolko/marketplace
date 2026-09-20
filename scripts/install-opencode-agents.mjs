@@ -164,7 +164,9 @@ function copySkill(source, target, force) {
 
 function enableMemory(projectRoot, agents) {
   const memoryAgents = agents.filter(
-    (agent) => agent.name.endsWith("-auditor") || agent.name === "olko-marketplace-skill-sync-manager",
+    (agent) =>
+      (agent.name.endsWith("-auditor") || agent.name === "olko-marketplace-skill-sync-manager") &&
+      fs.existsSync(path.join(projectRoot, ".opencode", "agents", agent.file)),
   );
   if (memoryAgents.length === 0) {
     return;
@@ -234,7 +236,6 @@ function main() {
   const requested = args.agents.length === 0 ? manifest.agents.map((agent) => agent.name) : args.agents;
   const selected = resolveSelectedAgents(manifest, requested);
 
-  enableMemory(projectRoot, selected);
   installWatchdog(projectRoot, args.force);
 
   for (const agent of selected) {
@@ -255,6 +256,11 @@ function main() {
       console.log(`${agent.name}: skill ${skillName} ${skillStatus}`);
     }
   }
+
+  // Memory blocks are created only after every agent file is in place, so an
+  // aborted run (e.g. a refused overwrite without --force) leaves no orphan
+  // memory stub for an agent that was never installed.
+  enableMemory(projectRoot, selected);
 }
 
 try {

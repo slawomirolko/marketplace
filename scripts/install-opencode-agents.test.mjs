@@ -323,3 +323,24 @@ test("rejects an unknown OpenCode agent", () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Unknown OpenCode agent: unknown-agent/);
 });
+
+test("an aborted install leaves no orphan memory stub", () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-opencode-agent-"));
+
+  // Pre-seed a conflicting agent file so the very first copy refuses.
+  fs.mkdirSync(path.join(project, ".opencode", "agents"), { recursive: true });
+  fs.writeFileSync(
+    path.join(project, ".opencode", "agents", "olko-marketplace-skill-bootstrapper.md"),
+    "conflicting local content\n",
+  );
+
+  const result = run(project, "--agent", "olko-implementation-orchestrator");
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Refusing to overwrite/);
+
+  // The refused run installed no agent, so it must not have created a single
+  // memory stub for any agent in the delegation closure.
+  const memoryDir = path.join(project, ".opencode", "memory");
+  const stubs = fs.existsSync(memoryDir) ? fs.readdirSync(memoryDir) : [];
+  assert.deepEqual(stubs, [], `orphan memory stubs created: ${stubs.join(", ")}`);
+});
