@@ -13,6 +13,7 @@
 - Prefer the smallest set of files and steps that still solves the target.
 - Final reply must name both saved or updated plan documents.
 - The technical document must state `Ready for implementation: yes/no`; never claim runtime signals are verified before code is run.
+- `Ready for implementation: yes` is FORBIDDEN while any BLOCKING open item exists. Every open question, unresolved assumption, unmet user decision, or unresolved blocker makes the verdict `no`, no matter how many readiness categories are `ready`. The technical document must carry an `## Open items` section classifying each item BLOCKING / VERIFY-DURING-WORK / ACCEPTED-GAP, and an ACCEPTED-GAP requires explicit user acceptance recorded in the tracker. Never present a plan as implementable while questions remain open; a skipped grill or blocker-grill is itself a BLOCKING item.
 - Final reply test list should not center on log checking unless the user asked for it.
 - Never leave either plan document only in chat if it can be created.
 - When `readArchitectureDocs` or `readTestingDocs` is disabled, use matching stack-specific skills only when they are declared in `uses`; otherwise document the review gap in the technical document.

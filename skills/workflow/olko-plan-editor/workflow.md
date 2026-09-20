@@ -47,7 +47,7 @@ Add `## Implementation readiness` before `## Tests`. It must state `Ready for im
 4. Runtime verification contract: affected service, health/status check, feature trigger, expected logs/traces/metrics, and what cannot be confirmed before code runs.
 5. Error readiness: trigger, planned handling, retry/idempotency boundary, blast radius, and validation test.
 
-`Ready for implementation: yes` is allowed only when every item is verified or explicitly user-approved as an exception. It is a design-readiness result, never proof that runtime logs, traces, health, or behavior have succeeded.
+`Ready for implementation: yes` is allowed only when every item is verified or explicitly user-approved as an exception, AND when the plan carries no BLOCKING open item. A BLOCKING open item is any unanswered user decision, unresolved blocker, unresolved assumption, or open question that could change scope, mechanism, contract, planned files, or acceptance criteria. Add an `## Open items` section to the technical document listing every open item classified as BLOCKING, VERIFY-DURING-WORK, or ACCEPTED-GAP; a `yes` verdict is forbidden while any item is BLOCKING, or while any ACCEPTED-GAP item lacks explicit user acceptance recorded in the tracker. VERIFY-DURING-WORK items are environmental checks resolved by doing the work and may remain under a `yes` only when they cannot change what is built. It is a design-readiness result, never proof that runtime logs, traces, health, or behavior have succeeded.
 
 1. Add a Tests section to the technical document.
 2. List unit tests always, and list integration tests when applicable.
