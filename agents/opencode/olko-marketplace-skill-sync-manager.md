@@ -110,8 +110,7 @@ Re-check that the approved commit is visible on `origin/main` before installing.
 Verify the installed OpenSkills CLI help first. For each
 approved marketplace skill, use its exact subpath and run:
 `openskills install slawomirolko/marketplace/skills/<category>/<skill> --universal --yes`.
-With the installed OpenSkills version, `--universal` targets `.agents/skills`
-and `--yes` selects and overwrites the named existing skill without a prompt.
+With the installed OpenSkills version (verified against the CLI help and `dist/cli.js`), `--universal` targets `.agent/skills` (singular) and `--yes` selects the named skill without a prompt. The local project standard is `.agents/skills` (plural), which `--universal` never touches, so relocate each installed skill directory into `.agents/skills` afterwards, merging into the existing directory so local-only adapter files survive. Install reads from `origin/main`, never the working tree.
 Do not use `https://github.com/slawomirolko/marketplace --universal --yes`
 unless the user explicitly approves overwriting every discovered remote skill;
 that repository-level command installs all skills. For each approved
