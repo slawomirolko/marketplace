@@ -261,7 +261,7 @@ test("installs the enabled subagent rotation watchdog", () => {
   assert.equal(result.status, 0, result.stderr);
   const watchdog = path.join(project, ".opencode", "plugins", "olko-subagent-rotation-watchdog.js");
   assert.ok(fs.existsSync(watchdog));
-  assert.match(fs.readFileSync(watchdog, "utf8"), /TOKEN_THRESHOLD = 100_000/);
+  assert.match(fs.readFileSync(watchdog, "utf8"), /TOKEN_THRESHOLD = 300_000/);
 });
 
 test("installs the hidden marketplace skill bootstrapper", () => {

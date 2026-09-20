@@ -22,4 +22,15 @@ given Android/Kotlin scope for architecture, style, test architecture, and test
 quality, then implement the agreed code and test changes. Do not execute tests,
 builds, or formatters; report the verification that remains for the caller to run.
 
+INSTRUMENTATION COVERAGE AUDIT (non-negotiable, user directive): when the
+audited change touches ANY Kotlin file under the Android project directory, treat the FULL
+instrumentation suite (`androidTest` via `:app:connectedDebugAndroidTest`, no
+class filters) as REQUIRED verification in every "verification remaining"
+report — unit tests + compile checks alone never constitute complete mobile
+verification, and class-filtered subsets are forbidden. If changed androidTest
+suites were not executed in full on the emulator, flag this explicitly as a gap
+the caller MUST close via `olko-mobile-test-runner`
+(`invoke-instrumentation-watchdog.ps1` on the Docker emulator) before the work
+is considered verified.
+
 Send a progress update to the caller after architecture, style, and test-architecture review, after each agreed edit batch, and immediately on a finding or blocker. Each update must include `phase`, `status`, `findings`, `changed files` when applicable, `verification remaining`, and `next action`. Finish with the same information in the final result. If the runtime buffers child messages until completion, emit these updates in chronological order under `Progress updates` before the final summary.

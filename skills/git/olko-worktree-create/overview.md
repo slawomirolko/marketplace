@@ -1,14 +1,15 @@
 # Smart Worktree Create
 
 ## What I Do
-- Determine branch name from active plan context, or ask user when no context exists.
+- Detect whether the agent session already runs in an attached Git worktree and reuse it.
+- Determine a branch name from active plan context, or ask the user, only when a new worktree is required.
 - Fetch latest remote default branch before creating anything.
-- Create sibling worktree directory named `<repo>-<branch-slug>`.
+- Create a sibling worktree directory named `<repo>-<branch-slug>` only from the primary checkout.
 - Create local branch from the fetched remote tip and set upstream to that remote default branch.
 - Report worktree path, branch name, and base commit.
 
 ## When To Use
-Use when user says "create worktree", "olko-worktree-create", "worktree-create", "new worktree", "open worktree for this plan", or wants isolated implementation workspace.
+Use when the user says "create worktree", "olko-worktree-create", "worktree-create", "new worktree", "open worktree for this plan", or wants an isolated implementation workspace. An existing attached worktree satisfies the request.
 
 ## Prerequisites
 - Current directory, or parent, is git repository.

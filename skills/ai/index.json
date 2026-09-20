@@ -42,7 +42,7 @@
     {
       "name": "olko-ai-architecture",
       "category": "ai",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Check AI context architecture compliance for a project's ai/ tree with marketplace defaults. Reads project docs and adapters, discovers the repo's buildable surfaces (apps/*, services/*, platform/*), verifies the ai/context + ai/skills + ai/prompts + ai/templates layout, surface-split context files, surface-split skill directories, global vs surface separation, no stale/orphaned artifacts, and that the AI tree stays in sync with the codebase surfaces, and reports violations with rule sources. Use when validating AI context organization, during plan review, when onboarding a new app/service surface, or standalone to verify the ai/ tree is complete and not drifting from the codebase.",
       "tags": [
         "ai",
@@ -109,6 +109,39 @@
         "SKILL.md",
         "agents/openai.yaml"
       ]
+    },
+    {
+      "name": "olko-migrate-opencode-to-pi",
+      "category": "ai",
+      "version": "1.0.0",
+      "description": "Assess and migrate a project's OpenCode workflow to Pi, covering portable skills, model access, agents, MCP, extensions, permissions, memory, and validation. Classifies every capability as portable, configure, port extension, replace workflow, or unsupported. Use when planning or executing a safe OpenCode-to-Pi transition; not for ordinary Pi setup. Triggers: 'migrate to pi', 'opencode to pi', 'olko-migrate-opencode-to-pi', 'port opencode workflow', 'pi migration'.",
+      "tags": [
+        "ai",
+        "migrate",
+        "pi"
+      ],
+      "capabilities": [
+        "ai",
+        "ai.migrate.pi"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-update-ai-tech-docs",

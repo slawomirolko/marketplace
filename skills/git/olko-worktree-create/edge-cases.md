@@ -16,6 +16,8 @@
 
 ## Safety Rules
 
+- Reuse the current attached worktree before any creation logic. Never create another worktree merely because a caller requested a fresh implementation workspace.
+- Never overwrite an existing `.env` in a reused worktree.
 - Always fetch before creating the worktree.
 - Always use fetched remote default branch as base.
 - Never delete an existing branch without explicit consent.

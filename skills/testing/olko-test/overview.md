@@ -4,8 +4,8 @@
 
 ## What I do
 - Determine test scope (current git changes, plan tests, or all tests)
-- Run unit tests for .NET, Python, Android (Kotlin), and React (Vitest)
-- Manage Android emulator (start, wait for boot, stop) for instrumentation tests
+- Run unit tests for .NET, Python, Android (Kotlin), and React (Vitest) — Android Gradle runs inside the `pricepredictor.android-emulator` Docker container (JDK 25 + Android SDK 35 + pre-cached Gradle 9.7.1, project `docker cp`'d into the container), never on the Windows host
+- Manage Android emulator container (start via `docker compose up -d android-emulator`, wait for boot, stop in `finally`) for instrumentation tests
 - Run Python integration tests
 - Run .NET integration tests
 - Run Android instrumentation tests (connectedCheck)
@@ -13,6 +13,9 @@
 - Detect linked Git worktrees and isolate their Compose test stack
 - Run repository-owned `scripts/tests/worktree-compose*.ps1` hooks with worktree context
 - Always clean up the isolated Compose project, including when tests fail
+
+## Container guardrail (HARD RULE, user directive 2026-09-14)
+Creating Docker containers or images outside the `pricepredictor` Docker Compose stack is **PROHIBITED**. Never `docker run`/`docker create`/`docker build` — use only the compose-defined services (`docker compose up -d`, `docker start` of existing instances, `docker exec`, `docker stop`). The watchdog scripts enforce this and throw `GUARDRAIL BLOCKER` instead of creating anything. If the emulator container (`pricepredictor.android-emulator`) is not already running, report the blocker to the user — do NOT work around it by creating or starting a container.
 
 ## When to use me
 User says "run tests", "test this", "/olko-test", or olko-plan-editor/olko-commit delegates test execution to me.
@@ -34,9 +37,10 @@ Recognized keys:
 | `testScopeCommand` | `git status` + `git diff --name-only HEAD` | Command used to discover changed files |
 | `dotnetTestArgs` | `--no-restore` | Extra .NET test args |
 | `pythonTestCommand` | `uv run --directory <py-root> pytest` | Python test runner command |
-| `androidUnitTestTask` | `test` | Gradle unit test task |
-| `androidInstrumentationTask` | `connectedCheck` | Gradle instrumentation task |
+| `androidUnitTestTask` | `:app:testDebugUnitTest` | Gradle JVM unit test task; avoids running the same tests twice for Debug and Release |
+| `androidInstrumentationTask` | `:app:connectedDebugAndroidTest` | Gradle instrumentation task for the debug APK |
 | `androidEmulatorTimeoutSeconds` | `120` | Emulator boot timeout |
+| `androidGradleTimeoutSeconds` | `600` | External Gradle watchdog timeout; kills the process tree and stops the daemon |
 | `reactTestCommand` | `vitest run` | React/TypeScript test runner command |
 | `reactTestTimeoutMs` | `120000` | Explicit timeout for the React test command |
 | `worktreeCompose` | `true` | Enable worktree Compose detection and lifecycle |
@@ -73,6 +77,15 @@ This skill discovers projects by convention — it does not hardcode project nam
 - Python: map a changed source module `<py-root>/src/foo/bar.py` → `<py-root>/tests/test_bar.py` (or the test file matching the module). If no specific test file maps, run the whole `<py-root>/tests/` directory.
 - Kotlin: `./gradlew test` (JVM unit) and `./gradlew connectedCheck` (instrumentation) from the Android project root — run whenever any Kotlin/Android source file changes.
 - React: `vitest run` from the discovered React project root — run whenever any `.ts`/`.tsx` source file changes. Manual e2e verification (`agent-browser` against the running dev server) is on-demand only; `olko-test` never runs it automatically.
+
+**Kotlin/Android instrumentation rule (MANDATORY, user directive 2026-09-04):** any
+Kotlin change (production or test) triggers the FULL instrumentation suite
+(`connectedDebugAndroidTest`, no class filters) via
+`invoke-instrumentation-watchdog.ps1`. NEVER filter to touched classes, NEVER
+skip, NEVER report instrumentation as not-run while the emulator can start.
+Only outcomes: PASSED, FAILED (→ failure handling), or explicit BLOCKER after
+emulator recovery exhausted. Unit + compile alone are never complete mobile
+verification.
 
 **Shared/contract projects:** when a changed project is shared across the codebase (contracts, application, infrastructure, persistence, or whatever the repo uses for cross-cutting layers), run **all** integration test projects in the repo, since any of them may depend on it. Detect "shared" by name convention (`*.Contracts`, `*.Application`, `*.Infrastructure`, `*.Persistence`) or by what the nearest `AGENTS.md` documents as shared.
 
