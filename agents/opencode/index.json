@@ -33,7 +33,7 @@
     },
     {
       "name": "olko-marketplace-skill-sync-manager",
-      "version": "2.2.1",
+      "version": "2.2.2",
       "file": "olko-marketplace-skill-sync-manager.md",
       "stack": "cross-stack",
       "role": "orchestrator",
