@@ -17,6 +17,6 @@ Create or edit paired business and technical implementation plans for a named it
 
 ## Files
 - `overview.md` - smallest useful summary and normal prerequisites.
-- `workflow.md` - normal execution path.
+- `workflow.md` - normal execution path. Step 6.5 documents the orchestrator-level RE-VALIDATION LOOP: after every user decision that changes plan scope/mechanism, the ORCHESTRATING AGENT must re-run readiness worker + stack auditors + consistency gate before asking the next question, cleaning up, or issuing a readiness verdict. The gate belongs to the agent; this skill only marks where it fires.
 - `examples.md` - output-pair example.
 - `edge-cases.md` - failure handling, uncommon branches, and rules.

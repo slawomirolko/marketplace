@@ -65,6 +65,8 @@ Apply these defaults unless config, adapter, or project docs override them.
 - Keep tool logic and schemas in a tool registry module.
 - Keep startup and trigger entrypoints in a main module.
 - Keep runtime settings in a settings module.
+- Keep LLM-facing field definitions in a dedicated schema module — Pydantic models with `Field(description=...)` capturing each field's semantics for the model.
+- Have the instructions/prompt module render field descriptions from that schema module; do not duplicate field semantics as hand-written prompt text (single source of truth).
 - Consume gRPC and API inputs from the system boundary; do not reimplement boundary transport inside Python business logic.
 
 ### Maintenance
@@ -114,6 +116,7 @@ Check documented rules plus marketplace defaults when docs do not override them.
 - external-service client config centralization and contract/smoke test presence
 - observability (OpenTelemetry logging/tracing modules, OTLP endpoint, service names)
 - module organization (workflow, instructions, tool registry, main, settings)
+- LLM-facing field descriptions: schema module with Pydantic `Field(description=...)` as the single source of truth, rendered by the instructions/prompt module (flag hand-written field prose duplicated in prompts)
 
 Use Python AST/import parsing where practical for imports. Avoid brittle text-only checks.
 

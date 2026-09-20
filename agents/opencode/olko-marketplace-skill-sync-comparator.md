@@ -10,7 +10,6 @@ permission:
   external_directory: allow
   webfetch: deny
   websearch: deny
-  skill: deny
   skill:
     olko-memory-layer: allow
 ---
