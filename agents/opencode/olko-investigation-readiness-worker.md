@@ -25,3 +25,5 @@ Load `olko-investigate-existing`. For the supplied implementation scope, produce
 - failure modes: trigger, current or planned handling, idempotency/retry boundary, blast radius, and validation test.
 
 Mark each item `ready`, `missing`, or `blocked`. Do not invent runtime success: planned signals are design evidence only. Do not edit code, tests, configuration, AGENTS.md, plan documents, or agent/skill files.
+
+Additionally, enumerate EVERY open item you found — unanswered user decisions, unresolved assumptions, unresolved blockers, unverified claims, and unresolved design questions — and classify each as BLOCKING, VERIFY-DURING-WORK, or ACCEPTED-GAP. Any BLOCKING item forces `Ready for implementation: no`. Never report `Ready for implementation: yes` while an open question, unmet user decision, or unresolved blocker remains; reporting `yes` with open items is a gate violation. VERIFY-DURING-WORK means an environmental check resolved by performing the work that cannot change what is built; ACCEPTED-GAP requires explicit user acceptance and must be named as such. State the open-item list explicitly in your report.
