@@ -17,15 +17,15 @@ If failure context is non-empty and the current step can be retried, show the co
 ### Step 0 — Collect session-changed files and branch name
 
 1. Load `.agents/skill-config.md` and `.agents/skills/olko-implement-current-code/project.md` if present. Read configuration keys listed in `edge-cases.md`.
-2. Collect session-changed files. Prefer the in-session file list if the agent has one. If unavailable, run `git status --short` in the main checkout and ask: `Are these the files to transfer into the worktree? (confirm or adjust)`.
-3. Suggest a branch name by analyzing changed paths and recent branch naming conventions. Use configured `branchPrefix`, default `feature/`. Ask: `Suggested branch name: <branch> — accept? (y/n)`. If rejected, ask for the preferred branch name.
+2. Collect session-changed files. Prefer the in-session file list if the agent has one. If unavailable, run `git status --short` in the current checkout and ask: `Are these the files to continue with? (confirm or adjust)`.
+3. Detect an attached worktree by comparing the normalized absolute paths from `git rev-parse --git-dir` and `git rev-parse --git-common-dir`. If they differ, use the current branch and skip branch-name confirmation. If the session is in the primary checkout, suggest a branch name by analyzing changed paths and recent branch naming conventions, use configured `branchPrefix` (default `feature/`), and ask for confirmation.
 4. Check instrumentation in changed files using configured `instrumentationPatterns`. If no logging or telemetry is found and verification requires observability, ask: `No logging/telemetry found in the changed files. Add instrumentation before proceeding? (y/n)`. If yes, add instrumentation following local project patterns, then re-read the changed files.
 
-### Step 1 — Create worktree
+### Step 1 — Resolve implementation worktree
 
-1. If `olko-worktree-create` is declared in `uses`, delegate worktree creation with the confirmed branch name. Otherwise, create the worktree manually from the freshly fetched remote default branch.
+1. If `olko-worktree-create` is declared in `uses`, delegate worktree resolution with the confirmed branch name. It must reuse the current attached worktree before considering creation. Otherwise, perform the same attached-worktree detection and only create from the freshly fetched remote default branch when the session is in the primary checkout.
 2. From this point on, run all subsequent reads, edits, checks, and commands inside the worktree path unless explicitly reading source files from `mainRepoPath`.
-3. If worktree creation fails or the user aborts, stop.
+3. If worktree resolution or creation fails or the user aborts, stop.
 
 ### Step 1a — Create progress tracker
 
@@ -58,13 +58,14 @@ On failure or abort:
 ### Step 2 — Transfer session files to worktree
 
 1. Read `sessionChangedFiles` from the tracker.
-2. For each file, read the source from `mainRepoPath` and target from `worktreePath`.
-3. Ensure the target directory exists.
-4. If the file is new or differs, copy the source version into the worktree. Use normal text writes for text files and native file copy for binary or large files.
-5. Append each transferred path to `## Changed files` immediately after the transfer succeeds.
-6. On resume, verify already-listed files still match source before skipping them.
-7. After all files are transferred, run `git status` in the worktree and report the number of transferred files.
-8. Update the tracker and move `CURRENT` to Step 3.
+2. If the session started in the resolved attached worktree, the files are already in the target. Record them in `## Changed files`, run `git status`, and continue to Step 3 without copying.
+3. Otherwise, for each file, read the source from `mainRepoPath` and target from `worktreePath`.
+4. Ensure the target directory exists.
+5. If the file is new or differs, copy the source version into the worktree. Use normal text writes for text files and native file copy for binary or large files.
+6. Append each transferred path to `## Changed files` immediately after the transfer succeeds.
+7. On resume, verify already-listed files still match source before skipping them.
+8. After all files are transferred, run `git status` in the worktree and report the number of transferred files.
+9. Update the tracker and move `CURRENT` to Step 3.
 
 ### Step 3 — Run style checks
 

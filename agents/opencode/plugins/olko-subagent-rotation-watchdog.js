@@ -2,8 +2,8 @@
 // context window. It is deliberately fail-open: a watchdog error never blocks
 // the agent that is doing the work.
 
-const TOKEN_THRESHOLD = 100_000
-const LOOP_THRESHOLD = 3
+const TOKEN_THRESHOLD = 300_000
+const LOOP_THRESHOLD = 20
 const HANDOFF_TIMEOUT_MS = 120_000
 const TOOL_OUTPUT_LIMIT = 2_000
 

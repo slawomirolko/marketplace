@@ -19,17 +19,17 @@ If failure context is non-empty and the current step can be retried, show the co
 
 1. Load `.agents/skill-config.md` and `.agents/skills/olko-implement-new/project.md` if present. Read configuration keys listed in `edge-cases.md`.
 2. Resolve every plan path. If a user gives a plan name without path, first check configured `planDirectory`, then ask if still missing.
-3. Read every plan file in the main checkout. Plans are canonical in the main checkout until the worktree is created.
+3. Resolve `mainRepoPath` from the Git common directory when the session is already in an attached worktree. Read each plan from its explicitly supplied location; for configured private plan paths, also check `mainRepoPath` because Git-ignored plans are not copied into a new worktree.
 4. For each plan, check whether it describes observability instrumentation: log calls, spans, metrics, events, trace tags, or other project-configured signals.
 5. If instrumentation is missing and verification requires observability, add a brief `Instrumentation` section to the plan. Include files, signal names, key points, and existing local patterns to follow.
 6. Report one summary line per updated plan. If all plans already describe instrumentation, report that and continue.
 
-### Step 1 — Create worktree
+### Step 1 — Resolve implementation worktree
 
 1. Derive a branch name from the plan slug using configured `branchPrefix`, default `feature/`.
-2. If `olko-worktree-create` is declared in `uses`, delegate worktree creation with the plan context and branch name. Otherwise, create the worktree manually from the freshly fetched remote default branch.
+2. If `olko-worktree-create` is declared in `uses`, delegate worktree resolution with the plan context and branch name. It must reuse the current attached worktree before considering creation. Otherwise, perform the same attached-worktree detection and only create from the freshly fetched remote default branch when the session is in the primary checkout.
 3. From this point on, run all subsequent reads, edits, checks, and commands inside the worktree path unless explicitly reading source plan files from `mainRepoPath`.
-4. If worktree creation fails or the user aborts, stop.
+4. If worktree resolution or creation fails or the user aborts, stop.
 
 ### Step 1a — Create progress tracker
 
@@ -308,10 +308,9 @@ Update the tracker and move `CURRENT` to Step 10 if the tracker still exists.
 
 ### Step 10 — Remove plans
 
-1. Ask before deleting plan files.
-2. If approved, remove each input plan file from the main checkout.
-3. Remove temporary `.txt` and `.log` files created by this skill.
-4. Report removed plan count and final status.
+1. Remove each input plan file from the main checkout — this is a standard post-merge continuation, NOT a user decision point; execute it directly and report.
+2. Remove temporary `.txt` and `.log` files created by this skill.
+3. Report removed plan count and final status.
 
 ### Step 11 — Rebuild affected services from main and verify (NEVER skip)
 

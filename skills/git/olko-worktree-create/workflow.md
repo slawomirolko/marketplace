@@ -1,5 +1,26 @@
 # Smart Worktree Create Workflow
 
+## Step 0 - Reuse the session worktree
+
+Before deriving a branch name, fetching, or creating anything, determine whether the current agent session already runs in an attached Git worktree:
+
+```powershell
+$worktreePath = git rev-parse --show-toplevel
+$gitDir = git rev-parse --path-format=absolute --git-dir
+$gitCommonDir = git rev-parse --path-format=absolute --git-common-dir
+$branchName = git branch --show-current
+```
+
+Normalize the two Git directory paths before comparing them. When `$gitDir` differs from `$gitCommonDir`, the session is already in an attached worktree, including a worktree created by JetBrains Air.
+
+- Reuse `$worktreePath`; do not create another worktree, derive or rename a branch, fetch solely for worktree creation, or ask for a branch name.
+- Require a non-empty `$branchName`. If the attached worktree is detached, stop and report that it needs a branch before implementation.
+- Set `mainRepoPath` to the parent of `$gitCommonDir` for this repository layout.
+- Copy the gitignored root `.env` from `mainRepoPath` only when it exists and the worktree does not already contain `.env`. Never overwrite an environment file supplied by Air or the user.
+- Return `worktreePath`, `branchName`, `mainRepoPath`, and the current HEAD as the worktree result. All caller operations must use this worktree path.
+
+Only continue to Step 1 when `$gitDir` and `$gitCommonDir` identify the primary checkout.
+
 ## Step 1 - Determine the branch name
 
 Look for a branch name from context, in this priority order:

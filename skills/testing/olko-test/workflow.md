@@ -141,80 +141,65 @@ uv run --directory <py-root> pytest <test_files> -v
 Collect results. If any fail, **stop immediately** and jump to Step 5.
 
 ### Step 3a — Run unit tests (Android/Kotlin)
-If Kotlin/Android source changed and there are unit tests (JVM `./gradlew test`):
-```bash
-./gradlew test
+If Kotlin/Android source changed and there are unit tests:
+```powershell
+powershell -File .agents/skills/olko-test/scripts/invoke-gradle-watchdog.ps1 `
+  -ProjectRoot apps/mobile `
+  -GradleArguments ':app:testDebugUnitTest --console=plain --no-configuration-cache --max-workers=1' `
+  -TimeoutSeconds 600
 ```
-Working directory: the discovered Android project root (where `gradlew` lives).
+Use the debug variant once; the lifecycle `test` task repeats the same JVM tests for Debug and Release. The watchdog reuses the compose-managed `pricepredictor.android-emulator` container, which is self-sufficient: JDK 25 (`/usr/lib/jvm/java-25-openjdk-amd64`), Android SDK at `/opt/android` (`platforms;android-35` + `build-tools;35.0.0`), and a pre-cached Gradle 9.7.1 distribution in `/opt/gradle-home`. It `docker cp`s the project into `/opt/workspace/olko-gradle-<guid>/` inside the container (dodging 9p stale-cache on the bind mount) and runs `./gradlew` **inside the container** — no Gradle runs on the Windows host. On timeout it stops streaming and reports `GRADLE_COMPLETION_MISSING` — the container workload is never killed or stopped. Working directory: repository root.
+
+**GUARDRAIL (user directive 2026-09-14): container creation outside the `pricepredictor` Docker Compose stack is PROHIBITED.** Both watchdog scripts enforce this: `docker run`/`docker build` were removed. The emulator container must already be running; if missing or stopped, the script throws `GUARDRAIL BLOCKER` — report it, do not create or start anything (lifecycle is owned by `scripts/tests/android-emulator.ps1` / the compose stack). The scripts verify in-container prerequisites before running (JDK 25, `/opt/android/platforms/android-35`, `/opt/gradle-home/wrapper/dists/gradle-9.7.1-bin`) and throw a precise blocker instead of installing anything.
 
 Collect results. If any fail, **stop immediately** and jump to Step 5.
 
-### Step 3b — Manage Android emulator (for instrumentation tests)
+### Step 3b+3c — Android instrumentation tests (ONE script, ONE tool call)
+
+**MANDATORY — NON-NEGOTIABLE (user directive, 2026-09-04): when ANY Kotlin/Android
+file changed — production OR test — the FULL instrumentation suite
+(`connectedDebugAndroidTest`, no class filters) MUST run. Never run a subset,
+never skip, never report instrumentation as optional. The only acceptable
+outcome is: instrumentation PASSED, or instrumentation FAILED (jump to Step 5),
+or an explicit BLOCKER recorded after the emulator start/recovery procedure was
+exhausted. "No emulator available" is not a terminal state — the Docker
+emulator can always be started (Step 0a / the watchdog script starts it).**
+
 If Kotlin/Android source changed and there are instrumentation tests (`connectedCheck`):
 
-**Pre-flight checks:**
-Verify `$env:ANDROID_HOME` is set and both `emulator.exe` and `adb.exe` exist:
+**Run the combined instrumentation watchdog from the repo root:**
 ```powershell
-if (-not $env:ANDROID_HOME) { Write-Error "ANDROID_HOME environment variable is not set."; exit 1 }
-$emuPath = "$env:ANDROID_HOME\emulator\emulator.exe"
-$adbPath = "$env:ANDROID_HOME\platform-tools\adb.exe"
-if (-not (Test-Path -LiteralPath $emuPath)) { Write-Error "Emulator executable not found at $emuPath."; exit 1 }
-if (-not (Test-Path -LiteralPath $adbPath)) { Write-Error "adb executable not found at $adbPath."; exit 1 }
+powershell -File .agents/skills/olko-test/scripts/invoke-instrumentation-watchdog.ps1 `
+  -ProjectRoot apps/mobile `
+  -BootTimeoutSeconds 120 `
+  -TestTimeoutSeconds 600
 ```
-Set up `$adb` alias for the rest of this step:
-```powershell
-function adb { & $adbPath @args }
-```
-If any check fails → tell user the specific error and stop. Do not attempt to start the emulator.
 
-**Find available AVD:**
-```powershell
-& $emuPath -list-avds
-```
-If no AVDs → tell user: "No Android emulator AVD found. Create one in Android Studio AVD Manager and try again." **Do not ask for emulator.**
+The script handles EVERYTHING atomically:
+1. Emulator container check (requires `pricepredictor.android-emulator` already running; verifies boot via container-local `adb getprop sys.boot_completed`; never starts/creates containers).
+2. JDK 25 verification inside the emulator container (the container ships JDK 25 + Android SDK 35 + pre-cached Gradle 9.7.1; no build container exists anymore).
+3. Stale-output cleanup (removes old androidTest-results to prevent file-lock failures).
+4. Test execution (`connectedDebugAndroidTest` inside the emulator container, project `docker cp`'d into `/opt/workspace/olko-instrumentation-<guid>/`, watchdog timeout, streams output).
+5. Error diagnostics (on failure, parses XML results, dumps every failed test name and message).
+6. No teardown — the emulator container is left running/unchanged (it must already be running when the script starts).
 
-**Check if emulator is already running:**
-```powershell
-$alreadyRunning = (adb devices 2>$null | Select-String "emulator.*device$").Count -gt 0
-```
-If already running → skip start and boot wait, jump directly to **Verify backend reachable from emulator** below.
+**Verify the backend/auth service is reachable from the emulator container before running instrumentation tests.** Instrumented tests read the host endpoint from `BuildConfig.ANDROID_TEST_*_BASE_URL` (derived from the Gradle property `pricePredictorAndroidTestHost`); check that host from inside the emulator container:
 
-**Start emulator (headless):**
 ```powershell
-Start-Process -NoNewWindow -FilePath $emuPath -ArgumentList "-avd","<avd_name>","-no-window","-no-audio","-gpu","swiftshader_indirect"
+docker exec pricepredictor.android-emulator sh -lc "wget -q -S -O /dev/null http://<androidTestHost>:<port>/<health-or-well-known-path> 2>&1 | head -1"
 ```
-Note: Use `-no-window` to keep it headless. Emulator process stays alive.
 
-**Wait for boot:**
-```powershell
-adb wait-for-device
-```
-Then poll until `sys.boot_completed=1` with a 120-second timeout:
-```powershell
-$maxWait = 120; $elapsed = 0; $interval = 2
-do {
-  Start-Sleep -Seconds $interval; $elapsed += $interval
-  $status = adb shell getprop sys.boot_completed 2>$null
-  if ($elapsed -gt $maxWait) { Write-Error "Emulator did not boot within ${maxWait}s. Last status: $status"; exit 1 }
-} while ($status -ne "1")
-```
-If timeout expires → tell user: "Emulator failed to boot within 120 seconds. Try closing the emulator and re-running, or check AVD configuration in Android Studio." Stop.
+Use the host and port the repo's `apps/mobile/AGENTS.md` and `app/build.gradle.kts` define — do not assume defaults. **Do NOT use `10.0.2.2`:** inside the Docker emulator it resolves to the emulator container itself and returns `ECONNREFUSED` (non-inferable project rule, verified 2026-08-17). If the service is not reachable → warn the user which service is unreachable and that they should ensure the relevant compose services are running. **Do not stop; proceed anyway** — the test will report the real failure.
 
-**Verify backend reachable from emulator:**
-If the instrumentation tests depend on a backend/auth service reachable from the emulator, verify it at its configured address. The emulator reaches the host loopback via `10.0.2.2`:
-```powershell
-adb shell curl -s -o /dev/null -w "%{http_code}" http://10.0.2.2:<port>/<health-or-well-known-path>
-```
-Use the port and path the repo's config/docs define — do not assume defaults. If the repo has no such dependency, skip this check.
-If not reachable → warn user which service is unreachable and that they should ensure docker compose (or the relevant runtime) is running. **Do not stop; proceed anyway** — the test will report the real failure.
+Gradle and the emulator run in the same Docker container — nothing runs on the Windows host. The emulator service is defined in the local-only `compose.override.yaml` (gitignored) with `/dev/kvm` passthrough, built from `apps/mobile/docker/android-emulator.Dockerfile`.
 
-### Step 3c — Run Android instrumentation tests
-```bash
-./gradlew connectedCheck
-```
-Working directory: the discovered Android project root.
+Exit codes: 0 = all passed, 1 = tests/build failed (details in output).
 
-Collect results. If any fail, jump to Step 5.
+The script's FINAL output line is always a hard marker: `[OLKO-TEST-DONE] result=passed|failed exit=N`. When the bash tool returns and you see this marker, the run is FINISHED — there is nothing left to wait for. Read `exit`:
+- `exit=0` → instrumentation PASSED. Your VERY NEXT message must continue this workflow (move to Step 4 / Step 6). Do NOT produce a standalone "tests passed" reply to the user. Do NOT stop. Do NOT wait.
+- `exit=1` → jump to Step 5.
+
+No cleanup is needed — the script never starts, stops, or removes the emulator container; it is left running and unchanged.
 
 ### Step 3d — Run unit/component tests (React/TypeScript)
 If React/TypeScript source changed, run the configured Vitest command from the discovered Vite/React project root:
@@ -238,11 +223,7 @@ When Step 0a prepared a stack, run every discovered `worktree-compose*.ps1` test
 In `finally`, invoke wrapper teardown for only the isolated project with the same values. Never run an unqualified `docker compose down`. If a test or service command fails, retain its original exit code and output; cleanup still runs and cleanup errors are secondary context. Docker or service failures are never converted into skips or success.
 Collect results. If any fail, jump to Step 5.
 
-**Android emulator** (if started in Step 3b):
-```powershell
-& "$env:ANDROID_HOME\platform-tools\adb.exe" emu kill
-```
-This stops the emulator and releases resources. Do NOT kill emulator if it was already running before the test run — only kill if we started it.
+**Android emulator:** No manual cleanup needed — under the container guardrail the emulator container is never started, stopped, or removed by this skill; `invoke-instrumentation-watchdog.ps1` requires `pricepredictor.android-emulator` to already be running and leaves it unchanged. Do NOT kill or remove the container. (The legacy `invoke-emulator-watchdog.ps1` two-script flow is not part of the current path.)
 
 ### Step 5 — Handle test failures
 Show:
@@ -261,8 +242,13 @@ Act based on user choice. If "Fix the tests" or "Fix the implementation", make c
 ### Step 6 — Report summary
 ```
 All tests passed:
-  - Unit:     12 passed, 0 failed (<project>.Tests)
-  - Unit:      3 passed, 0 failed (Python)
-  - Unit:      8 passed, 0 failed (React/Vitest)
-  - Integration: 5 passed, 0 failed (<project>.Tests.Integration)
+  - Unit:           12 passed, 0 failed (<project>.Tests)
+  - Unit:            3 passed, 0 failed (Python)
+  - Unit:            8 passed, 0 failed (React/Vitest)
+  - Integration:     5 passed, 0 failed (<project>.Tests.Integration)
+  - Instrumentation: 125 passed, 0 failed (apps/mobile :app:connectedDebugAndroidTest)
 ```
+
+Every test tier that actually ran MUST appear as a line in the summary. If instrumentation tests ran (Step 3b+3c), the summary MUST include the `Instrumentation:` line — never omit it. A missing tier line is a bug. If any Kotlin file changed and instrumentation did NOT run, the summary MUST instead include an explicit `Instrumentation: BLOCKED — <reason>` line; silently omitting instrumentation for a mobile change is a workflow violation.
+
+**After printing the summary, IMMEDIATELY return control to the calling skill.** Do NOT stop. Do NOT ask "shall I continue?". Do NOT wait for user input. Your next action is the calling skill's next step (e.g. `olko-implement-new` resume). If there is no calling skill (standalone invocation), the workflow is complete.

@@ -2,6 +2,16 @@
 
 ## Workflow - follow these steps in order
 
+### Step 0 - NO SHADOW MODES (HARD RULE, user directive 2026-09-13)
+Applies to every plan you draft or review:
+- ❌ NO shadow modes: never plan a new mechanism as experiment, shadow run, A/B test, dual-run, or parallel comparison alongside the old one
+- ❌ NO switched-off mechanisms: never plan a new mechanism behind a default-off flag/env/mode gate with the old one active in production — a planned mechanism IS the production behavior from its first deploy
+- ❌ NO separate production/testing release tracks: one production path; rollback = `git revert` / redeploy of a previous commit, NOTHING else
+- ✅ Plans must REPLACE the old mechanism and delete superseded code paths, not keep them as fallback modes
+- ✅ Feature flags/env gates allowed ONLY for genuinely external runtime variability (user-facing toggles, infrastructure endpoints) — never to gate a new mechanism off by default
+- ✅ Reject and rewrite any plan/scenario containing shadow phases, gradual-rollout mode gates for new mechanisms, or "switch-on later" deployment steps — the switch-on is part of the change itself
+- This rule overrides any plan-scenario template or previous plan convention; escalate to the user only when genuinely external variability makes the boundary unclear
+
 ### Step 1 - Identify the plan pair
 Identify the logical plan target, then resolve two linked files.
 
@@ -61,6 +71,23 @@ If `readArchitectureDocs` or `readTestingDocs` is disabled, do not invent missin
 Pass the technical draft, target files, and known stack context to each matching declared skill. Ask it to review the plan for rule impact only; do not ask it to implement. Fold returned violations or constraints into the technical document before persisting it. Reflect a changed scope, assumption, or business risk in the business document too.
 
 If no matching stack skill is declared in `uses`, fall back to the minimal loaded context (`.agents/skill-config.md`, scoped `AGENTS.md`, and project adapter). State the gap in the technical document's tradeoffs or assumptions section.
+
+### Step 6.5 - RE-VALIDATION LOOP (orchestrator-level HARD GATE)
+**NOTE ON OWNERSHIP: this gate is enforced by the ORCHESTRATING AGENT (e.g. olko-plan-documentation-orchestrator), not by this skill's own logic — this skill's workflow only documents where the orchestrator's loop check must fire. If you are executing this skill standalone and the user changes scope/mechanism mid-session, apply the same check yourself.**
+
+**Trigger:** EVERY user decision that changes plan scope, mechanism, or contract — grill answers, locked decisions, escalations — REGARDLESS of how the plan documents were edited afterward.
+
+**Required actions, in order, EVERY time:**
+1. Re-run the readiness/investigation worker (read-only) on the CHANGED slice of the final documents; it must verify every new/changed claim against the actual codebase with `file:line` evidence.
+2. Re-run the applicable stack-specific auditors (same set as the initial audit) on the changed slice.
+3. Re-run the business↔technical consistency gate in both directions on the updated documents.
+4. Fold verified findings; if folding changes the documents again, repeat this step 6.5 once more until a full pass yields no new findings.
+5. Only then may the plan advance to the next grill question, to cleanup, or to a readiness verdict.
+
+**HARD RULES:**
+- NEVER declare `Ready for implementation: yes`, NEVER close the grill, and NEVER report completion while any user decision from the session has not been re-validated by this loop.
+- Never substitute the editing agent's in-session analysis for worker/auditor verification: statements added during decision-folding (new file lists, dropped tables, re-pointed consumers, pinned ids) count as UNVERIFIED until a worker checks them against the code.
+- Record each loop re-run in the plan tracker (`tracker.md`) with its gate status; a skipped loop is a workflow violation, not an optimization.
 
 Use broader or specialized declared skills only when the target scope requires them:
 - If the plan changes top-level layout, module boundaries, app/service/platform separation, or shared contracts, delegate structural review to `olko-project-architecture`.
