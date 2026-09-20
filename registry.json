@@ -1547,7 +1547,7 @@
     {
       "name": "olko-plan-editor",
       "category": "workflow",
-      "version": "1.4.0",
+      "version": "1.5.0",
       "description": "Create or edit a paired business and technical implementation plan for a named item, an existing plan pair, or files to create. Produces a business mechanism document plus a technical delivery document. Uses strict caveman mode and minimal context. Triggers: 'plan', 'make a plan', 'edit plan', 'review plan', 'refine plan', 'plan this'.",
       "tags": [
         "workflow",
