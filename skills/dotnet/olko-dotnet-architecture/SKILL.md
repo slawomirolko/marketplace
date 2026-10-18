@@ -223,8 +223,8 @@ Apply these defaults unless config, adapter, or project docs override them.
 - Do not add default values inside settings record types.
 
 ### Project naming
-- If `dotnetProjectPrefix` is configured, every project in the solution must start with that prefix.
-- For PricePredictor, every project in the solution must start with the `PricePredictor.` prefix.
+- If `dotnetProjectPrefix` is configured, every project in the solution and its root namespace must start with that prefix.
+- For PricePredictor, every project in the solution and its root namespace must start with the `PricePredictor.` prefix.
 - Do not create .NET projects without the configured project prefix.
 
 ### Sagas
