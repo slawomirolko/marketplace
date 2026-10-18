@@ -1,6 +1,7 @@
 ---
 description: Routes product-idea work to a Feature/Task subagent or creates verified business, technical, stack, and tracker documents.
 mode: primary
+model: ollama-cloud/deepseek-v4.1-flash:cloud
 permission:
   edit: allow
   bash:

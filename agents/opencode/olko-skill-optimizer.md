@@ -1,6 +1,7 @@
 ---
 description: Manually optimize one selected AI skill, agent, prompt, or context resource by combining olko-agents-optimizer with the ASD-STE100 language adapter. Recommends related skills and agents where STE principles fit.
 mode: primary
+model: ollama-cloud/deepseek-v4.1-flash:cloud
 hidden: false
 permission:
   edit: allow

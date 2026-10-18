@@ -2,7 +2,7 @@
 description: Drafts only the business document of a paired implementation plan.
 mode: subagent
 hidden: true
-model: ollama-cloud/deepseek-v4-flash:0731
+model: ollama-cloud/deepseek-v4.1-flash:cloud
 permission:
   edit: allow
   bash: deny

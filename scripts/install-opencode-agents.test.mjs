@@ -30,7 +30,7 @@ test("installs the .NET audit agent with all its declared skills", () => {
   assert.match(result.stdout, /memory block olko-dotnet-auditor initialized/);
   assert.match(
     fs.readFileSync(path.join(project, ".opencode", "agents", "olko-dotnet-auditor.md"), "utf8"),
-    /model: ollama-cloud\/deepseek-v4-flash:0731/,
+    /model: ollama-cloud\/deepseek-v4.1-flash:cloud/,
   );
   const agent = fs.readFileSync(path.join(project, ".opencode", "agents", "olko-dotnet-auditor.md"), "utf8");
   assert.match(agent, /edit: allow/);
@@ -79,7 +79,7 @@ test("installs the .NET test runner with its declared skills", () => {
 
   assert.equal(result.status, 0, result.stderr);
   const agent = fs.readFileSync(path.join(project, ".opencode", "agents", "olko-dotnet-test-runner.md"), "utf8");
-  assert.match(agent, /model: ollama-cloud\/deepseek-v4-flash:0731/);
+  assert.match(agent, /model: ollama-cloud\/deepseek-v4.1-flash:cloud/);
   assert.match(agent, /edit: deny/);
   assert.match(agent, /bash:\s+"\*": allow/);
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-test", "SKILL.md")));

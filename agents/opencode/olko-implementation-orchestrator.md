@@ -1,6 +1,7 @@
 ---
 description: Coordinates independent implementation work across installed OpenCode stack agents.
 mode: primary
+model: ollama-cloud/deepseek-v4.1-flash:cloud
 hidden: false
 permission:
   edit: allow

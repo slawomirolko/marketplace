@@ -2,7 +2,7 @@
 description: Read-only comparison of one project-local skill or OpenCode agent against its marketplace source.
 mode: subagent
 hidden: true
-model: ollama-cloud/deepseek-v4-flash:0731
+model: ollama-cloud/deepseek-v4.1-flash:cloud
 permission:
   edit: deny
   bash: allow

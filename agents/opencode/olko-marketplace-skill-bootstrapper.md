@@ -2,7 +2,7 @@
 description: Installs all marketplace skills missing from the current project's .agents/skills directory.
 mode: subagent
 hidden: true
-model: ollama-cloud/deepseek-v4-flash:0731
+model: ollama-cloud/deepseek-v4.1-flash:cloud
 permission:
   edit: deny
   bash: allow

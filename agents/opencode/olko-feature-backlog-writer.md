@@ -1,6 +1,7 @@
 ---
 description: Refines rough ideas into user-facing Features and one-PR Tasks, then writes the accepted breakdown to YouTrack.
 mode: subagent
+model: ollama-cloud/deepseek-v4.1-flash:cloud
 hidden: true
 permission:
   edit:

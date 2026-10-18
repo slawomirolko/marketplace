@@ -2,7 +2,7 @@
 description: Creates, resumes, merges, and cleans up implementation worktrees through the dedicated worktree skills.
 mode: subagent
 hidden: true
-model: ollama-cloud/deepseek-v4-flash:0731
+model: ollama-cloud/deepseek-v4.1-flash:cloud
 permission:
   edit: allow
   bash:

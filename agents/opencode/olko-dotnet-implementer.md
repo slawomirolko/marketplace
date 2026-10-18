@@ -2,7 +2,7 @@
 description: Implements scoped .NET code and tests using olko-dotnet skills, then runs affected verification.
 mode: subagent
 hidden: true
-model: ollama-cloud/deepseek-v4-flash:0731
+model: ollama-cloud/deepseek-v4.1-flash:cloud
 permission:
   edit: allow
   bash:
