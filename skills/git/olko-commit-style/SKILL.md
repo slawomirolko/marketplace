@@ -107,6 +107,10 @@ Style violations:
   2. ...
 ```
 
+### Step 4b — Run project gates (checkable)
+
+If `.agents/skills/olko-commit-style/project.md` exists, read it and run every gate it lists against the added lines of the changed files (`git diff -U0`, fall back to `--cached`). Report each hit as `<gate id> <file>:<line> — <rule>` with the gate's rule source. A mechanical-gate hit is a style violation and must go through Step 5 (fix / skip-with-warning / abort) before the commit proceeds. `assisted` gates surface candidates for confirmation; `checklist` gates are verified by inspection.
+
 ### Step 5 — Handle violations
 
 If violations are found, ask the user:

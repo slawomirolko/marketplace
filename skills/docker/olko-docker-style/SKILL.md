@@ -46,6 +46,7 @@ Use these defaults only when config, adapter, or project docs do not override th
 - Chain package install cleanup: `apt-get update && apt-get install -y --no-install-recommends ... && rm -rf /var/lib/apt/lists/*`.
 - Use `COPY` instead of `ADD` unless the side effects of `ADD` are explicitly required and documented.
 - Do not hardcode secrets or environment-specific config values in Dockerfiles.
+- Do not add explanatory or narration comments to Dockerfiles; keep the file comment-free unless an instruction is unsafe or non-obvious without one.
 
 ### .dockerignore conventions
 - Root `.dockerignore` should exclude Git history and CI metadata: `.git/`, `.github/`.
@@ -72,6 +73,7 @@ Use these defaults only when config, adapter, or project docs do not override th
 - Use `host.docker.internal` only for container-to-host callbacks.
 - Do not hardcode IP addresses in Compose or service configuration.
 - Map only necessary ports to the host.
+- Do not add explanatory or narration comments to Compose files; keep the file comment-free unless a service definition is unsafe or non-obvious without one.
 
 ## Workflow
 

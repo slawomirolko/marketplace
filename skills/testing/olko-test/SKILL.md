@@ -9,7 +9,29 @@ user_invocable: true
 ## Routing Summary
 Run affected or all tests for .NET, Python, and Android/Kotlin with change-aware scope detection, emulator management, service management, and failure handling. Use when asked to run tests, after implementation, or when called from olko-plan-editor/olko-commit skills.
 
-**Kotlin/Android instrumentation gate (non-negotiable, user directive):** whenever ANY Kotlin file changed — production or test — the FULL instrumentation suite (`connectedDebugAndroidTest`, no class filters) MUST run via `invoke-instrumentation-watchdog.ps1`. Never filtered, never skipped, never deferred. Only outcomes: PASSED, FAILED (→ failure handling), or explicit BLOCKER after emulator recovery exhausted.
+**Kotlin/Android instrumentation gate (non-negotiable, user directive):** whenever ANY Kotlin file changed — production or test — the FULL instrumentation suite (`connectedDebugAndroidTest`, no class filters) MUST run via the selected platform variant's instrumentation runner (see PLATFORM VARIANTS). Never filtered, never skipped, never deferred. Only outcomes: PASSED, FAILED (→ failure handling), or explicit BLOCKER after emulator recovery exhausted.
+
+## PLATFORM VARIANTS — pick ONE before running any Android command
+
+Android execution has two supported, mutually exclusive models. Choose the one whose
+prerequisites exist in the repository. Never mix them in one run, and never silently
+substitute one for the other: if the selected variant's prerequisites are missing,
+report a blocker.
+
+- **Variant A — container runner (Windows/PowerShell).** Gradle runs INSIDE the
+  compose-managed Android emulator container via `scripts/invoke-gradle-watchdog.ps1`
+  and `scripts/invoke-instrumentation-watchdog.ps1`. Needs `pwsh`/PowerShell on the
+  host and an emulator image that ships JDK, Android SDK, and a Gradle distribution.
+  This is the model described in the Android steps below.
+- **Variant B — host runner (Linux/macOS).** Gradle runs ON THE HOST against a
+  user-scope toolchain, and the emulator container is a DEVICE ONLY (it needs no
+  JDK/SDK/Gradle). Needs the repository's host-runner scripts, e.g.
+  `scripts/tests/run-gradle-linux.sh` and `scripts/tests/android-emulator.sh`.
+
+Selection rule: if the repository provides the Variant B host-runner scripts (or the
+emulator image contains no JDK/SDK/Gradle), use Variant B. If it provides the
+PowerShell watchdogs and a self-sufficient emulator image, use Variant A. Record the
+selected variant in the report.
 
 Git-worktree test runs use an isolated Compose project when the repository provides `scripts/tests/worktree-compose*.ps1`; the main Compose project and ports are never reused, and cleanup always runs after failures.
 

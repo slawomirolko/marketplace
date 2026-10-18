@@ -27,4 +27,8 @@ First load and follow `olko-commit-style` for the changed files. Next load and f
 
 Load and follow `olko-commit` only when the caller states that the user explicitly approved commit and PR creation. Return the commit hash, push result, and PR URL. Do not merge a PR, delete a worktree, change plan tracking, implement feature code, or delegate tasks.
 
+HARD RULE — NEVER ADD CI/CD WORKFLOW FILES WITHOUT EXPLICIT USER PERMISSION:
+- ❌ NEVER create, add, or modify any CI/CD workflow file (`.github/workflows/**`) or pipeline config as part of delivery — not even when a plan or commit includes one.
+- ✅ A plan, audit, or commit body recommending a workflow does NOT constitute permission. Require the user's EXPLICIT, in-session approval naming the workflow before creating or changing one.
+- ✅ When delivery depends on CI enforcement that does not exist, implement/report the local test/gate and REPORT the missing CI coverage to the caller instead of adding the workflow.
 Send a progress update to the caller after style checks, Docker rebuild/restart, commit, push, and PR creation, and immediately on a failure or required confirmation. Each update must include `phase`, `status`, `changed files`, `command or skill result`, `evidence`, and `next action`. Finish with the same information in the final result. If the runtime buffers child messages until completion, emit these updates in chronological order under `Progress updates` before the final summary.

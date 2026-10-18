@@ -386,7 +386,7 @@
     {
       "name": "olko-docker-style",
       "category": "docker",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Check Dockerfile, .dockerignore, and Docker Compose conventions for changed container files with marketplace defaults. Reads project docs/adapters, verifies multi-stage .NET Dockerfiles, pinned base images, layer caching, non-root runtime users, healthchecks, exec-form entrypoints, minimal runtime images, build-context exclusions, compose secrets, healthchecks, restart policies, volumes, networking, and reports violations with rule sources. Use when validating Docker/container changes, before commit/test gates, or when olko-commit-style/olko-test delegates Docker checks.",
       "tags": [
         "docker",
@@ -552,7 +552,7 @@
     {
       "name": "olko-dotnet-testing",
       "category": "dotnet",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Check .NET test conventions for changed C# projects with marketplace defaults. Reads project docs/adapters, maps source changes to test projects, verifies InternalsVisibleTo usage, test visibility boundaries, smart enum coverage, saga JSON/ErrorOr assertion conventions, performance validation expectations, and reports violations with rule sources. Use when validating .NET tests, before commit/test gates, or when olko-test delegates .NET test-convention checks.",
       "tags": [
         "dotnet",
@@ -649,7 +649,7 @@
     {
       "name": "olko-commit-style",
       "category": "git",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Check coding style compliance for changed files across stacks. Reads style rules from project docs (AGENTS.md, CODING_STYLE.md), runs the prescribed style tools per stack, and reports violations with their rule source. Use when olko-commit delegates style checking, or standalone to verify style on changed files.",
       "tags": [
         "git",
@@ -1182,7 +1182,7 @@
     {
       "name": "olko-python-style",
       "category": "python",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Check Python style compliance for changed Python files with marketplace defaults. Reads project docs and adapters, maps .py files to pyproject.toml roots, runs documented format/lint/type commands such as ruff/mypy/pyright when configured, checks common Python style expectations that docs enable, and reports violations with rule sources. Use when validating Python style, linting Python changes, before commit/test gates, or when olko-commit-style delegates Python style checks.",
       "tags": [
         "python",
@@ -1369,7 +1369,7 @@
     {
       "name": "olko-test",
       "category": "testing",
-      "version": "1.3.0",
+      "version": "2.0.0",
       "description": "Run affected or all tests for .NET, Python, Android/Kotlin, and React/TypeScript with change-aware scope detection, emulator management, service management, and failure handling. Android/Kotlin instrumentation (connectedDebugAndroidTest, FULL suite) is MANDATORY whenever any Kotlin file changed — never skipped, never filtered. Use when asked to run tests, after implementation, or when called from olko-plan-editor/olko-commit skills.",
       "tags": [
         "testing",
@@ -1442,6 +1442,25 @@
         "SKILL.md",
         "ADR-FORMAT.md",
         "CONTEXT-FORMAT.md"
+      ]
+    },
+    {
+      "name": "olko-feature-planner",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Turn a rough product idea or an existing tracker issue into a user-facing Feature and independently testable, one-PR Tasks. Use for behavior flow, acceptance criteria, user checks, and backlog breakdown; not for technical implementation plans.",
+      "tags": [
+        "workflow",
+        "feature",
+        "planner"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.feature.planner"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
       ]
     },
     {
@@ -1609,6 +1628,25 @@
           "edge-cases"
         ]
       }
+    },
+    {
+      "name": "olko-ste100-skill-adapter",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Review and adapt the wording of OpenCode skills, agents, prompts, and AI commands using ASD-STE100 for English or a Polish clarity profile inspired by STE. Preserve behavior, routing, and executable content. Recommend which related skills and agents should use these principles.",
+      "tags": [
+        "workflow",
+        "ste100",
+        "adapter"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.ste100.skill.adapter"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
     },
     {
       "name": "olko-summary",

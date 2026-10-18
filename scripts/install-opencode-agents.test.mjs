@@ -61,7 +61,7 @@ test("installs the .NET audit agent by default", () => {
   assert.ok(fs.existsSync(path.join(project, ".opencode", "agents", "olko-marketplace-skill-sync-comparator.md")));
   assert.ok(fs.existsSync(path.join(project, ".opencode", "agents", "olko-marketplace-skill-bootstrapper.md")));
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-test", "SKILL.md")));
-  assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-implement-new", "SKILL.md")));
+  assert.ok(!fs.existsSync(path.join(project, ".agents", "skills", "olko-implement-new", "SKILL.md")));
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-adapt-to-marketplace", "SKILL.md")));
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-commit", "SKILL.md")));
   for (const name of ["olko-dotnet-auditor", "olko-mobile-auditor", "olko-army-python-auditor"]) {
@@ -73,7 +73,7 @@ test("installs the .NET audit agent by default", () => {
   }
 });
 
-test("installs the .NET test runner without unrelated skills", () => {
+test("installs the .NET test runner with its declared skills", () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-opencode-agent-"));
   const result = run(project, "--agent", "olko-dotnet-test-runner");
 
@@ -83,7 +83,7 @@ test("installs the .NET test runner without unrelated skills", () => {
   assert.match(agent, /edit: deny/);
   assert.match(agent, /bash:\s+"\*": allow/);
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-test", "SKILL.md")));
-  assert.ok(!fs.existsSync(path.join(project, ".agents", "skills", "olko-dotnet-architecture", "SKILL.md")));
+  assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-dotnet-architecture", "SKILL.md")));
   assert.ok(!fs.existsSync(path.join(project, "opencode.json")));
 });
 
@@ -138,7 +138,7 @@ test("installs the implementation orchestrator with delegation-only permissions"
     assert.ok(fs.existsSync(path.join(project, ".opencode", "agents", `${child}.md`)));
   }
   assert.doesNotMatch(agent, /olko-implement-new: allow/);
-  assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-implement-new", "SKILL.md")));
+  assert.ok(!fs.existsSync(path.join(project, ".agents", "skills", "olko-implement-new", "SKILL.md")));
   const config = JSON.parse(fs.readFileSync(path.join(project, "opencode.json"), "utf8"));
   assert.deepEqual(config.plugin, ["opencode-agent-memory@0.2.0"]);
 });
@@ -155,7 +155,8 @@ test("installs the plan documentation orchestrator with review-only stack delega
   assert.match(agent, /mode: primary/);
   assert.doesNotMatch(agent, /hidden: true/);
   assert.match(agent, /edit: allow/);
-  assert.match(agent, /bash: deny/);
+  assert.match(agent, /bash:\s+"\*": deny/);
+  assert.match(agent, /"code \*": allow/);
   assert.match(agent, /olko-dotnet-auditor: allow/);
   assert.match(agent, /olko-mobile-auditor: allow/);
   assert.match(agent, /olko-army-python-auditor: allow/);
@@ -306,13 +307,13 @@ test("installs the mobile auditor with only Kotlin skills", () => {
   assert.ok(fs.existsSync(path.join(project, ".opencode", "memory", "olko-mobile-auditor.md")));
 });
 
-test("installs the Python Army test runner with only olko-test", () => {
+test("installs the Python Army test runner with its declared skills", () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-opencode-agent-"));
   const result = run(project, "--agent", "olko-army-python-test-runner");
 
   assert.equal(result.status, 0, result.stderr);
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-test", "SKILL.md")));
-  assert.ok(!fs.existsSync(path.join(project, ".agents", "skills", "olko-python-testing", "SKILL.md")));
+  assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-python-testing", "SKILL.md")));
   assert.ok(!fs.existsSync(path.join(project, "opencode.json")));
 });
 
