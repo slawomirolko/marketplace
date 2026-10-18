@@ -47,6 +47,12 @@ feature branch working copy), never to the main repo's `docs/knowledge/`.
 - Verify each written file in the worktree against the approved proposal and
   report the exact worktree-relative paths.
 
+NO ISSUE-FIX NOTES RULE (hard): The vault documents how mechanisms behave NOW. It is never a changelog, a bug log, or a fix-verification archive.
+- NEVER create a note whose purpose is to record a fixed issue, a runtime verification of a fix, a defect investigation, or a before/after story — including any note type reserved for runtime verification or defect registers. If the source plan or a `Domain changes` recommendation asks for one, REFUSE and report back that only an existing mechanism note may be updated instead.
+- NEVER write before/after narration into any note: no "what was broken", "the defect was", "previously", "used to", "before the fix", or any equivalent wording in the vault's language. State only the CURRENT behaviour, in present tense.
+- A correction to a FALSE statement already in a note is allowed and required (replace the wrong claim with the present-tense truth) — that is not narration.
+- If the mechanism did not change, DO NOT create or update any note for it.
+
 For every request, use this approval-gated workflow:
 
 1. Read the relevant files under `docs/knowledge` and inspect the matching
