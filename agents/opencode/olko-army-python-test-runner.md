@@ -14,6 +14,9 @@ permission:
     "*": deny
     olko-memory-layer: allow
     olko-test: allow
+    olko-python-testing: allow
+    olko-python-style: allow
+    olko-python-architecture: allow
 ---
 
 MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every memory read or write; it owns the storage and retention policy.

@@ -140,6 +140,38 @@ uv run --directory <py-root> pytest <test_files> -v
 ```
 Collect results. If any fail, **stop immediately** and jump to Step 5.
 
+### Variant B — Android on a Linux/macOS host runner
+
+Use this variant when the repository provides a host-runner script set (default
+`scripts/tests/run-gradle-linux.sh` plus `scripts/tests/android-emulator.sh`). The
+emulator container is a DEVICE ONLY: it has no JDK, no Android SDK, and no Gradle, so
+**every** Gradle invocation runs on the host.
+
+Prerequisites the runner enforces (report a precise blocker instead of installing):
+
+- host JDK 25 in a user-scope directory, the Android SDK in a user-scope directory,
+  and a Gradle distribution cached from the project wrapper;
+- the mobile project's `local.properties` pointing `sdk.dir` at that SDK;
+- the emulator device already reachable (default `localhost:5555`) with
+  `sys.boot_completed=1`.
+
+Commands (from the repository root):
+
+```bash
+./scripts/tests/run-gradle-linux.sh :app:testDebugUnitTest
+./scripts/tests/run-gradle-linux.sh :app:connectedDebugAndroidTest
+```
+
+The host runner supplies the guardrail flags itself (`--console=plain
+--no-configuration-cache --max-workers=1 -Pandroid.builder.sdkDownload=false
+-Dorg.gradle.java.installations.auto-download=false`), requires the emulator serial to
+be exported (`ANDROID_SERIAL=localhost:5555`), and ends with an `[OLKO-TEST-DONE]`
+marker — wait for that marker before treating the run as finished.
+
+Emulator lifecycle is owned by `scripts/tests/android-emulator.sh` and the repository's
+Compose stack. Never create containers outside that stack: the runner only talks to the
+already-running device and reports a blocker when it is missing or stopped.
+
 ### Step 3a — Run unit tests (Android/Kotlin)
 If Kotlin/Android source changed and there are unit tests:
 ```powershell
@@ -153,6 +185,8 @@ Use the debug variant once; the lifecycle `test` task repeats the same JVM tests
 **GUARDRAIL (user directive 2026-09-14): container creation outside the `pricepredictor` Docker Compose stack is PROHIBITED.** Both watchdog scripts enforce this: `docker run`/`docker build` were removed. The emulator container must already be running; if missing or stopped, the script throws `GUARDRAIL BLOCKER` — report it, do not create or start anything (lifecycle is owned by `scripts/tests/android-emulator.ps1` / the compose stack). The scripts verify in-container prerequisites before running (JDK 25, `/opt/android/platforms/android-35`, `/opt/gradle-home/wrapper/dists/gradle-9.7.1-bin`) and throw a precise blocker instead of installing anything.
 
 Collect results. If any fail, **stop immediately** and jump to Step 5.
+
+### Variant A — Android instrumentation via the container watchdog
 
 ### Step 3b+3c — Android instrumentation tests (ONE script, ONE tool call)
 

@@ -44,6 +44,25 @@
       ]
     },
     {
+      "name": "olko-feature-planner",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Turn a rough product idea or an existing tracker issue into a user-facing Feature and independently testable, one-PR Tasks. Use for behavior flow, acceptance criteria, user checks, and backlog breakdown; not for technical implementation plans.",
+      "tags": [
+        "workflow",
+        "feature",
+        "planner"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.feature.planner"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
       "name": "olko-implement-current-code",
       "category": "workflow",
       "version": "1.2.0",
@@ -208,6 +227,25 @@
           "edge-cases"
         ]
       }
+    },
+    {
+      "name": "olko-ste100-skill-adapter",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Review and adapt the wording of OpenCode skills, agents, prompts, and AI commands using ASD-STE100 for English or a Polish clarity profile inspired by STE. Preserve behavior, routing, and executable content. Recommend which related skills and agents should use these principles.",
+      "tags": [
+        "workflow",
+        "ste100",
+        "adapter"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.ste100.skill.adapter"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
     },
     {
       "name": "olko-summary",

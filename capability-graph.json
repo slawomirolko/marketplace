@@ -700,20 +700,32 @@
       "skills": [
         "grill-me-base",
         "grill-with-docs",
+        "olko-feature-planner",
         "olko-implement-current-code",
         "olko-implement-new",
         "olko-investigate-existing",
         "olko-plan-editor",
         "olko-research-new-functionality",
+        "olko-ste100-skill-adapter",
         "olko-summary"
       ],
       "related": [
         "workflow.research",
         "workflow.summary",
+        "workflow.feature.planner",
         "workflow.grill.docs",
         "workflow.grill.me",
-        "workflow.implement.current-code",
-        "workflow.implement.new"
+        "workflow.implement.current-code"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "workflow.feature.planner",
+      "skills": [
+        "olko-feature-planner"
+      ],
+      "related": [
+        "workflow"
       ],
       "prerequisites": []
     },
@@ -781,6 +793,16 @@
       "id": "workflow.research",
       "skills": [
         "olko-research-new-functionality"
+      ],
+      "related": [
+        "workflow"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "workflow.ste100.skill.adapter",
+      "skills": [
+        "olko-ste100-skill-adapter"
       ],
       "related": [
         "workflow"

@@ -85,6 +85,10 @@ Apply these defaults unless config, adapter, or project docs override them.
 - Split when there are multiple answers to "what would make me edit this code?".
 - Keep parsing, storage, business logic, and presentation separate.
 
+### Resource lifecycle
+- Give each long-lived resource (DB connection/pool, checkpointer/saver, HTTP client, background task) one lifecycle owner: build it once per process or per documented unit of work and close it in the same module (context manager, lifespan shutdown, or `finally`) — an owner with no close path is a finding.
+- Never build a long-lived resource inside a request/handler/read path — including through an injected builder/factory invoked there; the injectable seam yields an instance, not a builder. A resource confined to the request/scope (opened and discarded there) is not long-lived. "Long-lived" is decided by the resource's documented/retained lifetime, never by how long the object happens to survive; for a resource documented as scoped to one unit of work — a request, a call, or a run — that unit of work IS the scope.
+
 ### Silent failures — zero tolerance
 - Never return `None`, empty dicts, empty lists, or silently skip processing when a required file/resource/config is missing.
 - Never swallow exceptions and return an empty/default result without logging or raising.
@@ -142,6 +146,7 @@ Check rules found in docs/adapters/config plus marketplace defaults when docs do
 - exception/logging conventions
 - `pathlib.Path` vs `os.path` and explicit `encoding` for file operations
 - silent failures and fail-fast behavior for missing files/resources/config
+- resource lifecycle (single owner; no per-request construction)
 - fixture, monkeypatch, and test naming conventions
 - generated-code edit restrictions (e.g. `*_pb2.py`, `*_pb2_grpc.py`)
 

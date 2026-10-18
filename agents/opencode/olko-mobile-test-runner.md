@@ -33,6 +33,32 @@ containers. Never accept SDK licenses, run setup/install scripts or package
 managers, rebuild images to obtain tools, or delegate installation. This rule
 overrides setup/recovery suggestions in loaded skills and LocalSetup.md.
 Do not evade installer denials via aliases, shell wrappers, downloads, or scripts.
+
+PLATFORM VARIANTS — pick ONE, never mix (the olko-test skill carries the full selection rule):
+
+- **Variant A — container runner (Windows/PowerShell).** Gradle runs INSIDE the
+  Compose-managed emulator container through the PowerShell watchdog; that same
+  container hosts the emulator AND the toolchain, and ADB uses the container-local
+  serial `emulator-5554`. This is the model described in the paragraphs below.
+- **Variant B — host runner (Linux/macOS).** Gradle runs ON THE HOST against a
+  user-scope toolchain (existing JDK 25, Android SDK, cached Gradle distribution), and
+  the emulator container is a DEVICE ONLY — do not expect Gradle, the SDK, or the JDK
+  inside it. Run the suite through the repository's host runner, default
+  `./scripts/tests/run-gradle-linux.sh :app:connectedDebugAndroidTest`, with
+  `ANDROID_SERIAL=localhost:5555` exported, from the repository root; the runner prints
+  an `[OLKO-TEST-DONE]` marker, so wait for it. ADB comes from the existing host SDK
+  (`$ANDROID_HOME/platform-tools/adb`). Emulator lifecycle belongs to
+  `scripts/tests/android-emulator.sh` and the repository Compose stack: the runner only
+  talks to the already-running device and reports a blocker instead of creating
+  containers. If one device appears under two adb serials (for example
+  `127.0.0.1:5555` and `emulator-5554`), Gradle schedules a duplicate instrumentation
+  run that hits the timeout — `adb disconnect` the duplicate serial first.
+
+Selection rule: use Variant B when the repository ships the host-runner scripts or the
+emulator image contains no JDK/SDK/Gradle; otherwise use Variant A. Record the selected
+variant in the report. Never substitute one variant for the other, and never install
+toolchain pieces to make a variant work.
+
 Use the existing SDK and JDK 25 only; never select JDK/JVM 17 or 21 as a workaround.
 Missing prerequisites are explicit BLOCKERS, not permission to install them.
 Ordinary project dependency resolution and installing the app/test APKs onto
@@ -56,7 +82,7 @@ compose or its existing container can be started; only
 report instrumentation as blocked after the recovery procedure below also
 fails — and record it as an explicit blocker, never a silent omission.
 
-ANDROID EMULATOR - DOCKER ONLY. NEVER use a system/local `emulator.exe`.
+ANDROID EMULATOR (VARIANT A) - DOCKER ONLY. NEVER use a system/local `emulator.exe`.
 Run the full instrumentation suite exclusively through
 `.agents/skills/olko-test/scripts/invoke-instrumentation-watchdog.ps1` with
 `-ProjectRoot <android-project-root> -BootTimeoutSeconds 240 -TestTimeoutSeconds 1200`.
@@ -79,7 +105,7 @@ change container users, permissions, packages, or host/WSL configuration to
 repair prerequisites; report those failures to the caller. Leave an emulator
 that was already running alive after the run. Never skip or hide failures.
 
-ADB PATH. Verify existing `C:\Android\platform-tools\adb.exe`, then set
+ADB PATH (VARIANT A). Verify existing `C:\Android\platform-tools\adb.exe`, then set
 `$env:ANDROID_HOME = 'C:\Android'` for this process only. If absent, check the
 existing ANDROID_HOME or Android Studio SDK location without installing tools.
 Missing ADB is a blocker. Never persist SDK environment variables or PATH.

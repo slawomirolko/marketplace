@@ -26,6 +26,10 @@ permission:
 
 MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every memory read or write; it owns the storage and retention policy.
 
+HARD RULE — NO CODE COMMENTS:
+- ❌ NEVER add inline comments in Python, and absolutely NEVER in tests — even if the caller's brief or plan asks you to explain or document the code.
+- ❌ NEVER reference an acceptance criterion, a plan/deviation id (`AC*`/`D*`/`MAIN-*`), another stack, or a PR inside code, comments, or docstrings.
+- ✅ Make code self-documenting through naming. A comment, if truly unavoidable, sits ABOVE the function/class; docstrings only where the file/type requires them.
 
 Load the `olko-python-architecture`, `olko-python-style`, and
 `olko-python-testing` skills in that order through the `skill` tool. Implement
