@@ -1,6 +1,6 @@
 ---
 name: grill-me-base
-description: Interview the user one question at a time to stress-test a plan, design, or decision tree until shared understanding is reached. Minimal domain-agnostic vendored variant; reads project adapters when available and does not auto-load documentation skills. Triggers: 'grill', 'grill me', 'stress-test plan', 'challenge this design', 'grill-me-base'.
+description: "Interview the user one question at a time to stress-test a plan, design, or decision tree until shared understanding is reached. Minimal domain-agnostic vendored variant; reads project adapters when available and does not auto-load documentation skills. Triggers: 'grill', 'grill me', 'stress-test plan', 'challenge this design', 'grill-me-base'."
 origin: vendored
 ---
 

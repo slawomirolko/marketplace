@@ -37,7 +37,7 @@
     {
       "name": "olko-dotnet-architecture",
       "category": "dotnet",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Check .NET architecture compliance for changed C# projects. Reads project docs and adapters, maps changed .cs/.csproj files to source projects, verifies layer boundaries, dependency direction, contracts ownership, architecture-test availability, and reports violations with rule sources. Use when validating .NET architecture, before commit/test gates, during plan review, or when olko-commit-style/olko-test/olko-plan-editor delegates .NET architecture checks.",
       "tags": [
         "dotnet",

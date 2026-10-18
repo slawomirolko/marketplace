@@ -1,6 +1,6 @@
 ---
 name: olko-summary
-description: End-of-session summary - track session-affected files, list investigated docs, summarize changes and problems, outline solved/pending issues, future steps, improvement suggestions, and helpful links. Triggers: "summarize session", "session summary", "wrap up session", "olko-summary".
+description: "End-of-session summary - track session-affected files, list investigated docs, summarize changes and problems, outline solved/pending issues, future steps, improvement suggestions, and helpful links. Triggers: \"summarize session\", \"session summary\", \"wrap up session\", \"olko-summary\"."
 user_invocable: true
 ---
 
