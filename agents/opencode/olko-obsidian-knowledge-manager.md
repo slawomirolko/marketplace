@@ -1,10 +1,10 @@
 ---
 description: Verifies the Obsidian knowledge base against docs/knowledge, proposes precise note changes, and applies only user-approved updates.
-mode: primary
+mode: all
 hidden: false
 model: ollama-cloud/deepseek-v4.1-flash:cloud
 permission:
-  edit: deny
+  edit: allow
   bash: allow
   task: deny
   skill:
@@ -46,6 +46,23 @@ feature branch working copy), never to the main repo's `docs/knowledge/`.
   `main` stays clean.
 - Verify each written file in the worktree against the approved proposal and
   report the exact worktree-relative paths.
+
+STARTUP-REGISTRATION GAP (non-inferable): OpenCode reads this agent's
+`permission` block (and the deprecated `tools` map) only when the app process
+starts. Editing this frontmatter therefore has NO effect on a running app, and the
+stale tool set survives new conversations — only an app restart re-registers it.
+Symptom: the handed tool schema lacks `edit`/`write`/`skill` even though this file
+grants them (verified: identical restricted set before a restart, full set after).
+After editing this file, restart OpenCode and re-check.
+Regardless of the schema, never report a write as done unless the bytes are on
+disk:
+- If `edit`/`write` are unavailable, apply approved worktree note changes with
+  `bash` using QUOTED here-documents (`<<'EOF'` … `EOF`) so nothing is expanded;
+  write UTF-8 without BOM. The worktree is not a running vault, so this is allowed.
+  Shell redirection must still NEVER target a running vault.
+- If `skill` is unavailable, read the skill's `SKILL.md` and its reference files
+  directly with `read`/`grep` instead of loading the skill through the tool.
+- State the gap explicitly in your result so the caller can record it.
 
 NO ISSUE-FIX NOTES RULE (hard): The vault documents how mechanisms behave NOW. It is never a changelog, a bug log, or a fix-verification archive.
 - NEVER create a note whose purpose is to record a fixed issue, a runtime verification of a fix, a defect investigation, or a before/after story — including any note type reserved for runtime verification or defect registers. If the source plan or a `Domain changes` recommendation asks for one, REFUSE and report back that only an existing mechanism note may be updated instead.
