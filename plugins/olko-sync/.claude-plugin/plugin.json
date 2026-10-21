@@ -1,0 +1,11 @@
+{
+  "name": "olko-sync",
+  "version": "1.0.0",
+  "description": "Sync skills and agents between a user-chosen Claude plugin marketplace, the Olko marketplace, and ~/.claude, with exclusions, parallel Haiku workers, and skill consolidation",
+  "author": {
+    "name": "Slawomir Olko"
+  },
+  "repository": "https://github.com/slawomirolko/marketplace",
+  "license": "MIT",
+  "keywords": ["sync", "skills", "agents", "consolidation"]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "olko",
+  "description": "Claude Code plugins from the Olko marketplace",
+  "owner": {
+    "name": "Slawomir Olko"
+  },
+  "plugins": [
+    {
+      "name": "olko-sync",
+      "source": "./plugins/olko-sync",
+      "description": "Sync skills and agents between a Claude plugin marketplace, the Olko marketplace, and ~/.claude; consolidate overlapping skills"
+    }
+  ]
+}
