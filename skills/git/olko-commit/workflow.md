@@ -28,7 +28,11 @@ If `olko-test` is declared in `uses`, delegate to it: pass the list of files cha
 
 If `olko-test` reports failures and the user chooses "Skip and continue" or "Abort", follow that choice.
 
-If `olko-test` is **not** in `uses`, skip tests and continue.
+If `olko-test` is **not** in `uses` but is installed under `.agents/skills/olko-test/`, delegate to it the same way.
+
+Otherwise, if configured `testCommands` match the changed paths, run them as the fallback and report each command and result.
+
+Otherwise, stop and ask: `No olko-test and no matching testCommands — skip tests or abort?`. Never skip tests silently.
 
 ### Step 4 — Summarize changes
 

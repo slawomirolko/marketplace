@@ -15,7 +15,7 @@
 
 ## Step status
 - [x] 0 — Collect session-changed files
-- [x] 1 — Create worktree
+- [x] 1 — Resolve implementation worktree
 - [ ] 2 — Transfer session files to worktree  CURRENT
 - [ ] 3 — Run style checks
 - [ ] 4 — Run tests
@@ -34,7 +34,7 @@
 ## Prompts
 
 ```text
-Are these the files to transfer into the worktree? (confirm or adjust)
+Are these the files to continue with? (confirm or adjust)
 Suggested branch name: feature/<short-kebab-case-description> — accept? (y/n)
 No logging/telemetry found in the changed files. Add instrumentation before proceeding? (y/n)
 Rebuild: <services> — proceed? (y/n)
@@ -60,6 +60,9 @@ Ready for commit? (y/n)
 - styleCommands:
   - match: "**/*.cs"
     command: "dotnet format --verify-no-changes"
+- testCommands:
+  - match: "**/*.cs"
+    command: "dotnet test"
 - serviceMap:
   - path: "src/api/**"
     services: ["api"]

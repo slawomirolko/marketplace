@@ -117,15 +117,16 @@ Update the tracker and move `CURRENT` to Step 5.
 
 > **CRITICAL RULE — NEVER run tests manually.**
 >
-> NEVER execute `dotnet test`, `gradlew test`, `pytest`, or any other test runner directly from this skill.
-> ALWAYS delegate test execution to `olko-test`. No exceptions.
-> If tempted to run a quick test manually: STOP. Delegate to `olko-test`.
+> NEVER execute `dotnet test`, `gradlew test`, `pytest`, or any other test runner ad hoc from this skill.
+> Delegate test execution to `olko-test` whenever it is declared or installed. The only exception is the configured `testCommands` fallback below.
+> If tempted to run a quick test manually: STOP. Follow the resolution order.
 
-**Always delegate to `olko-test`.** Resolution (in order):
+**Delegate to `olko-test` when available.** Resolution (in order):
 
 1. If `olko-test` is declared in `uses` → delegate with the changed file list and plan paths.
 2. Else if `.agents/skills/olko-test/` directory exists → auto-delegate (adapter absent, sub-skill installed) with the same arguments.
-3. Else → emit `Step 5 (tests): skipped - olko-test not installed` and continue. **Do NOT fall back to running tests manually.**
+3. Else, if configured `testCommands` match the changed paths → run them as the fallback and report each command and result.
+4. Else → stop and ask: `No olko-test and no matching testCommands — skip tests or abort?`. Never skip tests silently.
 
 `olko-test` maps the changed files to affected test projects and runs **all tests** in those projects (no filter — any affected file might break any test). Shared/contract projects trigger all integration test projects in the repo.
 
@@ -308,9 +309,10 @@ Update the tracker and move `CURRENT` to Step 10 if the tracker still exists.
 
 ### Step 10 — Remove plans
 
-1. Remove each input plan file from the main checkout — this is a standard post-merge continuation, NOT a user decision point; execute it directly and report.
-2. Remove temporary `.txt` and `.log` files created by this skill.
-3. Report removed plan count and final status.
+1. Ask before deleting plan files: `Remove plan files now? (y/n)`.
+2. If approved, remove each input plan file from the main checkout. If declined, keep them and report their paths.
+3. Remove temporary `.txt` and `.log` files created by this skill.
+4. Report removed plan count and final status.
 
 ### Step 11 — Rebuild affected services from main and verify (NEVER skip)
 

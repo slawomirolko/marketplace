@@ -25,4 +25,4 @@ This skill delegates only when project adapter declares matching skills in `.age
 - `olko-worktree-merge` for merge and cleanup.
 
 ## Configuration
-Reads `.agents/skill-config.md`, then `.agents/skills/olko-implement-new/project.md` when present. Defaults are conservative: no service rebuild, no telemetry endpoint query, delegate only declared `uses`, ask before irreversible actions.
+Reads `.agents/skill-config.md`, then `.agents/skills/olko-implement-new/project.md` when present. Defaults are conservative: no telemetry endpoint query, delegate only declared `uses`, ask before irreversible actions.

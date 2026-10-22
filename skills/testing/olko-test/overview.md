@@ -6,6 +6,7 @@
 - Determine test scope (current git changes, plan tests, or all tests)
 - Run unit tests for .NET, Python, Android (Kotlin), and React (Vitest) — Android Gradle runs inside the `pricepredictor.android-emulator` Docker container (JDK 25 + Android SDK 35 + pre-cached Gradle 9.7.1, project `docker cp`'d into the container), never on the Windows host
 - Manage Android emulator container (start via `docker compose up -d android-emulator`, wait for boot, stop in `finally`) for instrumentation tests
+- Variant C (local Windows Android SDK, no compose emulator service): start a local AVD headless via `$env:ANDROID_HOME\emulator\emulator.exe`, wait for boot, run Gradle on the host, and `adb emu kill` only an emulator this run started
 - Run Python integration tests
 - Run .NET integration tests
 - Run Android instrumentation tests (connectedCheck)
