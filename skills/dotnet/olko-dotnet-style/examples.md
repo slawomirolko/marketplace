@@ -4,5 +4,5 @@ Example report:
 
 ```text
 .NET style violations:
-  1. src/App/Foo.cs:17 - Method lacks XML summary/remark (source: olko-dotnet-style:Default .NET style rules)
+  1. src/App/Foo.cs:17 - Method has a `/// <summary>` comment that restates its name; remove it (source: olko-dotnet-style:Default .NET style rules)
 ```
