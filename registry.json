@@ -584,7 +584,7 @@
     {
       "name": "olko-commit",
       "category": "git",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Orchestrate the commit workflow: delegate style check, docs staleness, tests, docker rebuild, and PR-description updates to sub-skills, then draft a conventional commit message, resolve branch policy, commit, push, open/update a PR, and optionally merge it. Off main, creates a scope-named branch + PR. With --force, commits directly to main. Triggers: 'commit', 'commit this', 'wrap up', 'summarize changes'.",
       "tags": [
         "git",
@@ -1369,7 +1369,7 @@
     {
       "name": "olko-test",
       "category": "testing",
-      "version": "2.0.0",
+      "version": "2.1.0",
       "description": "Run affected or all tests for .NET, Python, Android/Kotlin, and React/TypeScript with change-aware scope detection, emulator management, service management, and failure handling. Android/Kotlin instrumentation (connectedDebugAndroidTest, FULL suite) is MANDATORY whenever any Kotlin file changed — never skipped, never filtered. Use when asked to run tests, after implementation, or when called from olko-plan-editor/olko-commit skills.",
       "tags": [
         "testing",
@@ -1466,7 +1466,7 @@
     {
       "name": "olko-implement-current-code",
       "category": "workflow",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "description": "Continue already-written session changes in the current attached worktree, or move them into a fresh one when needed; then verify, commit, and merge. Triggers: 'olko-implement-current-code', 'implement current code', 'transfer my session changes to a worktree', 'resume implement-current-code', 'continue current-code implementation'.",
       "tags": [
         "workflow",
@@ -1499,7 +1499,7 @@
     {
       "name": "olko-implement-new",
       "category": "workflow",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "description": "Implement one or more plan files in the session's attached worktree, or create a fresh one when needed; ensure observability, track progress, verify, commit, and merge. Triggers: 'olko-implement-new', 'implement the plan', 'implement plan', 'resume implement-new', 'continue implementation'.",
       "tags": [
         "workflow",

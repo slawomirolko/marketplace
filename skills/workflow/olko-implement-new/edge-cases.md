@@ -13,7 +13,7 @@ Read these keys from `.agents/skill-config.md`, then `.agents/skills/olko-implem
 - `environmentTemplateGlobs`: environment templates never copied as secrets. Default: common example/template names.
 - `styleCommands`: path-matched style check commands. Default: empty.
 - `styleFixCommands`: path-matched auto-fix commands. Default: empty.
-- `testCommands`: deprecated — no longer used. Tests are ALWAYS delegated to `olko-test`. Kept for backward compatibility but ignored. **NEVER run test commands manually from this skill.**
+- `testCommands`: path-matched test commands, used only as the Step 5 fallback when `olko-test` is neither declared nor installed. Default: empty.
 - `serviceMap`: changed-path to service-name mapping. Default: empty.
 - `neverRebuildServices`: services never rebuilt by this skill. Default: empty.
 - `composeBuildTemplate`: service build command template. Default: `docker compose build {service}`.
