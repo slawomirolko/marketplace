@@ -44,6 +44,45 @@
       ]
     },
     {
+      "name": "olko-design-rules",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Read-only rule catalogue for design and code review across stacks. Design rules (DRY, YAGNI, KISS) apply at plan time and code time. Code rules (nesting, cryptic identifiers, visibility, magic values, nested try/catch, collection-population blocks, linear scans, repeated mapping) apply at code time. .NET-only rules cover explicit enum values, sealed leaf types, and static field order. Never edits code; callers report findings with the rule id. Use when a stack style skill, plan review, or code review applies design rules. Triggers: 'design rules', 'DRY YAGNI KISS', 'check duplication', 'speculative abstraction', 'overengineering', 'olko-design-rules'.",
+      "tags": [
+        "workflow",
+        "design",
+        "review",
+        "dry",
+        "yagni",
+        "kiss"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.design.rules"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "references/code-rules.md",
+        "references/design-rules.md",
+        "references/dotnet-rules.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
       "name": "olko-feature-planner",
       "category": "workflow",
       "version": "1.0.0",
