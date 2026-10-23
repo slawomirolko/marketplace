@@ -235,6 +235,53 @@ The script's FINAL output line is always a hard marker: `[OLKO-TEST-DONE] result
 
 No cleanup is needed — the script never starts, stops, or removes the emulator container; it is left running and unchanged.
 
+### Variant C — Android on a local Windows emulator (Android SDK AVD)
+
+Use this variant only when the selection rule in `SKILL.md` picks it (no compose-managed
+emulator service; local Android SDK with an AVD on the Windows host). Gradle runs on the
+Windows host from the discovered Android project root (where `gradlew` lives). The
+mandatory full-instrumentation rule above applies unchanged.
+
+**Pre-flight checks:**
+Verify `$env:ANDROID_HOME` is set and both `emulator.exe` and `adb.exe` exist:
+```powershell
+if (-not $env:ANDROID_HOME) { Write-Error "ANDROID_HOME environment variable is not set."; exit 1 }
+$emuPath = "$env:ANDROID_HOME\emulator\emulator.exe"
+$adbPath = "$env:ANDROID_HOME\platform-tools\adb.exe"
+if (-not (Test-Path -LiteralPath $emuPath)) { Write-Error "Emulator executable not found at $emuPath."; exit 1 }
+if (-not (Test-Path -LiteralPath $adbPath)) { Write-Error "adb executable not found at $adbPath."; exit 1 }
+```
+If any check fails → tell the user the specific error and record `Instrumentation: BLOCKED — <reason>`. Do not attempt to start the emulator.
+
+**Unit tests (Step 3a equivalent):** from the Android project root run the configured `androidUnitTestTask` (default `:app:testDebugUnitTest`):
+```powershell
+./gradlew :app:testDebugUnitTest --console=plain
+```
+If any fail, **stop immediately** and jump to Step 5.
+
+**Start or reuse the emulator (one tool call):**
+```powershell
+powershell -File .agents/skills/olko-test/scripts/invoke-emulator-watchdog.ps1 -BootTimeoutSeconds 120
+```
+The script auto-discovers the first AVD (`emulator -list-avds`) unless `-AvdName` is passed, and:
+- prints `ALREADY_RUNNING` (exit 0) when an emulator is already attached — skip boot wait and do not kill it later;
+- prints `NO_AVD` (exit 2) when no AVD exists → tell the user: "No Android emulator AVD found. Create one in Android Studio AVD Manager and try again." Do not ask for an emulator; record `Instrumentation: BLOCKED — no AVD`;
+- otherwise starts the AVD headless (`-no-window -no-audio -gpu swiftshader_indirect`), writes `{started:true,pid}` to `$env:TEMP\olko-test-emulator.json`, waits for `sys.boot_completed=1`, and prints `BOOTED pid=<n>` (exit 0);
+- prints `TIMEOUT` plus the emulator log tail (exit 1) when boot exceeds the timeout → tell the user: "Emulator failed to boot within 120 seconds. Try closing the emulator and re-running, or check AVD configuration in Android Studio." Record the blocker.
+
+**Verify backend reachable from emulator:**
+If the instrumentation tests depend on a backend/auth service, verify it at its configured address. A local AVD reaches the host loopback via `10.0.2.2` (valid ONLY for this variant — never inside the Docker emulator of Variant A):
+```powershell
+& $adbPath shell curl -s -o /dev/null -w "%{http_code}" http://10.0.2.2:<port>/<health-or-well-known-path>
+```
+Use the port and path the repo's config/docs define — do not assume defaults. If the repo has no such dependency, skip this check. If not reachable → warn the user which service is unreachable and that they should ensure docker compose (or the relevant runtime) is running. **Do not stop; proceed anyway** — the test will report the real failure.
+
+**Instrumentation tests:** from the Android project root run the configured `androidInstrumentationTask` (default `:app:connectedDebugAndroidTest`, full suite, no class filters):
+```powershell
+./gradlew :app:connectedDebugAndroidTest --console=plain
+```
+Run it with the shell tool timeout set to the configured instrumentation timeout (default 600 s, same as Variant A). On timeout, record `Instrumentation: BLOCKED — timeout` and do not kill the emulator mid-run. Collect results. If any fail, jump to Step 5. Emulator cleanup for this variant is in Step 4a.
+
 ### Step 3d — Run unit/component tests (React/TypeScript)
 If React/TypeScript source changed, run the configured Vitest command from the discovered Vite/React project root:
 ```bash
@@ -257,7 +304,14 @@ When Step 0a prepared a stack, run every discovered `worktree-compose*.ps1` test
 In `finally`, invoke wrapper teardown for only the isolated project with the same values. Never run an unqualified `docker compose down`. If a test or service command fails, retain its original exit code and output; cleanup still runs and cleanup errors are secondary context. Docker or service failures are never converted into skips or success.
 Collect results. If any fail, jump to Step 5.
 
-**Android emulator:** No manual cleanup needed — under the container guardrail the emulator container is never started, stopped, or removed by this skill; `invoke-instrumentation-watchdog.ps1` requires `pricepredictor.android-emulator` to already be running and leaves it unchanged. Do NOT kill or remove the container. (The legacy `invoke-emulator-watchdog.ps1` two-script flow is not part of the current path.)
+**Android emulator:** No manual cleanup needed — under the container guardrail the emulator container is never started, stopped, or removed by this skill; `invoke-instrumentation-watchdog.ps1` requires `pricepredictor.android-emulator` to already be running and leaves it unchanged. Do NOT kill or remove the container. (The legacy `invoke-emulator-watchdog.ps1` two-script flow is not part of the Variant A path.)
+
+**Android emulator, Variant C only** (local AVD): if `$env:TEMP\olko-test-emulator.json` shows `started: true` for this run, stop the emulator and remove the state file:
+```powershell
+& "$env:ANDROID_HOME\platform-tools\adb.exe" emu kill
+Remove-Item -LiteralPath "$env:TEMP\olko-test-emulator.json" -ErrorAction SilentlyContinue
+```
+Do NOT kill the emulator if it was already running before the test run (`ALREADY_RUNNING`) — only kill it if this run started it.
 
 ### Step 5 — Handle test failures
 Show:

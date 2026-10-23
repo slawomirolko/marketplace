@@ -4,7 +4,7 @@
     {
       "name": "olko-commit",
       "category": "git",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Orchestrate the commit workflow: delegate style check, docs staleness, tests, docker rebuild, and PR-description updates to sub-skills, then draft a conventional commit message, resolve branch policy, commit, push, open/update a PR, and optionally merge it. Off main, creates a scope-named branch + PR. With --force, commits directly to main. Triggers: 'commit', 'commit this', 'wrap up', 'summarize changes'.",
       "tags": [
         "git",

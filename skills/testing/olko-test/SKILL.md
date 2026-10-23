@@ -1,6 +1,6 @@
 ---
 name: olko-test
-description: Run affected or all tests for .NET, Python, Android/Kotlin, and React/TypeScript with change-aware scope detection, emulator management, service management, and failure handling. Android/Kotlin instrumentation (connectedDebugAndroidTest, FULL suite) is MANDATORY whenever any Kotlin file changed — never skipped, never filtered. Use when asked to run tests, after implementation, or when called from olko-plan-editor/olko-commit skills.
+description: Run affected or all tests for .NET, Python, Android/Kotlin, and React/TypeScript with change-aware scope detection, emulator management (compose-managed emulator container, Linux/macOS host runner, or local Windows Android SDK emulator), service management, and failure handling. Android/Kotlin instrumentation (connectedDebugAndroidTest, FULL suite) is MANDATORY whenever any Kotlin file changed — never skipped, never filtered. Use when asked to run tests, after implementation, or when called from olko-plan-editor/olko-commit skills.
 user_invocable: true
 ---
 
@@ -13,7 +13,7 @@ Run affected or all tests for .NET, Python, and Android/Kotlin with change-aware
 
 ## PLATFORM VARIANTS — pick ONE before running any Android command
 
-Android execution has two supported, mutually exclusive models. Choose the one whose
+Android execution has three supported, mutually exclusive models. Choose the one whose
 prerequisites exist in the repository. Never mix them in one run, and never silently
 substitute one for the other: if the selected variant's prerequisites are missing,
 report a blocker.
@@ -27,10 +27,16 @@ report a blocker.
   user-scope toolchain, and the emulator container is a DEVICE ONLY (it needs no
   JDK/SDK/Gradle). Needs the repository's host-runner scripts, e.g.
   `scripts/tests/run-gradle-linux.sh` and `scripts/tests/android-emulator.sh`.
+- **Variant C — local Windows emulator (Android SDK AVD).** Gradle runs ON THE WINDOWS
+  HOST from the Android project root, against a local AVD started headless through
+  `$env:ANDROID_HOME\emulator\emulator.exe` (via `scripts/invoke-emulator-watchdog.ps1`).
+  Needs `ANDROID_HOME`, `emulator.exe`, `adb.exe`, and at least one AVD. No Docker.
 
 Selection rule: if the repository provides the Variant B host-runner scripts (or the
 emulator image contains no JDK/SDK/Gradle), use Variant B. If it provides the
-PowerShell watchdogs and a self-sufficient emulator image, use Variant A. Record the
+PowerShell watchdogs and a self-sufficient emulator image, use Variant A. Use Variant C
+only when the repository has no compose-managed Android emulator service (no Variant A
+or B prerequisites) and the Windows host has a local Android SDK with an AVD. Record the
 selected variant in the report.
 
 Git-worktree test runs use an isolated Compose project when the repository provides `scripts/tests/worktree-compose*.ps1`; the main Compose project and ports are never reused, and cleanup always runs after failures.

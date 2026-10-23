@@ -10,7 +10,7 @@ Read these keys from `.agents/skill-config.md`, then `.agents/skills/olko-implem
 - `instrumentationPatterns`: strings that count as logging/telemetry. Default: common logger and tracing names.
 - `styleCommands`: path-matched style check commands. Default: empty.
 - `styleFixCommands`: path-matched auto-fix commands. Default: empty.
-- `testCommands`: deprecated — no longer used. Tests are always delegated to `olko-test`, which runs all tests in affected projects. Kept for backward compatibility but ignored.
+- `testCommands`: path-matched test commands, used only as the Step 4 fallback when `olko-test` is neither declared in `uses` nor installed under `.agents/skills/olko-test/`. Default: empty.
 - `serviceMap`: changed-path to service-name mapping. Default: empty.
 - `neverRebuildServices`: services never rebuilt by this skill. Default: common infrastructure service names only when configured by project.
 - `composeBuildTemplate`: service build command template. Default: `docker compose build {service}`.
@@ -34,7 +34,7 @@ Read these keys from `.agents/skill-config.md`, then `.agents/skills/olko-implem
 ## Transfer Rules
 
 - The implementation source is the main checkout recorded as `mainRepoPath`.
-- Transfer into the created worktree only.
+- Transfer into the created worktree only; when an attached worktree is reused, work in place and transfer nothing.
 - Do not reimplement from scratch in the worktree.
 - Use text writes for normal source files.
 - Use native file copy for binary or large files.

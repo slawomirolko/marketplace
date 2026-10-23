@@ -77,15 +77,16 @@ On failure or abort:
 
 ### Step 4 — Run tests
 
-**Always delegate to `olko-test`.** Resolution (in order):
+**Delegate to `olko-test` when available.** Resolution (in order):
 
 1. If `olko-test` is declared in `uses` → delegate with the transferred file list.
 2. Else if `.agents/skills/olko-test/` directory exists → auto-delegate (adapter absent, sub-skill installed) with the same arguments.
-3. Else → emit `⚠ Step 4 (tests): skipped — olko-test not installed` and continue.
+3. Else, if configured `testCommands` match the transferred paths → run them as the fallback and report each command and result.
+4. Else → stop and ask: `No olko-test and no matching testCommands — skip tests or abort?`. Never skip tests silently.
 
 `olko-test` maps the transferred files to affected test projects and runs **all tests** in those projects (no filter — any affected file might break any test). Shared/contract projects trigger all integration test projects in the repo.
 
-If `olko-test` reports failures, follow its failure handling. Ask whether to fix, skip and continue, or abort.
+If `olko-test` or a fallback `testCommands` run reports failures, follow configured failure handling. Ask whether to fix, skip and continue, or abort.
 
 Update the tracker and move `CURRENT` to Step 5.
 
