@@ -41,6 +41,7 @@ These are reusable marketplace defaults. Project-specific naming rules, layer na
 ## Default Kotlin style rules
 
 Apply these defaults unless config, adapter, or project docs override them.
+Also apply the `olko-design-rules` catalogue to the changed lines: its design rules and code rules.
 
 ### Language and target
 - Write all `.kt` files in Kotlin, not Java.

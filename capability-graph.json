@@ -700,6 +700,7 @@
       "skills": [
         "grill-me-base",
         "grill-with-docs",
+        "olko-design-rules",
         "olko-feature-planner",
         "olko-implement-current-code",
         "olko-implement-new",
@@ -712,10 +713,20 @@
       "related": [
         "workflow.research",
         "workflow.summary",
+        "workflow.design.rules",
         "workflow.feature.planner",
         "workflow.grill.docs",
-        "workflow.grill.me",
-        "workflow.implement.current-code"
+        "workflow.grill.me"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "workflow.design.rules",
+      "skills": [
+        "olko-design-rules"
+      ],
+      "related": [
+        "workflow"
       ],
       "prerequisites": []
     },
