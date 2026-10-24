@@ -29,9 +29,10 @@ This is an intake and transfer path only. After the handoff, continue through
 3. Show the paths and ask the user to confirm or correct the list when its
    ownership is ambiguous. Do not absorb unrelated checkout changes.
 4. Compare every path and behavior with the Task plan and Feature scope. Count every distinct
-   repository path, including tests, migrations, configuration, documentation,
-   and both sides of renames.
-5. If the changes exceed 15 paths, exceed the Task estimate, include unrelated
+   repository code path, including tests, migrations, configuration, and both
+   sides of renames. Report documentation and knowledge-base paths separately
+   because they are outside the budget.
+5. If the code changes exceed 15 paths, exceed the Task estimate, include unrelated
    work, or materially differ from the approved plan, stop before transfer.
    Return the evidence to the normal Task scope-impact review and planning
    workflow. Never split or rewrite YouTrack Tasks from this skill.
@@ -65,7 +66,7 @@ This is an intake and transfer path only. After the handoff, continue through
 5. Leave the source checkout untouched. When source and target differ, report
    whether the source still contains the changes so the caller knows its state.
 6. Run `git status --short` in the target worktree. Confirm that its changed
-   paths are limited to the accepted Task scope and remain at or below 15.
+   code paths are limited to the accepted Task scope and remain at or below 15.
 7. Do not add explanatory code comments or Task/PR/plan identifiers to source
    code during transfer.
 
