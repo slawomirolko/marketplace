@@ -6,22 +6,40 @@ origin: vendored
 
 # Grill With Docs
 
-Interview the user relentlessly about every aspect of the plan until you reach shared understanding. Walk each branch of the design tree, resolving dependencies between decisions one-by-one. For each question, provide your recommended answer.
+Interview the user about every material part of the plan until you reach shared understanding. Ask exactly ONE question per turn. Record the user's answer in the plan tracker BEFORE asking the next question. Recommend an answer for the question you ask.
 
-Ask questions one at a time, waiting for feedback on each before continuing. If a question can be answered by exploring the codebase, explore instead of asking.
+Wait for the answer before asking anything else. If an answer raises a new question, ask it in the next turn. If the codebase can answer a question, inspect it instead of asking the user.
 
-## Question format (MANDATORY)
+A batch of questions may be enumerated in the plan tracker as one decision set. That bookkeeping does not change the presentation rule: the user still sees exactly one question per turn, and the full re-validation cycle still runs only after the last question in the batch is closed.
 
-Every grilling question MUST be asked via the `question` tool — NEVER as a wall of plain text. For each question render **exactly 3 options**:
+## Question content (MANDATORY)
 
-1. The **first** option is always the recommended answer; suffix its `label` with `(Recommended)`.
+A question the user cannot evaluate is a skill violation. Every question MUST contain, in this order:
+
+1. **Problem** — one or two sentences: what is undecided, and the verified fact that forces a decision (`file:line` when the fact comes from code).
+2. **Why I am asking** — what breaks, or what becomes unverifiable, if nobody decides.
+3. **Options** — exactly 3. The first is the recommendation, marked as recommended.
+4. Per option, BOTH consequences:
+   - **Business** — what the user will see or be able to conclude; what stays unverifiable; what risk is accepted.
+   - **Change scope** — concrete footprint: files to create/change, migrations, new producers, tests, config keys. Write "no change" only when it is truly zero.
+5. **Glossary** — every domain term used in the question is defined in one clause. Never make the user decode internal names.
+
+The recommendation states its reason in one line. Never present a known-broken option as its equal: if an option carries a defect, name that defect inside the option.
+
+## Question format
+
+Each question must render **exactly 3 options**:
+
+1. The **first** option is always the recommended answer; mark it as recommended.
 2. The other two are genuine alternative paths the user might prefer.
-3. The tool auto-appends a "Type your own answer" field — do NOT add a manual catch-all option.
-4. Keep `header` ≤ 30 chars; keep each option `description` to one short sentence.
+3. Do NOT add a manual catch-all option as one of the three — the user may always answer in prose.
+4. Keep the option label short; put the two consequences in the option body.
 
-A grilling turn that ships prose instead of 3 clickable options is a skill violation, even if the reasoning is correct. Exploration and findings prose may precede the tool call, but the decision itself is always the `question` tool with 3 options.
+If the `question` tool is available, use it. If it is not available in the session, ask in prose with the same structure and numbered options 1/2/3, and accept a single digit as the answer.
 
-This is the domain-aware sibling of `max:grill-me`. Where `grill-me` produces a per-dimension ambiguity report, `grill-with-docs` reconciles the plan with the project's documented language and decisions, and writes those docs inline as you go.
+A grilling turn that asks a question without the per-option business consequence AND change-scope consequence is a skill violation, even if the reasoning is correct.
+
+This skill is the domain-aware sibling of `max:grill-me`. `grill-me` reports ambiguities by dimension. `grill-with-docs` checks the plan against the project's terms and decisions, then updates the relevant docs as decisions are made.
 
 ---
 
@@ -29,14 +47,14 @@ This is the domain-aware sibling of `max:grill-me`. Where `grill-me` produces a 
 
 1. Read `.agents/skill-config.md` when present.
 2. If `projectAdapter` is not `false`, load `.agents/skills/grill-with-docs/project.md` when present.
-3. Apply precedence: Configuration > Project Adapter > AGENTS.md > Marketplace Skill.
+3. Apply rules in this order: Configuration, Project Adapter, AGENTS.md, then Marketplace Skill.
 4. Run with the defaults below when no higher-priority layer overrides them.
 
 Recognized configuration keys:
 
 - `projectAdapter`: default `true`; controls loading the project adapter.
 - `conventionDiscovery`: default `false`; when `true`, inspect the repository to find context docs, ADRs, and code answers.
-- `grillQuestionMode`: default `single`; ask exactly one question per turn.
+- `grillQuestionMode`: default `one-per-turn`; ask exactly one question, record the answer, then ask the next.
 - `grillExploration`: default `code-and-docs-when-answerable`; inspect code/docs instead of asking when the answer is discoverable and allowed.
 - `contextMapPath`: default `CONTEXT-MAP.md`; overrides the multi-context map path.
 - `contextFileName`: default `CONTEXT.md`; overrides context glossary file name.
@@ -50,7 +68,7 @@ Defaults:
 
 ## Domain awareness
 
-During codebase exploration, also look for existing documentation.
+When exploring the codebase, also look for existing documentation.
 
 ### File structure
 
@@ -100,11 +118,11 @@ When domain relationships are being discussed, stress-test them with specific sc
 
 ### Cross-reference with code
 
-When the user states how something works, check whether the code agrees. If you find a contradiction, surface it: "Your code cancels entire Orders, but you just said partial cancellation is possible — which is right?"
+When the user describes how something works, check the code. If it disagrees, explain the conflict and ask which behavior is correct. For example: "The code cancels entire Orders, but you said partial cancellation is possible. Which is correct?"
 
 ### Update CONTEXT.md inline
 
-When a term is resolved, update `CONTEXT.md` right there. Don't batch these up — capture them as they happen. Use the format in [CONTEXT-FORMAT.md](./CONTEXT-FORMAT.md).
+When the user resolves a term, update `CONTEXT.md` in the format defined by [CONTEXT-FORMAT.md](./CONTEXT-FORMAT.md). Record decisions as they arrive. Revalidate the plan only after every question is closed, one per turn.
 
 `CONTEXT.md` should be totally devoid of implementation details. Do not treat `CONTEXT.md` as a spec, a scratch pad, or a repository for implementation decisions. It is a glossary and nothing else.
 

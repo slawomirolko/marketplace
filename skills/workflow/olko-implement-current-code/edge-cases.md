@@ -1,54 +1,31 @@
-# Olko Implement Current Code Edge Cases
+# Olko Implement Current Code — Edge Cases
 
-## Configuration Keys
+## Stop and route back to planning when
 
-Read these keys from `.agents/skill-config.md`, then `.agents/skills/olko-implement-current-code/project.md`; project adapter wins.
+- Task ID, owning Feature, approved Task plan, or independently deliverable outcome is missing.
+- Any changed path is unrelated to the Task or the diff exceeds 15 paths.
+- The implementation changes Feature behavior, acceptance, contracts, domain
+  models/value objects, dependencies, or independent delivery safety.
+- The source file list is uncertain or the target worktree contains conflicting
+  edits.
 
-- `branchPrefix`: branch prefix for suggestions and slug derivation. Default: `feature/`.
-- `trackerGlob`: tracker file glob. Default: `implement-current-code_*.md`.
-- `uses`: explicit skill dependencies. Default: empty.
-- `instrumentationPatterns`: strings that count as logging/telemetry. Default: common logger and tracing names.
-- `styleCommands`: path-matched style check commands. Default: empty.
-- `styleFixCommands`: path-matched auto-fix commands. Default: empty.
-- `testCommands`: path-matched test commands, used only as the Step 4 fallback when `olko-test` is neither declared in `uses` nor installed under `.agents/skills/olko-test/`. Default: empty.
-- `serviceMap`: changed-path to service-name mapping. Default: empty.
-- `neverRebuildServices`: services never rebuilt by this skill. Default: common infrastructure service names only when configured by project.
-- `composeBuildTemplate`: service build command template. Default: `docker compose build {service}`.
-- `composeUpTemplate`: service start command template. Default: `docker compose up -d {service}`.
-- `composeStatusCommand`: service status command. Default: `docker compose ps`.
-- `logCommands`: service log commands. Default: compose recent logs when compose is configured.
-- `lokiUrl`: optional Loki base URL. Default: unset.
-- `tempoUrl`: optional Tempo base URL. Default: unset.
-- `verificationActions`: feature trigger instructions for the user. Default: ask only when the code path cannot be triggered automatically.
-- `allowGitignoreTrackerPattern`: whether tracker ignore pattern may be written to `.gitignore`. Default: false; use `.git/info/exclude`.
+Use the normal planning and Task-impact workflow to resolve these cases. Do not
+hide scope changes as file transfers.
 
-## Resume Rules
+## Source and target safety
 
-- `CURRENT` marker must exist on exactly one step.
-- Mark a step `[x]` only after it fully completes.
-- Never skip incomplete steps unless the user explicitly approves.
-- Re-read `## Changed files` before resuming Step 2.
-- Verify transferred files still match source before skipping them.
-- Preserve tracker failure context until the retried step succeeds.
+- Never reset, clean, stash-pop, or otherwise discard changes from the source
+  checkout.
+- Never overwrite a target path that differs from both the source change and
+  its base version. Stop and report the conflict.
+- Do not stage or modify plan documents, the shared Feature tracker, or unrelated
+  files as part of the code transfer.
+- Keep Task work isolated from the main Compose project. Runtime checks belong
+  to `olko-implementation-orchestrator` and follow its worktree isolation rules.
 
-## Transfer Rules
+## Handoff
 
-- The implementation source is the main checkout recorded as `mainRepoPath`.
-- Transfer into the created worktree only; when an attached worktree is reused, work in place and transfer nothing.
-- Do not reimplement from scratch in the worktree.
-- Use text writes for normal source files.
-- Use native file copy for binary or large files.
-- Keep path traversal impossible: relative paths must stay inside both repo roots after resolution.
-
-## Service Rules
-
-- Never rebuild services excluded by `neverRebuildServices`.
-- If no service map is configured, skip rebuild and say it is not configured.
-- Ask before rebuild, restart, commit, push, PR merge, or cleanup.
-- If service health cannot be determined, report that gap instead of assuming success.
-
-## Cleanup Rules
-
-- Remove temporary `.txt` and `.log` files created by this skill before finishing.
-- The tracker is local session state and must not be committed.
-- The tracker disappears when the worktree is removed during merge cleanup.
+- This skill owns inventory, Task-scope validation, and safe file transfer
+  only. The orchestrator owns all audits, verification, delivery, and cleanup.
+- If the caller cannot continue with the orchestrator, return the handoff record
+  and stop. Never create a separate commit or merge path.

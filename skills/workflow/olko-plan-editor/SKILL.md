@@ -1,13 +1,13 @@
 ---
 name: olko-plan-editor
-description: "Create or edit a paired business and technical implementation plan for a named item, an existing plan pair, or files to create. Produces a business mechanism document plus a technical delivery document. Uses strict caveman mode and minimal context. Triggers: 'plan', 'make a plan', 'edit plan', 'review plan', 'refine plan', 'plan this'."
+description: "Plan an accepted Feature in one session: create its business and technical plan plus one implementation plan file for every child Task; later implementation remains per Task. Also supports Epic plans and scoped Task-plan revisions."
 user_invocable: true
 ---
 
 # olko-plan-editor
 
 ## Routing Summary
-Create or edit paired business and technical implementation plans for a named item, an existing plan pair, or files to create. Produces a business mechanism document plus a technical delivery document. Uses strict caveman mode and minimal context.
+For a Feature, create/update the shared Feature plan and an implementation plan file for every current child Task in one planning session. Reuse accepted Feature decisions, batch open questions across all plans, and revalidate the complete set after the batch closes. Also support Epic plans and scoped Task-plan revisions. Apply strict caveman mode and minimal context.
 
 ## Progressive Loading
 - Load `overview.md` first after registry/category routing.
@@ -17,6 +17,6 @@ Create or edit paired business and technical implementation plans for a named it
 
 ## Files
 - `overview.md` - smallest useful summary and normal prerequisites.
-- `workflow.md` - normal execution path. Step 6.5 documents the orchestrator-level RE-VALIDATION LOOP: after every user decision that changes plan scope/mechanism, the ORCHESTRATING AGENT must re-run readiness worker + stack auditors + consistency gate before asking the next question, cleaning up, or issuing a readiness verdict. The gate belongs to the agent; this skill only marks where it fires.
-- `examples.md` - output-pair example.
-- `edge-cases.md` - failure handling, uncommon branches, and rules.
+- `workflow.md` - normal execution path. Step 6.5 describes the orchestrator's re-validation gate. Collect open questions into a batch and wait until the user resolves the full batch, including follow-ups. Then apply all answers and run the complete readiness-worker, stack-auditor, and consistency pass before cleanup or a readiness verdict. The orchestrator owns this gate; the skill marks where it applies.
+- `examples.md` - Feature plan package and per-Task plan examples.
+- `edge-cases.md` - failure handling, uncommon cases, and strict rules.

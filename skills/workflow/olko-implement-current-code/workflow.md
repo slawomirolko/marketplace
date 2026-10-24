@@ -1,138 +1,91 @@
 # Olko Implement Current Code
 
-## Workflow — follow these steps in order
+## Workflow
 
-### Step R — Resume detection
+This is an intake and transfer path only. After the handoff, continue through
+`olko-implementation-orchestrator`. Do not run a parallel commit/PR workflow.
 
-Before starting a fresh run, check whether this is a resume.
+### Step 0 — Resolve the Task input
 
-1. If the user provided a worktree path, glob for `implement-current-code_*.md` in the worktree root. If exactly one tracker exists, read it and resume from the `CURRENT` step. If multiple exist, ask which one to resume.
-2. If the user provided a branch name or slug, derive the slug by stripping any configured branch prefix and preserving hyphens. Look for sibling worktrees named by the repo plus slug and read `implement-current-code_<slug>.md` if present.
-3. If the user said resume or continue without a path, run `git worktree list` from the main repo. For every listed worktree, glob for `implement-current-code_*.md`. If exactly one tracker exists, read it. If multiple exist, present them and ask which one to resume.
-4. When resuming, set `workdir` to `worktreePath` from the tracker for every later tool call. Re-read `## Changed files` and `## Failure context`. Announce the slug, current step, and worktree path.
-5. Do not re-run Steps 0 or 1 when a tracker is found. Jump directly to the `CURRENT` step.
+1. Require one YouTrack Task ID, its owning Feature ID, the Task's approved
+   implementation plan, and linked Feature plan context.
+2. Read scope, affected paths or estimate, domain models/value objects,
+   acceptance criteria, dependencies, independent PR outcome, and verification
+   from those plans.
+3. If the Task plan or Feature context is missing or does not define a safe,
+   independently deliverable Task, stop and return to the Feature planning
+   session to prepare/revalidate plans for every child Task. Do not transfer or
+   alter files until the Task scope is ready.
+4. Do not re-grill accepted Feature business decisions. If the existing changes
+   expose a material scope or contract change, route to the normal Task-change
+   impact review before continuing.
 
-If failure context is non-empty and the current step can be retried, show the context and ask: `Retry Step <N> now, or abort?`
+### Step 1 — Inventory existing changes
 
-### Step 0 — Collect session-changed files and branch name
+1. Prefer the current session's explicit changed-file list. If unavailable,
+   inspect `git status --short` and the diff in the current checkout.
+2. Include modified, added, deleted, and both sides of renamed paths. Exclude
+   generated outputs only when the repository rules identify them as generated.
+3. Show the paths and ask the user to confirm or correct the list when its
+   ownership is ambiguous. Do not absorb unrelated checkout changes.
+4. Compare every path and behavior with the Task plan and Feature scope. Count every distinct
+   repository path, including tests, migrations, configuration, documentation,
+   and both sides of renames.
+5. If the changes exceed 15 paths, exceed the Task estimate, include unrelated
+   work, or materially differ from the approved plan, stop before transfer.
+   Return the evidence to the normal Task scope-impact review and planning
+   workflow. Never split or rewrite YouTrack Tasks from this skill.
 
-1. Load `.agents/skill-config.md` and `.agents/skills/olko-implement-current-code/project.md` if present. Read configuration keys listed in `edge-cases.md`.
-2. Collect session-changed files. Prefer the in-session file list if the agent has one. If unavailable, run `git status --short` in the current checkout and ask: `Are these the files to continue with? (confirm or adjust)`.
-3. Detect an attached worktree by comparing the normalized absolute paths from `git rev-parse --git-dir` and `git rev-parse --git-common-dir`. If they differ, use the current branch and skip branch-name confirmation. If the session is in the primary checkout, suggest a branch name by analyzing changed paths and recent branch naming conventions, use configured `branchPrefix` (default `feature/`), and ask for confirmation.
-4. Check instrumentation in changed files using configured `instrumentationPatterns`. If no logging or telemetry is found and verification requires observability, ask: `No logging/telemetry found in the changed files. Add instrumentation before proceeding? (y/n)`. If yes, add instrumentation following local project patterns, then re-read the changed files.
+### Step 2 — Resolve the Task worktree
 
-### Step 1 — Resolve implementation worktree
+1. If already in an attached worktree, confirm its branch and recorded Task
+   identity match this Task. Reuse it when they match.
+2. If the session is in the primary checkout, hand the resolved Task ID, Task
+   plan path, Feature ID, and confirmed path list to
+   `olko-implementation-orchestrator`.
+   It creates or selects the Task worktree through its standard lifecycle
+   manager, then resumes this skill with the worktree path and the same Task,
+   Task plan, Feature, and path list. If it cannot resume this skill, stop and
+   return the intake record; do not start a separate transfer flow.
+3. Never create a second worktree when an attached Task worktree already
+   exists. Never copy files into the primary checkout as a substitute.
 
-1. If `olko-worktree-create` is declared in `uses`, delegate worktree resolution with the confirmed branch name. It must reuse the current attached worktree before considering creation. Otherwise, perform the same attached-worktree detection and only create from the freshly fetched remote default branch when the session is in the primary checkout.
-2. From this point on, run all subsequent reads, edits, checks, and commands inside the worktree path unless explicitly reading source files from `mainRepoPath`.
-3. If worktree resolution or creation fails or the user aborts, stop.
+### Step 3 — Transfer without overwriting work
 
-### Step 1a — Create progress tracker
+1. Resolve and verify the repository roots. If source and target are the same
+   Task worktree, do not copy files; verify the current diff against the
+   confirmed path list, then continue to the final status check in this step.
+2. Otherwise, compare source and target state for each confirmed path before
+   copying.
+3. Copy only the confirmed session change into the target worktree. For a
+   deletion or rename, apply the deletion only when the target still matches
+   the source base version. Count both old and new paths for a rename.
+4. If a target file has different work that is not the source base version,
+   stop on that path. Report the conflict; do not overwrite or merge it here.
+5. Leave the source checkout untouched. When source and target differ, report
+   whether the source still contains the changes so the caller knows its state.
+6. Run `git status --short` in the target worktree. Confirm that its changed
+   paths are limited to the accepted Task scope and remain at or below 15.
+7. Do not add explanatory code comments or Task/PR/plan identifiers to source
+   code during transfer.
 
-1. Derive the slug from the branch name by removing the configured `branchPrefix` when present.
-2. Create `<worktreePath>/implement-current-code_<slug>.md` using the tracker format in `examples.md`.
-3. Fill metadata: `worktreePath`, `branchName`, `mainRepoPath`, `sessionChangedFiles`, `createdAt`, `updatedAt`.
-4. Mark Steps 0 and 1 complete. Mark Step 2 as `CURRENT`.
-5. Leave `## Changed files`, `## Failure context`, and `## Notes` empty.
-6. Ensure `implement-current-code_*.md` is ignored by the worktree. Add it to `.git/info/exclude` by default. If project config allows `.gitignore` edits, add it there instead and do not commit that edit unless the user explicitly asks.
-7. Announce the tracker path.
+### Step 4 — Hand off to the implementation orchestrator
 
-### Step 1b — Tracker update protocol
+Return a concise handoff record containing:
 
-After every completed step from Step 2 onward:
+- Task and Feature IDs and the technical plan path;
+- worktree path and branch;
+- confirmed changed paths and actual count;
+- transferred, already-present, and conflicting paths;
+- scope-check result and remaining blockers.
 
-1. Read the current tracker.
-2. Mark the completed step `[x]`.
-3. Move `CURRENT` to the next incomplete step.
-4. Update `updatedAt` with current UTC time.
-5. Update `## Changed files`, `## Failure context`, and `## Notes` when relevant.
-6. Write the tracker back.
+Then continue with `olko-implementation-orchestrator` using the existing diff
+as the implementation result. Do not dispatch implementers for paths already
+implemented. The orchestrator must still run its full Task gates: rules and
+stack audits, style/tests, isolated runtime and log/trace/DB verification,
+15-path PR gate, PR review, merge, post-merge verification, deletion of only
+the Task technical plan, and the final Feature audit when all Feature Tasks are
+complete.
 
-On failure or abort:
-
-1. Leave the failed step as `CURRENT`.
-2. Fill `## Failure context` with the step number, error or blocker, and user decision.
-3. Update `updatedAt`.
-4. Write the tracker back and stop.
-
-### Step 2 — Transfer session files to worktree
-
-1. Read `sessionChangedFiles` from the tracker.
-2. If the session started in the resolved attached worktree, the files are already in the target. Record them in `## Changed files`, run `git status`, and continue to Step 3 without copying.
-3. Otherwise, for each file, read the source from `mainRepoPath` and target from `worktreePath`.
-4. Ensure the target directory exists.
-5. If the file is new or differs, copy the source version into the worktree. Use normal text writes for text files and native file copy for binary or large files.
-6. Append each transferred path to `## Changed files` immediately after the transfer succeeds.
-7. On resume, verify already-listed files still match source before skipping them.
-8. After all files are transferred, run `git status` in the worktree and report the number of transferred files.
-9. Update the tracker and move `CURRENT` to Step 3.
-
-### Step 3 — Run style checks
-
-1. If `olko-commit-style` or stack-specific style skills are declared in `uses`, delegate with the transferred file list.
-2. Otherwise, run configured `styleCommands` that match the transferred paths.
-3. If style violations are found, present the output and ask: `Auto-fix, skip and continue, or abort?`
-4. If auto-fix is chosen, run configured `styleFixCommands`, then re-run style checks.
-5. Update the tracker and move `CURRENT` to Step 4.
-
-### Step 4 — Run tests
-
-**Delegate to `olko-test` when available.** Resolution (in order):
-
-1. If `olko-test` is declared in `uses` → delegate with the transferred file list.
-2. Else if `.agents/skills/olko-test/` directory exists → auto-delegate (adapter absent, sub-skill installed) with the same arguments.
-3. Else, if configured `testCommands` match the transferred paths → run them as the fallback and report each command and result.
-4. Else → stop and ask: `No olko-test and no matching testCommands — skip tests or abort?`. Never skip tests silently.
-
-`olko-test` maps the transferred files to affected test projects and runs **all tests** in those projects (no filter — any affected file might break any test). Shared/contract projects trigger all integration test projects in the repo.
-
-If `olko-test` or a fallback `testCommands` run reports failures, follow configured failure handling. Ask whether to fix, skip and continue, or abort.
-
-Update the tracker and move `CURRENT` to Step 5.
-
-### Step 5 — Rebuild affected services
-
-1. Determine affected services from configured `serviceMap`. Match changed paths to service names.
-2. Remove services listed in `neverRebuildServices`.
-3. If no services match, report `No configured services affected` and continue.
-4. Present the service list and ask: `Rebuild: <services> — proceed? (y/n)`.
-5. For each approved service, run configured build and up commands. Default command templates are documented in `edge-cases.md`.
-6. Check configured health command or status command until services are running or timeout.
-7. If rebuild or restart fails, report the failing service and ask whether to continue or abort.
-8. Update the tracker and move `CURRENT` to Step 6.
-
-### Step 6 — Verify in logs and traces
-
-1. Inspect recent logs for each rebuilt service using configured log commands.
-2. Look for errors, warnings, exceptions, connection failures, timeouts, and expected instrumentation keywords.
-3. If `lokiUrl` is configured, query logs using configured labels and keywords.
-4. If `tempoUrl` is configured, query traces or ask the user to check the configured trace UI when no API query is available.
-5. If user action is required to trigger the feature, tell the user the exact action from `verificationActions` and wait for confirmation before re-checking logs.
-6. Report:
-
-```text
-Verification:
-  Service logs: <healthy / errors found>
-  Aggregated logs: <found / not found / not configured>
-  Traces: <found / not found / not configured>
-  Flow completed: <yes / no / partial>
-  Issues: <list or "none">
-```
-
-7. If issues are found, ask whether to fix the issue, note it and continue, or abort.
-8. Update the tracker and move `CURRENT` to Step 7.
-
-### Step 7 — Commit
-
-1. Ask: `Ready for commit? (y/n)`.
-2. If no, stop with tracker left at Step 7.
-3. If yes and `olko-commit` is declared in `uses`, delegate the commit workflow with the transferred file list and verification summary.
-4. If no commit skill is declared, ask the user whether to commit manually using local repository policy.
-5. Update the tracker and move `CURRENT` to Step 8.
-
-### Step 8 — Merge worktree to main
-
-1. If `olko-worktree-merge` is declared in `uses`, delegate merge and cleanup.
-2. Otherwise, ask the user how to proceed with PR creation, merge, and worktree cleanup.
-3. If the user declines merge, stop and leave the worktree intact.
-4. After cleanup succeeds, the tracker is removed with the worktree.
+This skill never commits, pushes, opens or merges a PR, removes plans, or marks
+a Task or Feature complete.

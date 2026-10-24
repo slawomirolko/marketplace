@@ -1,11 +1,11 @@
 # Olko Implement New
 
 ## What
-Implement one or more plan files in the session's attached worktree. If the session is in the primary checkout, create a fresh worktree from the latest remote default branch. Then verify and finish via commit + merge skills.
+Implement one accepted Task from its Task-specific implementation plan. The Feature planning session prepares plans for all child Tasks; implementation then runs one Task/PR at a time. Use the existing worktree or create one from the latest remote default branch. Then verify and finish through commit and merge skills.
 
 ## Use When
-- User says `olko-implement-new`, `implement the plan`, or gives plan file paths.
-- Plan files came from `olko-plan-editor` or another planning flow.
+- User says `olko-implement-new`, `implement the Task`, `implement the plan`, or provides Task and Feature context.
+- The Task's implementation plan exists in the Feature plan package.
 - User says `resume implement-new` or gives worktree path/slug with progress tracker.
 
 ## Output
@@ -25,4 +25,4 @@ This skill delegates only when project adapter declares matching skills in `.age
 - `olko-worktree-merge` for merge and cleanup.
 
 ## Configuration
-Reads `.agents/skill-config.md`, then `.agents/skills/olko-implement-new/project.md` when present. Defaults are conservative: no telemetry endpoint query, delegate only declared `uses`, ask before irreversible actions.
+Reads `.agents/skill-config.md`, then `.agents/skills/olko-implement-new/project.md` when present. Defaults are conservative: no service rebuild, no telemetry endpoint query, delegate only declared `uses`, ask before irreversible actions.

@@ -1,13 +1,13 @@
 ---
 name: olko-implement-current-code
-description: "Continue already-written session changes in the current attached worktree, or move them into a fresh one when needed; then verify, commit, and merge. Triggers: 'olko-implement-current-code', 'implement current code', 'transfer my session changes to a worktree', 'resume implement-current-code', 'continue current-code implementation'."
+description: "Adopt already-written changes into one Task worktree, validate them against its approved Task plan and Feature context, and hand them to the standard implementation orchestrator. Does not own implementation verification or delivery. Triggers: 'olko-implement-current-code', 'adopt current changes', 'transfer my session changes to a worktree', 'resume implement-current-code'."
 user_invocable: true
 ---
 
 # olko-implement-current-code
 
 ## Routing Summary
-Continue already-written session changes in the current attached worktree, including an Air-managed worktree. Only create and transfer into a fresh worktree when the session is in the primary checkout. Track resume file. Run style, tests, service rebuild, logs/traces verification, commit, merge. Triggers: "olko-implement-current-code", "implement current code", "transfer my session changes to a worktree", "resume implement-current-code", "continue current-code implementation".
+Adopt already-written changes for one named Task. Verify its approved Task plan and Feature context, inventory and scope-check the existing diff, and transfer it into the Task worktree when needed. If the Task plan is missing, return to the Feature planning session to prepare plans for every child Task. Then return control to `olko-implementation-orchestrator` for all audits, tests, runtime verification, PR, merge, and cleanup. This skill does not run a separate delivery workflow.
 
 ## Progressive Loading
 - Load `overview.md` first after registry/category routing.
@@ -18,5 +18,5 @@ Continue already-written session changes in the current attached worktree, inclu
 ## Files
 - `overview.md` - smallest useful summary and prerequisites.
 - `workflow.md` - ordered implementation-transfer path.
-- `examples.md` - prompts, tracker shape, config examples.
+- `examples.md` - handoff record and user prompts.
 - `edge-cases.md` - resume, failure, service, and safety rules.
