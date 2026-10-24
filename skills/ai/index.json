@@ -93,7 +93,7 @@
     {
       "name": "olko-memory-layer",
       "category": "ai",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Manage an OpenCode agent's recurring-learning memory. Use whenever an agent reads, writes, compacts, or defines a memory layer or persistent-memory block.",
       "tags": [
         "ai",

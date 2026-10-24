@@ -120,9 +120,9 @@ test("installs the implementation orchestrator with delegation-only permissions"
   assert.match(agent, /olko-worktree-lifecycle-manager: allow/);
   assert.match(agent, /olko-git-delivery-manager: allow/);
   assert.match(agent, /Do not load or follow `olko-implement-new`/);
-  assert.match(agent, /Own implementation tracking in the canonical technical plan/);
+  assert.match(agent, /maintain one shared, persistent `?<mainRepoPath>\/plans\/features\/<feature-id>\/feature-tracker\.md/);
   assert.match(agent, /## Implementation/);
-  assert.match(agent, /Never dispatch two editing agents for the same file/);
+  assert.match(agent, /Never assign two editing agents the same file/);
   for (const child of [
     "olko-marketplace-skill-bootstrapper",
     "olko-dotnet-auditor",
