@@ -2,15 +2,19 @@
 
 ## Overview
 
-Use this skill for paired plan creation or edits.
+Plan a Feature as one package: its business-and-technical plan plus one implementation plan for every current child Task:
+
+- For an accepted Feature, prepare its business/technical plan and one implementation plan file for every current child Task in one planning session. Reuse accepted Feature decisions in each Task plan.
+- For a Feature, create or edit the linked business and technical plan pair and include every child Task file in the same session. An Epic-only request creates its linked pair.
+- Record predecessor dependencies in Task plans; do not defer planning later Tasks. When a Task plan is split or superseded, mark and link only that file. Preserve the shared Feature package and unaffected Task plans.
 
 ## What I do
-- Create or revise two linked documents for a named item or plan pair.
-- Write `<name>-business.md`: business purpose and mechanism description.
-- Write `<name>-technical.md`: technical delivery details.
+- Create or revise a Feature plan package with one plan file per Task, or linked Epic documents.
+- Keep the Feature business goal and progress map at Feature level.
+- In each Task plan, document only that Task's implementation and link to shared Feature context.
 - Gather only the minimum context needed from the repo.
 - Keep business intent separate from code-level implementation detail.
-- Persist both documents before the final reply.
+- Persist only the files required by the selected plan depth.
 - Apply strict caveman mode while performing this skill.
 
 ## When to use me
@@ -18,7 +22,7 @@ User says "make a plan", "edit plan", "review plan", "refine plan", "plan this",
 
 ## Context budget
 
-- Read only the target plan pair, the nearest `AGENTS.md`, `.agents/skill-config.md`, and the project adapter if enabled.
+- Read only the target Task and Feature context or target plan pair, the nearest `AGENTS.md`, `.agents/skill-config.md`, and the project adapter if enabled.
 - Do not scan the whole repo unless the user explicitly asks for wider discovery.
 - If the project adapter declares `uses: [caveman]`, load `caveman` first and keep this skill in caveman mode.
 - If `caveman` is not declared, still respond in caveman mode and keep prose terse.
@@ -69,7 +73,7 @@ Read from `.agents/skill-config.md`:
 | `readArchitectureDocs` | marketplace default | Hints that architecture docs should be read to verify the technical document against the solution architecture. |
 | `readTestingDocs` | marketplace default | Hints that testing docs should be read to inform the technical document's Tests section. |
 
-The plan-pair location is project-specific. A project adapter may override the file names and location. Otherwise, derive a same-directory pair from the user target: `<stem>-business.md` and `<stem>-technical.md`. Layer control flags are documented in the [Layered Skill Adaptation Pattern](../../docs/layered-skill-adaptation.md).
+For a Feature, use the project adapter's Feature package path and create one Task plan file per child Task in the same session. For a standalone Epic plan, the plan-pair location is project-specific; a project adapter may override it. Otherwise, derive a same-directory pair from the user target: `<stem>-business.md` and `<stem>-technical.md`. Layer control flags are documented in the [Layered Skill Adaptation Pattern](../../docs/layered-skill-adaptation.md).
 
 ## Resolution order
 
