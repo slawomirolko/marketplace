@@ -46,7 +46,7 @@
     {
       "name": "olko-feature-planner",
       "category": "workflow",
-      "version": "1.4.0",
+      "version": "1.5.0",
       "description": "Turn broad product outcomes into an Epic with business value and progress by Feature, then define user-facing Features and independently testable, one-PR Tasks. For implementation planning, return the complete accepted Feature/Task hierarchy to the orchestrator, which creates every Task plan in the same session.",
       "tags": [
         "workflow",
@@ -59,8 +59,22 @@
       ],
       "cost": 1,
       "files": [
-        "SKILL.md"
-      ]
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-implement-current-code",
