@@ -3,7 +3,7 @@
 ## Stop and route back to planning when
 
 - Task ID, owning Feature, approved Task plan, or independently deliverable outcome is missing.
-- Any changed path is unrelated to the Task or the diff exceeds 15 paths.
+- Any changed path is unrelated to the Task or the counted code diff exceeds 15 paths. Documentation and knowledge-base paths are outside that budget and are reported separately; they must still belong to the Task's approved scope.
 - The implementation changes Feature behavior, acceptance, contracts, domain
   models/value objects, dependencies, or independent delivery safety.
 - The source file list is uncertain or the target worktree contains conflicting

@@ -25,16 +25,17 @@ Own delivery for one caller-provided worktree and one YouTrack Task. Require the
 
 ## PR size gate
 
-Before committing, pushing, or creating a PR, independently compare the proposed diff with its target and count distinct repository paths.
+Before committing, pushing, or creating a PR, independently compare the proposed diff with its target and count distinct repository code paths.
 
 - If the Task, Feature milestone, or estimated file budget is missing, stop and report the missing input to the caller.
-- Count production code, tests, migrations, configuration, and documentation. For a rename, count both the old and new paths.
-- Aim for about 10 paths. The normal range is 5–15, with no minimum.
-- If the count exceeds 15, stop before commit, push, or PR creation. Return the count and full path list to the caller.
-- Continue only after the Task is re-scoped through the approval-gated YouTrack workflow or the user explicitly approves a documented exception.
+- Count production code, tests, migrations, and runtime configuration. For a rename, count both the old and new paths.
+- Documentation and knowledge-base paths are excluded from the budget and reported separately: markdown notes under `docs/` (including `docs/knowledge/`), files under `plans/`, and co-located documentation such as `AGENTS.md`, `CODING_STYLE.md`, `TESTING.md`, and `README.md`. They still must belong to the Task's approved scope, and code must never be reclassified as documentation to evade the ceiling.
+- Aim for about 10 code paths. The normal range is 5–15, with no minimum.
+- If the code-path count exceeds 15, stop before commit, push, or PR creation. Return the count and full path list to the caller.
+- Continue only after the Task is re-scoped through the approval-gated YouTrack workflow. The 15-code-path ceiling has no user waiver.
 - Recount after every later PR change.
 
-The delivery result must include the Task, its Feature milestone, the actual path count, and the PR URL. The caller uses these details to record the Task-to-PR result.
+The delivery result must include the Task, its Feature milestone, the actual code-path count, the documentation-path count, and the PR URL. The caller uses these details to record the Task-to-PR result.
 
 ## Delivery checks
 

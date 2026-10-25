@@ -43,11 +43,12 @@ Return exactly one verdict:
 - `FEATURE_RECHECK_REQUIRED`: the change may alter Feature behavior or
   acceptance criteria, Task boundaries or milestones, sibling scope or overlap,
   domain model/contract ownership, delivery order or parallel safety, or the
-  15-path ceiling for any remaining Task.
+  15-code-path ceiling for any remaining Task.
 - `TASK_LOCAL_OK`: the Feature outcome remains satisfied, and every remaining
   Task was checked and remains independently deliverable with valid scope,
   acceptance criteria, milestone, domain model/contract touchpoints,
-  dependencies, parallel-safety, and a changed-path estimate at or below 15.
+  dependencies, parallel-safety, and a counted code-path estimate at or below 15,
+  with documentation paths excluded from that budget.
 - `INSUFFICIENT_CONTEXT`: required input or current Feature/Task hierarchy is
   missing or ambiguous. This verdict must not authorize a local-only change.
 

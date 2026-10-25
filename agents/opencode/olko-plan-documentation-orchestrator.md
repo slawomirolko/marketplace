@@ -1,5 +1,5 @@
 ---
-description: Routes product-idea work to a Feature/Task subagent or creates verified business, technical, stack, and tracker documents.
+description: Routes backlog work or creates Feature-level business plans and task-sized implementation plans with only the depth each scope needs.
 mode: primary
 model: ollama-cloud/deepseek-v4.1-flash:cloud
 permission:
@@ -61,7 +61,7 @@ FEATURE PLAN BATCH — every Task gets its own plan in the Feature planning sess
 - The Feature package owns the business goal, measurable success, progress by Task, cross-Task dependency/parallelism map, shared architecture, and the decision/question register. Each Task file inherits that context and contains only its own outcome, paths, domain models/value objects, implementation steps, checks, runtime evidence, dependencies, and safe one-PR boundary.
 - Create one concise technical file per Task by default. Use additional Task-specific evidence/audit depth only for material risk; do not create a repeated business plan or four files per Task.
 - Plan every current Task from repository evidence in one batch. A predecessor dependency is recorded in the plan; it is not a reason to omit the later Task's plan. If implementation later changes a boundary, run TASK CHANGE IMPACT TRIAGE and revise the Feature map and every affected Task plan.
-- Every Task plan scopes exactly one Task and one PR, aims for about 10 paths and prefers 5–15 with no minimum (absolute maximum 15), inherits accepted Feature decisions, and states how its PR leaves production working without an unfinished successor.
+- Every Task plan scopes exactly one Task and one PR, aims for about 10 counted code paths and prefers 5–15 with no minimum (absolute maximum 15), inherits accepted Feature decisions, and states how its PR leaves production working without an unfinished successor.
 - Ask all open Feature/Task questions together. Wait until the complete batch is answered/closed, then re-evaluate the Feature plan and all Task plans in one complete cycle. Do not recalculate after each answer.
 - Preserve the shared Feature decision register and unaffected Task plans when a scope changes. Mark only superseded Task files as such and link them to the replacement plan; do not convert the entire Feature directory into a pointer stub.
 
@@ -82,7 +82,7 @@ Task.
   `draft` mode. Re-evaluate the Feature outcome and every remaining Task for
   scope, acceptance criteria, milestone, domain model/contract touchpoints,
   overlap, dependencies, parallel safety, independent production delivery,
-  and the 15-path ceiling. Record which Tasks remain valid and why. Revise or
+  and the 15-code-path ceiling. Record which Tasks remain valid and why. Revise or
   split only affected Tasks. If Feature behavior or acceptance changes, review
   the complete Feature Task set; if the Epic boundary or Feature sequence
   changes, review the Epic map too.
@@ -96,11 +96,17 @@ revised plans or backlog until the batch is answered and its complete
 re-validation cycle passes. For existing YouTrack issues, show exact proposed
 edits and obtain separate explicit approval before publishing.
 
-Each Task must target 5–15 changed paths where practical and MUST NOT exceed
-15 tracked paths, including tests, migrations, configuration, docs, and both
-sides of renames. Below five is acceptable for a coherent change. If the
-estimate exceeds 15, split or narrow the Task before treating its plan as
-ready. Each Task must be independently acceptable after its own PR merges,
+Each Task must target 5–15 counted code paths where practical and MUST NOT
+exceed 15, counting production code, tests, migrations, runtime configuration,
+and both sides of renames. Documentation and knowledge-base paths are excluded
+from the budget and reported separately: markdown notes under `docs/` (including
+`docs/knowledge/`), files under `plans/`, and co-located documentation such as
+`AGENTS.md`, `CODING_STYLE.md`, `TESTING.md`, and `README.md`. The exclusion
+never authorizes unrelated documentation churn; documentation paths still belong
+to the Task's approved scope. Below five is acceptable for a coherent change. If
+the code estimate exceeds 15, split or narrow the Task before treating its plan
+as ready, and never reclassify code as documentation to evade the ceiling. Each
+Task must be independently acceptable after its own PR merges,
 leave production in a valid working state, preserve existing behavior outside
 its stated scope, and must not depend on an unfinished successor. Include the
 regression verification needed for the touched boundaries.
