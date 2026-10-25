@@ -520,7 +520,7 @@
     {
       "name": "olko-dotnet-style",
       "category": "dotnet",
-      "version": "1.0.2",
+      "version": "1.1.0",
       "description": "Check .NET/C# style compliance for changed C# projects with marketplace defaults. Maps .cs/.csproj files to source projects, reads project docs/adapters, runs dotnet format by default when no project command is configured, checks common C# style expectations that docs enable, and reports violations with rule sources. Use when validating .NET style, linting C# changes, before commit/test gates, or when olko-commit-style delegates .NET style checks.",
       "tags": [
         "dotnet",
@@ -848,7 +848,7 @@
     {
       "name": "olko-kotlin-style",
       "category": "kotlin",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Check Kotlin/Android style compliance for changed Kotlin files with marketplace defaults. Reads project docs and adapters, maps .kt/.kts files to Gradle module roots, runs documented format/lint commands such as ktlint/detekt when configured, checks common Kotlin style expectations that docs enable (naming, formatting, imports, classes, value classes, extension/scope functions, collection ops, nullability, coroutines/Flow, Compose, networking), and reports violations with rule sources. Use when validating Kotlin style, linting Kotlin changes, before commit/test gates, or when olko-commit-style delegates Kotlin style checks.",
       "tags": [
         "kotlin",
@@ -1182,7 +1182,7 @@
     {
       "name": "olko-python-style",
       "category": "python",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Check Python style compliance for changed Python files with marketplace defaults. Reads project docs and adapters, maps .py files to pyproject.toml roots, runs documented format/lint/type commands such as ruff/mypy/pyright when configured, checks common Python style expectations that docs enable, and reports violations with rule sources. Use when validating Python style, linting Python changes, before commit/test gates, or when olko-commit-style delegates Python style checks.",
       "tags": [
         "python",
@@ -1278,7 +1278,7 @@
     {
       "name": "olko-react-style",
       "category": "react",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "description": "Check React/TypeScript style compliance for changed files with marketplace defaults. Reads project docs and adapters, maps .ts/.tsx files to Vite project roots, runs documented format/lint commands such as ESLint/Prettier when configured, checks common React style expectations that docs enable (naming, formatting, imports, component patterns, hooks rules, CSS Modules, React Query, React Hook Form, typed API client), and reports violations with rule sources. Use when validating React style, linting React/TypeScript changes, before commit/test gates, or when olko-commit-style delegates React style checks.",
       "tags": [
         "react",
@@ -1443,6 +1443,45 @@
         "ADR-FORMAT.md",
         "CONTEXT-FORMAT.md"
       ]
+    },
+    {
+      "name": "olko-design-rules",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Read-only rule catalogue for design and code review across stacks. Design rules (DRY, YAGNI, KISS) apply at plan time and code time. Code rules (nesting, cryptic identifiers, visibility, magic values, nested try/catch, collection-population blocks, linear scans, repeated mapping) apply at code time. .NET-only rules cover explicit enum values, sealed leaf types, and static field order. Never edits code; callers report findings with the rule id. Use when a stack style skill, plan review, or code review applies design rules. Triggers: 'design rules', 'DRY YAGNI KISS', 'check duplication', 'speculative abstraction', 'overengineering', 'olko-design-rules'.",
+      "tags": [
+        "workflow",
+        "design",
+        "review",
+        "dry",
+        "yagni",
+        "kiss"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.design.rules"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "references/code-rules.md",
+        "references/design-rules.md",
+        "references/dotnet-rules.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-feature-planner",

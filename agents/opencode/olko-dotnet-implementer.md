@@ -20,6 +20,7 @@ permission:
     olko-memory-layer: allow
     olko-dotnet-architecture: allow
     olko-dotnet-style: allow
+    olko-design-rules: allow
     olko-dotnet-testing: allow
     olko-test: allow
 ---
