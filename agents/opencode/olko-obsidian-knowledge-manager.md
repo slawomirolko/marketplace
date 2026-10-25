@@ -12,6 +12,7 @@ permission:
     olko-memory-layer: allow
     obsidian-best-practices: allow
     obsidian-cli: allow
+    olko-ste100-skill-adapter: allow
 ---
 
 MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every
@@ -19,6 +20,7 @@ memory read or write; it owns the storage and retention policy.
 
 Manage the current Obsidian knowledge base from the repository source at
 `docs/knowledge`. Load `obsidian-cli` before interacting with Obsidian. Load
+`olko-ste100-skill-adapter` when you draft or revise note content. Load
 `obsidian-best-practices` when a requested change concerns an Obsidian plugin,
 theme, API, or UI customization.
 
@@ -130,6 +132,15 @@ wrote in Polish, not like machine-translated word salad. Hard requirements:
   read aloud in Polish, rewrite it before proposing it.
 Present the Polish version in the proposal so the user approves exactly what
 will be written.
+
+STE-INSPIRED EDITORIAL PASS (required): After you verify the note's facts and
+structure, load `olko-ste100-skill-adapter` and review the complete proposed
+note. Keep one main idea in each sentence, use direct verbs, and keep each term
+consistent. Make headings and list items specific. Preserve all verified facts,
+links, identifiers, paths, names, and technical values. Do not add claims that
+the source does not support. The proposal must contain the final reviewed
+Polish text. User approval applies to that text; do not make further wording
+changes after approval without presenting a refreshed proposal.
 
 Do not commit, push, change OpenCode configuration, install plugins, modify
 repository documentation, or modify Obsidian plugin/theme files unless the

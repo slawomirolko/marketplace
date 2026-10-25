@@ -1,28 +1,42 @@
 # Olko Implement Current Code
 
-## What
-Continue current checkout changes in the session's attached worktree. If the session is in the primary checkout, transfer them into a new worktree from the latest remote default branch. Then verify and finish via commit + merge skills.
+## Purpose
 
-## Use When
-- User says `olko-implement-current-code`, `implement current code`, or `transfer my session changes to a worktree`.
-- Implementation already exists in main checkout during current session.
-- User says `resume implement-current-code` or gives worktree path/branch with progress tracker.
+Adopt changes that already exist in a checkout and attach them to one approved
+YouTrack Task. Transfer them to that Task's worktree when needed, then hand off
+to `olko-implementation-orchestrator` for the normal Task delivery flow.
+
+## Use when
+
+- The user asks to continue or adopt changes that are already written.
+- The approved Task implementation plan and owning Feature context are available. Feature planning prepares plans for every child Task in one session.
+- The changes can be identified as one Task's scope.
+
+Do not use this skill to start implementation from a plan. Use the standard
+implementation orchestrator directly for that.
+
+## Hard boundaries
+
+- One invocation adopts changes for one Task and one PR.
+- The approved Task implementation plan is required. The Task must belong to a
+  Feature, and the Feature delivery tracker is identified or created by the orchestrator.
+- Count all distinct changed code paths, including tests, migrations, config, and
+  both sides of renames. Documentation and knowledge-base paths are excluded
+  from that budget and reported separately. Aim for 5–15 code paths when the
+  work supports it; never transfer or accept a Task diff over 15 code paths.
+  There is no minimum.
+- Stop on unrelated changes, scope drift, missing Task/Feature context, an
+  ambiguous source file list, or a conflict with the target worktree.
+- This skill inventories and transfers files only. It does not edit product
+  code or run technical audits, tests, rebuilds, commit, open/merge a PR, or
+  delete plans.
+- After a successful handoff, the standard orchestrator owns the full flow:
+  Task audit and verification, Feature tracking, PR delivery, post-merge
+  verification, Task-plan cleanup, and final Feature audit.
 
 ## Output
-- Reused attached worktree branch or newly created worktree branch.
-- Local progress tracker: `implement-current-code_<slug>.md`.
-- Transferred session files.
-- Style/test/rebuild/log verification report.
-- Delegated commit and worktree merge when user confirms.
 
-## Uses
-This skill delegates only when project adapter declares matching skills in `.agents/skills/olko-implement-current-code/project.md`:
-
-- `olko-worktree-create` for current-worktree reuse or worktree creation.
-- `olko-commit-style` or stack style skills for style checks.
-- `olko-test` for all tests in affected projects (always delegated — auto-detected when installed even if not in `uses`; configured `testCommands` are the fallback when it is absent).
-- `olko-commit` for commit/push/PR workflow.
-- `olko-worktree-merge` for merge and cleanup.
-
-## Configuration
-Reads `.agents/skill-config.md`, then `.agents/skills/olko-implement-current-code/project.md` when present. Defaults are conservative: no service rebuild, no telemetry endpoint query, delegate only declared `uses`, ask before irreversible actions.
+- Task and Feature IDs plus the approved Task plan path.
+- Confirmed changed code paths and documentation paths, with the code count against the 15-path limit.
+- Source and target worktree paths, with transferred-file results.
+- Handoff status and any blocker. Do not claim implementation is complete.

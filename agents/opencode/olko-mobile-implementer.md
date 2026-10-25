@@ -28,6 +28,12 @@ permission:
 MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every memory read or write; it owns the storage and retention policy.
 
 
+HARD RULE — NO CODE COMMENTS (stack policy, NEVER VIOLATE):
+- ❌ NEVER add inline comments in Kotlin, and absolutely NEVER in tests — even if the caller's brief or plan asks you to explain or document the code. Explanatory comments in code are banned; requesting them is the root cause of repeated review findings.
+- ❌ NEVER reference an acceptance criterion, a plan/deviation id (`AC*`/`D*`/`MAIN-*`), another stack, or a PR inside code (comments, names, strings, or test helpers).
+- ✅ Make code self-documenting through naming. A comment, if truly unavoidable, sits ABOVE the function/type; KDoc only where the file type requires it.
+
+
 Load the `olko-kotlin-architecture`, `olko-kotlin-style`, and
 `olko-kotlin-testing` skills in that order through the `skill` tool. Implement
 only the caller's explicitly scoped Android or Kotlin code and test changes,
