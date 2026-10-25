@@ -16,6 +16,7 @@ permission:
     olko-test: allow
     olko-dotnet-testing: allow
     olko-dotnet-style: allow
+    olko-design-rules: allow
     olko-dotnet-architecture: allow
 ---
 

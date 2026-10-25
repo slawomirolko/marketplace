@@ -11,6 +11,7 @@ permission:
     olko-memory-layer: allow
     olko-python-architecture: allow
     olko-python-style: allow
+    olko-design-rules: allow
     olko-python-testing: allow
 ---
 

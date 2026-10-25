@@ -47,6 +47,7 @@ These are reusable marketplace defaults. Project-specific naming rules, layer na
 ## Default .NET style rules
 
 Apply these defaults unless config, adapter, or project docs override them.
+Also apply the `olko-design-rules` catalogue to the changed lines: its design rules, code rules, and .NET-only rules.
 
 ### Documentation and method shape
 - After reading a method name, a person should be able to understand what the method does.

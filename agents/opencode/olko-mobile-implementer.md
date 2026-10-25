@@ -20,6 +20,7 @@ permission:
     olko-memory-layer: allow
     olko-kotlin-architecture: allow
     olko-kotlin-style: allow
+    olko-design-rules: allow
     olko-kotlin-testing: allow
     olko-test: allow
 ---

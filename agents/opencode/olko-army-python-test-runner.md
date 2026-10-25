@@ -16,6 +16,7 @@ permission:
     olko-test: allow
     olko-python-testing: allow
     olko-python-style: allow
+    olko-design-rules: allow
     olko-python-architecture: allow
 ---
 
