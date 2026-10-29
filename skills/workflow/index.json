@@ -304,7 +304,7 @@
       "name": "olko-summary",
       "category": "workflow",
       "version": "1.0.1",
-      "description": "End-of-session summary — track session-affected files, list investigated docs, summarize changes and problems, outline solved/pending issues, future steps, improvement suggestions, and helpful links",
+      "description": "End-of-session summary - track session-affected files, list investigated docs, summarize changes and problems, outline solved/pending issues, future steps, improvement suggestions, and helpful links. Triggers: \\\"summarize session\\\", \\\"session summary\\\", \\\"wrap up session\\\", \\\"olko-summary\\\".",
       "tags": [
         "workflow",
         "olko",

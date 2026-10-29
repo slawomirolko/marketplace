@@ -28,6 +28,9 @@
         "olko-react-auditor",
         "olko-react-implementer",
         "olko-react-test-runner",
+        "olko-react-native-auditor",
+        "olko-react-native-implementer",
+        "olko-react-native-test-runner",
         "olko-army-python-auditor",
         "olko-army-python-implementer",
         "olko-army-python-test-runner",
@@ -136,6 +139,7 @@
         "olko-dotnet-auditor",
         "olko-mobile-auditor",
         "olko-react-auditor",
+        "olko-react-native-auditor",
         "olko-army-python-auditor",
         "olko-obsidian-knowledge-manager",
         "olko-task-scope-impact-reviewer"
@@ -334,6 +338,51 @@
         "olko-test",
         "olko-memory-layer",
         "vercel-react-view-transitions",
+        "olko-design-rules"
+      ]
+    },
+    {
+      "name": "olko-react-native-auditor",
+      "version": "1.0.0",
+      "file": "olko-react-native-auditor.md",
+      "stack": "react-native",
+      "role": "auditor",
+      "skills": [
+        "olko-react-native-architecture",
+        "olko-react-native-style",
+        "olko-react-native-security",
+        "olko-react-native-testing",
+        "olko-project-architecture",
+        "olko-memory-layer",
+        "olko-design-rules"
+      ]
+    },
+    {
+      "name": "olko-react-native-test-runner",
+      "version": "1.0.0",
+      "file": "olko-react-native-test-runner.md",
+      "stack": "react-native",
+      "role": "test-runner",
+      "skills": [
+        "olko-test",
+        "olko-react-native-testing",
+        "olko-memory-layer"
+      ]
+    },
+    {
+      "name": "olko-react-native-implementer",
+      "version": "1.0.0",
+      "file": "olko-react-native-implementer.md",
+      "stack": "react-native",
+      "role": "implementer",
+      "skills": [
+        "olko-react-native-architecture",
+        "olko-react-native-style",
+        "olko-react-native-testing",
+        "olko-react-native-security",
+        "olko-project-architecture",
+        "olko-test",
+        "olko-memory-layer",
         "olko-design-rules"
       ]
     },

@@ -38,6 +38,9 @@ uses:
   - olko-react-security
   - olko-react-style
   - olko-react-testing
+  - olko-react-native-architecture
+  - olko-react-native-style
+  - olko-react-native-testing
 ```
 
 If a dependency is not declared, run the built-in document-based checks below.
@@ -62,6 +65,7 @@ For each changed file, determine its stack using project markers (not fixed path
 | Docker | changed `Dockerfile*`, `*.Dockerfile`, `.dockerignore`, `compose*.yml`, `compose*.yaml`, `docker-compose*.yml`, `docker-compose*.yaml` |
 | Python | changed `.py`; belongs to nearest `pyproject.toml` dir |
 | Kotlin/Android | changed `.kt` / `.kts`; belongs to nearest `gradlew` dir |
+| React Native | changed JS/TS, workspace/app config, Metro, or native mobile file; belongs to the owning app/package |
 | React/TypeScript | changed `.ts` / `.tsx`; belongs to nearest `package.json` beside `vite.config.ts`/`.js` |
 
 If a changed file matches no known stack, skip it.
@@ -102,6 +106,9 @@ If a matching stack-specific skill is declared in `uses`, delegate the relevant 
 - React/TypeScript security: `olko-react-security`
 - React/TypeScript style: `olko-react-style`
 - React/TypeScript test conventions: `olko-react-testing`
+- React Native architecture: `olko-react-native-architecture`
+- React Native style: `olko-react-native-style`
+- React Native test conventions: `olko-react-native-testing`
 
 If no matching dependency is declared, inspect locally:
 

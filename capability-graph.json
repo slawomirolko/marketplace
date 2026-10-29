@@ -661,6 +661,62 @@
       "prerequisites": []
     },
     {
+      "id": "react-native",
+      "skills": [
+        "olko-react-native-architecture",
+        "olko-react-native-security",
+        "olko-react-native-style",
+        "olko-react-native-testing"
+      ],
+      "related": [
+        "react-native.architecture",
+        "react-native.security",
+        "react-native.style",
+        "react-native.testing"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "react-native.architecture",
+      "skills": [
+        "olko-react-native-architecture"
+      ],
+      "related": [
+        "react-native"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "react-native.security",
+      "skills": [
+        "olko-react-native-security"
+      ],
+      "related": [
+        "react-native"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "react-native.style",
+      "skills": [
+        "olko-react-native-style"
+      ],
+      "related": [
+        "react-native"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "react-native.testing",
+      "skills": [
+        "olko-react-native-testing"
+      ],
+      "related": [
+        "react-native"
+      ],
+      "prerequisites": []
+    },
+    {
       "id": "react.animation",
       "skills": [
         "vercel-react-view-transitions"

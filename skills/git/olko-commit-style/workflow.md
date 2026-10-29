@@ -18,3 +18,6 @@ Optional `uses` delegates:
 - `olko-react-security`
 - `olko-react-style`
 - `olko-react-testing`
+- `olko-react-native-architecture`
+- `olko-react-native-style`
+- `olko-react-native-testing`

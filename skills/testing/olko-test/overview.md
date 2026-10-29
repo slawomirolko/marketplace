@@ -4,7 +4,7 @@
 
 ## What I do
 - Determine test scope (current git changes, plan tests, or all tests)
-- Run unit tests for .NET, Python, Android (Kotlin), and React (Vitest) — Android Gradle runs inside the `pricepredictor.android-emulator` Docker container (JDK 25 + Android SDK 35 + pre-cached Gradle 9.7.1, project `docker cp`'d into the container), never on the Windows host
+- Run tests for .NET, Python, Android/Kotlin, React Native, and React web — each stack uses its configured project and runner
 - Manage Android emulator container (start via `docker compose up -d android-emulator`, wait for boot, stop in `finally`) for instrumentation tests
 - Variant C (local Windows Android SDK, no compose emulator service): start a local AVD headless via `$env:ANDROID_HOME\emulator\emulator.exe`, wait for boot, run Gradle on the host, and `adb emu kill` only an emulator this run started
 - Run Python integration tests
@@ -44,6 +44,12 @@ Recognized keys:
 | `androidGradleTimeoutSeconds` | `600` | External Gradle watchdog timeout; kills the process tree and stops the daemon |
 | `reactTestCommand` | `vitest run` | React/TypeScript test runner command |
 | `reactTestTimeoutMs` | `120000` | Explicit timeout for the React test command |
+| `reactNativeTestCommand` | none | React Native unit/component test command |
+| `reactNativeTypecheckCommand` | none | React Native type-check command when part of the test gate |
+| `reactNativeE2ECommand` | none | React Native device/simulator E2E command |
+| `reactNativeTestTimeoutMs` | `120000` | Timeout for configured React Native test commands |
+| `reactNativeProjectRoot` | owning app/package root | React Native app root override |
+| `reactNativeWorkspaceRoot` | discovered only when convention discovery is enabled | Package-manager workspace root override |
 | `worktreeCompose` | `true` | Enable worktree Compose detection and lifecycle |
 | `worktreeComposeWrapper` | `scripts/tests/worktree-compose.ps1` | Repository-relative wrapper path |
 | `worktreeComposeTestGlob` | `scripts/tests/worktree-compose*.ps1` | Repository-relative worktree test-script glob |
@@ -57,7 +63,7 @@ Stack-specific checks may be delegated only through `uses` in `.agents/skills/ol
 
 Determine scope in this priority order:
 
-1. **`-all` / `-a` / "for all" / "all tests"** — run every test in the entire repo (architecture tests + all .NET test projects + all Python tests + all Kotlin tests: JVM unit `./gradlew test` and instrumentation `./gradlew connectedCheck`, including Android emulator management per Step 3b + all React/Vitest tests)
+1. **`-all` / `-a` / "for all" / "all tests"** — run every discovered suite for .NET, Python, Kotlin/Android, React Native, and React web, including configured device/E2E suites.
 2. **Called from olko-plan-editor skill** — read the plan file at the path olko-plan-editor passes in (do not assume a fixed location). Extract the **Tests** section — both unit and integration test names and their file paths. These are the scope.
 3. **Called from olko-commit skill** — scope is the files changed in this session (tracked by olko-commit). Map changed files to affected test projects using the discovery rules below.
 4. **Default (standalone invocation)** — use `git status` to find modified/new files, then map to affected test projects.
@@ -70,6 +76,7 @@ This skill discovers projects by convention — it does not hardcode project nam
 - .NET solution: find `*.sln` (or top-level `*.csproj`). Source projects = every `*.csproj` in the repo.
 - Python project: find dirs containing `pyproject.toml` (or `requirements.txt`); that dir is the Python project root (run `uv`/`pytest` from there).
 - Kotlin/Android project: find the dir containing `gradlew` (or `build.gradle` / `build.gradle.kts`); that is the Android project root.
+- React Native app: map app, Metro, workspace, and native files to their owning app/package; resolve workspace root separately from app root.
 - React/Vite project: find the dir containing `package.json` beside a `vite.config.ts`/`.js`; that is the React project root (run `vitest` from there).
 
 **Map a changed source project → test projects (by naming convention):**
@@ -77,6 +84,7 @@ This skill discovers projects by convention — it does not hardcode project nam
 - .NET architecture tests: glob for `*.Architecture.Tests.csproj` (or `*.Architecture.*.csproj`). If one exists, it is a fail-fast gate that runs whenever **any** .NET source file changes.
 - Python: map a changed source module `<py-root>/src/foo/bar.py` → `<py-root>/tests/test_bar.py` (or the test file matching the module). If no specific test file maps, run the whole `<py-root>/tests/` directory.
 - Kotlin: `./gradlew test` (JVM unit) and `./gradlew connectedCheck` (instrumentation) from the Android project root — run whenever any Kotlin/Android source file changes.
+- React Native: run the configured unit/component command from the owning app/package root; run the configured device/E2E command when required by project instructions.
 - React: `vitest run` from the discovered React project root — run whenever any `.ts`/`.tsx` source file changes. Manual e2e verification (`agent-browser` against the running dev server) is on-demand only; `olko-test` never runs it automatically.
 
 **Kotlin/Android instrumentation rule (MANDATORY, user directive 2026-09-04):** any

@@ -244,7 +244,7 @@
       "category": "caveman",
       "origin": "vendored",
       "version": "1.0.0",
-      "description": "Compress natural language memory files (CLAUDE.md, todos, preferences) into caveman format to save input tokens. Preserves all technical substance, code, URLs, and structure. Compressed version overwrites the original file. Human-readable backup saved as FILE.original.md. Trigger: /caveman-compress FILEPATH or \"compress memory file\".",
+      "description": "Compress natural language memory files (CLAUDE.md, todos, preferences) into caveman format to save input tokens. Preserves all technical substance, code, URLs, and structure. Compressed version overwrites the original file. Human-readable backup saved as FILE.original.md. Trigger: /caveman-compress FILEPATH or \"compress memory file\"",
       "tags": [
         "caveman",
         "caveman",
@@ -1013,7 +1013,7 @@
       "name": "olko-install-skill",
       "category": "marketplace",
       "version": "1.1.0",
-      "description": "Install and adapt marketplace skills. With no skill name, bootstrap every missing skill without overwriting existing copies; with a name, install or reconfigure that skill.",
+      "description": "Install and adapt marketplace skills. With no skill name, bootstrap every missing skill without overwriting existing copies; with a name, install or reconfigure that skill. Triggers: 'install skills', 'bootstrap skills', 'install skill', 'adapt skill', 'configure skill', 'setup skill', 'optimize adaptation', 'olko-install-skill [name]'.",
       "tags": [
         "marketplace",
         "install"
@@ -1185,8 +1185,8 @@
     {
       "name": "olko-project-architecture",
       "category": "project",
-      "version": "1.0.0",
-      "description": "Check whole-monorepo architecture compliance for a project with marketplace defaults. Reads project docs and adapters, discovers the top-level layout (apps/*, services/*, platform/*, ai/*, docs/*, infrastructure/*, tests/*), verifies the apps-vs-services-vs-platform separation, DDD module layering (api/application/domain/infrastructure/contracts) and dependency direction, cross-module/cross-service communication through platform contracts and messaging, shared-code ownership, independent buildability, and delegates the ai/ subtree check to olko-ai-architecture. Use when validating overall project architecture, during plan review, when onboarding a new app/service/module, or standalone to verify the repo layout and layering are not drifting.",
+      "version": "1.1.0",
+      "description": "Check whole-monorepo architecture compliance for a project with marketplace defaults. Discover app/service/platform surfaces and workspace packages; verify top-level separation, DDD module boundaries, dependency direction, shared-code ownership, independent buildability, React Native workspace/package/Metro/native-linking boundaries, and AI context layout. Use when reviewing monorepo architecture, onboarding a surface/module, or checking repository structure for drift.",
       "tags": [
         "project",
         "architecture"
@@ -1444,7 +1444,7 @@
       "category": "react",
       "origin": "vendored",
       "version": "1.0.0",
-      "description": "Guide for implementing smooth, native-feeling animations using React’s View Transition API (<ViewTransition> component, addTransitionType, and CSS view transition pseudo-elements). Use this skill whenever the user wants to add page transitions, animate route changes, create shared element animations, animate enter/exit of components, animate list reorder, implement directional (forward/back) navigation animations, or integrate view transitions in Next.js. Also use when the user mentions view transitions, startViewTransition, ViewTransition, transition types, or asks about animating between UI states in React without third-party animation libraries.",
+      "description": "Guide for implementing smooth, native-feeling animations using React's View Transition API (`<ViewTransition>` component, `addTransitionType`, and CSS view transition pseudo-elements). Use this skill whenever the user wants to add page transitions, animate route changes, create shared element animations, animate enter/exit of components, animate list reorder, implement directional (forward/back) navigation animations, or integrate view transitions in Next.js. Also use when the user mentions view transitions, `startViewTransition`, `ViewTransition`, transition types, or asks about animating between UI states in React without third-party animation libraries.",
       "tags": [
         "react",
         "animation",
@@ -1467,10 +1467,83 @@
       ]
     },
     {
+      "name": "olko-react-native-architecture",
+      "category": "react-native",
+      "version": "1.1.0",
+      "description": "Review React Native application architecture across TypeScript and native platform boundaries, including monorepo workspaces. Check package ownership, dependency resolution, Metro, autolinking, app boundaries, navigation, API/auth, persistence, security, and Expo or bare React Native integration. Use when designing or reviewing React Native architecture.",
+      "tags": [
+        "react-native",
+        "architecture"
+      ],
+      "capabilities": [
+        "react-native",
+        "react-native.architecture"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-react-native-security",
+      "category": "react-native",
+      "version": "1.0.0",
+      "description": "Review React Native mobile apps for security issues across JavaScript, native Android/iOS configuration, storage, authentication, networking, deep links, WebViews, logs, dependencies, and release builds. Use for focused security reviews or when changing sensitive mobile flows; follow project rules and report evidence with severity.",
+      "tags": [
+        "react-native",
+        "security"
+      ],
+      "capabilities": [
+        "react-native",
+        "react-native.security"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-react-native-style",
+      "category": "react-native",
+      "version": "1.1.0",
+      "description": "Check style and static-quality conventions in React Native TypeScript and native-facing code. Read project rules, run configured ESLint/Prettier/type checks, and inspect hooks, components, platform boundaries, accessibility, and mobile performance patterns. Use when reviewing or formatting React Native changes.",
+      "tags": [
+        "react-native",
+        "style"
+      ],
+      "capabilities": [
+        "react-native",
+        "react-native.style"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-react-native-testing",
+      "category": "react-native",
+      "version": "1.1.0",
+      "description": "Review and run React Native tests across logic, components, navigation, native integration, and device-level user flows. Apply configured Jest/React Native Testing Library and E2E conventions, check meaningful assertions and platform coverage, and report failures without hiding unavailable infrastructure. Use when validating React Native tests or adding mobile feature coverage.",
+      "tags": [
+        "react-native",
+        "testing",
+        "test"
+      ],
+      "capabilities": [
+        "react-native",
+        "react-native.testing"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
       "name": "olko-test",
       "category": "testing",
       "version": "2.2.0",
-      "description": "Run affected or all tests for .NET, Python, Android/Kotlin, and React/TypeScript with change-aware scope detection, emulator management, service management, and failure handling. Android/Kotlin instrumentation (connectedDebugAndroidTest, FULL suite) is MANDATORY whenever any Kotlin file changed — never skipped, never filtered. Use when asked to run tests, after implementation, or when called from olko-plan-editor/olko-commit skills.",
+      "description": "Run affected or all tests for .NET, Python, Android/Kotlin, React Native, and React web with change-aware scope detection, platform-specific test execution, service management, and failure handling. Android/Kotlin instrumentation remains mandatory when Kotlin changes require it. Use when asked to run tests, after implementation, or when called from olko-plan-editor/olko-commit skills.",
       "tags": [
         "testing",
         "test"
@@ -1805,7 +1878,7 @@
       "name": "olko-summary",
       "category": "workflow",
       "version": "1.0.1",
-      "description": "End-of-session summary — track session-affected files, list investigated docs, summarize changes and problems, outline solved/pending issues, future steps, improvement suggestions, and helpful links",
+      "description": "End-of-session summary - track session-affected files, list investigated docs, summarize changes and problems, outline solved/pending issues, future steps, improvement suggestions, and helpful links. Triggers: \\\"summarize session\\\", \\\"session summary\\\", \\\"wrap up session\\\", \\\"olko-summary\\\".",
       "tags": [
         "workflow",
         "olko",

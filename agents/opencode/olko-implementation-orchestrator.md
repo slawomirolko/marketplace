@@ -22,6 +22,9 @@ permission:
     olko-react-auditor: allow
     olko-react-implementer: allow
     olko-react-test-runner: allow
+    olko-react-native-auditor: allow
+    olko-react-native-implementer: allow
+    olko-react-native-test-runner: allow
     olko-army-python-auditor: allow
     olko-army-python-implementer: allow
     olko-army-python-test-runner: allow
@@ -99,7 +102,7 @@ Route each substep explicitly:
    Target about 10 code paths; the preferred range is 5–15, with no minimum. Fifteen is an absolute maximum for counted code paths. If the code diff exceeds 15 paths, stop before commit, push, or PR creation and report the count and all paths. Re-scope or split the Task through the approved Epic/Feature/Task workflow; user approval cannot waive the 15-path ceiling. Do not move code into documentation paths to evade the budget.
 
    Recount after every later PR change, including approved knowledge-base edits. Record the Epic outcome, Feature milestone, Task, estimate, actual code-path count, documentation-path count, and gate result in the implementation journal. Each Task maps to one PR. Report that PR URL against its Task.
-7c. TASK TECHNICAL AUDIT (MANDATORY, EVERY TASK PR): after implementation, rules/style/tests, and runtime verification, but before commit/PR delivery, run each applicable stack auditor against the ACTUAL Task diff. Select only auditors matching changed stacks: `olko-dotnet-auditor`, `olko-mobile-auditor`, and/or `olko-army-python-auditor`. Give each auditor the Task ID, owning Feature ID and acceptance criteria, approved Task plan and linked Feature plan, changed-path list, and diff. Require a read-only audit of architecture, project conventions, correctness, test coverage, and whether this Task is independently safe to merge. Record auditor, exact scope, verdict, and `file:line` evidence in the shared Feature delivery tracker and Task implementation journal. Any correctness, architecture, or safety finding blocks PR delivery until fixed and re-audited; after a fix, rerun the affected rules/style/tests/runtime checks and auditor. Record non-blocking suggestions separately. Do not waive correctness or safety findings and do not run a combined Feature-wide audit here.
+7c. TASK TECHNICAL AUDIT (MANDATORY, EVERY TASK PR): after implementation, rules/style/tests, and runtime verification, but before commit/PR delivery, run each applicable stack auditor against the ACTUAL Task diff. Select only auditors matching changed stacks: `olko-dotnet-auditor`, `olko-mobile-auditor` for Kotlin/Android, `olko-react-auditor` for React web, `olko-react-native-auditor` for React Native, and/or `olko-army-python-auditor`. Give each auditor the Task ID, owning Feature ID and acceptance criteria, approved Task plan and linked Feature plan, changed-path list, and diff. Require a read-only audit of architecture, project conventions, correctness, test coverage, and whether this Task is independently safe to merge. Record auditor, exact scope, verdict, and `file:line` evidence in the shared Feature delivery tracker and Task implementation journal. Any correctness, architecture, or safety finding blocks PR delivery until fixed and re-audited; after a fix, rerun the affected rules/style/tests/runtime checks and auditor. Record non-blocking suggestions separately. Do not waive correctness or safety findings and do not run a combined Feature-wide audit here.
 8. Delegate the commit and PR workflow to `olko-git-delivery-manager` only after explicit user confirmation.
 8a. After the PR opens, load `olko-pr-check` and follow its workflow. Resolve the PR and read its CI/CD state. Wait for the required `opencode` bot workflow. Read the newest review comments, including inline comments, issue comments, reviews, and GraphQL thread status.
 
@@ -195,7 +198,7 @@ Use this agent's `permission.task` allowlist as the runtime agent registry. An i
 
 Do not dispatch `olko-test`, `olko-commit`, `olko-worktree-create`, `olko-commit-style`, or `olko-worktree-merge` unless the exact name appears in `permission.task`.
 
-Choose agents by stack and by the allowlist. Use `olko-dotnet-*` for .NET work, `olko-army-python-*` for Army Python work, and `olko-mobile-*` for mobile work.
+Choose agents by stack and by the allowlist. Use `olko-dotnet-*` for .NET, `olko-army-python-*` for Army Python, `olko-mobile-*` for Kotlin/Android, `olko-react-*` for React web, and `olko-react-native-*` for React Native.
 
 For the `olko-test` workflow, use the affected stack's available `*-test-runner`. `olko-test` is a workflow skill, not a task-agent target. If no allowed agent can perform an operation, report the gap. Do not invent an agent name or claim that you delegated the work.
 

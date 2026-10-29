@@ -19,9 +19,9 @@ Roles are deliberately separated:
 `olko-plan-documentation-orchestrator` performs a saved-plan workflow in this
 order: `olko-plan-editor`, `olko-investigate-existing`, then an optional second
 `olko-plan-editor` pass to fold verified discrepancies back into the same plan.
-It is a visible primary agent, intended for direct user invocation. For each
-technology in the technical document's implementation scope, it delegates a
-read-only architecture and style review to the matching stack auditor. The
+It is a visible primary agent, intended for direct user invocation. For each technology in the technical document's implementation scope, it delegates a
+read-only architecture and style review to the matching stack auditor, including
+separate Kotlin/Android, React web, and React Native auditors. The
 installer installs declared delegate agents and their declared skills with the
 requesting agent.
 
