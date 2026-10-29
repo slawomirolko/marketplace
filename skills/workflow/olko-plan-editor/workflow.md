@@ -89,13 +89,13 @@ Use the relevant `AGENTS.md` files (and architecture docs when `readArchitecture
 
 If `readArchitectureDocs` or `readTestingDocs` is disabled, do not invent missing rules. Instead, delegate review to matching stack-specific skills declared in `.agents/skills/olko-plan-editor/project.md`:
 
-| Stack | Architecture | Coding style | Test conventions |
-|-------|--------------|--------------|------------------|
-| .NET | `olko-dotnet-architecture` | `olko-dotnet-style` | `olko-dotnet-testing` |
-| Docker | - | `olko-docker-style` | - |
-| Python | `olko-python-architecture` | `olko-python-style` | `olko-python-testing` |
-| Kotlin/Android | `olko-kotlin-architecture` | `olko-kotlin-style` | `olko-kotlin-testing` |
-| React/TypeScript | `olko-react-architecture` | `olko-react-style` | `olko-react-testing` |
+| Stack | Architecture | Security | Coding style | Test conventions |
+|-------|--------------|----------|--------------|------------------|
+| .NET | `olko-dotnet-architecture` | `olko-dotnet-security` | `olko-dotnet-style` | `olko-dotnet-testing` |
+| Docker | - | - | `olko-docker-style` | - |
+| Python | `olko-python-architecture` | - | `olko-python-style` | `olko-python-testing` |
+| Kotlin/Android | `olko-kotlin-architecture` | `olko-kotlin-security` | `olko-kotlin-style` | `olko-kotlin-testing` |
+| React/TypeScript | `olko-react-architecture` | `olko-react-security` | `olko-react-style` | `olko-react-testing` |
 
 Pass the technical draft, target files, and known stack context to each matching declared skill. Ask it to review the plan for rule impact only; do not ask it to implement. Fold returned violations or constraints into the technical document before persisting it. Reflect a changed scope, assumption, or business risk in the business document too.
 

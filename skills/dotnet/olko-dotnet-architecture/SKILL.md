@@ -23,6 +23,7 @@ Read from `.agents/skill-config.md` first, then the project adapter:
 | `dotnetProjectPrefix` | — | Optional required project-name prefix, for example `Company.Product.`. |
 | `dotnetPromptHelperPath` | — | Optional central prompt helper path when prompt text must be centralized. |
 | `readArchitectureDocs` | `true` | Whether to read architecture docs. |
+| `dotnetArchitectureRulesDisabled` | `[]` | Rule ids from `references/aspnet-core.md` to skip, for example `[A9, A22]`. |
 
 For PricePredictor project adapters, set:
 
@@ -122,6 +123,7 @@ Apply these defaults unless config, adapter, or project docs override them.
 - Use health checks with `AddHealthChecks()` and `MapHealthChecks("/health")`.
 - Use database health probes such as `AddDbContextCheck<T>()` when a database is part of the service.
 - Do not use synchronous I/O in API endpoints.
+- For pipeline order, dependency-injection lifetimes, API results, background work, gRPC contracts, operations, and upgrades, apply `references/aspnet-core.md`.
 
 ### Messaging
 - Keep shared transport and bus defaults centralized in Infrastructure.
@@ -200,15 +202,8 @@ Apply these defaults unless config, adapter, or project docs override them.
 - Use FluentValidation for .NET application validation when validation rules are needed.
 - Keep HTTP exception handling in the API layer, not Application.
 
-### Connection strings and secrets
-- Load connection strings from configuration, user secrets, environment variables, or a documented secrets provider.
-- Do not hardcode connection strings in code.
-- Each connection string should have a dedicated settings type/section.
-- Keep secrets out of `appsettings*.json`, `.cs` files, and compose environment blocks.
-- Use an ignored root `.env` or documented secret provider when the project standard requires it.
-- Use `.env.example` or equivalent templates with placeholder values.
-- For CI/CD, pass secrets through environment variables or the platform secret store.
-- Use the `__` double-underscore convention for nested configuration sections in environment files.
+### Security
+- Security rules: see `olko-dotnet-security`.
 
 ### Startup validation and settings flow
 - Startup validation for external prerequisites must fail fast.
@@ -273,7 +268,7 @@ Read:
 - nearest `AGENTS.md`, `ARCHITECTURE.md`, `CODING_STYLE.md`, `TESTING.md` walking up from each changed file
 - repo root `AGENTS.md`
 
-Docs are the rule source of truth. If a doc conflicts with this skill, follow the doc and report the conflict.
+Docs are the rule source of truth. If a doc conflicts with this skill, follow the doc and report the conflict. Remove every rule id in `dotnetArchitectureRulesDisabled` from the check.
 
 ### Step 3 - Map projects
 For every changed source file:
@@ -293,6 +288,8 @@ Check only rules found in docs/adapters/config. Common rule types to look for wh
 - naming/location conventions for handlers, validators, repositories, migrations, and integration events
 - test-double and fixture placement conventions when architecture docs include test rules
 
+For ASP.NET Core host projects, also check the `A` rules in `references/aspnet-core.md` that are not disabled.
+
 Use structured project files (`.csproj`) for reference checks. Do not rely on string matching when XML project references are available.
 
 ### Step 5 - Run architecture command when configured
@@ -311,8 +308,10 @@ If violations exist:
 
 ```text
 .NET architecture violations:
-  1. <file>:<line> - <rule broken> (source: <doc>:<line-or-section>)
+  1. <file>:<line> - <rule broken> (source: <doc>:<line-or-section> | olko-dotnet-architecture:A<n>)
 ```
+
+Cite an ASP.NET Core finding as `olko-dotnet-architecture:A<n>`.
 
 If command/tests fail, include the failing command and the smallest useful error snippet.
 

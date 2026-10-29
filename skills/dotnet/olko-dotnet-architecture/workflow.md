@@ -6,6 +6,6 @@ Short path:
 1. Resolve changed `.cs` / `.csproj` files.
 2. Load config, adapter, scoped docs, and root `AGENTS.md`.
 3. Map files to source projects and related layers/modules.
-4. Check default + documented architecture rules.
+4. Check default + documented architecture rules, plus `references/aspnet-core.md` rules `A1`-`A25` for ASP.NET Core hosts (skip `dotnetArchitectureRulesDisabled`).
 5. Run configured architecture command or discovered architecture tests.
-6. Report violations with rule sources.
+6. Report violations with rule sources; cite ASP.NET Core findings as `olko-dotnet-architecture:A<n>`.

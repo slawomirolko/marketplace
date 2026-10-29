@@ -10,6 +10,7 @@ permission:
     "*": deny
     olko-memory-layer: allow
     olko-react-architecture: allow
+    olko-react-security: allow
     olko-react-style: allow
     olko-design-rules: allow
     olko-react-testing: allow
