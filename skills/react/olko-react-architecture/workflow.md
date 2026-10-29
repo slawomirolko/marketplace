@@ -46,14 +46,11 @@ Apply these defaults unless config, adapter, or project docs override them.
 - Avoid `any`; prefer `unknown` with narrowing, or a precise type/interface.
 - Keep path aliases in `tsconfig.json` `paths` in sync with `vite.config.ts` `resolve.alias` — an alias defined in one and missing from the other is a violation.
 
-### Security boundaries
-- Never embed secrets (API keys, tokens) in client bundle code; only `VITE_`-prefixed public config belongs in `import.meta.env`.
-- Validate/sanitize any user-controlled content rendered as HTML; do not use `dangerouslySetInnerHTML` without a documented sanitizer.
-- Do not trust client-side form validation alone — the API layer surfaces server validation errors, it does not suppress them.
+### Security
+- Security rules live in `olko-react-security`; apply it to the same scope.
 
 ### Observability and logging
 - Route logging through a documented logger or a thin wrapper; do not scatter raw `console.log` in business logic.
-- Never log sensitive data (tokens, credentials, PII).
 
 ### Module organization
 - Keep the API/transport layer in `reactApiDir`.
@@ -103,7 +100,6 @@ Check documented rules plus marketplace defaults when docs do not override them.
 - global CSS used for component-scoped styling
 - scattered fetch/auth-header construction outside the typed API client
 - `any` usage, `strict` mode disabled, or alias drift between `tsconfig.json` and `vite.config.ts`
-- secrets embedded outside `VITE_`-prefixed public config
 - generated file ownership violations
 
 Use TypeScript import inspection where practical. Avoid brittle text-only checks.

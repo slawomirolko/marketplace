@@ -27,11 +27,14 @@ uses:
   - olko-project-architecture
   - olko-ai-architecture
   - olko-dotnet-architecture
+  - olko-dotnet-security
   - olko-dotnet-style
   - olko-docker-style
   - olko-python-architecture
+  - olko-python-security
   - olko-python-style
   - olko-kotlin-architecture
+  - olko-kotlin-security
   - olko-kotlin-style
 ```
 

@@ -122,6 +122,7 @@ Apply these defaults unless config, adapter, or project docs override them.
 - Use health checks with `AddHealthChecks()` and `MapHealthChecks("/health")`.
 - Use database health probes such as `AddDbContextCheck<T>()` when a database is part of the service.
 - Do not use synchronous I/O in API endpoints.
+- For pipeline order, dependency-injection lifetimes, API results, background work, gRPC contracts, operations, and upgrades, apply `references/aspnet-core.md`.
 
 ### Messaging
 - Keep shared transport and bus defaults centralized in Infrastructure.
@@ -200,15 +201,8 @@ Apply these defaults unless config, adapter, or project docs override them.
 - Use FluentValidation for .NET application validation when validation rules are needed.
 - Keep HTTP exception handling in the API layer, not Application.
 
-### Connection strings and secrets
-- Load connection strings from configuration, user secrets, environment variables, or a documented secrets provider.
-- Do not hardcode connection strings in code.
-- Each connection string should have a dedicated settings type/section.
-- Keep secrets out of `appsettings*.json`, `.cs` files, and compose environment blocks.
-- Use an ignored root `.env` or documented secret provider when the project standard requires it.
-- Use `.env.example` or equivalent templates with placeholder values.
-- For CI/CD, pass secrets through environment variables or the platform secret store.
-- Use the `__` double-underscore convention for nested configuration sections in environment files.
+### Security
+- Security rules live in `olko-dotnet-security`; apply it to the same scope.
 
 ### Startup validation and settings flow
 - Startup validation for external prerequisites must fail fast.

@@ -18,6 +18,7 @@ permission:
     olko-dotnet-style: allow
     olko-design-rules: allow
     olko-dotnet-architecture: allow
+    olko-dotnet-security: allow
 ---
 
 MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every memory read or write; it owns the storage and retention policy.

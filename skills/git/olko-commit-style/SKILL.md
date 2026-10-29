@@ -24,15 +24,19 @@ This skill may delegate stack-specific checks when declared in the project adapt
 uses:
   - olko-dotnet-style
   - olko-dotnet-architecture
+  - olko-dotnet-security
   - olko-dotnet-testing
   - olko-docker-style
   - olko-python-architecture
+  - olko-python-security
   - olko-python-style
   - olko-python-testing
   - olko-kotlin-architecture
+  - olko-kotlin-security
   - olko-kotlin-style
   - olko-kotlin-testing
   - olko-react-architecture
+  - olko-react-security
   - olko-react-style
   - olko-react-testing
 ```
@@ -85,15 +89,19 @@ Run the style tool the docs reference. Do NOT hardcode a tool — use what the d
 If a matching stack-specific skill is declared in `uses`, delegate the relevant changed files to it and follow its result:
 - `.NET` style: `olko-dotnet-style`
 - `.NET` architecture: `olko-dotnet-architecture`
+- `.NET` security: `olko-dotnet-security`
 - `.NET` test conventions: `olko-dotnet-testing`
 - Docker conventions: `olko-docker-style`
 - Python architecture: `olko-python-architecture`
+- Python security: `olko-python-security`
 - Python style: `olko-python-style`
 - Python test conventions: `olko-python-testing`
 - Kotlin/Android architecture: `olko-kotlin-architecture`
+- Kotlin/Android security: `olko-kotlin-security`
 - Kotlin/Android style: `olko-kotlin-style`
 - Kotlin/Android test conventions: `olko-kotlin-testing`
 - React/TypeScript architecture: `olko-react-architecture`
+- React/TypeScript security: `olko-react-security`
 - React/TypeScript style: `olko-react-style`
 - React/TypeScript test conventions: `olko-react-testing`
 

@@ -1,6 +1,6 @@
 ---
 name: olko-kotlin-architecture
-description: "Check Kotlin/Android architecture compliance for changed Kotlin projects with marketplace defaults. Reads project docs and adapters, maps changed .kt/.kts files to Gradle module roots, verifies source-set layout, module boundaries, dependency direction, MVVM/ViewModel-StateFlow separation, networking singleton ownership, Gradle dependency configuration, build/dependency management, security boundaries, external-service client configuration, and reports violations with rule sources. Use when validating Kotlin/Android architecture, before commit/test gates, during plan review, or when olko-commit-style/olko-test/olko-plan-editor delegates Kotlin architecture checks."
+description: "Check Kotlin/Android architecture compliance for changed Kotlin projects with marketplace defaults. Reads project docs and adapters, maps changed .kt/.kts files to Gradle module roots, verifies source-set layout, module boundaries, dependency direction, MVVM/ViewModel-StateFlow separation, networking singleton ownership, Gradle dependency configuration, build/dependency management, API boundary DTO mapping, external-service client configuration, and reports violations with rule sources. Use when validating Kotlin/Android architecture, before commit/test gates, during plan review, or when olko-commit-style/olko-test/olko-plan-editor delegates Kotlin architecture checks."
 ---
 
 # Olko Kotlin Architecture
@@ -59,15 +59,14 @@ Apply these defaults unless config, adapter, or project docs override them.
 - Keep build optimization flags in `gradle.properties` (parallel, caching, daemon; daemon disabled in short-lived CI environments).
 - Keep `local.properties` (e.g. `sdk.dir`) uncommitted and machine-local.
 
-### Security boundaries
+### API boundary
 - Map entities to dedicated response DTOs at the API boundary; never return or surface internal entities directly.
-- Validate input at the boundary; reject bad input early. Do not trust client-side validation alone.
-- Store secrets in environment variables or the Android keystore; never commit secrets or provide default values for secret config keys.
-- Use HTTPS in production; restrict cleartext traffic to local dev only.
+
+### Security
+- Security rules live in `olko-kotlin-security`; apply it to the same scope.
 
 ### Observability and logging
 - Route logging through a documented logger or a thin wrapper; do not scatter raw `println` or ad-hoc log calls in business logic.
-- Never log sensitive data (tokens, credentials, PII).
 - Give each long-running component a stable identity for logs/traces when the project adopts tracing.
 
 ### Module organization
@@ -119,7 +118,7 @@ Check documented rules plus marketplace defaults when docs do not override them.
 - generated file ownership
 - dependency configuration misuse (`api` vs `implementation`, source-set leaks)
 - version catalog vs scattered hardcoded versions
-- security boundaries (entity vs DTO, hardcoded secrets, cleartext in release)
+- API boundary (entity vs DTO)
 - external-service client config centralization and contract/instrumentation coverage
 - module organization (api/auth/screens/viewmodel placement)
 

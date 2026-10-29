@@ -43,15 +43,19 @@ If stack-specific skills are declared in `.agents/skills/olko-test/project.md`, 
 uses:
   - olko-dotnet-style
   - olko-dotnet-architecture
+  - olko-dotnet-security
   - olko-dotnet-testing
   - olko-docker-style
   - olko-python-architecture
+  - olko-python-security
   - olko-python-style
   - olko-python-testing
   - olko-kotlin-architecture
+  - olko-kotlin-security
   - olko-kotlin-style
   - olko-kotlin-testing
   - olko-react-architecture
+  - olko-react-security
   - olko-react-style
   - olko-react-testing
 ```

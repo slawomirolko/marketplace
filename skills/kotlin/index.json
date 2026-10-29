@@ -4,8 +4,8 @@
     {
       "name": "olko-kotlin-architecture",
       "category": "kotlin",
-      "version": "1.0.0",
-      "description": "Check Kotlin/Android architecture compliance for changed Kotlin projects with marketplace defaults. Reads project docs and adapters, maps changed .kt/.kts files to Gradle module roots, verifies source-set layout, module boundaries, dependency direction, MVVM/ViewModel-StateFlow separation, networking singleton ownership, Gradle dependency configuration, build/dependency management, security boundaries, external-service client configuration, and reports violations with rule sources. Use when validating Kotlin/Android architecture, before commit/test gates, during plan review, or when olko-commit-style/olko-test/olko-plan-editor delegates Kotlin architecture checks.",
+      "version": "1.1.0",
+      "description": "Check Kotlin/Android architecture compliance for changed Kotlin projects with marketplace defaults. Reads project docs and adapters, maps changed .kt/.kts files to Gradle module roots, verifies source-set layout, module boundaries, dependency direction, MVVM/ViewModel-StateFlow separation, networking singleton ownership, Gradle dependency configuration, build/dependency management, API boundary DTO mapping, external-service client configuration, and reports violations with rule sources. Use when validating Kotlin/Android architecture, before commit/test gates, during plan review, or when olko-commit-style/olko-test/olko-plan-editor delegates Kotlin architecture checks.",
       "tags": [
         "kotlin",
         "architecture"
@@ -20,6 +20,39 @@
         "edge-cases.md",
         "examples.md",
         "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
+      "name": "olko-kotlin-security",
+      "category": "kotlin",
+      "version": "1.0.0",
+      "description": "Check Kotlin/Android security compliance for changed Kotlin projects with marketplace defaults. Read-only. Reads project docs and adapters, maps changed .kt/.kts files, Android manifests, and network security config to Gradle module roots, verifies boundary input validation, secret storage, cleartext traffic limits, and sensitive-data logging, and reports violations with rule ids and sources. Use when validating Kotlin/Android security, before commit/test gates, during plan review, or when olko-kotlin-architecture/olko-commit-style/olko-test/olko-plan-editor delegates Kotlin security checks.",
+      "tags": [
+        "kotlin",
+        "security"
+      ],
+      "capabilities": [
+        "kotlin",
+        "kotlin.kotlin.security"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "references/rules.md",
         "workflow.md"
       ],
       "loading": {

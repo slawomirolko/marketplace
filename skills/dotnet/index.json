@@ -37,7 +37,7 @@
     {
       "name": "olko-dotnet-architecture",
       "category": "dotnet",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Check .NET architecture compliance for changed C# projects. Reads project docs and adapters, maps changed .cs/.csproj files to source projects, verifies layer boundaries, dependency direction, contracts ownership, architecture-test availability, and reports violations with rule sources. Use when validating .NET architecture, before commit/test gates, during plan review, or when olko-commit-style/olko-test/olko-plan-editor delegates .NET architecture checks.",
       "tags": [
         "dotnet",
@@ -53,6 +53,7 @@
         "edge-cases.md",
         "examples.md",
         "overview.md",
+        "references/aspnet-core.md",
         "workflow.md"
       ],
       "loading": {
@@ -102,6 +103,39 @@
       "files": [
         "SKILL.md"
       ]
+    },
+    {
+      "name": "olko-dotnet-security",
+      "category": "dotnet",
+      "version": "1.0.0",
+      "description": "Check .NET security compliance for changed C# projects with marketplace defaults. Read-only. Reads project docs and adapters, maps changed .cs/.csproj/appsettings files to source projects, verifies connection-string and secret handling, endpoint authorization, anonymous-access reasons, antiforgery, CORS, HTTPS/HSTS, and data-protection key persistence, and reports violations with rule ids and sources. Use when validating .NET security, before commit/test gates, during plan review, or when olko-dotnet-architecture/olko-commit-style/olko-test/olko-plan-editor delegates .NET security checks.",
+      "tags": [
+        "dotnet",
+        "security"
+      ],
+      "capabilities": [
+        "dotnet",
+        "dotnet.dotnet.security"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "references/rules.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-dotnet-style",

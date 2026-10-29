@@ -243,6 +243,7 @@
         "olko-dotnet-architecture",
         "olko-dotnet-build",
         "olko-dotnet-migration",
+        "olko-dotnet-security",
         "olko-dotnet-style",
         "olko-dotnet-testing"
       ],
@@ -251,8 +252,8 @@
         "dotnet.dotnet.architecture",
         "dotnet.dotnet.build",
         "dotnet.dotnet.migration",
-        "dotnet.dotnet.style",
-        "dotnet.dotnet.testing"
+        "dotnet.dotnet.security",
+        "dotnet.dotnet.style"
       ],
       "prerequisites": []
     },
@@ -290,6 +291,16 @@
       "id": "dotnet.dotnet.migration",
       "skills": [
         "olko-dotnet-migration"
+      ],
+      "related": [
+        "dotnet"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "dotnet.dotnet.security",
+      "skills": [
+        "olko-dotnet-security"
       ],
       "related": [
         "dotnet"
@@ -415,11 +426,13 @@
       "id": "kotlin",
       "skills": [
         "olko-kotlin-architecture",
+        "olko-kotlin-security",
         "olko-kotlin-style",
         "olko-kotlin-testing"
       ],
       "related": [
         "kotlin.kotlin.architecture",
+        "kotlin.kotlin.security",
         "kotlin.kotlin.style",
         "kotlin.kotlin.testing"
       ],
@@ -429,6 +442,16 @@
       "id": "kotlin.kotlin.architecture",
       "skills": [
         "olko-kotlin-architecture"
+      ],
+      "related": [
+        "kotlin"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "kotlin.kotlin.security",
+      "skills": [
+        "olko-kotlin-security"
       ],
       "related": [
         "kotlin"
@@ -579,11 +602,13 @@
       "id": "python",
       "skills": [
         "olko-python-architecture",
+        "olko-python-security",
         "olko-python-style",
         "olko-python-testing"
       ],
       "related": [
         "python.python.architecture",
+        "python.python.security",
         "python.python.style",
         "python.python.testing"
       ],
@@ -593,6 +618,16 @@
       "id": "python.python.architecture",
       "skills": [
         "olko-python-architecture"
+      ],
+      "related": [
+        "python"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "python.python.security",
+      "skills": [
+        "olko-python-security"
       ],
       "related": [
         "python"
@@ -623,6 +658,7 @@
       "id": "react",
       "skills": [
         "olko-react-architecture",
+        "olko-react-security",
         "olko-react-style",
         "olko-react-testing",
         "vercel-react-view-transitions"
@@ -630,6 +666,7 @@
       "related": [
         "react.animation",
         "react.react.architecture",
+        "react.react.security",
         "react.react.style",
         "react.react.testing"
       ],
@@ -649,6 +686,16 @@
       "id": "react.react.architecture",
       "skills": [
         "olko-react-architecture"
+      ],
+      "related": [
+        "react"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "react.react.security",
+      "skills": [
+        "olko-react-security"
       ],
       "related": [
         "react"

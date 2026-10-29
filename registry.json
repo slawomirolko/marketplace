@@ -451,7 +451,7 @@
     {
       "name": "olko-dotnet-architecture",
       "category": "dotnet",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Check .NET architecture compliance for changed C# projects. Reads project docs and adapters, maps changed .cs/.csproj files to source projects, verifies layer boundaries, dependency direction, contracts ownership, architecture-test availability, and reports violations with rule sources. Use when validating .NET architecture, before commit/test gates, during plan review, or when olko-commit-style/olko-test/olko-plan-editor delegates .NET architecture checks.",
       "tags": [
         "dotnet",
@@ -467,6 +467,7 @@
         "edge-cases.md",
         "examples.md",
         "overview.md",
+        "references/aspnet-core.md",
         "workflow.md"
       ],
       "loading": {
@@ -516,6 +517,39 @@
       "files": [
         "SKILL.md"
       ]
+    },
+    {
+      "name": "olko-dotnet-security",
+      "category": "dotnet",
+      "version": "1.0.0",
+      "description": "Check .NET security compliance for changed C# projects with marketplace defaults. Read-only. Reads project docs and adapters, maps changed .cs/.csproj/appsettings files to source projects, verifies connection-string and secret handling, endpoint authorization, anonymous-access reasons, antiforgery, CORS, HTTPS/HSTS, and data-protection key persistence, and reports violations with rule ids and sources. Use when validating .NET security, before commit/test gates, during plan review, or when olko-dotnet-architecture/olko-commit-style/olko-test/olko-plan-editor delegates .NET security checks.",
+      "tags": [
+        "dotnet",
+        "security"
+      ],
+      "capabilities": [
+        "dotnet",
+        "dotnet.dotnet.security"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "references/rules.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     },
     {
       "name": "olko-dotnet-style",
@@ -649,7 +683,7 @@
     {
       "name": "olko-commit-style",
       "category": "git",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Check coding style compliance for changed files across stacks. Reads style rules from project docs (AGENTS.md, CODING_STYLE.md), runs the prescribed style tools per stack, and reports violations with their rule source. Use when olko-commit delegates style checking, or standalone to verify style on changed files.",
       "tags": [
         "git",
@@ -816,8 +850,8 @@
     {
       "name": "olko-kotlin-architecture",
       "category": "kotlin",
-      "version": "1.0.0",
-      "description": "Check Kotlin/Android architecture compliance for changed Kotlin projects with marketplace defaults. Reads project docs and adapters, maps changed .kt/.kts files to Gradle module roots, verifies source-set layout, module boundaries, dependency direction, MVVM/ViewModel-StateFlow separation, networking singleton ownership, Gradle dependency configuration, build/dependency management, security boundaries, external-service client configuration, and reports violations with rule sources. Use when validating Kotlin/Android architecture, before commit/test gates, during plan review, or when olko-commit-style/olko-test/olko-plan-editor delegates Kotlin architecture checks.",
+      "version": "1.1.0",
+      "description": "Check Kotlin/Android architecture compliance for changed Kotlin projects with marketplace defaults. Reads project docs and adapters, maps changed .kt/.kts files to Gradle module roots, verifies source-set layout, module boundaries, dependency direction, MVVM/ViewModel-StateFlow separation, networking singleton ownership, Gradle dependency configuration, build/dependency management, API boundary DTO mapping, external-service client configuration, and reports violations with rule sources. Use when validating Kotlin/Android architecture, before commit/test gates, during plan review, or when olko-commit-style/olko-test/olko-plan-editor delegates Kotlin architecture checks.",
       "tags": [
         "kotlin",
         "architecture"
@@ -832,6 +866,39 @@
         "edge-cases.md",
         "examples.md",
         "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
+      "name": "olko-kotlin-security",
+      "category": "kotlin",
+      "version": "1.0.0",
+      "description": "Check Kotlin/Android security compliance for changed Kotlin projects with marketplace defaults. Read-only. Reads project docs and adapters, maps changed .kt/.kts files, Android manifests, and network security config to Gradle module roots, verifies boundary input validation, secret storage, cleartext traffic limits, and sensitive-data logging, and reports violations with rule ids and sources. Use when validating Kotlin/Android security, before commit/test gates, during plan review, or when olko-kotlin-architecture/olko-commit-style/olko-test/olko-plan-editor delegates Kotlin security checks.",
+      "tags": [
+        "kotlin",
+        "security"
+      ],
+      "capabilities": [
+        "kotlin",
+        "kotlin.kotlin.security"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "references/rules.md",
         "workflow.md"
       ],
       "loading": {
@@ -1150,7 +1217,7 @@
     {
       "name": "olko-python-architecture",
       "category": "python",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Check Python architecture compliance for changed Python projects with marketplace defaults. Reads project docs and adapters, maps changed .py files to pyproject.toml roots, verifies package boundaries, dependency direction, generated-code ownership, source layout, runtime/dependency management, observability, and gRPC/external-integration boundaries, and reports violations with rule sources. Use when validating Python architecture, before commit/test gates, during plan review, or when olko-commit-style/olko-test/olko-plan-editor delegates Python architecture checks.",
       "tags": [
         "python",
@@ -1166,6 +1233,39 @@
         "edge-cases.md",
         "examples.md",
         "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
+      "name": "olko-python-security",
+      "category": "python",
+      "version": "1.0.0",
+      "description": "Check Python security compliance for changed Python projects with marketplace defaults. Read-only. Reads project docs and adapters, maps changed .py and tracked .env template files to pyproject.toml roots, verifies credential placement in environment files, and reports violations with rule ids and sources. Use when validating Python security, before commit/test gates, during plan review, or when olko-python-architecture/olko-commit-style/olko-test/olko-plan-editor delegates Python security checks.",
+      "tags": [
+        "python",
+        "security"
+      ],
+      "capabilities": [
+        "python",
+        "python.python.security"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "references/rules.md",
         "workflow.md"
       ],
       "loading": {
@@ -1246,8 +1346,8 @@
     {
       "name": "olko-react-architecture",
       "category": "react",
-      "version": "1.0.1",
-      "description": "Check React architecture compliance for changed TypeScript/React projects with marketplace defaults. Reads project docs and adapters, maps changed .ts/.tsx files to the nearest package.json/Vite project root, verifies component/pages source layout, module boundaries, dependency direction, React Query data-layer separation, typed fetch-based API client ownership, React Hook Form boundaries, CSS Modules styling boundaries, TypeScript strictness, and security boundaries, and reports violations with rule sources. Use when validating React architecture, before commit/test gates, during plan review, or when olko-commit-style/olko-test/olko-plan-editor delegates React architecture checks.",
+      "version": "1.1.0",
+      "description": "Check React architecture compliance for changed TypeScript/React projects with marketplace defaults. Reads project docs and adapters, maps changed .ts/.tsx files to the nearest package.json/Vite project root, verifies component/pages source layout, module boundaries, dependency direction, React Query data-layer separation, typed fetch-based API client ownership, React Hook Form boundaries, CSS Modules styling boundaries, and TypeScript strictness, and reports violations with rule sources. Use when validating React architecture, before commit/test gates, during plan review, or when olko-commit-style/olko-test/olko-plan-editor delegates React architecture checks.",
       "tags": [
         "react",
         "architecture"
@@ -1262,6 +1362,39 @@
         "edge-cases.md",
         "examples.md",
         "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
+      "name": "olko-react-security",
+      "category": "react",
+      "version": "1.0.0",
+      "description": "Check React/TypeScript front-end security compliance for changed files with marketplace defaults. Read-only. Reads project docs and adapters, maps changed .ts/.tsx/app-shell/package files to Vite project roots, verifies bundle secrets, HTML sanitization, token storage, URL and redirect safety, postMessage origins, DOM and code-execution sinks, CSRF, auth-header scope, app-shell CSP and security headers, third-party scripts, service-worker caching, and supply chain, and reports violations with rule ids and sources. Use when validating React security, before commit/test gates, during plan review, or when olko-react-architecture/olko-commit-style/olko-test/olko-plan-editor delegates React security checks.",
+      "tags": [
+        "react",
+        "security"
+      ],
+      "capabilities": [
+        "react",
+        "react.react.security"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "references/rules.md",
         "workflow.md"
       ],
       "loading": {
@@ -1369,7 +1502,7 @@
     {
       "name": "olko-test",
       "category": "testing",
-      "version": "2.1.0",
+      "version": "2.2.0",
       "description": "Run affected or all tests for .NET, Python, Android/Kotlin, and React/TypeScript with change-aware scope detection, emulator management, service management, and failure handling. Android/Kotlin instrumentation (connectedDebugAndroidTest, FULL suite) is MANDATORY whenever any Kotlin file changed — never skipped, never filtered. Use when asked to run tests, after implementation, or when called from olko-plan-editor/olko-commit skills.",
       "tags": [
         "testing",
@@ -1586,7 +1719,7 @@
     {
       "name": "olko-investigate-existing",
       "category": "workflow",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "description": "Investigate an existing mechanism by name or description — find it, analyze its behavior, map its flow, verify AGENTS.md docs, check technology architecture and coding style compliance, assess optimization/extension opportunities and predict potential errors, then offer to create improvement plans via a declared plan skill. Use when the user wants to understand, document, or improve an existing mechanism in the codebase.",
       "tags": [
         "workflow",
@@ -1619,7 +1752,7 @@
     {
       "name": "olko-plan-editor",
       "category": "workflow",
-      "version": "1.7.0",
+      "version": "1.8.0",
       "description": "Plan an accepted Feature in one session: create its business and technical plan plus one implementation plan file for every child Task; later implementation remains per Task. Also supports Epic plans and scoped Task-plan revisions.",
       "tags": [
         "workflow",
