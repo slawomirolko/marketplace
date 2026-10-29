@@ -51,6 +51,10 @@ uses:
   - olko-kotlin-security
   - olko-kotlin-style
   - olko-kotlin-testing
+  - olko-react-native-architecture
+  - olko-react-native-style
+  - olko-react-native-testing
+  - olko-react-native-security
   - olko-react-architecture
   - olko-react-security
   - olko-react-style

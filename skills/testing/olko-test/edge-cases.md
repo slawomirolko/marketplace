@@ -22,8 +22,9 @@
 - Missing Docker, missing services, wrapper errors, port collisions, and test errors are failures. Never add skip, xfail, or silent-success branches.
 - If startup fails, attempt scoped teardown anyway. Preserve a real test failure as primary when teardown also fails.
 - When a test failure is in a unit test for a main path, suggest adding an integration test covering that flow instead
-- Missing wrapper or matching scripts is not an error; preserve normal .NET, Python, Kotlin/Android, and React/TypeScript paths.
+- Missing wrapper or matching scripts is not an error; preserve normal .NET, Python, Kotlin/Android, React Native, and React/TypeScript paths.
 - Kotlin/Android instrumentation is MANDATORY whenever ANY Kotlin file changed (production or test): run the FULL `connectedDebugAndroidTest` suite via `invoke-instrumentation-watchdog.ps1` — never a class-filtered subset, never skipped, never deferred. Only acceptable outcomes: PASSED, FAILED (→ failure handling), or explicit BLOCKER after the emulator start/recovery procedure was exhausted. "No emulator available" is never terminal while the Docker emulator can be started. Unit tests + compile checks alone are never complete mobile verification (user directive, 2026-09-04).
 - If the same emulator appears under two adb serials (e.g. `127.0.0.1:5555` and `emulator-5554`), Gradle schedules a duplicate instrumentation run that hits the watchdog timeout — `adb disconnect` the duplicate serial before running tests.
 - Manual e2e verification (`agent-browser` against the running Vite dev server) is on-demand only, per `olko-react-testing`; never invoke it as part of the automated `olko-test` run.
+- React Native JS/component tests do not validate native platform code. Run configured device E2E/native checks when required; unavailable infrastructure is a blocker, not a skip or pass.
 - Variant C (local Windows AVD): `10.0.2.2` is the correct host-loopback address for a local AVD; the "never `10.0.2.2`" rule applies only to the Docker emulator. Never kill an emulator that was running before the test run.

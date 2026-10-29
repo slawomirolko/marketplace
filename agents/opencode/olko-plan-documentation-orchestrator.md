@@ -18,6 +18,7 @@ permission:
     olko-dotnet-auditor: allow
     olko-mobile-auditor: allow
     olko-react-auditor: allow
+    olko-react-native-auditor: allow
     olko-army-python-auditor: allow
     olko-obsidian-knowledge-manager: allow
     olko-task-scope-impact-reviewer: allow
@@ -143,7 +144,7 @@ cycle passes. The cycle:
    affected slice; they must verify every new/changed claim against the codebase
    with file:line evidence.
 2. Re-run every applicable stack auditor (olko-dotnet-auditor /
-   olko-mobile-auditor / olko-army-python-auditor) for the combined scope. If
+   olko-mobile-auditor / olko-react-auditor / olko-react-native-auditor / olko-army-python-auditor) for the combined scope. If
    the answers add implementation work in a new stack, run that auditor too.
 3. Re-run the business-to-technical consistency gate in both directions on the
    updated documents, and reconcile `stack.md` with the verified technical plan
@@ -227,6 +228,8 @@ verdict.
    document says will be implemented:
    - .NET: `olko-dotnet-auditor`
    - Android/Kotlin: `olko-mobile-auditor`
+   - React web: `olko-react-auditor`
+   - React Native: `olko-react-native-auditor`
    - Python Army: `olko-army-python-auditor`
 
    Give each selected auditor the technical document path, the planned file

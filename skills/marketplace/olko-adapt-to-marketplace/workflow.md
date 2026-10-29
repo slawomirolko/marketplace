@@ -66,7 +66,7 @@ Read the skill's body and identify its responsibilities. Classify the skill:
 | Classification | Signal | Action |
 |----------------|--------|--------|
 | **focused** | One stack, one responsibility, < ~150 lines of workflow | Keep as-is |
-| **multi-stack** | Handles 2+ unrelated stacks (e.g. .NET + Python + Kotlin) | Propose split by stack |
+| **multi-stack** | Handles 2+ unrelated stacks (e.g. .NET + Python + Kotlin + React Native) | Propose split by stack |
 | **multi-phase** | Handles 2+ distinct phases that run independently (e.g. lint + test + deploy) | Propose split by phase |
 | **fullstack** | Multi-stack **and** multi-phase, or > ~300 lines with clearly separable sections | Propose split by both |
 
@@ -90,11 +90,15 @@ Proposed split:
       - olko-test-dotnet
       - olko-test-python
       - olko-test-kotlin
+      - olko-test-react-native
+      - olko-test-react
 
   Sub-skills:
     olko-test-dotnet     — .NET unit + integration tests
     olko-test-python     — Python pytest
     olko-test-kotlin     — Kotlin JVM + instrumentation
+    olko-test-react-native — React Native JS/component + device tests
+    olko-test-react      — React web tests
 
 Each sub-skill is independently invocable; the parent delegates via `uses`.
 ```
@@ -395,12 +399,14 @@ For a split, show the full decomposition with each skill's structure and `uses` 
 Skill <old-name> → split into <N> skills:
 
 Parent:
-  olko-test               skills/testing/   progressive   uses: [olko-test-dotnet, olko-test-python, olko-test-kotlin]
+  olko-test               skills/testing/   progressive   uses: [olko-test-dotnet, olko-test-python, olko-test-kotlin, olko-test-react-native, olko-test-react]
 
 Sub-skills:
   olko-test-dotnet        skills/dotnet/    single
   olko-test-python        skills/python/    single
   olko-test-kotlin        skills/testing/   single
+  olko-test-react-native  skills/testing/   single
+  olko-test-react         skills/testing/   single
 
 All registered in registry.json. Each sub-skill is independently invocable; the parent delegates via `uses`.
 ```

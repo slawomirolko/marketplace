@@ -35,6 +35,10 @@ uses:
   - olko-kotlin-architecture
   - olko-kotlin-security
   - olko-kotlin-style
+  - olko-react-native-architecture
+  - olko-react-native-style
+  - olko-react-native-testing
+  - olko-react-native-security
 ```
 
 - If a **plan skill** (e.g. `olko-plan-editor`) is declared, delegate plan creation to it (Step 6). If not declared, skip plan creation and present the summary only.

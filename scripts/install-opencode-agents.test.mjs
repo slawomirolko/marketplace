@@ -131,6 +131,9 @@ test("installs the implementation orchestrator with delegation-only permissions"
     "olko-mobile-auditor",
     "olko-mobile-implementer",
     "olko-mobile-test-runner",
+    "olko-react-native-auditor",
+    "olko-react-native-implementer",
+    "olko-react-native-test-runner",
     "olko-army-python-auditor",
     "olko-army-python-implementer",
     "olko-army-python-test-runner",
@@ -159,6 +162,7 @@ test("installs the plan documentation orchestrator with review-only stack delega
   assert.match(agent, /"code \*": allow/);
   assert.match(agent, /olko-dotnet-auditor: allow/);
   assert.match(agent, /olko-mobile-auditor: allow/);
+  assert.match(agent, /olko-react-native-auditor: allow/);
   assert.match(agent, /olko-army-python-auditor: allow/);
   assert.match(agent, /olko-investigation-readiness-worker: allow/);
   assert.match(agent, /instruction to review only/);
@@ -175,6 +179,7 @@ test("installs the plan documentation orchestrator with review-only stack delega
   for (const [agentName, skills] of [
     ["olko-dotnet-auditor", ["olko-dotnet-architecture", "olko-dotnet-style"]],
     ["olko-mobile-auditor", ["olko-kotlin-architecture", "olko-kotlin-style"]],
+    ["olko-react-native-auditor", ["olko-react-native-architecture", "olko-react-native-style", "olko-react-native-security", "olko-react-native-testing"]],
     ["olko-army-python-auditor", ["olko-python-architecture", "olko-python-style"]],
     ["olko-investigation-readiness-worker", ["olko-investigate-existing"]],
   ]) {
@@ -284,6 +289,8 @@ test("installs the hidden marketplace skill bootstrapper", () => {
 
 for (const [agentName, skills] of [
   ["olko-mobile-implementer", ["olko-kotlin-architecture", "olko-kotlin-style", "olko-kotlin-testing", "olko-test"]],
+  ["olko-react-native-implementer", ["olko-react-native-architecture", "olko-react-native-style", "olko-react-native-testing", "olko-test"]],
+  ["olko-react-native-test-runner", ["olko-react-native-testing", "olko-test"]],
   ["olko-army-python-implementer", ["olko-python-architecture", "olko-python-style", "olko-python-testing", "olko-test"]],
 ]) {
   test(`installs ${agentName} with its declared skills`, () => {

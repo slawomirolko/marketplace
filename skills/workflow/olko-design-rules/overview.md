@@ -5,6 +5,7 @@ A read-only rule catalogue. It is not an executable workflow that changes files.
 ## How to use
 
 - This is a read-only catalogue. It never edits code.
+- Treat React web and React Native as separate stacks. Route browser/Vite conventions to `olko-react-*` and native mobile conventions to `olko-react-native-*`; share a rule only when the matching stack skill or project docs cover it.
 - The caller scans its scope, then reports each finding as `<rule id> <file>:<line> — <problem> — <fix>` with the source `olko-design-rules:<rule id>`.
 - The caller decides which findings to fix.
 
@@ -45,13 +46,13 @@ These source categories are already rules in the stack skills. Do not duplicate 
 
 | Category | Covered by |
 |----------|------------|
-| Method naming and single responsibility | `olko-dotnet-style`, `olko-python-style`, `olko-kotlin-style`, `olko-react-style` |
+| Method naming and single responsibility | `olko-dotnet-style`, `olko-python-style`, `olko-kotlin-style`, `olko-react-style`, `olko-react-native-style` |
 | Overlong methods | `olko-dotnet-style` (30-line limit) |
 | Inline comments | `olko-dotnet-style`, `olko-kotlin-style`, `olko-react-style`, `olko-dotnet-testing` |
 | One type per file | `olko-dotnet-style`, `olko-python-style`, `olko-kotlin-style`, `olko-react-style` |
 | Braces and other mechanical style | `olko-dotnet-style` and the stack format/lint commands |
-| Test naming consistency | `olko-dotnet-testing`, `olko-python-testing`, `olko-kotlin-testing`, `olko-react-testing` |
-| Test redundancy and coverage gaps | `olko-dotnet-testing`, `olko-python-testing`, `olko-kotlin-testing`, `olko-react-testing` |
+| Test naming consistency | `olko-dotnet-testing`, `olko-python-testing`, `olko-kotlin-testing`, `olko-react-testing`, `olko-react-native-testing` |
+| Test redundancy and coverage gaps | `olko-dotnet-testing`, `olko-python-testing`, `olko-kotlin-testing`, `olko-react-testing`, `olko-react-native-testing` |
 | Project-doc conventions (`AGENTS.md`) | every stack style skill (adaptation layers) |
 
 ## Not adopted (project conventions — intentionally left out, do not re-add in syncs)

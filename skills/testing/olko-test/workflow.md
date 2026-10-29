@@ -57,6 +57,9 @@ uses:
   - olko-react-security
   - olko-react-style
   - olko-react-testing
+  - olko-react-native-architecture
+  - olko-react-native-style
+  - olko-react-native-testing
 ```
 
 If a dependency is not declared, run the built-in document-based checks below.
@@ -76,6 +79,7 @@ git diff --name-only HEAD
 | Python | changed `.py`; belongs to nearest `pyproject.toml` dir | nearest `AGENTS.md`, `CODING_STYLE.md`, `TESTING.md` up the dir tree + repo root |
 | Kotlin/Android | changed `.kt`/`.kts`; belongs to nearest `gradlew` dir | nearest `AGENTS.md`, `CODING_STYLE.md`, `Testing.md` up the dir tree + repo root |
 | React/TypeScript | changed `.ts`/`.tsx`; belongs to nearest `package.json` beside `vite.config.ts`/`.js` | nearest `AGENTS.md`, `CODING_STYLE.md`, `TESTING.md` up the dir tree + repo root |
+| React Native | changed JS/TS, app/workspace config, Metro, or native mobile file; belongs to the owning app/package | nearest `AGENTS.md`, `CODING_STYLE.md`, `TESTING.md` up from the file + repo root |
 
 **Per-stack checks — read the reference docs above first, then run the tooling the docs prescribe.**
 
@@ -104,6 +108,12 @@ git diff --name-only HEAD
 1. Read the nearest `AGENTS.md` / `CODING_STYLE.md` / `TESTING.md` to learn the current rules.
 2. Run the style tool those docs reference (typically `npm run lint` / `npx eslint .`, and `npx prettier --check .` when configured — use what the docs prescribe, run from the discovered Vite/React project root).
 3. Cross-check changed files against architecture + test rules in the docs (e.g. React Query data-layer ownership, typed API client centralization, CSS Modules boundaries, React Hook Form conventions, Vitest + Testing Library + MSW harness conventions, no-skip/no-silent-pass, parametrization, fixture reuse). Report violations.
+
+**React Native:**
+1. Read the owning app/package's `AGENTS.md`, `CODING_STYLE.md`, and `TESTING.md` plus root guidance.
+2. If `olko-react-native-architecture`, `olko-react-native-style`, or `olko-react-native-testing` is declared in `.agents/skills/olko-test/project.md` under `uses`, delegate matching files to those skills. Otherwise use project docs and the testing defaults.
+3. Run configured `reactNativeTestCommand` and type-check commands from the owning app/package or workspace root. Run configured `reactNativeE2ECommand` when project instructions require it and device/tooling are available.
+4. JS-only tests do not verify native permissions, secure storage, push delivery, native linking, or platform-specific behavior. Report unavailable required infrastructure as a blocker, never as a pass.
 
 **If the gate fails** (style tool non-zero, or a documented rule violation is found):
 Show the offending file(s), a snippet of the error, and the source rule (with the AGENTS.md / CODING_STYLE.md / TESTING.md file and line that defines it). Then ask via question tool:
@@ -285,7 +295,14 @@ Use the port and path the repo's config/docs define — do not assume defaults. 
 ```
 Run it with the shell tool timeout set to the configured instrumentation timeout (default 600 s, same as Variant A). On timeout, record `Instrumentation: BLOCKED — timeout` and do not kill the emulator mid-run. Collect results. If any fail, jump to Step 5. Emulator cleanup for this variant is in Step 4a.
 
-### Step 3d — Run unit/component tests (React/TypeScript)
+### Step 3d — Run unit/component tests (React Native)
+If React Native application or shared-package source changed, run configured `reactNativeTestCommand` from its owning app/package or workspace root. Use `reactNativeTestTimeoutMs` when configured. Run `reactNativeTypecheckCommand` when it is part of the project's test gate. Do not invent commands.
+
+Run `reactNativeE2ECommand` only when configured or required by project instructions. Device tests must exercise the built native app. JS/component tests alone do not verify native permissions, secure storage, notifications, native linking, or platform-specific behavior. If required tooling or a device is unavailable, report a blocker and keep the suite executable.
+
+Collect results. If any fail, **stop immediately**, report failures, and jump to Step 5.
+
+### Step 3e — Run unit/component tests (React/TypeScript)
 If React/TypeScript source changed, run the configured Vitest command from the discovered Vite/React project root:
 ```bash
 npx vitest run
@@ -336,6 +353,7 @@ All tests passed:
   - Unit:           12 passed, 0 failed (<project>.Tests)
   - Unit:            3 passed, 0 failed (Python)
   - Unit:            8 passed, 0 failed (React/Vitest)
+  - Component:       9 passed, 0 failed (React Native/Jest)
   - Integration:     5 passed, 0 failed (<project>.Tests.Integration)
   - Instrumentation: 125 passed, 0 failed (apps/mobile :app:connectedDebugAndroidTest)
 ```

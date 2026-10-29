@@ -72,8 +72,8 @@
     {
       "name": "olko-project-architecture",
       "category": "project",
-      "version": "1.0.0",
-      "description": "Check whole-monorepo architecture compliance for a project with marketplace defaults. Reads project docs and adapters, discovers the top-level layout (apps/*, services/*, platform/*, ai/*, docs/*, infrastructure/*, tests/*), verifies the apps-vs-services-vs-platform separation, DDD module layering (api/application/domain/infrastructure/contracts) and dependency direction, cross-module/cross-service communication through platform contracts and messaging, shared-code ownership, independent buildability, and delegates the ai/ subtree check to olko-ai-architecture. Use when validating overall project architecture, during plan review, when onboarding a new app/service/module, or standalone to verify the repo layout and layering are not drifting.",
+      "version": "1.1.0",
+      "description": "Check whole-monorepo architecture compliance for a project with marketplace defaults. Discover app/service/platform surfaces and workspace packages; verify top-level separation, DDD module boundaries, dependency direction, shared-code ownership, independent buildability, React Native workspace/package/Metro/native-linking boundaries, and AI context layout. Use when reviewing monorepo architecture, onboarding a surface/module, or checking repository structure for drift.",
       "tags": [
         "project",
         "architecture"

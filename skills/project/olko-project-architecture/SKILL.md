@@ -1,6 +1,6 @@
 ---
 name: olko-project-architecture
-description: "Check whole-monorepo architecture compliance for a project with marketplace defaults. Reads project docs and adapters, discovers the top-level layout (apps/*, services/*, platform/*, ai/*, docs/*, infrastructure/*, tests/*), verifies the apps-vs-services-vs-platform separation, DDD module layering (api/application/domain/infrastructure/contracts) and dependency direction, cross-module/cross-service communication through platform contracts and messaging, shared-code ownership, independent buildability, and delegates the ai/ subtree check to olko-ai-architecture. Use when validating overall project architecture, during plan review, when onboarding a new app/service/module, or standalone to verify the repo layout and layering are not drifting."
+description: "Check whole-monorepo architecture compliance for a project with marketplace defaults. Discover app/service/platform surfaces and workspace packages; verify top-level separation, DDD module boundaries, dependency direction, shared-code ownership, independent buildability, React Native workspace/package/Metro/native-linking boundaries, and AI context layout. Use when reviewing monorepo architecture, onboarding a surface/module, or checking repository structure for drift."
 ---
 
 # Olko Project Architecture
@@ -38,6 +38,9 @@ Read from `.agents/skill-config.md` first, then the project adapter:
 | `infrastructureDir` | `infrastructure/` | Infrastructure definitions root. |
 | `testsDir` | `tests/` | Cross-cutting tests root. |
 | `moduleLayers` | `api, application, domain, infrastructure, contracts` | DDD layers expected inside a module. |
+| `workspaceRoot` | repository root | Package-manager workspace root when the repository uses workspaces. |
+| `workspaceConfig` | discover from package-manager manifests | Workspace manifest/config path. |
+| `workspaceGlobs` | discover from workspace config | Directories included in the package workspace. |
 | `readArchitectureDocs` | `true` | Whether to read architecture docs. |
 
 ## Default project architecture rules
@@ -50,6 +53,15 @@ Apply these defaults unless config, adapter, or project docs override them.
 - `platform/` holds shared, cross-cutting platform assets consumed by apps and services: contracts (DTOs/events/OpenAPI/proto), workflows (cross-module/cross-service processes), messaging (queues/events/topics), auth, and shared utilities.
 - `docs/`, `infrastructure/`, `tests/`, `tools/`, `playground/`, `examples/` are supporting tops; do not put application/service business logic in them.
 - Do not mix concerns across tops: runnables in `apps/`, deployables in `services/`, shared contracts in `platform/`.
+- A React Native app is a runnable application surface, whether its JavaScript workspace package is colocated with other apps/packages or its Android/iOS projects live inside the app directory. Do not classify each native platform directory as a separate deployable service.
+
+### Package-manager workspaces and React Native apps
+- Resolve the repository root, package-manager workspace root, app roots, and shared package roots separately. Read the active package manager's workspace manifest and each relevant `package.json`; do not assume a fixed `apps/` or `packages/` layout.
+- Each app/shared package must declare its direct dependencies and own scripts. Do not rely on accidental dependency hoisting or run app-specific build/release commands from the wrong root.
+- Shared packages expose intentional public APIs and must not import app internals. Keep platform-neutral packages free of browser/Node-only APIs unless their contract explicitly supports those runtimes.
+- For React Native, check one compatible `react`/`react-native` instance per app, duplicate native modules, package-manager resolution, codegen/autolinking, and Metro configuration together. Preserve the installed framework's default Metro config; apply workspace overrides only when required by that version/toolchain.
+- Check that shared packages consumed by a mobile app are visible to Metro and native build/autolinking, and that each app remains independently buildable. Workspace package sharing must not create app-to-app source imports or dependency cycles.
+- Expo/EAS commands and app config belong to each app root unless project docs establish another arrangement. Bare React Native Gradle/CocoaPods scripts must resolve workspace dependencies from the documented roots.
 
 ### DDD module layering
 - Inside a modular app (e.g. `apps/api/modules/<module>/`), keep one directory per layer: `api`, `application`, `domain`, `infrastructure`, `contracts`.
@@ -98,7 +110,7 @@ Apply these defaults unless config, adapter, or project docs override them.
 ### Step 1 - Resolve scope
 Use changed files from the caller when provided. Otherwise inspect `git status --porcelain` and `git diff --name-only HEAD`.
 
-Discover the top-level layout by convention (`apps/`, `services/`, `platform/`, `ai/`, `docs/`, `infrastructure/`, `tests/`) unless config/docs override the directory names.
+Discover the top-level layout by convention (`apps/`, `services/`, `platform/`, `ai/`, `docs/`, `infrastructure/`, `tests/`) unless config/docs override the directory names. When workspace manifests exist, map package roots to the runnable app or shared package they own.
 
 ### Step 2 - Load adaptation layers
 Follow precedence:
@@ -121,6 +133,8 @@ Check the documented top-level layout plus marketplace defaults. Common checks:
 - shared platform code living inside an app or service
 - business logic inside `docs/`, `infrastructure/`, or `tools/`
 - a deployable placed under `apps/` instead of `services/` (or vice versa)
+- a React Native app or native project misclassified as a service/platform surface
+- workspace packages outside documented workspace globs, duplicate app/package ownership, or app-specific scripts/config owned by the wrong root
 
 ### Step 4 - Inspect DDD layering and dependency direction
 For each changed module, check:
@@ -132,6 +146,10 @@ For each changed module, check:
 - a service depending on another service's internals
 - `platform/*` depending on a specific app/service
 - cycles between modules, services, or layers
+- workspace package imports that bypass declared dependencies, import another app's internals, or create package cycles
+- duplicate React/React Native or native module instances within one runnable app
+- Metro, codegen, Gradle, CocoaPods, or autolinking resolving a different package/root than the package manager intended
+- shared mobile packages that Metro cannot see or native build/autolinking cannot consume
 
 Use import/dependency inspection where practical. Avoid brittle text-only checks.
 

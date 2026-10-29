@@ -10,7 +10,7 @@ Load this file only when concrete output shape, prompt wording, or command examp
   "name": "olko-test",
   "category": "testing",
   "version": "1.0.0",
-  "description": "Run affected or all tests for .NET, Python, and Android/Kotlin with change-aware scope detection. Triggers: 'run tests', 'run affected tests', 'olko-test'.",
+  "description": "Run affected or all tests for .NET, Python, Android/Kotlin, React Native, and React web with change-aware scope detection. Triggers: 'run tests', 'run affected tests', 'olko-test'.",
   "tags": ["testing", "test"],
   "capabilities": ["testing", "testing.test"],
   "cost": 2,
@@ -48,12 +48,14 @@ No `loading` block — the skill is small enough to ship as one file.
 Skill super-tester → split into 4 skills:
 
 Parent:
-  olko-test              skills/testing/   progressive   uses: [olko-test-dotnet, olko-test-python, olko-test-kotlin]
+  olko-test              skills/testing/   progressive   uses: [olko-test-dotnet, olko-test-python, olko-test-kotlin, olko-test-react-native, olko-test-react]
 
 Sub-skills:
   olko-test-dotnet       skills/dotnet/    single
   olko-test-python       skills/python/    single
   olko-test-kotlin       skills/testing/   single
+  olko-test-react-native skills/testing/   single
+  olko-test-react        skills/testing/   single
 ```
 
 ## Regenerate + validate commands

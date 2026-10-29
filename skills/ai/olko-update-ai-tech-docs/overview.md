@@ -1,6 +1,6 @@
 # Olko Update AI Tech Docs Overview
 
-AI-facing tech-doc updater. Use when user wants agent docs/conventions reviewed or improved for a named stack: Kotlin mobile, Python agents, React frontend, C# backend, etc.
+AI-facing tech-doc updater. Use when user wants agent docs/conventions reviewed or improved for a named stack: Kotlin/Android, React Native, React web, Python agents, C# backend, etc.
 
 Core flow:
 - parse technology, domain, and requested scope
