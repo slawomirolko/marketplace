@@ -206,12 +206,13 @@
     },
     {
       "name": "olko-dotnet-auditor",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "file": "olko-dotnet-auditor.md",
       "stack": "dotnet",
       "role": "auditor",
       "skills": [
         "olko-dotnet-architecture",
+        "olko-dotnet-security",
         "olko-dotnet-style",
         "olko-dotnet-testing",
         "olko-memory-layer",
@@ -220,7 +221,7 @@
     },
     {
       "name": "olko-dotnet-test-runner",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "file": "olko-dotnet-test-runner.md",
       "stack": "dotnet",
       "role": "test-runner",
@@ -230,17 +231,19 @@
         "olko-dotnet-testing",
         "olko-dotnet-style",
         "olko-dotnet-architecture",
+        "olko-dotnet-security",
         "olko-design-rules"
       ]
     },
     {
       "name": "olko-dotnet-implementer",
-      "version": "1.4.0",
+      "version": "1.5.0",
       "file": "olko-dotnet-implementer.md",
       "stack": "dotnet",
       "role": "implementer",
       "skills": [
         "olko-dotnet-architecture",
+        "olko-dotnet-security",
         "olko-dotnet-style",
         "olko-dotnet-testing",
         "olko-test",
@@ -250,12 +253,13 @@
     },
     {
       "name": "olko-mobile-auditor",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "file": "olko-mobile-auditor.md",
       "stack": "mobile",
       "role": "auditor",
       "skills": [
         "olko-kotlin-architecture",
+        "olko-kotlin-security",
         "olko-kotlin-style",
         "olko-kotlin-testing",
         "olko-memory-layer",
@@ -275,12 +279,13 @@
     },
     {
       "name": "olko-mobile-implementer",
-      "version": "1.5.0",
+      "version": "1.6.0",
       "file": "olko-mobile-implementer.md",
       "stack": "mobile",
       "role": "implementer",
       "skills": [
         "olko-kotlin-architecture",
+        "olko-kotlin-security",
         "olko-kotlin-style",
         "olko-kotlin-testing",
         "olko-test",
@@ -290,12 +295,13 @@
     },
     {
       "name": "olko-react-auditor",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "file": "olko-react-auditor.md",
       "stack": "react",
       "role": "auditor",
       "skills": [
         "olko-react-architecture",
+        "olko-react-security",
         "olko-react-style",
         "olko-react-testing",
         "olko-memory-layer",
@@ -316,12 +322,13 @@
     },
     {
       "name": "olko-react-implementer",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "file": "olko-react-implementer.md",
       "stack": "react",
       "role": "implementer",
       "skills": [
         "olko-react-architecture",
+        "olko-react-security",
         "olko-react-style",
         "olko-react-testing",
         "olko-test",
