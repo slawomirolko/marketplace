@@ -63,7 +63,7 @@ Also apply the `olko-design-rules` catalogue to the changed lines: its design ru
 - Keep related types together in the same feature namespace and folder tree.
 - For every `record`, declare data with explicit public properties using `{ get; init; }`.
 - Use opening and closing braces for all control flow statements, including single-line `if`, `else`, `for`, `foreach`, `while`, `using`, `lock`, and `fixed`.
-- `CancellationToken` parameters must use the full name `cancellationToken` and default to `default`, for example `CancellationToken cancellationToken = default`.
+- `CancellationToken` parameters must use the full name `cancellationToken` and default to `default`, for example `CancellationToken cancellationToken = default`. Check every changed interface member and method declaration, not just the implementation, and report each missing `= default` as a violation.
 
 ### Modern C#
 - Enable nullable reference types in all projects with `<Nullable>enable</Nullable>`.
