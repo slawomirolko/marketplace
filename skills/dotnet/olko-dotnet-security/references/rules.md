@@ -7,7 +7,7 @@ Apply these rules to changed lines only. Read code outside the scope only to get
 - **S1** - Load connection strings from configuration, user secrets, environment variables, or a documented secrets provider.
 - **S2** - Do not hardcode connection strings in code.
 - **S3** - Each connection string should have a dedicated settings type/section.
-- **S4** - Keep secrets out of `appsettings*.json`, `.cs` files, and compose environment blocks.
+- **S4** - Keep secrets out of `appsettings*.json`, `.cs` files, tracked `.env*` templates, and CI/CD definition files. Secrets in Compose files: see `olko-docker-style`.
 - **S5** - Use an ignored root `.env` or documented secret provider when the project standard requires it.
 - **S6** - Use `.env.example` or equivalent templates with placeholder values.
 - **S7** - For CI/CD, pass secrets through environment variables or the platform secret store.
@@ -46,7 +46,10 @@ Fix: call `UseHsts()` only when the environment is not Development, and call `Us
 Do not flag: when project docs state that the ingress or proxy enforces the HTTPS redirect and HSTS for this host.
 
 ### W6 - Data-protection keys are shared between instances
-Flag a host that runs more than one instance and uses cookie authentication, antiforgery, session state, or OIDC sign-in when `AddDataProtection()` is missing, does not persist keys to shared storage, or does not set a fixed application name with `SetApplicationName(...)`.
+Flag a host that runs more than one instance and uses cookie authentication, antiforgery, session state, or OIDC sign-in when any of these holds:
+- `AddDataProtection()` is missing.
+- Keys are not persisted to shared storage.
+- No fixed application name is set with `SetApplicationName(...)`.
 Shared storage examples: blob storage with keys protected by a key vault, Redis, or a database (`PersistKeysTo...` plus `ProtectKeysWith...`).
 Why: each instance otherwise makes its own key ring. A cookie or token that one instance issues then fails on another instance and after a restart.
 Do not flag: a pure JWT-bearer API that has no cookie, antiforgery, session, or OIDC sign-in. A host that docs state runs as one instance.

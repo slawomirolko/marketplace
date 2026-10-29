@@ -98,7 +98,7 @@ If `readArchitectureDocs` or `readTestingDocs` is disabled, do not invent missin
 |-------|--------------|----------|--------------|
 | .NET | `olko-dotnet-architecture` | `olko-dotnet-security` | `olko-dotnet-style` |
 | Docker | — | — | `olko-docker-style` |
-| Python | `olko-python-architecture` | `olko-python-security` | `olko-python-style` |
+| Python | `olko-python-architecture` | — | `olko-python-style` |
 | Kotlin/Android | `olko-kotlin-architecture` | `olko-kotlin-security` | `olko-kotlin-style` |
 
 Pass the mechanism summary, touched files, flow graph, and known stack context to each matching declared skill. Ask it to review for rule impact only; do not ask it to implement. Fold returned violations, constraints, or review gaps into the investigation summary.

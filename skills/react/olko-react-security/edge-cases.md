@@ -1,9 +1,5 @@
 # Olko React Security Edge Cases
 
-- **No config and no adapter** - apply all rules with the defaults in `overview.md`.
-- **`projectAdapter: false`** - ignore `.agents/skills/olko-react-security/project.md`, also when it exists.
-- **Project doc conflicts with a rule** - follow the doc. Report the conflict once. Do not report the finding.
-- **No app shell or package files in scope** - report groups `H` and `P` as not applicable, not as checked.
 - **Authentication mode unknown** - report `T3` as a `check` that names the missing fact. Do not guess cookie or bearer.
 - **Back-end gap found (`T2`, `T3`)** - report it to the caller. Do not check back-end code here; the back-end stack's security skill owns it.
 - **No documented sanitizer** - report `B2` or `D3` findings with the fix "document and use one sanitizer". Do not pick a library for the project.

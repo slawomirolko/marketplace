@@ -47,7 +47,7 @@ Apply these defaults unless config, adapter, or project docs override them.
 - Keep path aliases in `tsconfig.json` `paths` in sync with `vite.config.ts` `resolve.alias` — an alias defined in one and missing from the other is a violation.
 
 ### Security
-- Security rules live in `olko-react-security`; apply it to the same scope.
+- Security rules: see `olko-react-security`.
 
 ### Observability and logging
 - Route logging through a documented logger or a thin wrapper; do not scatter raw `console.log` in business logic.

@@ -4,7 +4,7 @@
     {
       "name": "olko-python-architecture",
       "category": "python",
-      "version": "1.2.0",
+      "version": "1.1.0",
       "description": "Check Python architecture compliance for changed Python projects with marketplace defaults. Reads project docs and adapters, maps changed .py files to pyproject.toml roots, verifies package boundaries, dependency direction, generated-code ownership, source layout, runtime/dependency management, observability, and gRPC/external-integration boundaries, and reports violations with rule sources. Use when validating Python architecture, before commit/test gates, during plan review, or when olko-commit-style/olko-test/olko-plan-editor delegates Python architecture checks.",
       "tags": [
         "python",
@@ -20,39 +20,6 @@
         "edge-cases.md",
         "examples.md",
         "overview.md",
-        "workflow.md"
-      ],
-      "loading": {
-        "mode": "progressive",
-        "first": "overview.md",
-        "sections": [
-          "overview",
-          "workflow",
-          "examples",
-          "edge-cases"
-        ]
-      }
-    },
-    {
-      "name": "olko-python-security",
-      "category": "python",
-      "version": "1.0.0",
-      "description": "Check Python security compliance for changed Python projects with marketplace defaults. Read-only. Reads project docs and adapters, maps changed .py and tracked .env template files to pyproject.toml roots, verifies credential placement in environment files, and reports violations with rule ids and sources. Use when validating Python security, before commit/test gates, during plan review, or when olko-python-architecture/olko-commit-style/olko-test/olko-plan-editor delegates Python security checks.",
-      "tags": [
-        "python",
-        "security"
-      ],
-      "capabilities": [
-        "python",
-        "python.python.security"
-      ],
-      "cost": 3,
-      "files": [
-        "SKILL.md",
-        "edge-cases.md",
-        "examples.md",
-        "overview.md",
-        "references/rules.md",
         "workflow.md"
       ],
       "loading": {

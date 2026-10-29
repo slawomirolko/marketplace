@@ -10,7 +10,6 @@ permission:
     "*": deny
     olko-memory-layer: allow
     olko-python-architecture: allow
-    olko-python-security: allow
     olko-python-style: allow
     olko-design-rules: allow
     olko-python-testing: allow

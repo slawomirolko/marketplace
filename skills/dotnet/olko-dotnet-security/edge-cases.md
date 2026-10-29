@@ -5,7 +5,6 @@
 - **Project doc conflicts with a rule** - follow the doc. Report the conflict once. Do not report the finding.
 - **No web host in scope** - check `S` rules only. Report the `W` rules as not applicable, not as checked.
 - **Evidence is not available** (for example, the startup file or deployment files are outside the repository) - report a `check` that names the missing fact. Do not guess.
-- **Secrets in Dockerfiles or Compose files** - out of scope. `olko-docker-style` owns them.
 
 ## Strict rules
 - Never edit code. Report findings only.

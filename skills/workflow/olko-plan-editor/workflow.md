@@ -93,7 +93,7 @@ If `readArchitectureDocs` or `readTestingDocs` is disabled, do not invent missin
 |-------|--------------|----------|--------------|------------------|
 | .NET | `olko-dotnet-architecture` | `olko-dotnet-security` | `olko-dotnet-style` | `olko-dotnet-testing` |
 | Docker | - | - | `olko-docker-style` | - |
-| Python | `olko-python-architecture` | `olko-python-security` | `olko-python-style` | `olko-python-testing` |
+| Python | `olko-python-architecture` | - | `olko-python-style` | `olko-python-testing` |
 | Kotlin/Android | `olko-kotlin-architecture` | `olko-kotlin-security` | `olko-kotlin-style` | `olko-kotlin-testing` |
 | React/TypeScript | `olko-react-architecture` | `olko-react-security` | `olko-react-style` | `olko-react-testing` |
 

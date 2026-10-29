@@ -602,13 +602,11 @@
       "id": "python",
       "skills": [
         "olko-python-architecture",
-        "olko-python-security",
         "olko-python-style",
         "olko-python-testing"
       ],
       "related": [
         "python.python.architecture",
-        "python.python.security",
         "python.python.style",
         "python.python.testing"
       ],
@@ -618,16 +616,6 @@
       "id": "python.python.architecture",
       "skills": [
         "olko-python-architecture"
-      ],
-      "related": [
-        "python"
-      ],
-      "prerequisites": []
-    },
-    {
-      "id": "python.python.security",
-      "skills": [
-        "olko-python-security"
       ],
       "related": [
         "python"

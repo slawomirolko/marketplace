@@ -5,7 +5,7 @@ This skill is read-only. Collect evidence with read and search tools. Run only t
 ## Step 1 - Resolve scope
 Use changed files from the caller when provided. Otherwise inspect `git status --porcelain` and `git diff --name-only HEAD`.
 
-Keep `.cs`, `.csproj`, and `appsettings*.json` files. Skip files that match `dotnetSecurityGeneratedGlobs` unless docs explicitly require checking them. Leave Dockerfiles and Compose files to `olko-docker-style`.
+Keep `.cs`, `.csproj`, and `appsettings*.json` files. Also keep tracked `.env*` template files (for example `.env.example`) and CI/CD definition files (`.github/workflows/*.yml`, `azure-pipelines*.yml`, `.gitlab-ci.yml`). Never read untracked `.env` files. Skip files that match `dotnetSecurityGeneratedGlobs` unless docs explicitly require checking them. Leave Dockerfiles and Compose files to `olko-docker-style`.
 
 At plan time, the scope is the planned files and planned elements that the caller gives.
 
@@ -28,7 +28,9 @@ Docs are the rule source of truth. If a doc conflicts with a rule, follow the do
 For every changed file:
 - find the nearest `.csproj`
 - mark the project as a web host when it uses `Microsoft.NET.Sdk.Web`, or when its code maps endpoints or controllers
-- find the host startup file (`Program.cs` or the documented equivalent) for each web host; W rules often need evidence from it
+- find the host startup file (`Program.cs` or the documented equivalent) for each web host
+
+`.env*` templates and CI/CD definition files belong to no project. Check them against the `S` rules only.
 
 Apply `S` rules to every project. Apply `W` rules only to web host projects.
 
@@ -47,9 +49,13 @@ If violations exist:
 ```text
 .NET security violations (<checked>/<total> rules checked):
   1. <rule id> <file>:<line> - <rule broken> (source: <doc>:<section> | olko-dotnet-security:<rule id>)
+Checks:
+  1. <rule id> <file>:<line> - <finding>; <missing fact> (source: <doc>:<section> | olko-dotnet-security:<rule id>)
 ```
 
-Report a finding that needs facts you do not have (for example instance count for `W6`) as `check`, not as a violation.
+Report a finding that needs facts you do not have (for example instance count for `W6`) under `Checks:`, not as a violation. Leave out the `Checks:` block when there are none.
+
+Never print a secret value. Name the file, line, and key only.
 
 If the command fails, include the failing command and the smallest useful error snippet.
 

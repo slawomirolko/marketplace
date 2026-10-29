@@ -40,9 +40,8 @@ Apply these defaults unless config, adapter, or project docs override them.
 - Use the project's documented dependency manager and runner (e.g. `uv`) for dependency management and execution.
 - Keep the Python virtual environment local to the Python project (e.g. `.venv`).
 - Store runtime state in a documented state directory.
-
-### Security
-- Security rules live in `olko-python-security`; apply it to the same scope.
+- Keep credentials in the root `.env` file only (repository root). Do not duplicate secrets into a Python-local `.env`.
+- A Python-local `.env` is for non-secret dev overrides only (model names, stagger seconds, etc.).
 
 ### External-service client configuration
 - Keep external-service client configuration (connection URLs, API keys, headers, auth) centralized in a settings module that loads the root `.env` and a Python-local override file.
@@ -113,7 +112,7 @@ Check documented rules plus marketplace defaults when docs do not override them.
 - no business logic in transport/CLI/API adapters
 - dependency injection/config boundary rules
 - source layout (source root, generated-code dir, shared proto contracts root)
-- runtime/dependency management (venv location, runtime state)
+- runtime/dependency management (venv location, runtime state, credentials only in root `.env`)
 - external-service client config centralization and contract/smoke test presence
 - observability (OpenTelemetry logging/tracing modules, OTLP endpoint, service names)
 - module organization (workflow, instructions, tool registry, main, settings)

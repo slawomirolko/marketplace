@@ -1,6 +1,6 @@
 ---
 name: olko-kotlin-security
-description: "Check Kotlin/Android security compliance for changed Kotlin projects with marketplace defaults. Read-only. Reads project docs and adapters, maps changed .kt/.kts files, Android manifests, and network security config to Gradle module roots, verifies boundary input validation, secret storage, cleartext traffic limits, and sensitive-data logging, and reports violations with rule ids and sources. Use when validating Kotlin/Android security, before commit/test gates, during plan review, or when olko-kotlin-architecture/olko-commit-style/olko-test/olko-plan-editor delegates Kotlin security checks."
+description: "Check Kotlin/Android security compliance for changed Kotlin projects with marketplace defaults. Read-only. Reads project docs and adapters, maps changed .kt/.kts files, Android manifests, and network security config to Gradle module roots, verifies boundary input validation, secret storage, cleartext traffic limits, and sensitive-data logging, and reports violations with rule ids and sources. Use when validating Kotlin/Android security, before commit/test gates, during plan review, or when olko-kotlin-architecture/olko-commit-style/olko-test/olko-plan-editor delegates Kotlin security checks. Triggers: 'kotlin security', 'android security check', 'cleartext traffic', 'secret in kotlin code', 'olko-kotlin-security'."
 ---
 
 # olko-kotlin-security

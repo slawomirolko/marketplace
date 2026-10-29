@@ -31,7 +31,6 @@ uses:
   - olko-dotnet-style
   - olko-docker-style
   - olko-python-architecture
-  - olko-python-security
   - olko-python-style
   - olko-kotlin-architecture
   - olko-kotlin-security

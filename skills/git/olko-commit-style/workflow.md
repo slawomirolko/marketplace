@@ -8,7 +8,6 @@ Optional `uses` delegates:
 - `olko-dotnet-security`
 - `olko-dotnet-testing`
 - `olko-python-architecture`
-- `olko-python-security`
 - `olko-python-style`
 - `olko-python-testing`
 - `olko-kotlin-architecture`

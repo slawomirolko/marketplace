@@ -3,7 +3,7 @@
 This skill is read-only. Collect evidence with read and search tools. Run only the configured security command. Do not edit files.
 
 ## Step 1 - Resolve scope
-Use changed files from the caller when provided. Otherwise inspect `git status --porcelain` and `git diff --name-only HEAD`.
+If the caller gives changed files, use them. Otherwise run `git status --porcelain` and `git diff --name-only HEAD`.
 
 Keep:
 - `.ts` / `.tsx` files
@@ -27,7 +27,7 @@ Read:
 - nearest `AGENTS.md`, `ARCHITECTURE.md`, `SECURITY.md`, `CODING_STYLE.md` walking up from each changed file
 - repo root `AGENTS.md`
 
-Docs are the rule source of truth. If a doc conflicts with a rule, follow the doc and report the conflict. Remove every rule id in `reactSecurityRulesDisabled` from the check.
+Docs are the rule source of truth. If a doc conflicts with a rule, follow the doc, report the conflict once, and do not report the finding. Remove every rule id in `reactSecurityRulesDisabled` from the check.
 
 ## Step 3 - Map project roots
 For every changed file:
@@ -53,9 +53,11 @@ If violations exist:
 ```text
 React security violations (<checked>/<total> rules checked):
   1. <rule id> <file>:<line> - <rule broken> (source: <doc>:<section> | olko-react-security:<rule id>)
+Checks:
+  1. <rule id> <file>:<line> - <finding>; <missing fact> (source: <doc>:<section> | olko-react-security:<rule id>)
 ```
 
-Report a finding that needs facts you do not have (for example a header config outside the repository for `H3`) as `check`, not as a violation.
+If a finding needs facts you do not have (for example a header config outside the repository for `H3`), report it as a `check`, not a violation. List it under `Checks:`. Leave out the `Checks:` block when there are none.
 
 If the command fails, include the failing command and the smallest useful error snippet.
 

@@ -45,7 +45,6 @@ uses:
   - olko-create-saga
   - olko-docker-style
   - olko-python-architecture
-  - olko-python-security
   - olko-python-style
   - olko-python-testing
   - olko-kotlin-architecture

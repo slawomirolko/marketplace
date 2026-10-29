@@ -4,6 +4,7 @@ Check .NET security compliance for changed C# projects, with marketplace default
 
 ## What I do
 - Map changed `.cs`, `.csproj`, and `appsettings*.json` files to their nearest `.csproj`.
+- Check changed tracked `.env*` template files (for example `.env.example`) and CI/CD definition files (`.github/workflows/*.yml`, `azure-pipelines*.yml`, `.gitlab-ci.yml`) against the `S` rules. Never read untracked `.env` files.
 - Read security rules from `.agents/skill-config.md`, `.agents/skills/olko-dotnet-security/project.md`, scoped `AGENTS.md`, `ARCHITECTURE.md`, `SECURITY.md`, and `CODING_STYLE.md`.
 - Check changed lines against the rule catalogue in `references/rules.md` and against documented project security rules.
 - Run a configured security command when one exists.
@@ -16,7 +17,7 @@ Use when validating .NET security, before commit/test gates, during plan review,
 
 | Group | Ids | Applies to |
 |-------|-----|------------|
-| Connection strings and secrets | `S1`-`S8` | all .NET projects and their settings files |
+| Connection strings and secrets | `S1`-`S8` | all .NET projects, their settings files, tracked `.env*` templates, and CI/CD definition files |
 | ASP.NET Core web host | `W1`-`W6` | web host projects only (`Microsoft.NET.Sdk.Web`, or code that maps endpoints or controllers) |
 
 ## Configuration keys
@@ -29,7 +30,6 @@ Read from `.agents/skill-config.md` first, then the project adapter:
 | `dotnetSecurityCommand` | — | Optional command that runs security checks (for example a vulnerable-package scan or an analyzer run). |
 | `dotnetSecurityRulesDisabled` | `[]` | Rule ids to skip, for example `[S8, W5]`. |
 | `dotnetSecurityGeneratedGlobs` | `**/bin/**`, `**/obj/**`, `**/*.g.cs`, `**/*.Designer.cs`, `**/Generated/**` | Files skipped unless docs say otherwise. |
-| `readArchitectureDocs` | `true` | Whether architecture and security docs may add or override rules. |
 
 With no config and no adapter, all rules apply with the defaults above. Project-specific rule changes belong in `.agents/skill-config.md`, the project adapter, or `AGENTS.md`.
 

@@ -522,7 +522,7 @@
       "name": "olko-dotnet-security",
       "category": "dotnet",
       "version": "1.0.0",
-      "description": "Check .NET security compliance for changed C# projects with marketplace defaults. Read-only. Reads project docs and adapters, maps changed .cs/.csproj/appsettings files to source projects, verifies connection-string and secret handling, endpoint authorization, anonymous-access reasons, antiforgery, CORS, HTTPS/HSTS, and data-protection key persistence, and reports violations with rule ids and sources. Use when validating .NET security, before commit/test gates, during plan review, or when olko-dotnet-architecture/olko-commit-style/olko-test/olko-plan-editor delegates .NET security checks.",
+      "description": "Check .NET security compliance for changed C# projects with marketplace defaults. Read-only. Reads project docs and adapters, maps changed .cs/.csproj/appsettings files to source projects, checks tracked .env template and CI/CD definition files, verifies connection-string and secret handling, endpoint authorization, anonymous-access reasons, antiforgery, CORS, HTTPS/HSTS, and data-protection key persistence, and reports violations with rule ids and sources. Use when validating .NET security, before commit/test gates, during plan review, or when olko-dotnet-architecture/olko-commit-style/olko-test/olko-plan-editor delegates .NET security checks. Not for secrets in Dockerfiles or Compose files (olko-docker-style) or front-end code (olko-react-security). Triggers: '.NET security', 'dotnet security check', 'secrets in appsettings', 'endpoint authorization', 'CORS policy check', 'olko-dotnet-security'.",
       "tags": [
         "dotnet",
         "security"
@@ -883,7 +883,7 @@
       "name": "olko-kotlin-security",
       "category": "kotlin",
       "version": "1.0.0",
-      "description": "Check Kotlin/Android security compliance for changed Kotlin projects with marketplace defaults. Read-only. Reads project docs and adapters, maps changed .kt/.kts files, Android manifests, and network security config to Gradle module roots, verifies boundary input validation, secret storage, cleartext traffic limits, and sensitive-data logging, and reports violations with rule ids and sources. Use when validating Kotlin/Android security, before commit/test gates, during plan review, or when olko-kotlin-architecture/olko-commit-style/olko-test/olko-plan-editor delegates Kotlin security checks.",
+      "description": "Check Kotlin/Android security compliance for changed Kotlin projects with marketplace defaults. Read-only. Reads project docs and adapters, maps changed .kt/.kts files, Android manifests, and network security config to Gradle module roots, verifies boundary input validation, secret storage, cleartext traffic limits, and sensitive-data logging, and reports violations with rule ids and sources. Use when validating Kotlin/Android security, before commit/test gates, during plan review, or when olko-kotlin-architecture/olko-commit-style/olko-test/olko-plan-editor delegates Kotlin security checks. Triggers: 'kotlin security', 'android security check', 'cleartext traffic', 'secret in kotlin code', 'olko-kotlin-security'.",
       "tags": [
         "kotlin",
         "security"
@@ -1217,7 +1217,7 @@
     {
       "name": "olko-python-architecture",
       "category": "python",
-      "version": "1.2.0",
+      "version": "1.1.0",
       "description": "Check Python architecture compliance for changed Python projects with marketplace defaults. Reads project docs and adapters, maps changed .py files to pyproject.toml roots, verifies package boundaries, dependency direction, generated-code ownership, source layout, runtime/dependency management, observability, and gRPC/external-integration boundaries, and reports violations with rule sources. Use when validating Python architecture, before commit/test gates, during plan review, or when olko-commit-style/olko-test/olko-plan-editor delegates Python architecture checks.",
       "tags": [
         "python",
@@ -1233,39 +1233,6 @@
         "edge-cases.md",
         "examples.md",
         "overview.md",
-        "workflow.md"
-      ],
-      "loading": {
-        "mode": "progressive",
-        "first": "overview.md",
-        "sections": [
-          "overview",
-          "workflow",
-          "examples",
-          "edge-cases"
-        ]
-      }
-    },
-    {
-      "name": "olko-python-security",
-      "category": "python",
-      "version": "1.0.0",
-      "description": "Check Python security compliance for changed Python projects with marketplace defaults. Read-only. Reads project docs and adapters, maps changed .py and tracked .env template files to pyproject.toml roots, verifies credential placement in environment files, and reports violations with rule ids and sources. Use when validating Python security, before commit/test gates, during plan review, or when olko-python-architecture/olko-commit-style/olko-test/olko-plan-editor delegates Python security checks.",
-      "tags": [
-        "python",
-        "security"
-      ],
-      "capabilities": [
-        "python",
-        "python.python.security"
-      ],
-      "cost": 3,
-      "files": [
-        "SKILL.md",
-        "edge-cases.md",
-        "examples.md",
-        "overview.md",
-        "references/rules.md",
         "workflow.md"
       ],
       "loading": {
@@ -1379,7 +1346,7 @@
       "name": "olko-react-security",
       "category": "react",
       "version": "1.0.0",
-      "description": "Check React/TypeScript front-end security compliance for changed files with marketplace defaults. Read-only. Reads project docs and adapters, maps changed .ts/.tsx/app-shell/package files to Vite project roots, verifies bundle secrets, HTML sanitization, token storage, URL and redirect safety, postMessage origins, DOM and code-execution sinks, CSRF, auth-header scope, app-shell CSP and security headers, third-party scripts, service-worker caching, and supply chain, and reports violations with rule ids and sources. Use when validating React security, before commit/test gates, during plan review, or when olko-react-architecture/olko-commit-style/olko-test/olko-plan-editor delegates React security checks.",
+      "description": "Read-only React/TypeScript front-end security check for changed files, with marketplace defaults. Covers bundle secrets, HTML sanitization, token storage, URL and redirect safety, postMessage origins, DOM and code-execution sinks, CSRF, auth-header scope, app-shell CSP and security headers, third-party scripts, service-worker caching, and supply chain, and reports violations with rule ids and sources. Use when validating React security, before commit/test gates, during plan review, or when olko-react-architecture/olko-commit-style/olko-test/olko-plan-editor delegates React security checks. Not for back-end security; use the back-end stack's security skill. Triggers: 'react security', 'frontend security check', 'check XSS', 'olko-react-security'.",
       "tags": [
         "react",
         "security"

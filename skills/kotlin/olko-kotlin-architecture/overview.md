@@ -1,5 +1,5 @@
 # Olko Kotlin Architecture Overview
 
-Checks Kotlin/Android architecture for changed `.kt`/`.kts` files with marketplace defaults: source-set layout, module boundaries, dependency direction, MVVM/ViewModel-StateFlow separation, networking singleton ownership, Gradle dependency configuration, API boundary DTO mapping, and external-service client configuration. Security rules live in `olko-kotlin-security`. Use before commit/test gates, during plan review, or when delegated by olko-commit-style/olko-test/olko-plan-editor.
+Checks Kotlin/Android architecture for changed `.kt`/`.kts` files with marketplace defaults: source-set layout, module boundaries, dependency direction, MVVM/ViewModel-StateFlow separation, networking singleton ownership, Gradle dependency configuration, API boundary DTO mapping, and external-service client configuration. Security rules: see `olko-kotlin-security`. Use before commit/test gates, during plan review, or when delegated by olko-commit-style/olko-test/olko-plan-editor.
 
 Load `SKILL.md` for the canonical workflow and rule list.

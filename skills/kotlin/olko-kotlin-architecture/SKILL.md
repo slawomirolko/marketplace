@@ -63,7 +63,7 @@ Apply these defaults unless config, adapter, or project docs override them.
 - Map entities to dedicated response DTOs at the API boundary; never return or surface internal entities directly.
 
 ### Security
-- Security rules live in `olko-kotlin-security`; apply it to the same scope.
+- Security rules: see `olko-kotlin-security`.
 
 ### Observability and logging
 - Route logging through a documented logger or a thin wrapper; do not scatter raw `println` or ad-hoc log calls in business logic.

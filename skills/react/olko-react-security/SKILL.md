@@ -1,6 +1,6 @@
 ---
 name: olko-react-security
-description: "Check React/TypeScript front-end security compliance for changed files with marketplace defaults. Read-only. Reads project docs and adapters, maps changed .ts/.tsx/app-shell/package files to Vite project roots, verifies bundle secrets, HTML sanitization, token storage, URL and redirect safety, postMessage origins, DOM and code-execution sinks, CSRF, auth-header scope, app-shell CSP and security headers, third-party scripts, service-worker caching, and supply chain, and reports violations with rule ids and sources. Use when validating React security, before commit/test gates, during plan review, or when olko-react-architecture/olko-commit-style/olko-test/olko-plan-editor delegates React security checks."
+description: "Read-only React/TypeScript front-end security check for changed files, with marketplace defaults. Covers bundle secrets, HTML sanitization, token storage, URL and redirect safety, postMessage origins, DOM and code-execution sinks, CSRF, auth-header scope, app-shell CSP and security headers, third-party scripts, service-worker caching, and supply chain, and reports violations with rule ids and sources. Use when validating React security, before commit/test gates, during plan review, or when olko-react-architecture/olko-commit-style/olko-test/olko-plan-editor delegates React security checks. Not for back-end security; use the back-end stack's security skill. Triggers: 'react security', 'frontend security check', 'check XSS', 'olko-react-security'."
 ---
 
 # olko-react-security

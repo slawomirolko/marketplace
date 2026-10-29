@@ -1,6 +1,6 @@
 # Olko React Security Overview
 
-Check front-end security compliance for changed files in TypeScript/React projects, with marketplace defaults. This skill is read-only. It reports violations. It does not fix code.
+Check front-end security compliance for changed files in TypeScript/React projects, with marketplace defaults. This skill is read-only.
 
 ## What I do
 - Map changed files to their nearest Vite/React project root (`package.json` next to a `vite.config.ts`).
@@ -36,7 +36,6 @@ Read from `.agents/skill-config.md` first, then the project adapter:
 | `reactHeadersConfig` | — | File that sets HTTP response headers for the app shell (hosting config, reverse-proxy config, or server middleware). |
 | `reactHtmlSanitizer` | — | The documented sanitizer used for `B2` and `D3`. |
 | `reactGeneratedCodeDirs` | `dist/`, generated API types | Directories excluded from checks. |
-| `readArchitectureDocs` | `true` | Whether architecture and security docs may add or override rules. |
 
 With no config and no adapter, all rules apply with the defaults above. Project-specific rule changes belong in `.agents/skill-config.md`, the project adapter, or `AGENTS.md`.
 

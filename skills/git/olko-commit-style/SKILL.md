@@ -28,7 +28,6 @@ uses:
   - olko-dotnet-testing
   - olko-docker-style
   - olko-python-architecture
-  - olko-python-security
   - olko-python-style
   - olko-python-testing
   - olko-kotlin-architecture
@@ -93,7 +92,6 @@ If a matching stack-specific skill is declared in `uses`, delegate the relevant 
 - `.NET` test conventions: `olko-dotnet-testing`
 - Docker conventions: `olko-docker-style`
 - Python architecture: `olko-python-architecture`
-- Python security: `olko-python-security`
 - Python style: `olko-python-style`
 - Python test conventions: `olko-python-testing`
 - Kotlin/Android architecture: `olko-kotlin-architecture`
