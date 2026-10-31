@@ -23,8 +23,9 @@ implementation orchestrator directly for that.
 - Count all distinct changed code paths, including tests, migrations, config, and
   both sides of renames. Documentation and knowledge-base paths are excluded
   from that budget and reported separately. Aim for 5–15 code paths when the
-  work supports it; never transfer or accept a Task diff over 15 code paths.
-  There is no minimum.
+  work supports it; never transfer or accept a Task diff over 15 code paths
+  unless the developer explicitly approved a larger count for this Task; an
+  explicit extension must be honored in one PR. There is no minimum.
 - Stop on unrelated changes, scope drift, missing Task/Feature context, an
   ambiguous source file list, or a conflict with the target worktree.
 - This skill inventories and transfers files only. It does not edit product
@@ -37,6 +38,6 @@ implementation orchestrator directly for that.
 ## Output
 
 - Task and Feature IDs plus the approved Task plan path.
-- Confirmed changed code paths and documentation paths, with the code count against the 15-path limit.
+- Confirmed changed code paths and documentation paths, with the code count against the applicable limit.
 - Source and target worktree paths, with transferred-file results.
 - Handoff status and any blocker. Do not claim implementation is complete.

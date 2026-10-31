@@ -9,7 +9,7 @@ Current-code adoption
   Technical plan: <absolute path>
   Worktree: <absolute path>
   Branch: <branch name>
-  Confirmed code paths: <count; maximum 15>
+  Confirmed code paths: <count; default maximum 15 or the approved extended limit>
   Documentation paths: <count; outside the budget>
   Transferred: <paths>
   Already present: <paths>
@@ -22,6 +22,6 @@ Current-code adoption
 
 ```text
 These are the changes I found for <Task ID>: <paths>. Confirm this list or tell me what to adjust.
-The changes exceed the approved Task scope or the 15-code-path limit. Return to Task planning before transfer.
+The changes exceed the approved Task scope or the applicable code-path limit. Return to Task planning before transfer.
 Target file <path> has different work in the Task worktree. Resolve the conflict before transfer.
 ```

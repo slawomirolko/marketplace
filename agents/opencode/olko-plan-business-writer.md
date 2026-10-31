@@ -4,7 +4,12 @@ mode: subagent
 hidden: true
 model: ollama-cloud/deepseek-v4.1-flash:cloud
 permission:
-  edit: allow
+  edit:
+    "plans/**": allow
+    "*": deny
+  write:
+    "plans/**": allow
+    "*": deny
   bash: deny
   task: deny
   skill:

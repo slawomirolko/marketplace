@@ -85,7 +85,7 @@
     {
       "name": "olko-feature-planner",
       "category": "workflow",
-      "version": "1.5.0",
+      "version": "1.6.0",
       "description": "Turn broad product outcomes into an Epic with business value and progress by Feature, then define user-facing Features and independently testable, one-PR Tasks. For implementation planning, return the complete accepted Feature/Task hierarchy to the orchestrator, which creates every Task plan in the same session.",
       "tags": [
         "workflow",
@@ -118,7 +118,7 @@
     {
       "name": "olko-implement-current-code",
       "category": "workflow",
-      "version": "2.1.0",
+      "version": "2.2.0",
       "description": "Adopt already-written changes into one Task worktree, validate them against its approved Task plan and Feature context, and hand them to the standard implementation orchestrator. Does not own implementation verification or delivery. Triggers: 'olko-implement-current-code', 'adopt current changes', 'transfer my session changes to a worktree', 'resume implement-current-code'.",
       "tags": [
         "workflow",
@@ -218,7 +218,7 @@
     {
       "name": "olko-plan-editor",
       "category": "workflow",
-      "version": "1.8.0",
+      "version": "1.9.0",
       "description": "Plan an accepted Feature in one session: create its business and technical plan plus one implementation plan file for every child Task; later implementation remains per Task. Also supports Epic plans and scoped Task-plan revisions.",
       "tags": [
         "workflow",
