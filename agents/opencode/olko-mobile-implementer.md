@@ -60,15 +60,17 @@ MANDATORY FILE-INTEGRITY SELF-VERIFICATION (do not skip):
 - If you cannot verify a file's integrity, say so explicitly in the report —
   never report "done" for unverified files.
 
-ANDROID EMULATOR — DOCKER ONLY. NEVER use a system/local `emulator.exe`. The
+ANDROID EMULATOR — DOCKER ONLY. NEVER use a system/local emulator binary. The
 repo runs the Android emulator as a Docker Compose service (`android-emulator`
 in `compose.override.yaml`, `budtmo/docker-android:emulator_11.0`). The
 emulator lifecycle is owned by the repository's emulator lifecycle script — call that
 script (`start`, `status`, `stop`), do NOT issue raw `docker compose`/`adb`
 commands for the emulator. The `start` action polls boot every 10 seconds and
 prints `Boot check at Ns: sys.boot_completed='...'`; verify the printed value
-reaches `'1'` before running `./gradlew connectedCheck`, and set
-`$env:ANDROID_SERIAL = 'localhost:5555'` for the Gradle invocation. If the
+reaches `'1'` before running `./gradlew connectedCheck`, and point the Gradle
+invocation at the forwarded device with `ANDROID_SERIAL=localhost:5555`
+(export it in a POSIX shell, or set the equivalent environment variable on the
+host platform). If the
 script times out or Docker is unavailable, report the failure — do not fall
 back to a local emulator and do not skip the instrumentation tests.
 
@@ -84,19 +86,20 @@ the repository's emulator lifecycle script (`start`). Only report instrumentatio
 not-run if the emulator genuinely cannot start after the recovery procedure —
 and then state it as an explicit blocker, never as a silent omission.
 
-WINDOWS GRADLE HANG HANDLING (mandatory, do not skip):
+GRADLE HANG HANDLING (mandatory, do not skip):
 - ALWAYS pass an explicit long timeout (600000 ms = 10 min) to EVERY bash
   invocation that runs `gradlew` (compile, test, lint). The default 120s
   timeout kills Gradle mid-run and the call reports failure even when the build
   succeeded. A killed/hung Gradle call is the #1 cause of this agent failing.
 - If the captured output shows `BUILD SUCCESSFUL` (or the tests pass) but the
-  shell reports a timeout, the run PASSED — the hang is the Windows
+  shell reports a timeout, the run PASSED — the hang is a
   configuration-cache/daemon quirk, not the build. Record it as pass and move
   on. Do NOT report failure.
 - After a successful-but-hung run, kill the lingering daemon with
   `./gradlew --stop` (its own bash call, also with a long timeout).
 - Do NOT add `--no-daemon` to fix hangs — it slows every later invocation.
-- Optional environment setup: `scripts/setup-android-env.ps1` exists in the
-  repo; run it before Gradle if the environment variables are missing.
+- Environment setup: if the repo provides an Android environment setup script,
+  run it before Gradle when the required variables are missing. Do not assume a
+  platform-specific script name or extension.
 
 Send a progress update to the caller after scope inspection, each completed edit batch, and verification, and immediately on a blocker. Each update must include `phase`, `status`, `changed files`, `commands or checks`, `result`, and `next action`. Finish with the same information in the final result. If the runtime buffers child messages until completion, emit these updates in chronological order under `Progress updates` before the final summary.

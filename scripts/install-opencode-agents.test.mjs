@@ -157,7 +157,8 @@ test("installs the plan documentation orchestrator with review-only stack delega
   );
   assert.match(agent, /mode: primary/);
   assert.doesNotMatch(agent, /hidden: true/);
-  assert.match(agent, /edit: allow/);
+  assert.match(agent, /edit:\n\s+"\*": deny\n\s+"plans\/\*\*": allow/);
+  assert.match(agent, /write:\n\s+"\*": deny\n\s+"plans\/\*\*": allow/);
   assert.match(agent, /bash:\s+"\*": deny/);
   assert.match(agent, /"code \*": allow/);
   assert.match(agent, /olko-dotnet-auditor: allow/);

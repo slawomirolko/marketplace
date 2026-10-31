@@ -1,5 +1,5 @@
 ---
-description: Runs delivery gates and Git handoff for an implementation worktree: style, Docker rebuild, commit, push, and PR creation.
+description: "Runs delivery gates and Git handoff for an implementation worktree: style, Docker rebuild, commit, push, and PR creation."
 mode: subagent
 hidden: true
 model: ollama-cloud/deepseek-v4.1-flash:cloud
@@ -31,8 +31,8 @@ Before committing, pushing, or creating a PR, independently compare the proposed
 - Count production code, tests, migrations, and runtime configuration. For a rename, count both the old and new paths.
 - Documentation and knowledge-base paths are excluded from the budget and reported separately: markdown notes under `docs/` (including `docs/knowledge/`), files under `plans/`, and co-located documentation such as `AGENTS.md`, `CODING_STYLE.md`, `TESTING.md`, and `README.md`. They still must belong to the Task's approved scope, and code must never be reclassified as documentation to evade the ceiling.
 - Aim for about 10 code paths. The normal range is 5–15, with no minimum.
-- If the code-path count exceeds 15, stop before commit, push, or PR creation. Return the count and full path list to the caller.
-- Continue only after the Task is re-scoped through the approval-gated YouTrack workflow. The 15-code-path ceiling has no user waiver.
+- An explicit developer request to extend the ceiling for this Task and PR is approval and must be honored: commit, push, and open the PR with the approved count and the approval recorded in the delivery result and PR body. Do not ask again, refuse, split, or defer.
+- Only when no explicit developer extension exists and the code-path count exceeds 15, stop before commit, push, or PR creation. Return the count and full path list to the caller for re-scoping through the approval-gated YouTrack workflow.
 - Recount after every later PR change.
 
 The delivery result must include the Task, its Feature milestone, the actual code-path count, the documentation-path count, and the PR URL. The caller uses these details to record the Task-to-PR result.
