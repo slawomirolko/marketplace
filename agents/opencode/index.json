@@ -4,7 +4,7 @@
   "agents": [
     {
       "name": "olko-implementation-orchestrator",
-      "version": "2.1.0",
+      "version": "2.2.0",
       "file": "olko-implementation-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -93,7 +93,7 @@
     },
     {
       "name": "olko-git-delivery-manager",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "file": "olko-git-delivery-manager.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -118,7 +118,7 @@
     },
     {
       "name": "olko-plan-documentation-orchestrator",
-      "version": "2.1.0",
+      "version": "2.2.0",
       "file": "olko-plan-documentation-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -147,7 +147,7 @@
     },
     {
       "name": "olko-task-scope-impact-reviewer",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "file": "olko-task-scope-impact-reviewer.md",
       "stack": "cross-stack",
       "role": "comparator",
@@ -155,7 +155,7 @@
     },
     {
       "name": "olko-plan-business-writer",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "file": "olko-plan-business-writer.md",
       "stack": "cross-stack",
       "role": "writer",
@@ -272,7 +272,7 @@
     },
     {
       "name": "olko-mobile-test-runner",
-      "version": "2.0.0",
+      "version": "2.1.0",
       "file": "olko-mobile-test-runner.md",
       "stack": "mobile",
       "role": "test-runner",
@@ -283,7 +283,7 @@
     },
     {
       "name": "olko-mobile-implementer",
-      "version": "1.6.0",
+      "version": "1.6.1",
       "file": "olko-mobile-implementer.md",
       "stack": "mobile",
       "role": "implementer",
@@ -432,7 +432,7 @@
     },
     {
       "name": "olko-feature-backlog-writer",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "file": "olko-feature-backlog-writer.md",
       "stack": "cross-stack",
       "role": "writer",

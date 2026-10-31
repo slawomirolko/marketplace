@@ -16,7 +16,7 @@ Before presenting or publishing a Task, review its description and explicitly re
 
 1. Does the outcome fit one production PR and remain independently acceptable without a later Task?
 2. Does the Task advance a named Feature milestone with a verifiable post-merge capability?
-3. Is the distinct counted-code-path estimate grounded in repository evidence, ideally 5–15 code paths, and at most 15 with no exceptions?
+3. Is the distinct counted-code-path estimate grounded in repository evidence, ideally 5–15 code paths, and at most 15 unless the developer explicitly approved an extension?
 4. Does the Task identify affected existing domain models, aggregates, and value objects with repository evidence, explain reuse/extension/new decisions, and state why if none apply?
 5. Does the Task leave the system in a valid working state after merge and preserve existing behavior outside its scope, with relevant regression checks?
 6. Does the Task have observable acceptance criteria for the main path and meaningful no-data or failure paths?

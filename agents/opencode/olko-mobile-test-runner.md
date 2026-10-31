@@ -5,11 +5,30 @@ hidden: true
 model: ollama-cloud/deepseek-v4.1-flash:cloud
 permission:
   edit: deny
+  task: deny
   bash:
     "*": allow
     "git commit *": deny
     "git push *": deny
     "git reset *": deny
+    "*sdkmanager*": deny
+    "*avdmanager*": deny
+    "*apt-get*": deny
+    "*apt install*": deny
+    "*apt upgrade*": deny
+    "*apt remove*": deny
+    "*apt purge*": deny
+    "*winget*": deny
+    "*choco*": deny
+    "*scoop*": deny
+    "*brew install*": deny
+    "*sdk install*": deny
+    "*setup-android*": deny
+    "*docker run*": deny
+    "*docker create*": deny
+    "*docker build*": deny
+    "*--force-recreate*": deny
+    "*docker rm*": deny
   skill:
     "*": deny
     olko-memory-layer: allow

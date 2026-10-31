@@ -32,7 +32,7 @@ This is an intake and transfer path only. After the handoff, continue through
    repository code path, including tests, migrations, configuration, and both
    sides of renames. Report documentation and knowledge-base paths separately
    because they are outside the budget.
-5. If the code changes exceed 15 paths, exceed the Task estimate, include unrelated
+5. If the code changes exceed 15 paths and no developer-approved extension exists, exceed the Task estimate, include unrelated
    work, or materially differ from the approved plan, stop before transfer.
    Return the evidence to the normal Task scope-impact review and planning
    workflow. Never split or rewrite YouTrack Tasks from this skill.
@@ -66,7 +66,7 @@ This is an intake and transfer path only. After the handoff, continue through
 5. Leave the source checkout untouched. When source and target differ, report
    whether the source still contains the changes so the caller knows its state.
 6. Run `git status --short` in the target worktree. Confirm that its changed
-   code paths are limited to the accepted Task scope and remain at or below 15.
+   code paths are limited to the accepted Task scope and remain at or below 15, or within the developer-approved extended limit.
 7. Do not add explanatory code comments or Task/PR/plan identifiers to source
    code during transfer.
 
