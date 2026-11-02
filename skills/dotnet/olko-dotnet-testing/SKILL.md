@@ -40,6 +40,7 @@ Apply these defaults unless config, adapter, or project docs override them.
 ### Coverage
 - Treat 90% coverage as an aspirational guide, not a hard CI gate, unless project docs say otherwise.
 - Use coverage to identify untested code paths, not as the only test quality signal.
+- Every branch, error path, and boundary value in changed production code needs an asserting test; report each uncovered one.
 
 ### Visibility and InternalsVisibleTo
 - If `InternalsVisibleTo` is needed, declare it only in the `.csproj` file.
@@ -104,6 +105,10 @@ Apply these defaults unless config, adapter, or project docs override them.
 - Integration tests must not use NSubstitute.
 - Integration tests must not use mocks, stubs, fakes, substitutes, or test-only internal implementations.
 - Integration tests should use only real implementations wired through `WebApplicationFactory`, Testcontainers, or documented integration fixtures.
+
+### What not to test
+- Do not write tests that only assert a mock received the exact arguments the test itself passed in; assert the observable outcome instead.
+- Do not write tests that only assert a plain DTO or data-class property returns the value just set.
 
 ### Test naming and organization
 - Name tests after one behavior using `MethodName_scenario_expectedResult`.

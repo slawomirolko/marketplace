@@ -97,6 +97,7 @@ Also apply the `olko-design-rules` catalogue to the changed lines: its design ru
 
 ### Comments
 - Do not write comments. Code should be self-documenting through clear naming.
+- A comment that explains what a method does signals a weak name: rename the method so the comment becomes redundant, then remove the comment.
 
 ## Workflow
 

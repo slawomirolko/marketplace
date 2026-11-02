@@ -150,6 +150,7 @@ Verify and fix the skill body against the [Skill Adaptation Contract](../docs/sk
 - [ ] The skill reads configuration flags and project facts from `.agents/skill-config.md` instead of guessing them from the repository.
 - [ ] The skill loads `.agents/skills/<skill-name>/project.md` when present and runs with default behavior when it is absent.
 - [ ] The skill contains no hardcoded project-specific commands, paths, stack names, or vendor directories.
+- [ ] Every helper skill or agent the skill delegates to is named through a documented configuration key with a default (for example `worktreeCreateSkill: olko-worktree-create`), never hard-coded in the body.
 - [ ] The skill documents every configuration key it recognizes.
 - [ ] The skill documents its default behavior so projects know what they are overriding.
 - [ ] The skill follows the resolution order and precedence defined in the Layered Skill Adaptation Pattern and the contract.

@@ -24,6 +24,7 @@ Apply these defaults unless config, adapter, or project docs override them.
 
 ### Coverage
 - Treat coverage as a guide for untested paths, not a hard CI gate, unless project docs say otherwise.
+- Every branch, error path, and boundary value in changed production code needs an asserting test; report each uncovered one.
 
 ### Merge similar tests
 - When multiple tests exercise the same component/hook with the same setup and assertions but different inputs, consolidate with `it.each` / `describe.each`.
@@ -87,6 +88,8 @@ Every unit test must satisfy all five:
 - Do not write tests that assert `package.json`, `vite.config.ts`, or `tsconfig.json` contain or omit specific keys/values.
 - Do not write tests that verify static structure: CSS Module class-name strings matching a hardcoded literal, route-string constants matching navigation config.
 - Code review should catch configuration changes, not tests.
+- Do not write tests that only assert a mock received the exact arguments the test itself passed in; assert the observable outcome instead.
+- Do not write tests that only assert a plain DTO or data-class property returns the value just set.
 
 ### What to test
 - Test runtime behavior: how a component renders for given props/state, how a hook transforms data, how errors/loading are surfaced.

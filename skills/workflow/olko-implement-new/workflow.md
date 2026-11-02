@@ -27,7 +27,7 @@ If failure context is non-empty and the current step can be retried, show the co
 ### Step 1 — Resolve implementation worktree
 
 1. Derive a branch name from the Task ID or plan slug using configured `branchPrefix`, default `feature/`.
-2. If `olko-worktree-create` is declared in `uses`, delegate worktree resolution with the plan context and branch name. It must reuse the current attached worktree before considering creation. Otherwise, perform the same attached-worktree detection and only create from the freshly fetched remote default branch when the session is in the primary checkout.
+2. If the `worktreeCreateSkill` skill (default `olko-worktree-create`) is declared in `uses`, delegate worktree resolution with the plan context and branch name. It must reuse the current attached worktree before considering creation. Otherwise, perform the same attached-worktree detection and only create from the freshly fetched remote default branch when the session is in the primary checkout.
 3. From this point on, run all subsequent reads, edits, checks, and commands inside the worktree path unless explicitly reading source plan files from `mainRepoPath`.
 4. If worktree resolution or creation fails or the user aborts, stop.
 

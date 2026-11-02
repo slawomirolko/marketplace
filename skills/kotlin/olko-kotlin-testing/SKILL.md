@@ -50,6 +50,7 @@ Apply these defaults unless config, adapter, or project docs override them.
 ### Coverage
 - Treat ~90% coverage as an aspirational guide, not a hard CI gate, unless project docs say otherwise.
 - Use coverage to identify untested code paths, not as the only test quality signal.
+- Every branch, error path, and boundary value in changed production code needs an asserting test; report each uncovered one.
 
 ### Merge similar tests
 - When multiple tests exercise the same flow with the same setup and assertions but different inputs, consolidate them with parameterized tests.
@@ -122,6 +123,8 @@ Every unit test must satisfy all five:
 - Do not write tests that verify configuration files (`build.gradle.kts`, `AndroidManifest.xml`, strings.xml) contain or do not contain specific keys/values. Testing file contents breaks on legitimate config changes and tests structure instead of behavior.
 - Do not write tests that verify static structure: names in a config matching runtime registries, navigation-route strings matching hardcoded constants, or method existence on generated classes.
 - Code reviews should catch configuration changes, not tests.
+- Do not write tests that only assert a mock received the exact arguments the test itself passed in; assert the observable outcome instead.
+- Do not write tests that only assert a plain DTO or data-class property returns the value just set.
 
 ### What to test
 - Test runtime behavior: how `ViewModel`s transform data, how errors are handled, how business logic produces outputs.

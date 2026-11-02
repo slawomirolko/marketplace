@@ -18,7 +18,7 @@ Implement one accepted Task from its Task-specific implementation plan. The Feat
 ## Uses
 This skill delegates only when project adapter declares matching skills in `.agents/skills/olko-implement-new/project.md`:
 
-- `olko-worktree-create` for current-worktree reuse or worktree creation.
+- the `worktreeCreateSkill` skill (default `olko-worktree-create`) for current-worktree reuse or worktree creation.
 - `olko-commit-style` or stack style skills for style checks.
 - `olko-test` for all tests in affected projects (always delegated — auto-detected when installed even if not in `uses`).
 - `olko-commit` for commit/push/PR workflow.
@@ -26,3 +26,7 @@ This skill delegates only when project adapter declares matching skills in `.age
 
 ## Configuration
 Reads `.agents/skill-config.md`, then `.agents/skills/olko-implement-new/project.md` when present. Defaults are conservative: no service rebuild, no telemetry endpoint query, delegate only declared `uses`, ask before irreversible actions.
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `worktreeCreateSkill` | `olko-worktree-create` | Skill that reuses or creates the Task worktree. Must also be declared in `uses`. |
