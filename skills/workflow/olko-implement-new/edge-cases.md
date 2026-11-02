@@ -13,7 +13,7 @@ Read these keys from `.agents/skill-config.md`, then `.agents/skills/olko-implem
 - `environmentTemplateGlobs`: environment templates never copied as secrets. Default: common example/template names.
 - `styleCommands`: path-matched style check commands. Default: empty.
 - `styleFixCommands`: path-matched auto-fix commands. Default: empty.
-- `testCommands`: path-matched test commands, used only as the Step 5 fallback when `olko-test` is neither declared nor installed. Default: empty.
+- `testCommands`: path-matched test commands, used only as the Step 5 fallback when the `testSkill` skill (default `olko-test`) is neither declared nor installed. Default: empty.
 - `serviceMap`: changed-path to service-name mapping. Default: empty.
 - `neverRebuildServices`: services never rebuilt by this skill. Default: empty.
 - `composeBuildTemplate`: service build command template. Default: `docker compose build {service}`.
@@ -50,7 +50,7 @@ Read these keys from `.agents/skill-config.md`, then `.agents/skills/olko-implem
 ## Test Rules
 
 - NEVER run `dotnet test`, `gradlew test`, `pytest`, or any test runner ad hoc from this skill, except the configured `testCommands` fallback in Step 5.
-- Tests are ALWAYS delegated to `olko-test` in Step 5 whenever it is declared or installed.
+- Tests are ALWAYS delegated to the `testSkill` skill in Step 5 whenever it is declared or installed.
 - If you need to verify code compiles after implementation, use build/compile commands (`dotnet build`, `gradlew compileKotlin`), NOT test commands.
 
 ## Service Rules

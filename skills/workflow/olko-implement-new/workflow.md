@@ -111,7 +111,7 @@ Update the tracker and move `CURRENT` to Step 4.
 
 ### Step 4 — Run style checks
 
-1. If `olko-commit-style` or stack-specific style skills are declared in `uses`, delegate with the changed file list.
+1. If the `styleSkill` skill (default `olko-commit-style`) or stack-specific style skills are declared in `uses`, delegate with the changed file list.
 2. Otherwise, run configured `styleCommands` that match changed paths.
 3. If style violations are found, present the output and ask: `Auto-fix, skip and continue, or abort?`
 4. If auto-fix is chosen, run configured `styleFixCommands`, then re-run style checks.
@@ -124,19 +124,19 @@ Update the tracker and move `CURRENT` to Step 5.
 >
 > NEVER execute `dotnet test`, `gradlew test`, `pytest`, or any other test runner directly from this skill,
 > except the configured `testCommands` fallback below.
-> Delegate test execution to `olko-test` whenever it is declared or installed.
+> Delegate test execution to the `testSkill` skill (default `olko-test`) whenever it is declared or installed.
 > If tempted to run a quick test manually: STOP. Follow the resolution order.
 
-**Delegate to `olko-test` when available.** Resolution (in order):
+**Delegate to the `testSkill` skill when available.** Resolution (in order):
 
-1. If `olko-test` is declared in `uses` → delegate with the changed file list and plan paths.
-2. Else if `.agents/skills/olko-test/` directory exists → auto-delegate (adapter absent, sub-skill installed) with the same arguments.
+1. If the `testSkill` skill is declared in `uses` → delegate with the changed file list and plan paths.
+2. Else if `.agents/skills/<testSkill>/` directory exists → auto-delegate (adapter absent, sub-skill installed) with the same arguments.
 3. Else, if configured `testCommands` match the changed paths → run them as the fallback and report each command and result.
-4. Else → emit `Step 5 (tests): skipped - no olko-test and no matching testCommands` and continue.
+4. Else → emit `Step 5 (tests): skipped - no testSkill and no matching testCommands` and continue.
 
-`olko-test` maps the changed files to affected test projects and runs **all tests** in those projects (no filter — any affected file might break any test). Shared/contract projects trigger all integration test projects in the repo.
+The `testSkill` skill maps the changed files to affected test projects and runs **all tests** in those projects (no filter — any affected file might break any test). Shared/contract projects trigger all integration test projects in the repo.
 
-If `olko-test` reports failures, follow its failure handling. Ask whether to fix, skip and continue, or abort.
+If the `testSkill` skill reports failures, follow its failure handling. Ask whether to fix, skip and continue, or abort.
 
 Update the tracker and move `CURRENT` to Step 6.
 
@@ -281,7 +281,7 @@ passes.
 
 1. Ask: `Ready for commit? (y/n)`.
 2. If no, stop with tracker left at Step 8.
-3. If yes and `olko-commit` is declared in `uses`, delegate the commit workflow with changed files, Task/Feature IDs, plan paths, and verification summary.
+3. If yes and the `commitSkill` skill (default `olko-commit`) is declared in `uses`, delegate the commit workflow with changed files, Task/Feature IDs, plan paths, and verification summary.
 4. If no commit skill is declared, ask the user whether to commit manually using local repository policy.
 
 Update the tracker and move `CURRENT` to Step 8a.
@@ -335,7 +335,7 @@ Update the tracker and move `CURRENT` to Step 9.
 
 ### Step 9 — Merge worktree to main
 
-1. If `olko-worktree-merge` is declared in `uses`, delegate merge and cleanup.
+1. If the `worktreeMergeSkill` skill (default `olko-worktree-merge`) is declared in `uses`, delegate merge and cleanup.
 2. Otherwise, ask the user how to proceed with PR creation, merge, and worktree cleanup.
 3. If the user declines merge, stop and leave the worktree intact.
 4. After cleanup succeeds, continue from the main checkout.

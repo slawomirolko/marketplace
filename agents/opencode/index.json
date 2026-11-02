@@ -4,7 +4,7 @@
   "agents": [
     {
       "name": "olko-implementation-orchestrator",
-      "version": "2.2.0",
+      "version": "2.3.0",
       "file": "olko-implementation-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -106,7 +106,7 @@
     },
     {
       "name": "olko-worktree-lifecycle-manager",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "file": "olko-worktree-lifecycle-manager.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -444,7 +444,7 @@
     },
     {
       "name": "olko-skill-optimizer",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "file": "olko-skill-optimizer.md",
       "stack": "cross-stack",
       "role": "writer",
