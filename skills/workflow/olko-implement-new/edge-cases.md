@@ -8,6 +8,11 @@ Read these keys from `.agents/skill-config.md`, then `.agents/skills/olko-implem
 - `planDirectory`: default directory for plan names without paths. Default: `.agents/skills/olko-plan-editor/plans`.
 - `trackerGlob`: tracker file glob. Default: `implement-new_*.md`.
 - `uses`: explicit skill dependencies. Default: empty.
+- `worktreeCreateSkill`: skill that reuses or creates the Task worktree. Must also be in `uses`. Default: `olko-worktree-create`.
+- `styleSkill`: skill that checks style on changed files. Must also be in `uses`. Default: `olko-commit-style`.
+- `testSkill`: skill that runs tests in affected projects. Default: `olko-test`.
+- `commitSkill`: skill that commits, pushes, and opens or updates the PR. Must also be in `uses`. Default: `olko-commit`.
+- `worktreeMergeSkill`: skill that merges and cleans up the worktree. Must also be in `uses`. Default: `olko-worktree-merge`.
 - `instrumentationPatterns`: strings that count as logging/telemetry. Default: common logger and tracing names.
 - `environmentFileGlobs`: local environment files copied from main checkout to worktree. Default: empty.
 - `environmentTemplateGlobs`: environment templates never copied as secrets. Default: common example/template names.

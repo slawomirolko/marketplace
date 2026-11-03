@@ -25,12 +25,4 @@ This skill delegates only when project adapter declares matching skills in `.age
 - the `worktreeMergeSkill` skill (default `olko-worktree-merge`) for merge and cleanup.
 
 ## Configuration
-Reads `.agents/skill-config.md`, then `.agents/skills/olko-implement-new/project.md` when present. Defaults are conservative: no service rebuild, no telemetry endpoint query, delegate only declared `uses`, ask before irreversible actions.
-
-| Key | Default | Meaning |
-|-----|---------|---------|
-| `worktreeCreateSkill` | `olko-worktree-create` | Skill that reuses or creates the Task worktree. Must also be declared in `uses`. |
-| `styleSkill` | `olko-commit-style` | Skill that checks style on changed files. Must also be declared in `uses`. |
-| `testSkill` | `olko-test` | Skill that runs tests in affected projects. |
-| `commitSkill` | `olko-commit` | Skill that commits, pushes, and opens or updates the PR. Must also be declared in `uses`. |
-| `worktreeMergeSkill` | `olko-worktree-merge` | Skill that merges and cleans up the worktree. Must also be declared in `uses`. |
+Reads `.agents/skill-config.md`, then `.agents/skills/olko-implement-new/project.md` when present. Defaults are conservative: no service rebuild, no telemetry endpoint query, delegate only declared `uses`, ask before irreversible actions. All configuration keys are listed in `edge-cases.md`.
