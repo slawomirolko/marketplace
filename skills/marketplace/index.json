@@ -4,7 +4,7 @@
     {
       "name": "olko-adapt-to-marketplace",
       "category": "marketplace",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Adapt a local skill for Marketplace onboarding, or with --local-only restructure it in its project without publishing. Can rename, split into parent/sub-skills, add SemVer, optimize routing, and scaffold progressive loading. Local-only mode forbids Marketplace registry edits, copies, and publication. Triggers: 'adapt to marketplace', 'onboard skill', 'split skill', 'prepare skill for marketplace', 'adapt local skill', 'restructure local skill', 'olko-adapt-to-marketplace <name>'.",
       "tags": [
         "marketplace",

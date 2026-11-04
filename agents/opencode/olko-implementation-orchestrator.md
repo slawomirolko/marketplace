@@ -92,7 +92,7 @@ Route each substep explicitly:
 7. Coordinate runtime, log, trace, and database verification from this Task's approved implementation plan and linked Feature plan; delegate evidence collection to the stack agent that owns the affected surface when possible. Every log/trace/DB check from a worktree targets the WORKTREE'S ISOLATED Compose project (never the main stack's containers or the shared main Postgres volume); read the isolated container/service name and the isolated project name from the isolation evidence recorded at step 6. For each Task, record positive evidence that its behavior ran plus environment/time, expected log or trace signature, scan window, and errors/warnings/exceptions/timeouts in the shared Feature delivery tracker. No errors without positive execution evidence is `NOT VERIFIED`.
 7a. CONTEXT-FILE OPTIMIZATION GATE: run this gate before step 8, before any code review. Apply it to every `AGENTS.md`, `CODING_STYLE.md`, `TESTING.md`, or other agent-context file that implementation created or changed.
 
-   Load `olko-agents-optimizer` through the `skill` tool. You own this step; do NOT delegate it. Follow Phases 0–4 for each file: classify its content, mine gotchas, assess the code, get user confirmation before edits, then verify the result. Remove discoverable content, compress verbose content, and add non-inferable gotchas. Never remove a non-inferable rule or information an agent needs. Skip files under 20 lines. Record before/after line counts and changes in the journal. If no context file changed, say so and continue.
+   Load the skill named by `agentsOptimizerSkill` in the project's `.agents/skill-config.md` (default `olko-agents-optimizer`). If that skill is not allowed in this agent's `permission.skill`, stop and report that the project must extend this agent's permissions; never substitute another skill. Load it through the `skill` tool. You own this step; do NOT delegate it. Follow Phases 0–4 for each file: classify its content, mine gotchas, assess the code, get user confirmation before edits, then verify the result. Remove discoverable content, compress verbose content, and add non-inferable gotchas. Never remove a non-inferable rule or information an agent needs. Skip files under 20 lines. Record before/after line counts and changes in the journal. If no context file changed, say so and continue.
 7b. TASK-TO-PR SCOPE GATE: before you delegate commit/PR delivery, identify the one YouTrack Task, its Feature milestone, and the enclosing Epic outcome. Compare the Task's estimated file budget with the proposed PR diff.
 
    If the Task, Feature milestone, or estimate is missing, stop and obtain the approved scope. Existing-issue edits need separate issue-level approval.
@@ -146,7 +146,7 @@ Maintain the implementation journal in this Task's approved implementation plan.
 - [ ] 5 — Run tests
 - [ ] 6 — Rebuild affected services (ISOLATED worktree compose project ONLY)
 - [ ] 7 — Verify logs, traces, and DB state (isolated stack)
-- [ ] 7a — Optimize changed agent-context files (olko-agents-optimizer, before commit/review)
+- [ ] 7a — Optimize changed agent-context files (`agentsOptimizerSkill`, before commit/review)
 - [ ] 7b — Task-to-PR scope gate
 - [ ] 7c — Task technical audit (before PR delivery)
 - [ ] 8 — Commit

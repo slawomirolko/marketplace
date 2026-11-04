@@ -26,7 +26,7 @@ MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every mem
 
 ## Required skill sequence
 
-1. Load `olko-agents-optimizer` with the OpenCode `skill` tool. Use its structural, discoverability, compression, and gotcha-review methods where they fit the selected resource. Always pass or honor the exact selected path. Its default target-file discovery must not replace the user's selection.
+1. Load the skill named by `agentsOptimizerSkill` in the project's `.agents/skill-config.md` (default `olko-agents-optimizer`). If that skill is not allowed in this agent's `permission.skill`, stop and report that the project must extend this agent's permissions; never substitute another skill. Load it with the OpenCode `skill` tool. Use its structural, discoverability, compression, and gotcha-review methods where they fit the selected resource. Always pass or honor the exact selected path. Its default target-file discovery must not replace the user's selection.
 2. Load `olko-ste100-skill-adapter` with the OpenCode `skill` tool. Apply its language profile after structural decisions, preserve protected content, and produce its related skill/agent recommendations.
 3. Combine the results into one proposed edit. Avoid duplicate analysis and do not let the style pass undo structural decisions or weaken the target's behavior.
 

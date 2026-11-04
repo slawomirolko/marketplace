@@ -73,7 +73,9 @@ assessment, recommended action, version bump, and exact proposed next version.
 Do not change anything yet. Ask the user for an explicit decision on every
 non-identical artifact. For a `local-only` skill or agent, explicitly ask
 whether it should be created in the marketplace: `create`, `reject`, or `leave`.
-Show its candidate version. For all other non-identical artifacts, ask for
+Show its candidate version. For an `adapter-candidate` artifact, recommend
+`move-to-adapter` and also offer `adopt <patch|minor|major>`, `revert local`,
+or `leave`. For all other non-identical artifacts, ask for
 `adopt <patch|minor|major>`, `revert local`, or `leave`. `revert local` is a
 destructive overwrite and requires one final confirmation immediately before it
 runs. Keep project adapters, secrets, paths, credentials, and runtime settings
@@ -94,7 +96,15 @@ definition and a valid manifest entry at the user-approved candidate version,
 then validate it with `node scripts/install-opencode-agents.mjs
 --project <temporary-empty-directory> --agent <name>`. For accepted reverts,
 replace only the selected local source with its marketplace counterpart after
-the final confirmation. Leave all other skills and agents untouched.
+the final confirmation. For an accepted `move-to-adapter`, run these steps in
+order: (1) write every reported value into the project's
+`.agents/skill-config.md` or `.agents/skills/<name>/project.md`, and declare
+every delegated skill in that adapter's `uses`; show the adapter diff and ask
+before writing; (2) when the marketplace skill does not expose a reported key,
+add that key with the current marketplace value as its default, as a marketplace
+change with at least a `minor` bump; (3) only after steps 1 and 2 succeed,
+replace the local skill body with its marketplace counterpart after one final
+confirmation, so every project-specific value lives only in the adapter. Leave all other skills and agents untouched.
 
 Phase 5 â€” publish and reinstall. Show the exact marketplace diff, versions,
 and validation result, then ask for explicit confirmation before commit and

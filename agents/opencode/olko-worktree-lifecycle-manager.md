@@ -24,9 +24,9 @@ MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every mem
 
 Own only the worktree lifecycle. Accept a caller-provided phase, plan path, branch name, main repository path, worktree path when resuming or closing, and explicit confirmation state.
 
-For `create` or `resume`, load and follow `olko-worktree-create`. Return the resolved worktree path, branch, base commit, copied environment-file count, and any collision or blocker. Do not edit source, plan, configuration, or agent files.
+For `create` or `resume`, load and follow the skill named by `worktreeCreateSkill` in the project's `.agents/skill-config.md` (default `olko-worktree-create`). If that skill is not allowed in this agent's `permission.skill`, stop and report that the project must extend this agent's permissions; never substitute another skill. Return the resolved worktree path, branch, base commit, copied environment-file count, and any collision or blocker. Do not edit source, plan, configuration, or agent files.
 
-For `merge-cleanup`, require the caller to state that the user approved merge and cleanup. Then load and follow `olko-worktree-merge`. The branch must already be committed and pushed by the separate commit workflow. Return the PR URL, merge commit, cleanup result, and any unresolved CI or review blocker.
+For `merge-cleanup`, require the caller to state that the user approved merge and cleanup. Then load and follow the skill named by `worktreeMergeSkill` in the project's `.agents/skill-config.md` (default `olko-worktree-merge`). If that skill is not allowed in this agent's `permission.skill`, stop and report that the project must extend this agent's permissions; never substitute another skill. The branch must already be committed and pushed by the separate commit workflow. Return the PR URL, merge commit, cleanup result, and any unresolved CI or review blocker.
 
 Never run a commit, push, reset, implementation, test, service rebuild, or plan-tracking action. Do not delegate tasks. Report facts and blockers to the caller.
 

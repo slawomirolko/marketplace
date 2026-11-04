@@ -82,6 +82,7 @@ Also apply the `olko-design-rules` catalogue to the changed lines: its design ru
 ### Single responsibility
 - Class: one reason to change.
 - Function: do one thing at one abstraction level.
+- A comment that explains what a method does signals a weak name: rename the method so the comment becomes redundant, then remove the comment.
 - Module: one domain concept per file.
 - Split when there are multiple answers to "what would make me edit this code?".
 - Keep parsing, storage, business logic, and presentation separate.

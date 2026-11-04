@@ -53,6 +53,7 @@ Also apply the `olko-design-rules` catalogue to the changed lines: its design ru
 - After reading a method name, a person should be able to understand what the method does.
 - If a method name contains `And` or `Or`, inspect it for single-responsibility violations and split it when appropriate.
 - Remove `/// <summary>` and `/// <remark>` comments. Keep comments only when they explain an edge case that is not clear from the code.
+- A comment that explains what a method does signals a weak name: rename the method so the comment becomes redundant, then remove the comment.
 - Keep methods at or below 30 lines unless the local docs allow a specific exception.
 - Method names should represent one responsibility.
 

@@ -140,7 +140,7 @@
     {
       "name": "olko-dotnet-style",
       "category": "dotnet",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "description": "Check .NET/C# style compliance for changed C# projects with marketplace defaults. Maps .cs/.csproj files to source projects, reads project docs/adapters, runs dotnet format by default when no project command is configured, checks common C# style expectations that docs enable, and reports violations with rule sources. Use when validating .NET style, linting C# changes, before commit/test gates, or when olko-commit-style delegates .NET style checks.",
       "tags": [
         "dotnet",
@@ -172,7 +172,7 @@
     {
       "name": "olko-dotnet-testing",
       "category": "dotnet",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Check .NET test conventions for changed C# projects with marketplace defaults. Reads project docs/adapters, maps source changes to test projects, verifies InternalsVisibleTo usage, test visibility boundaries, smart enum coverage, saga JSON/ErrorOr assertion conventions, performance validation expectations, and reports violations with rule sources. Use when validating .NET tests, before commit/test gates, or when olko-test delegates .NET test-convention checks.",
       "tags": [
         "dotnet",
