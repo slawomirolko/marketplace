@@ -43,7 +43,7 @@ uses:
 
 - If a **plan skill** (e.g. `olko-plan-editor`) is declared, delegate plan creation to it (Step 6). If not declared, skip plan creation and present the summary only.
 - If a **grill-with-docs** skill is declared, delegate suggestion stress-testing to it (Step 6a-pre) — it runs its own 3-option interview to sharpen the suggestion against the domain docs, then this skill applies an extra style/architecture-compliance pass and presents its own 4-option decision. If not declared, fall back to manual doc cross-checking and state the grilling gap.
-- If an **agents-optimizer skill** (e.g. `olko-agents-optimizer`) is declared, follow its methodology for AGENTS.md content decisions (Step 4). If not declared, apply the universal rule below.
+- If the `agentsOptimizerSkill` skill (default `olko-agents-optimizer`) is declared, follow its methodology for AGENTS.md content decisions (Step 4). If not declared, apply the universal rule below.
 - If matching **technology architecture/style skills** are declared, delegate review to them when docs are disabled or when the mechanism's stack needs stack-specific validation (Step 5). If not declared, fall back to loaded docs/config and report the review gap. Do not auto-load skills; composition is explicit through `uses`.
 - Universal AGENTS.md rule: only suggest **non-inferable** content (naming quirks, cross-boundary rules, custom tooling commands, optional wiring). Never add overviews, flow diagrams, property tables, dependency lists, file indexes, or test tables.
 
@@ -58,6 +58,7 @@ Read from `.agents/skill-config.md`:
 | `conventionDiscovery` | `false` | When `true`, inspect the repo to infer file types, project markers, and conventions not stated in config or AGENTS.md. When `false`/absent, rely on config + AGENTS.md + the Project Adapter only (user may explicitly request repo inspection for a turn). |
 | `readArchitectureDocs` | marketplace default | Hints that architecture/style docs should be read and checked when assessing architecture compliance (Step 5). |
 | `readTestingDocs` | marketplace default | Hints that testing docs should be read when assessing test reuse (Step 2 / Step 5). |
+| `agentsOptimizerSkill` | `olko-agents-optimizer` | Skill whose methodology decides AGENTS.md content (Step 4). Must also be declared in `uses`. |
 
 Layer control flags are documented in the [Layered Skill Adaptation Pattern](../../docs/layered-skill-adaptation.md). The plan file location is project-specific — never hardcode a path; let the declared plan skill name it or read it from the project adapter.
 

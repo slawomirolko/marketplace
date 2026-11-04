@@ -155,9 +155,9 @@ Extract `<owner>/<repo>` from `git remote get-url origin` (parse SSH or HTTPS fo
 
 Only runs when a PR was successfully opened via `gh`.
 
-If `olko-pr-description-update` is declared in `uses`, delegate to it: pass the PR number/URL, current PR body, linked PBI/Bug context if known, change summary, and testing results. The sub-skill writes or updates the PR body with the required PBI/Bug context and Mermaid flow when issue context exists. Follow its result.
+If the `prDescriptionSkill` skill (default `olko-pr-description-update`) is declared in `uses`, delegate to it: pass the PR number/URL, current PR body, linked PBI/Bug context if known, change summary, and testing results. The sub-skill writes or updates the PR body with the required PBI/Bug context and Mermaid flow when issue context exists. Follow its result.
 
-If `olko-pr-description-update` is **not** in `uses`, keep the PR body created in Step 7 and continue.
+If the `prDescriptionSkill` skill is **not** in `uses`, keep the PR body created in Step 7 and continue.
 
 Proceed to **Step 7.5 — Post-PR decision**.
 

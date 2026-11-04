@@ -212,7 +212,7 @@ test("installs the visible marketplace skill sync manager and its comparator", (
     JSON.parse(fs.readFileSync(path.join(marketplaceRoot, "agents", "opencode", "index.json"), "utf8")).agents.find(
       (agent) => agent.name === "olko-marketplace-skill-sync-manager",
     ).version,
-    "2.2.2",
+    "2.3.0",
   );
   assert.match(manager, /bash: allow/);
   assert.match(manager, /Never pass `--force` to `olko-commit`/);
@@ -248,6 +248,10 @@ test("installs the visible marketplace skill sync manager and its comparator", (
   assert.match(comparator, /external_directory: allow/);
   assert.match(comparator, /artifact specified by the calling manager/);
   assert.match(comparator, /marketplace agent\s+manifest entry/);
+  assert.match(comparator, /`adapter-candidate`/);
+  const syncManager = fs.readFileSync(path.join(project, ".opencode", "agents", "olko-marketplace-skill-sync-manager.md"), "utf8");
+  assert.match(syncManager, /recommend\s+`move-to-adapter`/);
+  assert.match(syncManager, /only after steps 1 and 2 succeed/);
 });
 
 test("declares a valid SemVer version for every OpenCode agent", () => {
@@ -304,6 +308,65 @@ for (const [agentName, skills] of [
     }
   });
 }
+
+test("installs the review orchestrator with read-only stack lenses", () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-opencode-agent-"));
+  const result = run(project, "--agent", "olko-review-orchestrator");
+
+  assert.equal(result.status, 0, result.stderr);
+  const agent = fs.readFileSync(path.join(project, ".opencode", "agents", "olko-review-orchestrator.md"), "utf8");
+  assert.match(agent, /mode: primary/);
+  assert.match(agent, /edit: deny/);
+  assert.match(agent, /"gh pr comment \*": ask/);
+  for (const [agentName, skills] of [
+    ["olko-review-bugs-lens", ["caveman"]],
+    ["olko-review-dotnet-lens", ["olko-dotnet-architecture", "olko-dotnet-style", "olko-dotnet-testing", "olko-dotnet-security", "olko-design-rules"]],
+    ["olko-review-react-lens", ["olko-react-architecture", "olko-react-style", "olko-react-testing", "olko-react-security", "web-design-guidelines"]],
+    ["olko-review-mobile-lens", ["olko-kotlin-architecture", "olko-kotlin-style", "olko-kotlin-testing", "olko-kotlin-security"]],
+    ["olko-review-python-lens", ["olko-python-architecture", "olko-python-style", "olko-python-testing"]],
+    ["olko-review-verifier", ["olko-design-rules"]],
+    ["olko-review-feedback-handler", ["olko-pr-check", "olko-test", "olko-commit"]],
+  ]) {
+    assert.match(agent, new RegExp(`${agentName}: allow`));
+    assert.ok(fs.existsSync(path.join(project, ".opencode", "agents", `${agentName}.md`)));
+    for (const skill of skills) {
+      assert.ok(fs.existsSync(path.join(project, ".agents", "skills", skill, "SKILL.md")));
+    }
+  }
+});
+
+test("review lenses and verifier deny edit and bash", () => {
+  for (const agentName of [
+    "olko-review-bugs-lens",
+    "olko-review-dotnet-lens",
+    "olko-review-react-lens",
+    "olko-review-mobile-lens",
+    "olko-review-python-lens",
+    "olko-review-verifier",
+  ]) {
+    const agent = fs.readFileSync(path.join(marketplaceRoot, "agents", "opencode", `${agentName}.md`), "utf8");
+    assert.match(agent, /hidden: true/, agentName);
+    assert.match(agent, /edit: deny/, agentName);
+    assert.match(agent, /bash: deny/, agentName);
+    assert.match(agent, /task: deny/, agentName);
+  }
+});
+
+test("review orchestrator routes own PRs to the feedback handler and applies memory thresholds", () => {
+  const agent = fs.readFileSync(path.join(marketplaceRoot, "agents", "opencode", "olko-review-orchestrator.md"), "utf8");
+  assert.match(agent, /Author is the user → FEEDBACK ROUTE: delegate the whole run to `olko-review-feedback-handler`/);
+  assert.match(agent, /Suppress: `rejected` >= 2/);
+  assert.match(agent, /Prioritize: `confirmed` >= 1/);
+});
+
+test("review feedback handler never resolves threads and gates commit and push", () => {
+  const agent = fs.readFileSync(path.join(marketplaceRoot, "agents", "opencode", "olko-review-feedback-handler.md"), "utf8");
+  assert.match(agent, /"git commit \*": ask/);
+  assert.match(agent, /"git push \*": ask/);
+  assert.match(agent, /"git reset \*": deny/);
+  assert.match(agent, /NEVER resolve review threads/);
+  assert.match(agent, /NEVER change code before every selected comment has an agreed plan/);
+});
 
 test("installs the mobile auditor with only Kotlin skills", () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-opencode-agent-"));

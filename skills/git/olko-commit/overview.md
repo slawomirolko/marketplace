@@ -8,7 +8,7 @@
 - Delegate AGENTS.md staleness/coverage to `olko-commit-docs`
 - Delegate test execution to `olko-test` (fallback: configured `testCommands`; never skip silently)
 - Delegate docker rebuild to `olko-commit-docker`
-- Delegate PR description updates to `olko-pr-description-update` after a PR is opened
+- Delegate PR description updates to the `prDescriptionSkill` skill after a PR is opened
 - Draft a conventional commit message
 - Resolve branch policy, commit, push, and open/merge a PR
 
@@ -39,6 +39,7 @@ Read from `.agents/skill-config.md`:
 | `packageManager` | — | Package manager (e.g. NuGet, uv). Used for info only. |
 | `deploymentTarget` | — | Deployment target. If not "Docker", skip docker rebuild. |
 | `testCommands` | empty | Path-matched test commands, used only as the Step 3 fallback when `olko-test` is neither declared nor installed. |
+| `prDescriptionSkill` | `olko-pr-description-update` | Skill that writes or updates the PR body. Must also be declared in `uses`. |
 
 Layer control flags (`conventionDiscovery`, `projectAdapter`, `readArchitectureDocs`, `readTestingDocs`) are documented in the [Layered Skill Adaptation Pattern](../../docs/layered-skill-adaptation.md).
 

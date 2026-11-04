@@ -195,6 +195,7 @@ suspend fun fetchDashboard(id: Long): Dashboard = coroutineScope {
 
 ### Comments
 - Do not write comments. Code should be self-documenting through clear naming.
+- A comment that explains what a method does signals a weak name: rename the method so the comment becomes redundant, then remove the comment.
 
 ## Workflow
 

@@ -18,11 +18,11 @@ Implement one accepted Task from its Task-specific implementation plan. The Feat
 ## Uses
 This skill delegates only when project adapter declares matching skills in `.agents/skills/olko-implement-new/project.md`:
 
-- `olko-worktree-create` for current-worktree reuse or worktree creation.
-- `olko-commit-style` or stack style skills for style checks.
-- `olko-test` for all tests in affected projects (always delegated — auto-detected when installed even if not in `uses`).
-- `olko-commit` for commit/push/PR workflow.
-- `olko-worktree-merge` for merge and cleanup.
+- the `worktreeCreateSkill` skill (default `olko-worktree-create`) for current-worktree reuse or worktree creation.
+- the `styleSkill` skill (default `olko-commit-style`) or stack style skills for style checks.
+- the `testSkill` skill (default `olko-test`) for all tests in affected projects (always delegated — auto-detected when installed even if not in `uses`).
+- the `commitSkill` skill (default `olko-commit`) for commit/push/PR workflow.
+- the `worktreeMergeSkill` skill (default `olko-worktree-merge`) for merge and cleanup.
 
 ## Configuration
-Reads `.agents/skill-config.md`, then `.agents/skills/olko-implement-new/project.md` when present. Defaults are conservative: no service rebuild, no telemetry endpoint query, delegate only declared `uses`, ask before irreversible actions.
+Reads `.agents/skill-config.md`, then `.agents/skills/olko-implement-new/project.md` when present. Defaults are conservative: no service rebuild, no telemetry endpoint query, delegate only declared `uses`, ask before irreversible actions. All configuration keys are listed in `edge-cases.md`.

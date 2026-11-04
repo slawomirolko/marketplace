@@ -554,7 +554,7 @@
     {
       "name": "olko-dotnet-style",
       "category": "dotnet",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "description": "Check .NET/C# style compliance for changed C# projects with marketplace defaults. Maps .cs/.csproj files to source projects, reads project docs/adapters, runs dotnet format by default when no project command is configured, checks common C# style expectations that docs enable, and reports violations with rule sources. Use when validating .NET style, linting C# changes, before commit/test gates, or when olko-commit-style delegates .NET style checks.",
       "tags": [
         "dotnet",
@@ -586,7 +586,7 @@
     {
       "name": "olko-dotnet-testing",
       "category": "dotnet",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Check .NET test conventions for changed C# projects with marketplace defaults. Reads project docs/adapters, maps source changes to test projects, verifies InternalsVisibleTo usage, test visibility boundaries, smart enum coverage, saga JSON/ErrorOr assertion conventions, performance validation expectations, and reports violations with rule sources. Use when validating .NET tests, before commit/test gates, or when olko-test delegates .NET test-convention checks.",
       "tags": [
         "dotnet",
@@ -618,7 +618,7 @@
     {
       "name": "olko-commit",
       "category": "git",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Orchestrate the commit workflow: delegate style check, docs staleness, tests, docker rebuild, and PR-description updates to sub-skills, then draft a conventional commit message, resolve branch policy, commit, push, open/update a PR, and optionally merge it. Off main, creates a scope-named branch + PR. With --force, commits directly to main. Triggers: 'commit', 'commit this', 'wrap up', 'summarize changes'.",
       "tags": [
         "git",
@@ -915,7 +915,7 @@
     {
       "name": "olko-kotlin-style",
       "category": "kotlin",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Check Kotlin/Android style compliance for changed Kotlin files with marketplace defaults. Reads project docs and adapters, maps .kt/.kts files to Gradle module roots, runs documented format/lint commands such as ktlint/detekt when configured, checks common Kotlin style expectations that docs enable (naming, formatting, imports, classes, value classes, extension/scope functions, collection ops, nullability, coroutines/Flow, Compose, networking), and reports violations with rule sources. Use when validating Kotlin style, linting Kotlin changes, before commit/test gates, or when olko-commit-style delegates Kotlin style checks.",
       "tags": [
         "kotlin",
@@ -947,7 +947,7 @@
     {
       "name": "olko-kotlin-testing",
       "category": "kotlin",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Check Kotlin/Android test conventions for changed Kotlin projects with marketplace defaults. Reads project docs/adapters, maps source changes to test files, verifies instrumentation vs unit tier rules, Gradle harness conventions, no-skip/no-silent-pass policy, MockK/fake test-double boundaries, parametrization, fixture reuse, Compose UI testing conventions, Windows Gradle hang handling, new-component test requirements, cross-boundary contract tests, and reports violations with rule sources. Use when validating Kotlin/Android tests, before commit/test gates, or when olko-test/olko-commit-style delegates Kotlin test-convention checks.",
       "tags": [
         "kotlin",
@@ -979,7 +979,7 @@
     {
       "name": "olko-adapt-to-marketplace",
       "category": "marketplace",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Adapt a local skill for Marketplace onboarding, or with --local-only restructure it in its project without publishing. Can rename, split into parent/sub-skills, add SemVer, optimize routing, and scaffold progressive loading. Local-only mode forbids Marketplace registry edits, copies, and publication. Triggers: 'adapt to marketplace', 'onboard skill', 'split skill', 'prepare skill for marketplace', 'adapt local skill', 'restructure local skill', 'olko-adapt-to-marketplace <name>'.",
       "tags": [
         "marketplace",
@@ -1249,7 +1249,7 @@
     {
       "name": "olko-python-style",
       "category": "python",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "description": "Check Python style compliance for changed Python files with marketplace defaults. Reads project docs and adapters, maps .py files to pyproject.toml roots, runs documented format/lint/type commands such as ruff/mypy/pyright when configured, checks common Python style expectations that docs enable, and reports violations with rule sources. Use when validating Python style, linting Python changes, before commit/test gates, or when olko-commit-style delegates Python style checks.",
       "tags": [
         "python",
@@ -1281,7 +1281,7 @@
     {
       "name": "olko-python-testing",
       "category": "python",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Check Python test conventions for changed Python projects with marketplace defaults. Reads project docs/adapters, maps source changes to test files, verifies integration vs unit tier rules, pytest harness conventions, no-skip/no-silent-pass policy, monkeypatch/unit-only doubles, parametrization, fixture reuse, integration boundary rules, new-component test requirements, contract tests, and reports violations with rule sources. Use when validating Python tests, before commit/test gates, or when olko-test/olko-commit-style delegates Python test-convention checks.",
       "tags": [
         "python",
@@ -1378,7 +1378,7 @@
     {
       "name": "olko-react-style",
       "category": "react",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Check React/TypeScript style compliance for changed files with marketplace defaults. Reads project docs and adapters, maps .ts/.tsx files to Vite project roots, runs documented format/lint commands such as ESLint/Prettier when configured, checks common React style expectations that docs enable (naming, formatting, imports, component patterns, hooks rules, CSS Modules, React Query, React Hook Form, typed API client), and reports violations with rule sources. Use when validating React style, linting React/TypeScript changes, before commit/test gates, or when olko-commit-style delegates React style checks.",
       "tags": [
         "react",
@@ -1410,7 +1410,7 @@
     {
       "name": "olko-react-testing",
       "category": "react",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "description": "Check React test conventions for changed TypeScript/React projects with marketplace defaults. Reads project docs/adapters, maps source changes to test files, verifies Vitest + Testing Library + MSW harness conventions, no-skip/no-silent-pass policy, network-boundary test doubles, parametrization, fixture reuse, React Query/React Hook Form testing conventions, manual e2e verification on the dev machine via the agent-browser (Vercel) tool, new-component test requirements, cross-boundary contract tests, and reports violations with rule sources. Use when validating React tests, before commit/test gates, or when olko-test/olko-commit-style delegates React test-convention checks.",
       "tags": [
         "react",
@@ -1725,7 +1725,7 @@
     {
       "name": "olko-implement-new",
       "category": "workflow",
-      "version": "2.0.0",
+      "version": "2.1.0",
       "description": "Implement one accepted Task from its Task-specific plan in the session's attached worktree; ensure observability, track progress, verify, commit, and merge. Triggers: 'olko-implement-new', 'implement the plan', 'implement Task', 'resume implement-new', 'continue implementation'.",
       "tags": [
         "workflow",
@@ -1759,7 +1759,7 @@
     {
       "name": "olko-investigate-existing",
       "category": "workflow",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "description": "Investigate an existing mechanism by name or description — find it, analyze its behavior, map its flow, verify AGENTS.md docs, check technology architecture and coding style compliance, assess optimization/extension opportunities and predict potential errors, then offer to create improvement plans via a declared plan skill. Use when the user wants to understand, document, or improve an existing mechanism in the codebase.",
       "tags": [
         "workflow",
@@ -1858,7 +1858,7 @@
     {
       "name": "olko-ste100-skill-adapter",
       "category": "workflow",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Review and adapt the wording of OpenCode skills, agents, prompts, and AI commands using ASD-STE100 for English or a Polish clarity profile inspired by STE. Preserve behavior, routing, and executable content. Recommend which related skills and agents should use these principles.",
       "tags": [
         "workflow",

@@ -31,6 +31,15 @@ comparison per skill, aggregates the results, and waits for an explicit
 per-skill decision before changing marketplace content, publishing, or
 reinstalling anything.
 
+`olko-review-orchestrator` is a visible primary agent for code review. For
+someone else's PR or a local diff it runs a read-only review: one
+`olko-review-bugs-lens` plus one stack lens per changed stack in parallel,
+every finding checked by `olko-review-verifier`, then a ranked list. None of
+these agents can edit files; posting a PR comment requires approval of each
+command. For the user's own PR it routes to `olko-review-feedback-handler`,
+which agrees a plan per review comment before changing code and never resolves
+threads.
+
 The marketplace `registry.json` remains skill-only. Before adopting a newer
 OpenCode major version, update the manifest format and agent permission syntax
 as a compatibility change.
