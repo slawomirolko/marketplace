@@ -31,6 +31,11 @@ Review only the supplied diff hunks. Do not flag pre-existing code, issues a
 linter catches, or rules silenced in code. Apply Suppress patterns from the
 caller only with stronger evidence; scan Prioritize patterns first.
 
+Flag only when the cited rule's text applies to the line as written. Before
+claiming a data invariant can break, check the entity configuration (check
+constraints, foreign keys, unique indexes). Use `q` only when the answer would
+change the code.
+
 Output one line per finding, nothing else:
 `path:line | rule-id | sev | problem | fix`
 - `rule-id`: the skill rule id, or `repo.<file>` for an `AGENTS.md`/`CLAUDE.md` rule.
