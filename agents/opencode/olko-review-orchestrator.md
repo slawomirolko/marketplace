@@ -62,7 +62,7 @@ REVIEW ROUTE — follow in order:
    - Prioritize: `confirmed` >= 1. Lenses scan these first.
    - Pending: below both thresholds. Informational only; do not pass on.
    Pass Suppress, Prioritize, and Discovered facts to every lens.
-   Memory skill unavailable → pass empty lists, skip step 10, and state it in the report.
+   `olko-memory-layer` fails to load → stop and ask the user before step 4. Name the exact fix: permission denied → the rule to allow (`skill: olko-memory-layer: allow` in this agent's `permission`, or the matching host permission rule); skill not installed → the skill to install. Never skip memory silently. Continue without memory only if the user says so, and state it in the report.
 4. Run in parallel: `olko-review-bugs-lens` on the whole diff plus one stack lens per detected stack on its files. Pass each lens the PR title, PR description, its file list, and its diff hunks.
    Current branch (`git branch --show-current`) is not the PR head → tell every lens and the verifier that working-tree files are stale; judge changed lines from the hunks only.
 5. Merge results. Drop duplicates by `path:line + rule-id`; keep the most severe. Never add findings of your own, including ones a lens listed under `skipped`.
