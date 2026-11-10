@@ -456,7 +456,7 @@
     },
     {
       "name": "olko-review-orchestrator",
-      "version": "1.0.2",
+      "version": "1.1.0",
       "file": "olko-review-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -546,13 +546,29 @@
     },
     {
       "name": "olko-review-verifier",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "file": "olko-review-verifier.md",
       "stack": "cross-stack",
       "role": "investigator",
       "skills": [
         "caveman",
-        "olko-design-rules"
+        "olko-design-rules",
+        "olko-dotnet-architecture",
+        "olko-dotnet-style",
+        "olko-dotnet-testing",
+        "olko-dotnet-security",
+        "olko-react-architecture",
+        "olko-react-style",
+        "olko-react-testing",
+        "olko-react-security",
+        "web-design-guidelines",
+        "olko-kotlin-architecture",
+        "olko-kotlin-style",
+        "olko-kotlin-testing",
+        "olko-kotlin-security",
+        "olko-python-architecture",
+        "olko-python-style",
+        "olko-python-testing"
       ]
     },
     {
