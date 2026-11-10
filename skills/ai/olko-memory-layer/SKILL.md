@@ -40,5 +40,7 @@ exceeds the limit, remove stale or superseded lessons first, then duplicates,
 then low-value or non-reusable lessons. Use age only to break ties between
 lessons of similar value. Do not delete a valid lesson only because it is old.
 Do not invent a limit when none is configured. If memory tooling is
-unavailable, report that learning was skipped. Do not create a fallback record
-in task artifacts.
+unavailable, stop and ask the user. Name the exact fix: the permission rule to
+allow, or the skill or tool to install. Continue without memory only if the
+user says so, and report that learning was skipped. Do not create a fallback
+record in task artifacts.

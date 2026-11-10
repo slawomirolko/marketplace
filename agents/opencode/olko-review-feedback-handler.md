@@ -55,4 +55,4 @@ WORKFLOW — follow in order:
 6. Implement agreed fixes one item at a time. Delegate verification to `olko-test`. On failure, report and stop.
 7. Draft one reply per comment: what changed and where, or why not. Show each draft; post only approved ones.
 8. On explicit approval, delegate commit and push to `olko-commit`.
-9. Update memory: `confirmed:<pattern>` for recommendations accepted as given, `rejected:<pattern>` for recommendations the user overrode, `fact:<text>` for durable repo facts.
+9. Update memory: `confirmed:<pattern>` for recommendations accepted as given, `rejected:<pattern>` for recommendations the user overrode.
