@@ -82,8 +82,12 @@ Tool descriptions and `next` hints were rewritten from the prompt optimizer revi
 | thin client | OpenCode 2.2.7, Haiku, 2 runs after naming the end statuses in `factory_wait`/`factory_status` and throttling waits on ended runs | done, 2 `factory_wait` each, 0 throttled |
 | delegate | OpenCode, Opus/Sonnet/Haiku subagents | `sessionID` passed for 7 of 7 nodes, 0 of 7 `unknown` (all `estimated`) |
 | delegate | Claude Code, same models | 7 of 7 `unknown` (only total tokens; one agent id) |
+| delegate | OpenCode, after the hint asks for `agentId` | `agentId` passed in 7 of 7 `factory_submit` calls, `sessionID` 7 of 7, 0 `unknown` |
+| interactive | OpenCode 2.2.7 TUI, Haiku, a person answering | the TUI showed the proposal and waited for approval, then asked "New endpoint or extend the existing one?" and waited; the person answered `extend` about 18 s later; run done, 13 steps, 2 `factory_wait`, 0 `factory_status` |
 
-Still open: live questions in interactive UIs.
+Interactive OpenCode needs `opencode --standalone` in the folder that holds `opencode.json`: the plain TUI talks to the background OpenCode service, which did not have the `factory` server (or `FACTORY_TOKEN`) and reported no factory tools.
+
+Still open: interactive Claude Code UI.
 
 ## 5. Cleanup
 
