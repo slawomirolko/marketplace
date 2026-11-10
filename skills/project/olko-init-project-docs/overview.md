@@ -27,7 +27,7 @@
 | `projectAdapter` | `true` | Load the project adapter. |
 | `adrDirectory` | `docs/adr` | ADR files, `TEMPLATE.md`, and the `README.md` log. |
 | `rulesDirectory` | `docs/rules` | Scoped rule files and the `README.md` table. |
-| `architectureDirectory` | `docs/architecture` | `c4-context.md` and `c4-containers.md`. |
+| `architectureDirectory` | `docs/architecture` | `c4-context.md` and `c4-containers.md`, directly in this directory (no `c4/` subdirectory). |
 | `initParts` | `adr, rules, architecture` | Parts this skill may create. |
 
 ## Store Format

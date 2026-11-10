@@ -39,7 +39,7 @@ Write approved content only, into missing files (re-runs: `edge-cases.md`). Shap
 - `<adrDirectory>/README.md`: one-paragraph purpose, the ADR filter, the consequence style, and the log `| ADR | Title | Status | Scope |`. Status: `Proposed`, `Accepted`, `Deprecated`, or `Superseded by NNNN`. Add the log row together with the ADR.
 - `<rulesDirectory>/<name>.md`: front matter `scope` and `summary`, then the rule list.
 - `<rulesDirectory>/README.md`: one-paragraph purpose and `| File | Scope | Summary |`, one row per rule file.
-- `<architectureDirectory>/c4-context.md` and `c4-containers.md`: one bullet per element and per connection; no component-level detail.
+- `<architectureDirectory>/c4-context.md` (level 1) and `<architectureDirectory>/c4-containers.md` (level 2), written directly in `<architectureDirectory>`; never create a `c4/` subdirectory. One bullet per element and per connection; no component-level detail.
 
 Store files contain the approved text only, never the evidence.
 
