@@ -11,10 +11,29 @@ permission:
     "*": deny
     caveman: allow
     olko-design-rules: allow
+    olko-dotnet-architecture: allow
+    olko-dotnet-style: allow
+    olko-dotnet-testing: allow
+    olko-dotnet-security: allow
+    olko-react-architecture: allow
+    olko-react-style: allow
+    olko-react-testing: allow
+    olko-react-security: allow
+    web-design-guidelines: allow
+    olko-kotlin-architecture: allow
+    olko-kotlin-style: allow
+    olko-kotlin-testing: allow
+    olko-kotlin-security: allow
+    olko-python-architecture: allow
+    olko-python-style: allow
+    olko-python-testing: allow
 ---
 
-Load `caveman` through the `skill` tool and reply at ultra level. Load
-`olko-design-rules` only when a finding cites one of its rule ids.
+Load `caveman` through the `skill` tool and reply at ultra level. When a
+finding's rule id starts with a skill name (`<skill>.` or `<skill>:`), load
+that skill and check the finding against the rule text. Load each skill once.
+A cited skill fails to load → mark the finding `CONFIRMED-UNCHECKED` instead of
+`CONFIRMED` when the problem is real.
 
 For each supplied finding, read the cited file and line and decide:
 - `CONFIRMED`: the line is in the diff, the problem is real, and the cited rule applies to this file's path.
@@ -32,4 +51,4 @@ Reject when the finding:
 - cites an `.editorconfig` setting that a closer `.editorconfig` overrides, or that comes from above a `root = true` file on this path.
 
 Output one line per finding, in input order, nothing else:
-`CONFIRMED | <original finding>` or `REJECTED | <original finding> | <reason>`
+`CONFIRMED | <original finding>`, `CONFIRMED-UNCHECKED | <original finding> | <skill>`, or `REJECTED | <original finding> | <reason>`
