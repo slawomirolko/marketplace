@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { cspMiddleware, NONCE_PLACEHOLDER } from "./csp.mjs";
 import { apiMiddleware, createDataApi } from "./data.mjs";
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
@@ -17,6 +18,7 @@ function factoryData() {
   return {
     name: "factory-data",
     configureServer(server) {
+      server.middlewares.use(cspMiddleware());
       server.middlewares.use(apiMiddleware(api));
       server.httpServer?.once("listening", () => console.log(`  factory data: ${api.dataDir}`));
     },
@@ -25,5 +27,6 @@ function factoryData() {
 
 export default defineConfig({
   plugins: [react(), factoryData()],
+  html: { cspNonce: NONCE_PLACEHOLDER },
   server: { host: "127.0.0.1", port: 5180, open: true },
 });
