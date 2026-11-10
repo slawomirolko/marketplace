@@ -21,19 +21,23 @@ const MAX_WAIT_SEC = 50;
 const factory = new Factory(DATA_DIR);
 const lastStatusAt = new Map();
 let statusCalls = 0;
+const lastIdleWaitAt = new Map();
 let throttledCalls = 0;
 let waitCalls = 0;
+let throttledWaitCalls = 0;
+
+async function delayIfTooSoon(lastCallAt, runId) {
+  const now = Date.now();
+  const earliest = (lastCallAt.get(runId) ?? 0) + MIN_STATUS_INTERVAL_MS;
+  const delay = Math.max(0, earliest - now);
+  lastCallAt.set(runId, now + delay);
+  if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+  return delay > 0;
+}
 
 async function throttle(runId) {
   statusCalls += 1;
-  const now = Date.now();
-  const earliest = (lastStatusAt.get(runId) ?? 0) + MIN_STATUS_INTERVAL_MS;
-  const delay = Math.max(0, earliest - now);
-  lastStatusAt.set(runId, now + delay);
-  if (delay > 0) {
-    throttledCalls += 1;
-    await new Promise((r) => setTimeout(r, delay));
-  }
+  if (await delayIfTooSoon(lastStatusAt, runId)) throttledCalls += 1;
 }
 
 function reply(payload) {
@@ -130,7 +134,7 @@ function buildServer() {
     "factory_status",
     {
       description:
-        "Current status of a factory run (returns immediately). The cost fields are the cost and budget of this factory run, not of your own session. To wait for progress, call factory_wait. Do not call factory_status in a loop: the server delays calls closer than the minimum interval.",
+        "Current status of a factory run (returns immediately). The cost fields are the cost and budget of this factory run, not of your own session. The run has ended when status is done, stopped, cancelled or failed. To wait for progress, call factory_wait. Do not call factory_status in a loop: the server delays calls closer than the minimum interval.",
       inputSchema: { runId: z.string() },
     },
     guarded(async ({ runId }) => {
@@ -143,10 +147,11 @@ function buildServer() {
     "factory_wait",
     {
       description:
-        "Block until the run needs the user (waiting_for_user), finishes, or timeoutSec passes. Use this instead of polling. On waiting_for_user, ask the user pendingQuestion.text and send the user's answer with factory_answer. If it returns status 'running' (timedOut), call it again.",
+        "Block until the run needs the user (waiting_for_user), ends, or timeoutSec passes. The run has ended when status is done, stopped, cancelled or failed; then stop calling factory_wait. Use this instead of polling. On waiting_for_user, ask the user pendingQuestion.text and send the user's answer with factory_answer. If it returns status 'running' (timedOut), call it again. The server delays calls closer than the minimum interval when the run is not running.",
       inputSchema: { runId: z.string(), timeoutSec: z.number().int().min(1).max(MAX_WAIT_SEC).optional() },
     },
     guarded(async ({ runId, timeoutSec }) => {
+      if (factory.get(runId).status !== "running" && (await delayIfTooSoon(lastIdleWaitAt, runId))) throttledWaitCalls += 1;
       const { run, timedOut } = await factory.waitForChange(runId, (timeoutSec ?? DEFAULT_WAIT_SEC) * 1000);
       waitCalls += 1;
       return { ...factory.status(run), timedOut };
@@ -209,7 +214,7 @@ const httpServer = http.createServer(async (req, res) => {
     return;
   }
   if (req.url === "/metrics" && req.headers.authorization === `Bearer ${TOKEN}`) {
-    res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ statusCalls, throttledCalls, waitCalls }));
+    res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ statusCalls, throttledCalls, waitCalls, throttledWaitCalls }));
     return;
   }
   if (req.headers.authorization !== `Bearer ${TOKEN}`) {

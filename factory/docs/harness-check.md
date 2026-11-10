@@ -65,11 +65,25 @@ curl -s -H "Authorization: Bearer $FACTORY_TOKEN" http://127.0.0.1:7340/metrics
 
 | Check | Expected |
 |---|---|
-| Final output | `STATUS=done STEPS=9 COST=0.4715` |
-| `/metrics` | `waitCalls` small (about 2), `statusCalls` near 0 |
+| Final output | `STATUS=done STEPS=13 COST=0.54073` (sample workflow with four review agents) |
+| `/metrics` | `waitCalls` small (about 2), `statusCalls` near 0, `throttledWaitCalls` 0 |
 | Server run state | one run, `answers: { q-endpoint: "extend" }` |
 
-Still open: live questions in interactive UIs, and delegate mode (does a subagent result expose its token usage?).
+`throttledWaitCalls` counts `factory_wait` calls on a run that is not running that came closer than the minimum interval (500 ms). A value above 0 means the client kept calling after the run ended.
+
+## Results after the tool text update (2026-11-10)
+
+Tool descriptions and `next` hints were rewritten from the prompt optimizer review. One or two runs per row, so these show behaviour, not rates.
+
+| Mode | Harness | Result |
+|---|---|---|
+| thin client | Claude Code 2.1.319, Haiku | done, 13 steps, 2 `factory_wait`, 0 `factory_status` |
+| thin client | OpenCode 2.2.7, Haiku, first run | done, but **49** `factory_wait`: its loop stopped on `finished`/`completed`, not `done`, so it kept waiting on the ended run |
+| thin client | OpenCode 2.2.7, Haiku, 2 runs after naming the end statuses in `factory_wait`/`factory_status` and throttling waits on ended runs | done, 2 `factory_wait` each, 0 throttled |
+| delegate | OpenCode, Opus/Sonnet/Haiku subagents | `sessionID` passed for 7 of 7 nodes, 0 of 7 `unknown` (all `estimated`) |
+| delegate | Claude Code, same models | 7 of 7 `unknown` (only total tokens; one agent id) |
+
+Still open: live questions in interactive UIs.
 
 ## 5. Cleanup
 

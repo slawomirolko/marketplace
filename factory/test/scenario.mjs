@@ -164,6 +164,19 @@ await check("throttle: tight factory_status loop is slowed to the minimum interv
   console.log(`      6 rapid calls took ${elapsed} ms`);
 });
 
+await check("throttle: tight factory_wait loop on an ended run is slowed and told to stop", async () => {
+  const { payload } = await call(client, "factory_start", { goal: "ended wait test" });
+  await call(client, "factory_cancel", { runId: payload.runId });
+  const started = Date.now();
+  let last;
+  for (let i = 0; i < 6; i += 1) last = await call(client, "factory_wait", { runId: payload.runId, timeoutSec: 5 });
+  const elapsed = Date.now() - started;
+  assert.equal(last.payload.status, "cancelled");
+  assert.match(last.payload.next, /Do not call factory_wait/);
+  assert.ok(elapsed >= 5 * 450, `6 calls took only ${elapsed} ms`);
+  console.log(`      6 rapid waits on an ended run took ${elapsed} ms`);
+});
+
 await client.close();
 const failed = results.filter((r) => !r.ok).length;
 console.log(`\n${results.length - failed}/${results.length} passed`);
