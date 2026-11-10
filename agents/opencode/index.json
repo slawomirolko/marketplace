@@ -461,7 +461,7 @@
     },
     {
       "name": "olko-skill-optimizer",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "file": "olko-skill-optimizer.md",
       "stack": "cross-stack",
       "role": "writer",

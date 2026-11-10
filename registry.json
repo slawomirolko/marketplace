@@ -4,12 +4,14 @@
     {
       "name": "olko-agents-optimizer",
       "category": "ai",
-      "version": "1.1.0",
-      "description": "Optimize agent context files (AGENTS.md, CLAUDE.md, .github/copilot-instructions.md, .windsurfrules, codex.md, etc.) using Addy Osmani's agents-md methodology. Triggers: 'optimize CLAUDE.md', 'streamline CLAUDE.md', 'agents-md', 'discoverability filter', 'add gotchas', 'optimize AGENTS.md', 'optimize context file', 'optimize .windsurfrules', 'optimize copilot-instructions', 'optimize codex.md'.",
+      "version": "1.2.0",
+      "description": "Optimize agent context files (AGENTS.md, CLAUDE.md, .github/copilot-instructions.md, .windsurfrules, codex.md, etc.), agent prompts, and SKILL.md files using Addy Osmani's agents-md methodology plus a token and cache audit (stable prefix, examples over rules, split plan). Triggers: 'optimize CLAUDE.md', 'streamline CLAUDE.md', 'agents-md', 'discoverability filter', 'add gotchas', 'optimize AGENTS.md', 'optimize context file', 'optimize .windsurfrules', 'optimize copilot-instructions', 'optimize codex.md', 'optimize agent prompt', 'reduce agent tokens', 'prompt caching'.",
       "tags": [
         "ai",
         "agents",
-        "optimizer"
+        "optimizer",
+        "tokens",
+        "cache"
       ],
       "capabilities": [
         "ai",
@@ -25,6 +27,7 @@
         "references/code-assessment.md",
         "references/gotcha-mining.md",
         "references/methodology.md",
+        "references/token-and-cache.md",
         "scripts/line-count.mjs",
         "workflow.md"
       ],

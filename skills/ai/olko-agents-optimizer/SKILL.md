@@ -1,12 +1,12 @@
 ---
 name: olko-agents-optimizer
-description: "Optimize agent context files (AGENTS.md, CLAUDE.md, .github/copilot-instructions.md, .windsurfrules, codex.md, etc.) using Addy Osmani's agents-md methodology. Triggers: 'optimize CLAUDE.md', 'streamline CLAUDE.md', 'agents-md', 'discoverability filter', 'add gotchas', 'optimize AGENTS.md', 'optimize context file', 'optimize .windsurfrules', 'optimize copilot-instructions', 'optimize codex.md'."
+description: "Optimize agent context files (AGENTS.md, CLAUDE.md, .github/copilot-instructions.md, .windsurfrules, codex.md, etc.), agent prompts, and SKILL.md files using Addy Osmani's agents-md methodology plus a token and cache audit (stable prefix, examples over rules, split plan). Triggers: 'optimize CLAUDE.md', 'streamline CLAUDE.md', 'agents-md', 'discoverability filter', 'add gotchas', 'optimize AGENTS.md', 'optimize context file', 'optimize .windsurfrules', 'optimize copilot-instructions', 'optimize codex.md', 'optimize agent prompt', 'reduce agent tokens', 'prompt caching'."
 ---
 
 # olko-agents-optimizer
 
 ## Routing Summary
-Optimize agent context files (AGENTS.md, CLAUDE.md, .github/copilot-instructions.md, .windsurfrules, codex.md, etc.) using Addy Osmani's agents-md methodology. Triggers: 'optimize CLAUDE.md', 'streamline CLAUDE.md', 'agents-md', 'discoverability filter', 'add gotchas', 'optimize AGENTS.md', 'optimize context file', 'optimize .windsurfrules', 'optimize copilot-instructions', 'optimize codex.md'.
+Optimize agent context files (AGENTS.md, CLAUDE.md, .github/copilot-instructions.md, .windsurfrules, codex.md, etc.), agent prompts, and SKILL.md files using Addy Osmani's agents-md methodology plus a token and cache audit (stable prefix, examples over rules, split plan). Triggers: 'optimize CLAUDE.md', 'streamline CLAUDE.md', 'agents-md', 'discoverability filter', 'add gotchas', 'optimize AGENTS.md', 'optimize context file', 'optimize .windsurfrules', 'optimize copilot-instructions', 'optimize codex.md', 'optimize agent prompt', 'reduce agent tokens', 'prompt caching'.
 
 ## Progressive Loading
 - Load `overview.md` first after registry/category routing.
