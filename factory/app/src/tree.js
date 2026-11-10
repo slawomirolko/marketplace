@@ -93,6 +93,20 @@ export function runFailure(run) {
   return event ? `${event.node ? `${event.node}: ` : ""}${errorMessage(event.error)}` : null;
 }
 
+function allItems(level) {
+  return level.items.flatMap((item) => [item, ...(item.inner ? allItems(item.inner) : [])]);
+}
+
+export function buildRunIndex(level, config, report, run) {
+  const index = new Map();
+  for (const item of allItems(level)) {
+    const cost = costOf(item, report);
+    const tier = tierOf(item, config, report);
+    index.set(item.key, { cost, tier, model: cost?.model ?? (tier ? report?.tierModels?.[tier] ?? null : null), failure: failureOf(item, run) });
+  }
+  return index;
+}
+
 export function formatTokens(tokens, cacheTokens) {
   const base = `${(tokens ?? 0).toLocaleString("en-US")} tok`;
   return cacheTokens ? `${base} + ${cacheTokens.toLocaleString("en-US")} cache` : base;

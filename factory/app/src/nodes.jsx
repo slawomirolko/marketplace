@@ -1,7 +1,13 @@
 import { useEffect, useRef } from "react";
 import { Handle, Position } from "@xyflow/react";
 import { useViewer } from "./context.js";
-import { costOf, failureOf, formatTokens, formatUsd, isGroup, tierOf } from "./tree.js";
+import { formatTokens, formatUsd, isGroup } from "./tree.js";
+
+const EMPTY_ENTRY = { cost: null, tier: null, model: null, failure: null };
+
+function useEntry(item) {
+  return useViewer().index?.get(item.key) ?? EMPTY_ENTRY;
+}
 
 function Handles() {
   return (
@@ -27,19 +33,17 @@ function subtitle(item) {
   return item.node.role ? `${item.node.kind} · ${item.node.role}` : item.node.kind;
 }
 
-export function nodeAriaLabel(item, report, run) {
+export function nodeAriaLabel(item, report, entry = EMPTY_ENTRY) {
   if (item.kind === "terminal") return item.label;
-  const failure = failureOf(item, run);
-  const cost = report ? (failure ? `failed: ${failure}` : formatUsd(costOf(item, report))) : null;
+  const cost = report ? (entry.failure ? `failed: ${entry.failure}` : formatUsd(entry.cost)) : null;
   return [title(item), subtitle(item), cost].filter(Boolean).join(", ");
 }
 
 function CostLine({ item }) {
-  const { report, run } = useViewer();
+  const { report } = useViewer();
+  const { cost, failure } = useEntry(item);
   if (!report) return null;
-  const failure = failureOf(item, run);
   if (failure) return <div className="cost cost-unknown">failed: {failure.slice(0, 90)}</div>;
-  const cost = costOf(item, report);
   return (
     <div className={`cost ${cost?.costSource === "unknown" ? "cost-unknown" : ""}`}>
       <strong>{formatUsd(cost)}</strong>
@@ -74,9 +78,7 @@ function Toggle({ item, expanded }) {
 
 export function CardNode({ data, selected }) {
   const { item } = data;
-  const { config, report } = useViewer();
-  const tier = tierOf(item, config, report);
-  const model = costOf(item, report)?.model ?? (tier ? report?.tierModels?.[tier] : null);
+  const { tier, model } = useEntry(item);
   return (
     <div className={`card tier-${tier ?? "none"} kind-${item.kind} ${selected ? "selected" : ""}`}>
       <Handles />

@@ -6,7 +6,7 @@ import { ViewerContext } from "./context.js";
 import { Details } from "./Details.jsx";
 import { layoutGraph } from "./layout.js";
 import { nodeAriaLabel, nodeTypes } from "./nodes.jsx";
-import { buildLevel, formatAmount, formatTokens, isUnknownCost } from "./tree.js";
+import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost } from "./tree.js";
 
 async function getJson(url) {
   const response = await fetch(url);
@@ -78,9 +78,10 @@ function Viewer() {
   }, [workflows, rootName, detail]);
   const level = built?.level ?? null;
   const graph = useMemo(() => (level ? layoutGraph(level, expanded) : { nodes: [], edges: [], bounds: null }), [level, expanded]);
+  const runIndex = useMemo(() => (level ? buildRunIndex(level, config, detail?.report ?? null, detail?.run ?? null) : new Map()), [level, config, detail]);
   const nodes = useMemo(
-    () => graph.nodes.map((n) => ({ ...n, selected: n.id === selected?.key, ariaLabel: nodeAriaLabel(n.data.item, detail?.report ?? null, detail?.run ?? null) })),
-    [graph, selected, detail],
+    () => graph.nodes.map((n) => ({ ...n, selected: n.id === selected?.key, ariaLabel: nodeAriaLabel(n.data.item, detail?.report ?? null, runIndex.get(n.id)) })),
+    [graph, selected, detail, runIndex],
   );
   const onNodesChange = useCallback(
     (changes) => {
@@ -102,7 +103,7 @@ function Viewer() {
     });
   }, []);
 
-  const context = useMemo(() => ({ config, report: detail?.report ?? null, run: detail?.run ?? null, toggle, focusKey }), [config, detail, toggle, focusKey]);
+  const context = useMemo(() => ({ config, report: detail?.report ?? null, run: detail?.run ?? null, toggle, focusKey, index: runIndex }), [config, detail, toggle, focusKey, runIndex]);
   const total = detail?.report.cost;
 
   if (error) return <p className="error" role="alert">Could not load factory data: {error}</p>;

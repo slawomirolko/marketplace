@@ -201,3 +201,24 @@ test("totals with unknown steps are shown as unknown or partial, never as an exa
   const build = level.items.find((i) => i.key === "hello/build");
   assert.equal(formatUsd(costOf(build, report)), "unknown", "a subgraph whose LLM steps are all unknown is not $0");
 });
+
+test("run index gives the same cost, tier and failure as the per-node lookups", async () => {
+  const { buildRunIndex, tierOf } = await import("../app/src/tree.js");
+  const { data, detail } = await demoRun();
+  const config = data.config();
+  const run = { ...detail.run, events: [...detail.run.events, { type: "node_failed", node: "hello/build/implement", error: "boom" }] };
+  const level = buildLevel(data.workflows(), "hello", "hello", ["hello"], detail.report);
+  const index = buildRunIndex(level, config, detail.report, run);
+  const items = [];
+  const walk = (lvl) => lvl.items.forEach((item) => { items.push(item); if (item.inner) walk(item.inner); });
+  walk(level);
+  assert.equal(index.size, items.length, "one entry per drawn item, including agents and subgraph children");
+  for (const item of items) {
+    const entry = index.get(item.key);
+    assert.deepEqual(entry.cost, costOf(item, detail.report), `cost of ${item.key}`);
+    assert.equal(entry.tier, tierOf(item, config, detail.report), `tier of ${item.key}`);
+    assert.equal(entry.failure, failureOf(item, run), `failure of ${item.key}`);
+  }
+  assert.equal(index.get("hello/build").failure, "boom", "a failure inside a subgraph marks the subgraph");
+  assert.equal(index.get("hello/review#docs").tier, "low");
+});
