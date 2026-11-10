@@ -147,7 +147,7 @@ function buildServer() {
     "factory_wait",
     {
       description:
-        "Wait until the run needs the user (waiting_for_user), the run ends, or timeoutSec passes. Use this tool instead of polling. The run has ended when status is done, stopped, cancelled or failed. After that, stop calling factory_wait. On waiting_for_user, ask the user pendingQuestion.text. Then send the user's answer with factory_answer. If the result has status 'running' and timedOut is true, call factory_wait again. When the run is not running, the server delays calls that come sooner than the minimum interval.",
+        "Wait until the run needs the user (waiting_for_user), needs you to run node work in delegate mode (waiting_for_client), the run ends, or timeoutSec passes. Use this tool instead of polling. The run has ended when status is done, stopped, cancelled or failed. After that, stop calling factory_wait. On waiting_for_user, ask the user pendingQuestion.text. Then send the user's answer with factory_answer. On waiting_for_client, run pendingWork and call factory_submit. If the result has status 'running' and timedOut is true, call factory_wait again. When the run is not running, the server delays calls that come sooner than the minimum interval.",
       inputSchema: { runId: z.string(), timeoutSec: z.number().int().min(1).max(MAX_WAIT_SEC).optional() },
     },
     guarded(async ({ runId, timeoutSec }) => {
