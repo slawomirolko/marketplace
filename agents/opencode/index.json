@@ -456,7 +456,7 @@
     },
     {
       "name": "olko-review-orchestrator",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-review-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -486,7 +486,7 @@
     },
     {
       "name": "olko-review-dotnet-lens",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-review-dotnet-lens.md",
       "stack": "dotnet",
       "role": "investigator",
@@ -546,7 +546,7 @@
     },
     {
       "name": "olko-review-verifier",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-review-verifier.md",
       "stack": "cross-stack",
       "role": "investigator",

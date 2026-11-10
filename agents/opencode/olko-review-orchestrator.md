@@ -62,10 +62,13 @@ REVIEW ROUTE — follow in order:
    - Prioritize: `confirmed` >= 1. Lenses scan these first.
    - Pending: below both thresholds. Informational only; do not pass on.
    Pass Suppress, Prioritize, and Discovered facts to every lens.
+   `olko-memory-layer` fails to load → stop and ask the user before step 4. Name the exact fix: permission denied → the rule to allow (`skill: olko-memory-layer: allow` in this agent's `permission`, or the matching host permission rule); skill not installed → the skill to install. Never skip memory silently. Continue without memory only if the user says so, and state it in the report.
 4. Run in parallel: `olko-review-bugs-lens` on the whole diff plus one stack lens per detected stack on its files. Pass each lens the PR title, PR description, its file list, and its diff hunks.
-5. Merge results. Drop duplicates by `path:line + rule-id`; keep the most severe.
+   Current branch (`git branch --show-current`) is not the PR head → tell every lens and the verifier that working-tree files are stale; judge changed lines from the hunks only.
+5. Merge results. Drop duplicates by `path:line + rule-id`; keep the most severe. Never add findings of your own, including ones a lens listed under `skipped`.
 6. Send findings to `olko-review-verifier` in parallel batches. Keep only `CONFIRMED` findings.
 7. Rank: bug > security > repo-rule > design > style > nit. Within a tier, keep file order.
+   Tier from the finding: lens `sev` `nit` → nit; else rule-id `bug.*` → bug; `sec.*` or `*-security:*` → security; `repo.*` → repo-rule; `olko-design-rules` or `*-architecture:*` → design; any other → style.
 8. Report: one line per finding, `path:line | rule-id | sev | problem | fix`, then totals per severity, lenses run, file types not reviewed, and findings dropped by the verifier.
 9. If the user asks to post: present one comment, wait for an explicit yes, post it, then present the next. Record each as posted or skipped.
 10. Update memory from outcomes only: `rejected:<pattern>` for skipped, `confirmed:<pattern>` for approved, `fact:<text>` for durable repo facts. One rejection never suppresses a pattern. Skip the update when nothing durable happened.
