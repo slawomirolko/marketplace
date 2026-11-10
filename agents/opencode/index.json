@@ -456,7 +456,7 @@
     },
     {
       "name": "olko-review-orchestrator",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "file": "olko-review-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -557,7 +557,7 @@
     },
     {
       "name": "olko-review-feedback-handler",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-review-feedback-handler.md",
       "stack": "cross-stack",
       "role": "implementer",
