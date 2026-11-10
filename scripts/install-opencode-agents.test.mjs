@@ -99,9 +99,12 @@ test("installs the .NET implementer with its review and verification skills", ()
   assert.match(agent, /"git push \*": deny/);
   assert.match(agent, /task: deny/);
   assert.match(agent, /Do not commit, push/);
-  for (const skill of ["olko-dotnet-architecture", "olko-dotnet-style", "olko-dotnet-testing", "olko-test"]) {
+  for (const skill of ["olko-dotnet-architecture", "olko-dotnet-style", "olko-test"]) {
     assert.ok(fs.existsSync(path.join(project, ".agents", "skills", skill, "SKILL.md")));
   }
+  assert.doesNotMatch(agent, /olko-dotnet-testing/);
+  assert.match(agent, /NEVER write new tests/);
+  assert.match(agent, /Blocked:/);
   assert.ok(!fs.existsSync(path.join(project, ".opencode", "memory", "olko-dotnet-implementer.md")));
 });
 
@@ -293,10 +296,11 @@ test("installs the hidden marketplace skill bootstrapper", () => {
 });
 
 for (const [agentName, skills] of [
-  ["olko-mobile-implementer", ["olko-kotlin-architecture", "olko-kotlin-style", "olko-kotlin-testing", "olko-test"]],
-  ["olko-react-native-implementer", ["olko-react-native-architecture", "olko-react-native-style", "olko-react-native-testing", "olko-test"]],
+  ["olko-mobile-implementer", ["olko-kotlin-architecture", "olko-kotlin-style", "olko-test"]],
+  ["olko-react-native-implementer", ["olko-react-native-architecture", "olko-react-native-style", "olko-test"]],
   ["olko-react-native-test-runner", ["olko-react-native-testing", "olko-test"]],
-  ["olko-army-python-implementer", ["olko-python-architecture", "olko-python-style", "olko-python-testing", "olko-test"]],
+  ["olko-army-python-implementer", ["olko-python-architecture", "olko-python-style", "olko-test"]],
+  ["olko-test-first-author", ["olko-dotnet-testing", "olko-react-testing", "olko-react-native-testing", "olko-kotlin-testing", "olko-python-testing", "olko-test"]],
 ]) {
   test(`installs ${agentName} with its declared skills`, () => {
     const project = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-opencode-agent-"));
@@ -315,7 +319,7 @@ test("installs the review orchestrator with read-only stack lenses", () => {
 
   assert.equal(result.status, 0, result.stderr);
   const agent = fs.readFileSync(path.join(project, ".opencode", "agents", "olko-review-orchestrator.md"), "utf8");
-  assert.match(agent, /mode: primary/);
+  assert.match(agent, /mode: all/);
   assert.match(agent, /edit: deny/);
   assert.match(agent, /"gh pr comment \*": ask/);
   for (const [agentName, skills] of [
@@ -325,6 +329,8 @@ test("installs the review orchestrator with read-only stack lenses", () => {
     ["olko-review-mobile-lens", ["olko-kotlin-architecture", "olko-kotlin-style", "olko-kotlin-testing", "olko-kotlin-security"]],
     ["olko-review-python-lens", ["olko-python-architecture", "olko-python-style", "olko-python-testing"]],
     ["olko-review-verifier", ["olko-design-rules"]],
+    ["olko-review-requirements-lens", ["olko-design-rules"]],
+    ["olko-project-rules-check", ["caveman"]],
     ["olko-review-feedback-handler", ["olko-pr-check", "olko-test", "olko-commit"]],
   ]) {
     assert.match(agent, new RegExp(`${agentName}: allow`));
@@ -338,6 +344,8 @@ test("installs the review orchestrator with read-only stack lenses", () => {
 test("review lenses and verifier deny edit and bash", () => {
   for (const agentName of [
     "olko-review-bugs-lens",
+    "olko-review-requirements-lens",
+    "olko-project-rules-check",
     "olko-review-dotnet-lens",
     "olko-review-react-lens",
     "olko-review-mobile-lens",

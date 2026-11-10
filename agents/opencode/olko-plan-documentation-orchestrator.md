@@ -29,6 +29,7 @@ permission:
     olko-army-python-auditor: allow
     olko-obsidian-knowledge-manager: allow
     olko-task-scope-impact-reviewer: allow
+    olko-review-orchestrator: allow
   skill:
     olko-ste100-skill-adapter: allow
     "*": deny
@@ -54,6 +55,10 @@ TWO DISTINCT PATHS — choose by requested DELIVERABLE, not by whether an issue 
 
   Do NOT create a plan directory, call `olko-plan-editor`, or run implementation-readiness checks on this path. A Feature can exist before an implementation plan.
 - IMPLEMENTATION PLANNING: Use this path when the user asks how to implement an accepted Feature. In ONE planning session, prepare the Feature plan and an implementation plan file for EVERY current child Task. A Task-only planning request is for revising an already planned Task or a clearly named standalone Task; it is not the default way to plan a Feature.
+
+  ENTRY GATE (HARD): this path starts only from an existing YouTrack Feature whose child Tasks all have acceptance criteria, or from a named existing Task for revision. Ask `olko-feature-backlog-writer` for read-only `context` first.
+  - An Epic → stop; ask which Feature to plan, or route to EPIC/FEATURE/TASK DISCOVERY.
+  - No issue ID, a rough idea, or a Task without acceptance criteria → stop; route to `olko-feature-backlog-writer` in `draft` mode first. Never plan from a criterion you would have to guess.
 
   If the user supplies an issue ID, ask `olko-feature-backlog-writer` for read-only `context` and use its result as plan input. If an existing Task misses a checklist item, report the missing items and recommend a repair. Request a read-only edit draft, show the exact proposed change, and ask for separate, explicit approval before changing the tracker. If the user declines, leave the issue unchanged and record the mismatch.
 
@@ -262,6 +267,16 @@ verdict.
    the user asks.
 6. If no discrepancy is found, leave both documents unchanged and report they were
    validated against current code.
+6a. PLAN REVIEW (BEFORE USER APPROVAL): delegate `olko-review-orchestrator` (PLAN
+    ROUTE) once for the Feature `implementation.md` and once per Task file. Pass
+    the plan text, its acceptance criteria, and the target paths it names. Fold
+    every `CONFIRMED` finding into the plan through `olko-plan-editor` and rerun
+    the consistency gate. Add every `ask` verdict (the plan breaks a project
+    ADR or rule file) and every vague criterion to the step 7 question
+    batch; never resolve one yourself. Record the review result in
+    `tracker.md`. Rerun 6a for every plan file that changes later, including
+    changes from steps 8, 8b, 8c, or a `PLAN_UPDATE_REQUIRED` from the
+    implementation preflight.
 7. Load `grill-with-docs` through the `skill` tool. Give it both document paths
    (`business.md` + `implementation.md`),
    the consistency result, implementation-readiness result, and any accepted

@@ -1149,6 +1149,41 @@
       }
     },
     {
+      "name": "olko-init-project-docs",
+      "category": "project",
+      "version": "1.0.0",
+      "description": "Initialize a project's decision store — ADRs, scoped rule files, and C4 architecture docs — from the existing codebase. Scans the code read-only, grills the user one candidate at a time (record / reword / skip), then writes the approved files itself. Re-runs fill only missing files and never overwrite. Use when a project has no docs/adr or docs/rules yet, or when the user asks to init or bootstrap project docs. Triggers: 'init project docs', 'seed ADRs', 'bootstrap docs/rules', 'create decision store', 'olko-init-project-docs'.",
+      "tags": [
+        "project",
+        "docs",
+        "adr",
+        "rules",
+        "architecture"
+      ],
+      "capabilities": [
+        "project",
+        "project.docs.init"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
       "name": "olko-mobile-network-sync",
       "category": "project",
       "version": "1.0.1",
@@ -1599,7 +1634,7 @@
       "name": "grill-with-docs",
       "category": "workflow",
       "origin": "vendored",
-      "version": "1.2.1",
+      "version": "1.3.0",
       "description": "A grilling session that stress-tests a plan against the project's documented domain model — sharpens fuzzy terminology, challenges it against the existing glossary, cross-references it with the code, and updates documentation (CONTEXT.md, ADRs) inline as decisions crystallize. The domain-aware variant of grill-me — use this instead when the repo has (or should have) a CONTEXT.md glossary or docs/adr/ decision records. Triggers include \"grill with docs\", \"stress-test this against our domain model\", \"does this match our language\", \"check this against our glossary\", \"grill this and update the docs\", or any time a non-trivial plan needs to be reconciled with the project's documented decisions.",
       "tags": [
         "workflow",

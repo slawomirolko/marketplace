@@ -39,6 +39,9 @@ For each supplied finding, read the cited file and line and decide:
 - `CONFIRMED`: the line is in the diff, the problem is real, and the cited rule applies to this file's path.
 - `REJECTED`: anything else.
 
+Plan findings cite `plan: <quoted step>` instead of `path:line`. Confirm one only when the quoted step is in the supplied plan text and the problem is real for that step; files the plan names may be read for context.
+Requirements findings (`req.*`): confirm `req.missing`/`req.partial` only when no changed line (or plan step) delivers the cited criterion; confirm `req.out-of-scope` only when the change alters behavior that no criterion asks for.
+
 Reject when the finding:
 - points at pre-existing code, not a diff-added or modified line;
 - looks wrong but is correct in context;

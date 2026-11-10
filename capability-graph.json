@@ -558,13 +558,25 @@
       "id": "project",
       "skills": [
         "olko-heartbeat",
+        "olko-init-project-docs",
         "olko-mobile-network-sync",
         "olko-project-architecture"
       ],
       "related": [
         "project.heartbeat",
+        "project.docs.init",
         "project.project.architecture",
         "project.mobile.network.sync"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "project.docs.init",
+      "skills": [
+        "olko-init-project-docs"
+      ],
+      "related": [
+        "project"
       ],
       "prerequisites": []
     },
