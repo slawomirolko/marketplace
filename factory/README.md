@@ -43,13 +43,29 @@ JSON Schemas (draft 2020-12) in `spec/`, validated by `src/spec.ts` (Ajv plus gr
 
 `spec/examples/valid` and `spec/examples/invalid` hold examples checked by `test/spec.test.ts`. The PoC server still emits the older footer field names; moving it to this schema is the next step.
 
-## Setup and the run page
+## Install
 
-```bash
-node factory/setup.ts
+Claude Code (one step, from the Olko marketplace):
+
+```text
+/plugin install skill-factory --marketplace slawomirolko/marketplace
 ```
 
-Installs the viewer dependencies (`pnpm install --frozen-lockfile`), builds the viewer (`vite build`) and builds the factory image (`skill-factory-poc:0.3`), then prints the `docker run` command. The factory server serves the built viewer at `http://127.0.0.1:7340/viewer/`, reading the same runs as the MCP endpoint. Every response that has a `runId` also has `viewerUrl` (`/viewer/?run=<runId>`), and the end hint and the `factory_report` description tell the client to show it to the user. `FACTORY_PUBLIC_URL` changes the base when the port is mapped differently.
+The plugin declares the MCP server `factory` (`node ${CLAUDE_PLUGIN_ROOT}/dist/stdio.mjs`). Claude Code starts it by itself in every session; there is no install step, no Docker and no token. `dist/` and `app/dist/` are committed build output, so the plugin needs only Node (22.18 or newer runs the bundle; development uses 26.13).
+
+OpenCode: run once `node factory/dist/install-opencode.mjs` (from a clone or from the Claude Code plugin folder). It adds a `factory` local server to `~/.config/opencode/opencode.json` in the shape the file already uses, keeps a `.bak-<time>` copy, and does nothing when the entry is already there. Pass another config path as the first argument.
+
+What happens at start (`src/stdio.ts`):
+- The harness talks to the factory over stdio, so only that harness can reach the tools.
+- Runs are stored in `~/.skill-factory` (`FACTORY_DATA_DIR` changes it), shared by all harnesses. A run is resumed only by the process that owns it, or after that process has died.
+- If nothing answers on `127.0.0.1:7340` (`FACTORY_VIEWER_PORT`), the factory starts the run page (`src/viewer-server.ts`) as a separate background process, so the page keeps working after the harness session ends. Its process id is in `~/.skill-factory/viewer.pid`.
+- The default backend is `delegate`; `FACTORY_BACKEND=fake` selects the fake test model.
+
+After a change, `pnpm build` (from `factory/`) rebuilds `app/dist` and `dist`; commit both.
+
+## HTTP server and the run page
+
+`node factory/setup.ts` builds the viewer and the Docker image (`skill-factory-poc:0.3`) for the HTTP variant (`src/server.ts`, bearer token, used by the container tests and LangGraph). That server serves the same run page at `http://127.0.0.1:7340/viewer/`. Every response that has a `runId` also has `viewerUrl` (`/viewer/?run=<runId>`), and the end hint and the `factory_report` description tell the client to show it to the user. `FACTORY_PUBLIC_URL` changes the base when the port is mapped differently.
 
 The run page needs no MCP token. It is read-only (GET), answers only requests whose Host is the factory's own local address (protection against DNS rebinding), and sends a Content-Security-Policy with a new nonce per request. The page shows prompts and agent outputs, so keep the port bound to 127.0.0.1.
 
@@ -135,10 +151,13 @@ docker run --rm --network none -v "${PWD}/factory/spec:/app/spec:ro" -v "${PWD}/
 
 | Client | Result |
 |---|---|
-| Node MCP client (offline, Node 26.13) | 15/15 scenario tests, 50/50 unit tests, restart resilience |
+| Node MCP client (offline, Node 26.13) | 15/15 scenario tests, 52/52 unit tests (incl. stdio end to end on the bundle, Node 24 and 26), restart resilience |
 | LangGraph 1.2 host, `langchain-mcp-adapters` 0.3.2 and `langchain[mcp]` 1.4 | run completes, questions map to `interrupt()` |
 | Claude Code CLI 2.1.274, headless | run completes, 2 `factory_wait` calls, 0 status polls |
 | OpenCode CLI 2.2.7, headless | run completes, 2 `factory_wait` calls, 0 status polls |
+| Claude Code 2.1.322, plugin loaded with `--plugin-dir` | Claude Code started the factory over stdio by itself; run done, link shown; the run page kept working after Claude Code exited |
+| OpenCode 2.2.7, local `factory` server in `opencode.json` | OpenCode started the factory over stdio; run done, per-agent cost table and link shown |
+| Claude Code 2.1.322, delegate with real Opus/Sonnet/Haiku 5.5 subagents (HTTP) | run done, link shown; per-step cost `unknown` because Claude Code does not pass subagent tokens |
 
 Findings:
 - The legacy `langchain-mcp-adapters` and `langchain[mcp]` cannot share one Python environment (the new one pulls `mcp` 2.x).
@@ -158,4 +177,4 @@ Findings:
 - Delegate mode on Claude Code: the model actually used by each subagent was not checked.
 - Direct API backend (`api` kind in the config schema).
 - Live user questions in interactive harness UIs (tests answered through the prompt).
-- Installation from marketplaces, long runs, desktop apps.
+- Installation from the published marketplace (tested with `claude --plugin-dir` and a local OpenCode config), long runs, desktop apps.

@@ -203,6 +203,7 @@ export interface RunEvent {
 
 export interface Run {
   runId: string;
+  ownerPid?: number;
   idempotencyKey: string | null;
   goal: string;
   workflow?: string;

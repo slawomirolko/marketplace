@@ -51,6 +51,25 @@ const FAKE_CONFIG: RunConfig = {
   budget: DEFAULT_BUDGET,
 };
 
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+function ownedByOtherProcess(run: Run): boolean {
+  return run.ownerPid !== undefined && run.ownerPid !== process.pid && processAlive(run.ownerPid);
+}
+
+export function parseBackend(value: string | undefined): DefaultBackend {
+  const backend = value ?? "delegate";
+  if (backend !== "fake" && backend !== "delegate") throw new Error("FACTORY_BACKEND must be fake or delegate");
+  return backend;
+}
+
 export type DefaultBackend = "fake" | "delegate";
 
 export interface FactoryOptions {
@@ -160,7 +179,7 @@ export class Factory {
       const run = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8")) as Run;
       this.runs.set(run.runId, run);
       if (run.idempotencyKey) this.idempotency.set(run.idempotencyKey, run.runId);
-      if (run.status === "running") this.schedule(run);
+      if (run.status === "running" && !ownedByOtherProcess(run)) this.schedule(run);
     }
   }
 
@@ -368,6 +387,7 @@ export class Factory {
 
   schedule(run: Run): void {
     if (this.timers.has(run.runId) || this.busy.has(run.runId)) return;
+    run.ownerPid = process.pid;
     const tick = async () => {
       this.timers.delete(run.runId);
       if (run.status !== "running") return;

@@ -17,5 +17,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src", "host", "viewer", "test", "app/data.ts", "app/csp.ts", "app/src/tree.ts", "app/vite.config.ts", "setup.ts"]
+  "include": ["src", "host", "viewer", "test", "app/data.ts", "app/csp.ts", "app/src/tree.ts", "app/vite.config.ts", "bundle.config.ts", "setup.ts"]
 }

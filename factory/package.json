@@ -15,7 +15,10 @@
     "viewer": "pnpm --dir app run dev",
     "viewer:build": "pnpm --dir app run build",
     "viewer:mermaid": "node viewer/render.ts",
-    "setup": "node setup.ts"
+    "setup": "node setup.ts",
+    "bundle": "vite build --config bundle.config.ts",
+    "build": "pnpm run viewer:build && pnpm run bundle",
+    "stdio": "node src/stdio.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
@@ -25,6 +28,7 @@
   },
   "devDependencies": {
     "@types/node": "26.6.6",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "vite": "8.3.6"
   }
 }
