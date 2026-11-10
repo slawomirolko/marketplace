@@ -130,7 +130,7 @@ function buildServer() {
     "factory_status",
     {
       description:
-        "Current run status (returns immediately). To wait for progress use factory_wait instead of calling this in a loop; calls closer than the minimum interval are delayed by the server.",
+        "Current status of a factory run (returns immediately). The cost fields are the cost and budget of this factory run, not of your own session. To wait for progress, call factory_wait. Do not call factory_status in a loop: the server delays calls closer than the minimum interval.",
       inputSchema: { runId: z.string() },
     },
     guarded(async ({ runId }) => {
@@ -143,7 +143,7 @@ function buildServer() {
     "factory_wait",
     {
       description:
-        "Block until the run needs the user (waiting_for_user), finishes, or timeoutSec passes. Use this instead of polling. If it returns status 'running' (timedOut), call it again.",
+        "Block until the run needs the user (waiting_for_user), finishes, or timeoutSec passes. Use this instead of polling. On waiting_for_user, ask the user pendingQuestion.text and send the user's answer with factory_answer. If it returns status 'running' (timedOut), call it again.",
       inputSchema: { runId: z.string(), timeoutSec: z.number().int().min(1).max(MAX_WAIT_SEC).optional() },
     },
     guarded(async ({ runId, timeoutSec }) => {
@@ -156,7 +156,7 @@ function buildServer() {
   server.registerTool(
     "factory_answer",
     {
-      description: "Answer the pending question of a run. Idempotent for the same questionId and answer.",
+      description: "Send the user's answer to the pending question of a factory run (pendingQuestion). Idempotent for the same questionId and answer.",
       inputSchema: { runId: z.string(), questionId: z.string(), answer: z.string() },
     },
     guarded(({ runId, questionId, answer }) => {
@@ -167,13 +167,13 @@ function buildServer() {
 
   server.registerTool(
     "factory_report",
-    { description: "Cost and step report per node and tier.", inputSchema: { runId: z.string() } },
+    { description: "Steps, tokens and cost of a factory run per node, agent, tier and model. This is the factory run cost, not the cost of your own session. Call it when the run has ended.", inputSchema: { runId: z.string() } },
     guarded(({ runId }) => factory.report(factory.get(runId))),
   );
 
   server.registerTool(
     "factory_trace",
-    { description: "Trace tree of the run: nodes, turns, tokens, cost, events.", inputSchema: { runId: z.string() } },
+    { description: "Trace tree of a factory run: nodes, turns, tokens, factory run cost and events.", inputSchema: { runId: z.string() } },
     guarded(({ runId }) => {
       const run = factory.get(runId);
       return { trace: factory.trace(run), cost: factory.footer(run) };
@@ -182,7 +182,7 @@ function buildServer() {
 
   server.registerTool(
     "factory_cancel",
-    { description: "Cancel a run.", inputSchema: { runId: z.string() } },
+    { description: "Cancel a factory run. Call it when the user asks to stop the run.", inputSchema: { runId: z.string() } },
     guarded(({ runId }) => factory.status(factory.cancel(runId))),
   );
 

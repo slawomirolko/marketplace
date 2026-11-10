@@ -341,7 +341,7 @@ export class Factory {
     if (ratio >= pauseRatio && !run.thresholdsHit.includes("pause")) {
       run.thresholdsHit.push("pause");
       run.status = "waiting_for_user";
-      run.pendingQuestion = { id: "q-budget-pause", text: `Budget at ${Math.round(ratio * 100)}%. Continue?`, allowed: ["continue", "stop"] };
+      run.pendingQuestion = { id: "q-budget-pause", text: `Factory run budget at ${Math.round(ratio * 100)}%. Continue?`, allowed: ["continue", "stop"] };
       this.event(run, "budget_threshold", { level: "pause", ratio });
       return false;
     }
@@ -611,9 +611,9 @@ function nextHint(run) {
     case "waiting_for_user":
       return "Ask the user pendingQuestion.text and send the answer with factory_answer.";
     case "waiting_for_client":
-      return "Run pendingWork.prompt in a subagent that uses model pendingWork.model, then call factory_submit with the subagent output. If the subagent result shows a session id, pass it as usage.childSessionId.";
+      return "Run pendingWork.prompt in a subagent that uses model pendingWork.model, then call factory_submit with the subagent output. If the subagent result shows a session id (for example <subagent sessionID=\"ses_...\">), pass it as usage.childSessionId.";
     default:
-      return "Run finished. Call factory_report.";
+      return "The run has ended (done, stopped, cancelled or failed). Call factory_report.";
   }
 }
 
