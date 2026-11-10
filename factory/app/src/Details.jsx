@@ -1,6 +1,12 @@
 import { useViewer } from "./context.js";
 import { costOf, failureOf, formatAmount, formatTokens, formatUsd, ledgerOf, runFailure, tierOf } from "./tree.js";
 
+function kindLabel(item) {
+  if (item.kind === "team") return `llm, ${item.inner.items.length} agents`;
+  if (item.kind === "agent") return "agent";
+  return item.node.kind;
+}
+
 function usd(value) {
   return value == null ? "unknown" : `$${value.toFixed(6)}`;
 }
@@ -144,7 +150,7 @@ export function Details({ item }) {
     <section>
       <h2>{item.kind === "agent" ? `${item.agent.id} (agent of ${item.node.id})` : item.node.id}</h2>
       <Row label="Path" value={item.kind === "agent" ? `${item.nodePath} / ${item.agent.id}` : item.key} />
-      <Row label="Kind" value={item.kind === "team" ? `llm, ${item.inner.items.length} agents` : item.kind === "agent" ? "agent" : item.node.kind} />
+      <Row label="Kind" value={kindLabel(item)} />
       {item.node?.run && <Row label="Runs" value={item.node.run} />}
       {(item.node?.agent || records.find((r) => r.agentName)?.agentName) && <Row label="Harness agent" value={records.find((r) => r.agentName)?.agentName ?? item.node.agent} />}
       {(item.agent?.role ?? item.node.role) && <Row label="Role" value={item.agent?.role ?? item.node.role} />}

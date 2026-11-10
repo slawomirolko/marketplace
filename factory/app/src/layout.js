@@ -7,6 +7,12 @@ const AGENT = { width: 220, height: 124 };
 const PAD = 20;
 const HEADER = 72;
 
+function nodeTypeOf(box) {
+  if (box.inner) return "cluster";
+  if (box.item.kind === "terminal") return "terminal";
+  return "card";
+}
+
 function sizeOf(item) {
   if (item.kind === "terminal") return TERMINAL;
   if (item.kind === "agent") return AGENT;
@@ -40,7 +46,7 @@ function layoutLevel(level, expanded, parentKey) {
     const expandedGroup = Boolean(box.inner);
     nodes.push({
       id: box.item.key,
-      type: expandedGroup ? "cluster" : box.item.kind === "terminal" ? "terminal" : "card",
+      type: nodeTypeOf(box),
       position: { x: box.x - minX, y: box.y - minY },
       data: { item: box.item, expanded: expandedGroup },
       width: box.width,
