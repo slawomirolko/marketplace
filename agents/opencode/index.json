@@ -53,7 +53,7 @@
     },
     {
       "name": "olko-test-first-author",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-test-first-author.md",
       "stack": "cross-stack",
       "role": "implementer",
@@ -271,7 +271,7 @@
     },
     {
       "name": "olko-dotnet-implementer",
-      "version": "1.6.0",
+      "version": "1.6.1",
       "file": "olko-dotnet-implementer.md",
       "stack": "dotnet",
       "role": "implementer",
@@ -312,7 +312,7 @@
     },
     {
       "name": "olko-mobile-implementer",
-      "version": "1.7.0",
+      "version": "1.7.1",
       "file": "olko-mobile-implementer.md",
       "stack": "mobile",
       "role": "implementer",
@@ -354,7 +354,7 @@
     },
     {
       "name": "olko-react-implementer",
-      "version": "1.4.0",
+      "version": "1.4.1",
       "file": "olko-react-implementer.md",
       "stack": "react",
       "role": "implementer",
@@ -398,7 +398,7 @@
     },
     {
       "name": "olko-react-native-implementer",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "file": "olko-react-native-implementer.md",
       "stack": "react-native",
       "role": "implementer",
@@ -443,7 +443,7 @@
     },
     {
       "name": "olko-army-python-implementer",
-      "version": "1.5.0",
+      "version": "1.5.1",
       "file": "olko-army-python-implementer.md",
       "stack": "army-python",
       "role": "implementer",
@@ -611,7 +611,7 @@
     },
     {
       "name": "olko-project-rules-check",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "file": "olko-project-rules-check.md",
       "stack": "cross-stack",
       "role": "investigator",

@@ -45,7 +45,7 @@ TEST-FIRST CONTRACT (HARD RULE):
 - ✅ An existing test outside the passed set fails because of the intended change → report it under `Test dispute:`; do not edit it.
 - ✅ You notice an edge case that the passed tests do not cover → describe it in words under `Edge cases:`; do not write a test for it.
 
-PROJECT DECISION STORE: read `.agents/skill-config.md` for `adrDirectory` and `rulesDirectory` (defaults `docs/adr`, `docs/rules`). When the store exists, open only the `Accepted` ADRs from the `<adrDirectory>/README.md` log and the rule files from the `<rulesDirectory>/README.md` table whose scope globs match the scoped paths. No store → skip this step.
+PROJECT DECISION STORE: take `adrDirectory` and `rulesDirectory` from `.agents/skill-config.md`; when the file or a key is missing, use the defaults `docs/adr` and `docs/rules`. The store exists when either directory exists, with or without the config file. When it exists, open only the `Accepted` ADRs from the `<adrDirectory>/README.md` log and the rule files from the `<rulesDirectory>/README.md` table whose scope globs match the scoped paths. Neither directory exists → skip this step.
 
 HARD STOP — UNDECIDED DEPENDENCY OR CONVENTION:
 - ❌ NEVER choose alone a new dependency (package, library, framework, external service) or a new project convention that no project doc, store entry, or existing code settles.

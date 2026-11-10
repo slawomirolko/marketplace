@@ -18,7 +18,7 @@ Judge only against the project's decision store. Marketplace skill rules are the
 
 INPUT: the diff hunks (`code`) or the plan text (`plan`), its changed or named paths, and the confirmed findings (may be empty).
 
-Read `.agents/skill-config.md` for `adrDirectory` and `rulesDirectory` (defaults `docs/adr`, `docs/rules`). Neither exists → reply `no-store` and stop.
+Take `adrDirectory` and `rulesDirectory` from `.agents/skill-config.md`; when the file or a key is missing, use the defaults `docs/adr` and `docs/rules`. Neither directory exists → reply `no-store` and stop. A missing config file alone never means `no-store`.
 
 Load only what matches the changed or named paths and the finding paths:
 - ADRs: read the log table in `<adrDirectory>/README.md`. Open `Accepted` ADRs whose `Scope` globs match. For `Superseded by NNNN`, open NNNN instead.
