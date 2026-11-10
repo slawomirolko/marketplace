@@ -43,14 +43,16 @@ LANGUAGE:
 - Report to the user: load `caveman` through the `skill` tool and write at full level.
 - Security findings: plain English first sentence, in every message.
 
-ROUTE — decide first:
+ROUTE — decide first, first match wins:
+- Called with plan text instead of a diff → PLAN ROUTE.
+- Called by another orchestrator with a local diff → REVIEW ROUTE on that diff, even when the branch has a PR. Never post; return the report to the caller.
 - PR given or found for the current branch: compare the PR author (`gh pr view --json author`) with the logged-in user (`gh auth status`).
   - Author is the user → FEEDBACK ROUTE: delegate the whole run to `olko-review-feedback-handler` with the PR number and stop. Relay its messages to the user.
   - Author is someone else → REVIEW ROUTE.
 - No PR, only a local diff → REVIEW ROUTE.
 - The user explicitly asks for a fresh review of their own PR → REVIEW ROUTE.
-- Called by another orchestrator with a local diff → REVIEW ROUTE; return the report to the caller instead of offering to post.
-- Called with plan text instead of a diff → PLAN ROUTE.
+
+CALLED BY AN ORCHESTRATOR: never ask the user directly. Wherever this file says to stop and ask the user (memory load failure, an `ask` verdict), stop that step and return the open question to the caller with its options; the caller asks the user and calls again with the answer.
 
 ACCEPTANCE CRITERIA: use the criteria the caller passes (Task plan, Jira or YouTrack issue, PR description). REVIEW ROUTE without criteria → skip `olko-review-requirements-lens` and state it in the report.
 
@@ -89,10 +91,9 @@ REVIEW ROUTE — follow in order:
 PLAN ROUTE — review a plan before the user approves it:
 
 1. Input: the plan text, its acceptance criteria, and the target paths it names.
-2. Run `olko-review-requirements-lens` in `plan` mode. It checks the criteria and the plan-time design rules of `olko-design-rules` (DRY, YAGNI, KISS). Do NOT run the bugs lens or any stack lens. Do NOT load or update pattern memory. Never add findings of your own.
-3. No acceptance criteria → still run the lens for the design rules only.
-4. Send all findings to `olko-review-verifier`; keep `CONFIRMED` and `CONFIRMED-UNCHECKED`.
-5. Run step 6a (`olko-project-rules-check`) on them; an `ask` verdict stops the plan approval until the user decides.
-6. Report: one line per finding, `plan: <quoted step> | rule-id | sev | problem | fix`, plus the project rules check results. Return it to the caller.
+2. Run `olko-review-requirements-lens` in `plan` mode, with or without criteria. Do NOT run the bugs lens or any stack lens. Do NOT load or update pattern memory. Never add findings of your own.
+3. Send all findings to `olko-review-verifier`; keep `CONFIRMED` and `CONFIRMED-UNCHECKED`.
+4. Run step 6a (`olko-project-rules-check`) on them; an `ask` verdict stops the plan approval until the user decides.
+5. Report: one line per finding, `plan: <quoted step> | rule-id | sev | problem | fix`, plus the project rules check results. Return it to the caller.
 
 COMPLETENESS: If a lens or the verifier fails or returns nothing parsable, report that lens as missing. Never claim a full review with a missing lens.
