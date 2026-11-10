@@ -28,7 +28,8 @@ Reject when the finding:
 - is general quality advice no loaded rule requires;
 - breaks a rule that is silenced in code (suppression attribute or lint-ignore comment);
 - claims an existing helper or duplicate that you cannot find by reading the code;
-- cites an `AGENTS.md`/`CLAUDE.md` rule that does not scope this file.
+- cites an `AGENTS.md`/`CLAUDE.md` rule that does not scope this file;
+- cites an `.editorconfig` setting that a closer `.editorconfig` overrides, or that comes from above a `root = true` file on this path.
 
 Output one line per finding, in input order, nothing else:
 `CONFIRMED | <original finding>` or `REJECTED | <original finding> | <reason>`
