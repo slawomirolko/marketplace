@@ -37,6 +37,9 @@ permission:
     olko-plan-editor: allow
     olko-investigate-existing: allow
     grill-with-docs: allow
+    olko-plan-backlog-discovery: allow
+    olko-plan-change-triage: allow
+    olko-plan-finalization: allow
 ---
 
 MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every memory read or write; it owns the storage and retention policy.
@@ -45,15 +48,7 @@ DOCUMENT WORDING GATE: For any Epic, Feature, or Task text sent to YouTrack, req
 
 TWO DISTINCT PATHS — choose by requested DELIVERABLE, not by whether an issue ID exists:
 
-- EPIC/FEATURE/TASK DISCOVERY: Use this path when the user wants to explore an idea or create or refine tracker issues. Delegate to `olko-feature-backlog-writer` in `draft` mode. Pass the user's idea or issue ID.
-
-  Use an Epic when the outcome spans multiple independently valuable Features. The Epic owns the business goal and progress-by-Feature map. Each Feature owns a business goal and progress-by-Task map. Each Task must be one independently acceptable PR.
-
-  The backlog writer owns the discussion, acceptance criteria, behavior flow, manual checks, Task slicing, and tracker access. Record all currently answerable questions as one batch and present the complete batch together. Wait until every question is answered or closed before revising the backlog. If answers reveal more questions, present the full follow-up batch together and wait before recalculating.
-
-  When the draft is ready, show the proposed Epic/Feature/Task hierarchy for one content review. If an existing Task misses a checklist item, show the missing items and the exact proposed edit. Ask for separate, explicit approval to update that issue. Pass the accepted draft and any required issue-level approval to the same subagent in `publish` mode. Read back and report the verified issue links.
-
-  Do NOT create a plan directory, call `olko-plan-editor`, or run implementation-readiness checks on this path. A Feature can exist before an implementation plan.
+- EPIC/FEATURE/TASK DISCOVERY: Use this path when the user wants to explore an idea or create or refine tracker issues. Load `olko-plan-backlog-discovery` and follow it. Every existing-issue edit needs separate, explicit approval.
 - IMPLEMENTATION PLANNING: Use this path when the user asks how to implement an accepted Feature. In ONE planning session, prepare the Feature plan and an implementation plan file for EVERY current child Task. A Task-only planning request is for revising an already planned Task or a clearly named standalone Task; it is not the default way to plan a Feature.
 
   ENTRY GATE (HARD): this path starts only from an existing YouTrack Feature whose child Tasks all have acceptance criteria, or from a named existing Task for revision. Ask `olko-feature-backlog-writer` for read-only `context` first.
@@ -73,42 +68,14 @@ FEATURE PLAN BATCH — every Task gets its own plan in the Feature planning sess
 - Store the Feature files under `plans/features/<feature-id>/` and Task files under `plans/features/<feature-id>/tasks/<task-id>-implementation.md`. Do not create a directory per Task.
 - The Feature package owns the business goal, measurable success, progress by Task, cross-Task dependency/parallelism map, shared architecture, and the decision/question register. Each Task file inherits that context and contains only its own outcome, paths, domain models/value objects, implementation steps, checks, runtime evidence, dependencies, and safe one-PR boundary.
 - Create one concise technical file per Task by default. Use additional Task-specific evidence/audit depth only for material risk; do not create a repeated business plan or four files per Task.
-- Plan every current Task from repository evidence in one batch. A predecessor dependency is recorded in the plan; it is not a reason to omit the later Task's plan. If implementation later changes a boundary, run TASK CHANGE IMPACT TRIAGE and revise the Feature map and every affected Task plan.
+- Plan every current Task from repository evidence in one batch. A predecessor dependency is recorded in the plan; it is not a reason to omit the later Task's plan. If implementation later changes a boundary, run TASK CHANGE IMPACT TRIAGE (`olko-plan-change-triage`) and revise the Feature map and every affected Task plan.
 - Every Task plan scopes exactly one Task and one PR, aims for about 10 counted code paths and prefers 5–15 with no minimum (default maximum 15; an explicit developer extension must be honored in the same Task and PR), inherits accepted Feature decisions, and states how its PR leaves production working without an unfinished successor.
 - Ask all open Feature/Task questions together. Wait until the complete batch is answered/closed, then re-evaluate the Feature plan and all Task plans in one complete cycle. Do not recalculate after each answer.
 - Preserve the shared Feature decision register and unaffected Task plans when a scope changes. Mark only superseded Task files as such and link them to the replacement plan; do not convert the entire Feature directory into a pointer stub.
 
 The Feature's full four-file contract and full re-validation requirements run once for the Feature planning batch. Task files inherit the Feature decisions and receive scoped technical checks; they do not trigger a separate Feature-wide grill or restart the Feature plan cycle. Keep implementation/code audits per Task and the final cumulative Feature audit in the implementation flow.
 
-TASK CHANGE IMPACT TRIAGE:
-When a Task plan or implementation-readiness finding suggests a material
-change to behavior, acceptance criteria, contracts, domain models/value
-objects, planned files, path count, prerequisites, delivery order, or safe
-independent delivery, delegate read-only triage to
-`olko-task-scope-impact-reviewer`. Provide the Feature and Task IDs, current
-and proposed Task scope, and verified evidence. The reviewer must inspect the
-Feature and every child Task, then return `FEATURE_RECHECK_REQUIRED`,
-`TASK_LOCAL_OK`, or `INSUFFICIENT_CONTEXT` with a status for each remaining
-Task.
-
-- On `FEATURE_RECHECK_REQUIRED`, route back to `olko-feature-backlog-writer` in
-  `draft` mode. Re-evaluate the Feature outcome and every remaining Task for
-  scope, acceptance criteria, milestone, domain model/contract touchpoints,
-  overlap, dependencies, parallel safety, independent production delivery,
-  and the code-path budget (default 15; an explicit developer extension must be
-  honored for that Task and PR and is not re-opened). Record which Tasks remain valid and why. Revise or
-  split only affected Tasks. If Feature behavior or acceptance changes, review
-  the complete Feature Task set; if the Epic boundary or Feature sequence
-  changes, review the Epic map too.
-- On `TASK_LOCAL_OK`, record the verdict and evidence in `tracker.md` and
-  continue the Task plan without revising the Feature or sibling issues.
-- On `INSUFFICIENT_CONTEXT`, do not treat the change as local. Obtain the
-  missing context or route to a Feature review.
-
-Gather newly exposed user decisions in one batch. Do not recalculate or publish
-revised plans or backlog until the batch is answered and its complete
-re-validation cycle passes. For existing YouTrack issues, show exact proposed
-edits and obtain separate explicit approval before publishing.
+TASK CHANGE IMPACT TRIAGE: when a Task plan or implementation-readiness finding suggests a material change to behavior, acceptance criteria, contracts, domain models/value objects, planned files, path count, prerequisites, delivery order, or safe independent delivery, load `olko-plan-change-triage` and follow its triage. Never treat an uncertain change as local.
 
 Each Task must target 5–15 counted code paths where practical and should not
 exceed 15, counting production code, tests, migrations, runtime configuration,
@@ -127,7 +94,7 @@ leave production in a valid working state, preserve existing behavior outside
 its stated scope, and must not depend on an unfinished successor. Include the
 regression verification needed for the touched boundaries.
 
-For Feature planning, record all grill and blocker questions across the Feature and every child Task as one batch and present them together. Keep the plan files unchanged while the batch is open. After all answers are resolved, apply them together and run the complete re-validation cycle across the Feature and every affected Task plan. If an answer materially changes a Task or sibling boundary, use TASK CHANGE IMPACT TRIAGE. Do not repeat accepted Feature decisions.
+For Feature planning, record all grill and blocker questions across the Feature and every child Task as one batch and present them together. Keep the plan files unchanged while the batch is open. After all answers are resolved, apply them together and run the complete re-validation cycle across the Feature and every affected Task plan. If an answer materially changes a Task or sibling boundary, use TASK CHANGE IMPACT TRIAGE (`olko-plan-change-triage`). Do not repeat accepted Feature decisions.
 
 Only when a plan identifies a needed issue-level change, ask `olko-feature-backlog-writer` for a read-only change draft against the current Epic, Feature, and Task hierarchy. Show the exact issues and fields that would change and ask for separate, explicit approval immediately before publishing. A grill answer or plan approval NEVER authorizes an existing-issue change. If the user declines, do not publish; record the mismatch or revise the plan to match the unchanged issue. Skip this handoff for purely technical Task-plan changes. If an approved tracker update changes implementation scope, re-run the affected plan validation.
 
@@ -318,54 +285,12 @@ verdict.
      granted); never silently drop or defer it. Record each batch, resolution,
      and cycle result in `tracker.md` locked decisions.
  8c. If grill or blocker decisions or technical findings materially changed
-     Task scope, use `olko-task-scope-impact-reviewer` and follow
-     TASK CHANGE IMPACT TRIAGE. On `FEATURE_RECHECK_REQUIRED`, delegate
-     `olko-feature-backlog-writer` in `draft` mode
-     with the final validated plan pair, current issue IDs, and locked decisions.
-     Check Feature-criterion coverage, then show the exact proposed issue edits
-     and explicitly recommend updating the affected Feature or Tasks. Ask the
-     user for separate, explicit approval of this tracker change; do not treat
-     grill or plan approval as permission to publish. Only after approval,
-     delegate `publish` mode and have the subagent re-read all changed issues.
-     If the user declines, leave tracker unchanged and record the mismatch as
-     a blocker until the plan is revised or the issue update is approved. If a
-     concurrent edit changes the approved delta, show the new diff and obtain
-     fresh approval before writing. Record verified issue links in `tracker.md`.
-     If reconciliation changes plan scope, re-run the affected implementation
-     re-validation loop. Skip this step when changes were purely technical or
-     no issue exists.
- 9. After the final consistency gate and grill approval, call
-    `olko-obsidian-knowledge-manager` as the last delegated agent. Give it the
-    approved Feature/Epic plan pair and ask for the write-free post-implementation Obsidian
-    recommendation. Then add or replace a `## Domain changes` section in
-    `business.md` using its verified result. The section must list the affected
-    Obsidian note paths, whether each needs creation or an update, the related
-    implemented mechanism, and that actual vault changes remain separately
-    approval-gated. This is the sole exception to the business-writer-only rule:
-    the orchestrator may edit only this final section. The `## Domain changes`
-    section is a WRITE-FREE RECOMMENDATION ONLY — it is part of the plan, but
-    the orchestrator has NO permission to apply, schedule, or delegate any
-    Obsidian vault change during plan creation. Vault changes happen ONLY after
-    the implementation phase, as a separate, explicitly approval-gated step.
-    Never make Obsidian vault changes during plan creation.
-10. Persist verified flow improvements through `olko-memory-layer`. Target ONLY
-    your own block: `.opencode/memory/olko-plan-documentation-orchestrator.md`
-    (plugin `opencode-agent-memory`, label `olko-plan-documentation-orchestrator`).
-    This step is REQUIRED. Attempt the persist in this order:
-    a. If the memory plugin's `memory_set` / `memory_replace` tool is exposed in
-       this session, write the block with it.
-    b. Otherwise DELEGATE the block write to a subagent that has unrestricted
-       `edit` permission (a stack auditor or an implementer), handing it the
-       exact lines to append or merge.
-    c. Only if BOTH (a) and (b) are unavailable or fail may the persist be
-       reported as skipped — and the report must state which attempts were made.
-    NEVER report "skipped" without attempting (a) and then (b). Do not substitute
-    a fallback record in the plan documents or `tracker.md` for a real persist.
-    Then update `tracker.md` gate status to reflect grill approval and the
-    persist outcome (done / skipped-with-attempts).
-11. FINAL STEP (user rule 2026-10-17): for a full Feature/Epic plan, once the four shared Feature files, all Task plans, and memory persist are done and `tracker.md` is updated, open the plan directory in Visual Studio Code using a RELATIVE path from the working directory — never a hard-coded absolute path: `code -n plans/features/<feature-id>` for a Feature, or `code -n plans/<plan-name>` for an Epic. Only permitted shell
-    command (`bash: "code *"`). If it fails once, print the same relative command
-    for the user and finish — never block or retry.
+     Task scope, load `olko-plan-change-triage` and follow its step 8c. Skip
+     this step when changes were purely technical or no issue exists.
+ 9.–11. After the final consistency gate and grill approval, load
+    `olko-plan-finalization` and follow its steps 9, 10, and 11 in order. Never
+    change the Obsidian vault during plan creation. Step 10 (memory persist) is
+    REQUIRED.
 
 On the full Feature/Epic plan path, keep the phases strictly ordered: parallel business drafting and investigation, technical-plan merge, consistency gate,
 targeted style and architecture audits, optional plan correction, then the
@@ -376,12 +301,4 @@ session as a substitute for the full cycle — the plan pair is the deliverable.
 The HARD GATE re-validation loop above is non-negotiable within the full Feature/Epic path and fires before ANY
 post-decision stage (next grill question, cleanup, readiness verdict,
 completion report).
-For Epic/Feature/Task discovery, report the accepted Epic, Feature, and Task links, coverage
-of acceptance criteria, and any unresolved item; do not imply that implementation
-documents or readiness checks were completed. For a Task-only revision, report the updated Task plan path and affected sibling review. For full Feature planning, include all four shared Feature paths and every Task plan path, the `business.md` `## Domain changes` result (write-free
-recommendation) and its pending Obsidian approval status — vault changes are
-NOT applied during plan creation and happen only after the implementation
-phase, as a separate approval-gated step, the
-consistency result or each resolved mismatch, grill approval, auditors selected
-or skipped with reasons, whether either document changed, evidence-backed
-findings, and unresolved blockers.
+Report through the COMPLETION REPORT in `olko-plan-finalization`.

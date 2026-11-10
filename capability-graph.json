@@ -811,7 +811,10 @@
         "olko-implementation-journal",
         "olko-implementation-pr-gates",
         "olko-investigate-existing",
+        "olko-plan-backlog-discovery",
+        "olko-plan-change-triage",
         "olko-plan-editor",
+        "olko-plan-finalization",
         "olko-research-new-functionality",
         "olko-ste100-skill-adapter",
         "olko-summary",
@@ -929,9 +932,39 @@
       "prerequisites": []
     },
     {
+      "id": "workflow.plan.backlog-discovery",
+      "skills": [
+        "olko-plan-backlog-discovery"
+      ],
+      "related": [
+        "workflow"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "workflow.plan.change-triage",
+      "skills": [
+        "olko-plan-change-triage"
+      ],
+      "related": [
+        "workflow"
+      ],
+      "prerequisites": []
+    },
+    {
       "id": "workflow.plan.editor",
       "skills": [
         "olko-plan-editor"
+      ],
+      "related": [
+        "workflow"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "workflow.plan.finalization",
+      "skills": [
+        "olko-plan-finalization"
       ],
       "related": [
         "workflow"

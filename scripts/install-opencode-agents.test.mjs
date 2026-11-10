@@ -168,6 +168,10 @@ test("installs the plan documentation orchestrator with review-only stack delega
   assert.match(agent, /write:\r?\n\s+"\*": deny\r?\n\s+"plans\/\*\*": allow/);
   assert.match(agent, /bash:\s+"\*": deny/);
   assert.match(agent, /"code \*": allow/);
+  for (const skill of ["olko-plan-backlog-discovery", "olko-plan-change-triage", "olko-plan-finalization"]) {
+    assert.match(agent, new RegExp(`${skill}: allow`));
+    assert.ok(fs.existsSync(path.join(project, ".agents", "skills", skill, "SKILL.md")));
+  }
   assert.match(agent, /olko-dotnet-auditor: allow/);
   assert.match(agent, /olko-mobile-auditor: allow/);
   assert.match(agent, /olko-react-native-auditor: allow/);

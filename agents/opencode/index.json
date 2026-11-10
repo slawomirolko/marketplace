@@ -144,7 +144,7 @@
     },
     {
       "name": "olko-plan-documentation-orchestrator",
-      "version": "2.3.0",
+      "version": "2.4.0",
       "file": "olko-plan-documentation-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -153,7 +153,10 @@
         "olko-investigate-existing",
         "grill-with-docs",
         "olko-memory-layer",
-        "olko-ste100-skill-adapter"
+        "olko-ste100-skill-adapter",
+        "olko-plan-backlog-discovery",
+        "olko-plan-change-triage",
+        "olko-plan-finalization"
       ],
       "delegates": [
         "olko-plan-business-writer",

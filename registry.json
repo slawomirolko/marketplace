@@ -1882,6 +1882,42 @@
       }
     },
     {
+      "name": "olko-plan-backlog-discovery",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Epic/Feature/Task discovery path of olko-plan-documentation-orchestrator: draft, one content review, approval-gated publish to YouTrack, and read-back.",
+      "tags": [
+        "workflow",
+        "planning"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.plan.backlog-discovery"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-plan-change-triage",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Task change impact triage and step 8c tracker reconciliation for olko-plan-documentation-orchestrator; load when a material change to a Task's scope appears.",
+      "tags": [
+        "workflow",
+        "planning"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.plan.change-triage"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
       "name": "olko-plan-editor",
       "category": "workflow",
       "version": "1.9.0",
@@ -1914,6 +1950,24 @@
           "edge-cases"
         ]
       }
+    },
+    {
+      "name": "olko-plan-finalization",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Final steps 9–11 and the completion report of olko-plan-documentation-orchestrator: Domain changes recommendation, memory persist, opening the plan directory.",
+      "tags": [
+        "workflow",
+        "planning"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.plan.finalization"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
     },
     {
       "name": "olko-research-new-functionality",
