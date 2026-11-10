@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Handle, Position } from "@xyflow/react";
 import { useViewer } from "./context.js";
 import { costOf, failureOf, formatTokens, formatUsd, isGroup, tierOf } from "./tree.js";
@@ -26,6 +27,13 @@ function subtitle(item) {
   return item.node.role ? `${item.node.kind} · ${item.node.role}` : item.node.kind;
 }
 
+export function nodeAriaLabel(item, report, run) {
+  if (item.kind === "terminal") return item.label;
+  const failure = failureOf(item, run);
+  const cost = report ? (failure ? `failed: ${failure}` : formatUsd(costOf(item, report))) : null;
+  return [title(item), subtitle(item), cost].filter(Boolean).join(", ");
+}
+
 function CostLine({ item }) {
   const { report, run } = useViewer();
   if (!report) return null;
@@ -41,11 +49,16 @@ function CostLine({ item }) {
 }
 
 function Toggle({ item, expanded }) {
-  const { toggle } = useViewer();
+  const { toggle, focusKey } = useViewer();
+  const button = useRef(null);
+  useEffect(() => {
+    if (focusKey === item.key) button.current?.focus();
+  }, [focusKey, item.key]);
   if (!isGroup(item)) return null;
   const count = item.inner.items.length;
   return (
     <button
+      ref={button}
       type="button"
       className="toggle nodrag"
       aria-expanded={expanded}

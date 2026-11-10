@@ -5,7 +5,7 @@ import "./styles.css";
 import { ViewerContext } from "./context.js";
 import { Details } from "./Details.jsx";
 import { layoutGraph } from "./layout.js";
-import { nodeTypes } from "./nodes.jsx";
+import { nodeAriaLabel, nodeTypes } from "./nodes.jsx";
 import { buildLevel, formatAmount, formatTokens, isUnknownCost } from "./tree.js";
 
 async function getJson(url) {
@@ -78,9 +78,22 @@ function Viewer() {
   }, [workflows, rootName, detail]);
   const level = built?.level ?? null;
   const graph = useMemo(() => (level ? layoutGraph(level, expanded) : { nodes: [], edges: [], bounds: null }), [level, expanded]);
-  const nodes = useMemo(() => graph.nodes.map((n) => ({ ...n, selected: n.id === selected?.key })), [graph, selected]);
+  const nodes = useMemo(
+    () => graph.nodes.map((n) => ({ ...n, selected: n.id === selected?.key, ariaLabel: nodeAriaLabel(n.data.item, detail?.report ?? null, detail?.run ?? null) })),
+    [graph, selected, detail],
+  );
+  const onNodesChange = useCallback(
+    (changes) => {
+      const picked = changes.find((change) => change.type === "select" && change.selected);
+      const node = picked && graph.nodes.find((n) => n.id === picked.id);
+      if (node) setSelected(node.data.item);
+    },
+    [graph],
+  );
 
+  const [focusKey, setFocusKey] = useState(null);
   const toggle = useCallback((key) => {
+    setFocusKey(key);
     setExpanded((current) => {
       const next = new Set(current);
       if (next.has(key)) next.delete(key);
@@ -89,7 +102,7 @@ function Viewer() {
     });
   }, []);
 
-  const context = useMemo(() => ({ config, report: detail?.report ?? null, run: detail?.run ?? null, toggle }), [config, detail, toggle]);
+  const context = useMemo(() => ({ config, report: detail?.report ?? null, run: detail?.run ?? null, toggle, focusKey }), [config, detail, toggle, focusKey]);
   const total = detail?.report.cost;
 
   if (error) return <p className="error" role="alert">Could not load factory data: {error}</p>;
@@ -127,6 +140,7 @@ function Viewer() {
               edges={graph.edges}
               nodeTypes={nodeTypes}
               onNodeClick={(_, node) => setSelected(node.data.item)}
+              onNodesChange={onNodesChange}
               onPaneClick={() => setSelected(null)}
               nodesDraggable={false}
               nodesConnectable={false}
