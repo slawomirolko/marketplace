@@ -1,5 +1,6 @@
 ---
 name: olko-commit-style
+version: 1.2.0
 description: "Check coding style compliance for changed files across stacks. Reads style rules from project docs (AGENTS.md, CODING_STYLE.md), runs the prescribed style tools per stack, and reports violations with their rule source. Use when olko-commit delegates style checking, or standalone to verify style on changed files."
 ---
 

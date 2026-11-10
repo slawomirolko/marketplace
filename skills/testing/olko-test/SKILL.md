@@ -1,5 +1,6 @@
 ---
 name: olko-test
+version: 2.2.0
 description: Run affected or all tests for .NET, Python, Android/Kotlin, React Native, and React web with change-aware scope detection, platform-specific test execution, service management, and failure handling. Android/Kotlin instrumentation remains mandatory when Kotlin changes require it. Use when asked to run tests, after implementation, or when called from olko-plan-editor/olko-commit skills.
 user_invocable: true
 ---
