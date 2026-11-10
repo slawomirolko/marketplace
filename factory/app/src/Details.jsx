@@ -21,7 +21,7 @@ function Row({ label, value }) {
 function LedgerTable({ records }) {
   if (records.length === 0) return <p className="muted">No ledger records yet.</p>;
   return (
-    <div className="table-wrap">
+    <div className="table-wrap" tabIndex={0}>
       <table>
         <thead>
           <tr>
@@ -64,7 +64,7 @@ function AgentTable({ item }) {
   return (
     <section>
       <h3>Agents</h3>
-      <div className="table-wrap">
+      <div className="table-wrap" tabIndex={0}>
         <table>
           <thead>
             <tr>

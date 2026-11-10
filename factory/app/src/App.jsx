@@ -47,12 +47,33 @@ function Viewer() {
 
   useEffect(() => {
     setSelected(null);
-    if (!runId) return setDetail(null);
-    getJson(`/api/runs/${runId}`).then(setDetail).catch((e) => setError(e.message));
+    if (!runId) {
+      setDetail(null);
+      return undefined;
+    }
+    let current = true;
+    getJson(`/api/runs/${runId}`)
+      .then((d) => {
+        if (current) setDetail(d);
+      })
+      .catch((e) => {
+        if (current) setError(e.message);
+      });
+    return () => {
+      current = false;
+    };
   }, [runId]);
 
   const rootName = detail?.report.workflow.split("@")[0] ?? "hello";
-  const level = useMemo(() => (workflows ? buildLevel(workflows, rootName, rootName, [rootName], detail?.report ?? null) : null), [workflows, rootName, detail]);
+  const built = useMemo(() => {
+    if (!workflows) return null;
+    try {
+      return { level: buildLevel(workflows, rootName, rootName, [rootName], detail?.report ?? null) };
+    } catch (e) {
+      return { error: e.message };
+    }
+  }, [workflows, rootName, detail]);
+  const level = built?.level ?? null;
   const graph = useMemo(() => (level ? layoutGraph(level, expanded) : { nodes: [], edges: [], bounds: null }), [level, expanded]);
   const nodes = useMemo(() => graph.nodes.map((n) => ({ ...n, selected: n.id === selected?.key })), [graph, selected]);
 
@@ -68,7 +89,7 @@ function Viewer() {
   const context = useMemo(() => ({ config, report: detail?.report ?? null, run: detail?.run ?? null, toggle }), [config, detail, toggle]);
   const total = detail?.report.cost;
 
-  if (error) return <p className="error">Could not load factory data: {error}</p>;
+  if (error) return <p className="error" role="alert">Could not load factory data: {error}</p>;
   if (!workflows) return <p className="muted pad">Loading…</p>;
 
   return (
@@ -95,6 +116,9 @@ function Viewer() {
         </header>
         <main>
           <div className="canvas">
+            {built?.error ? (
+              <p className="error" role="alert">Could not draw this run: {built.error}</p>
+            ) : (
             <ReactFlow
               nodes={nodes}
               edges={graph.edges}
@@ -110,6 +134,7 @@ function Viewer() {
               <Controls showInteractive={false} />
               <FitToBounds bounds={graph.bounds} />
             </ReactFlow>
+            )}
           </div>
           <aside>
             <Details item={selected} />
