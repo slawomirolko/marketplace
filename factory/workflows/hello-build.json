@@ -1,0 +1,13 @@
+{
+  "name": "hello-build",
+  "version": "0.1.0",
+  "entry": "implement",
+  "nodes": [
+    { "id": "implement", "kind": "llm", "role": "implementer", "maxTurns": 4, "question": { "id": "q-endpoint", "text": "New endpoint or extend the existing one?", "allowed": ["new", "extend"] } },
+    { "id": "verify", "kind": "script", "run": "verify" }
+  ],
+  "edges": [
+    { "from": "implement", "to": "verify" },
+    { "from": "verify", "to": "END" }
+  ]
+}

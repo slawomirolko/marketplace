@@ -41,6 +41,20 @@ JSON Schemas (draft 2020-12) in `spec/`, validated by `src/spec.mjs` (Ajv plus g
 
 `spec/examples/valid` and `spec/examples/invalid` hold examples checked by `test/spec.test.mjs`. The PoC server still emits the older footer field names; moving it to this schema is the next step.
 
+## Viewer
+
+`viewer/` draws a workflow as a Mermaid flowchart: nodes, subgraphs as clusters, edge conditions, role to tier, and (for a run) the model, cost, tokens, steps and cost source of every node. A node whose cost is `unknown` shows "$ unknown" with a red dashed border, never $0.
+
+```bash
+node factory/viewer/demo-report.mjs report.json                 # fake run, offline
+node factory/viewer/render.mjs --report report.json --out hello-run
+node factory/viewer/render.mjs --root feature --workflows factory/spec/examples/valid --out feature
+```
+
+Each call writes `<out>.mmd`, `<out>.md` (a Mermaid block that GitHub renders) and `<out>.html` (zoom with the mouse wheel or buttons, drag to pan). `--report` takes the JSON of `factory_report`. The HTML page loads `mermaid@12.3.0` (MIT) and `@panzoom/panzoom@4.6.2` (MIT) from jsDelivr; there is no build step and no server.
+
+`workflows/hello.json` and `workflows/hello-build.json` describe the graph the engine runs in the workflow schema format. The engine still keeps its prompts and turn counts in code; `test/viewer.test.mjs` checks that both have the same node paths.
+
 ## Layout
 
 ```text
@@ -49,7 +63,10 @@ factory/
   src/server.mjs        MCP server, auth, wait and throttle
   src/spec.mjs          schema validation for config, workflow, ledger, footer
   spec/                 JSON Schemas and examples
+  workflows/            sample workflow in the workflow schema format
+  viewer/               Mermaid diagram of a workflow, with per-node cost from a run report
   test/spec.test.mjs    schema tests
+  test/viewer.test.mjs  viewer and per-node cost tests
   test/scenario.mjs     MCP client scenario tests
   test/restart.mjs      kill + restart resilience test
   py/langgraph_client.py  LangGraph host (legacy and new LangChain MCP API)

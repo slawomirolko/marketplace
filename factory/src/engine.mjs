@@ -16,7 +16,7 @@ const DEFAULT_CONFIG = {
   budget: { maxCostUsd: 1.5, infoRatio: 0.5, pauseRatio: 0.8 },
 };
 
-const WORKFLOW = {
+export const WORKFLOW = {
   name: "hello",
   version: "0.1.0",
   nodes: [
@@ -460,18 +460,23 @@ export class Factory {
     const byCostSource = {};
     let harnessCostUsd = 0;
     for (const r of run.ledger) {
-      byNode[r.nodePath] ??= { steps: 0, tokens: 0, costUsd: 0, tier: r.tier };
+      byNode[r.nodePath] ??= { steps: 0, tokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null };
       byNode[r.nodePath].steps += 1;
       byNode[r.nodePath].tokens += (r.inputTokens ?? 0) + (r.outputTokens ?? 0);
-      byNode[r.nodePath].costUsd = round(byNode[r.nodePath].costUsd + (r.costUsd ?? 0));
+      byNode[r.nodePath].costUsd += r.costUsd ?? 0;
       const tierKey = r.tier ?? "script";
-      byTier[tierKey] = round((byTier[tierKey] ?? 0) + (r.costUsd ?? 0));
+      byTier[tierKey] = (byTier[tierKey] ?? 0) + (r.costUsd ?? 0);
       if (r.kind === "llm") {
-        byModel[r.model ?? "unknown"] = round((byModel[r.model ?? "unknown"] ?? 0) + (r.costUsd ?? 0));
+        byModel[r.model ?? "unknown"] = (byModel[r.model ?? "unknown"] ?? 0) + (r.costUsd ?? 0);
         byCostSource[r.costSource] = (byCostSource[r.costSource] ?? 0) + 1;
       }
       harnessCostUsd += r.harnessCostUsd ?? 0;
     }
+    for (const [nodePath, entry] of Object.entries(byNode)) {
+      entry.costUsd = round(entry.costUsd);
+      entry.costSource = costSourceSummary(run.ledger.filter((r) => r.nodePath === nodePath));
+    }
+    for (const totals of [byTier, byModel]) for (const key of Object.keys(totals)) totals[key] = round(totals[key]);
     return { runId: run.runId, status: run.status, workflow: `${WORKFLOW.name}@${WORKFLOW.version}`, backend: run.config?.backend, tierModels: run.config?.tiers, byNode, byTier, byModel, byCostSource, harnessCostUsd: round(harnessCostUsd), cost: this.footer(run) };
   }
 

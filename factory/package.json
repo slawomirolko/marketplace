@@ -6,7 +6,9 @@
   "scripts": {
     "server": "node src/server.mjs",
     "test": "node test/scenario.mjs",
-    "test:spec": "node --test test/spec.test.mjs"
+    "test:spec": "node --test test/spec.test.mjs",
+    "test:viewer": "node --test test/viewer.test.mjs",
+    "viewer": "node viewer/render.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
