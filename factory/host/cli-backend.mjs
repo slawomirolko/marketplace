@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 
-const TIMEOUT_MS = 300000;
+const TIMEOUT_MS = 900000;
 const OPENCODE_IDS = { haiku: "anthropic/claude-haiku-5-5", sonnet: "anthropic/claude-sonnet-5-5", opus: "anthropic/claude-opus-5-5" };
 const CLAUDE_DISALLOWED = "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,Agent,Task,NotebookEdit";
 
@@ -33,8 +33,15 @@ function spawnCli(command, args, stdinText, { cwd = workDir, env = {} } = {}) {
   });
 }
 
-async function runClaude(model, prompt) {
-  const res = await spawnCli("claude", ["-p", "--model", model, "--output-format", "json", "--max-turns", "2", "--strict-mcp-config", "--disallowedTools", CLAUDE_DISALLOWED], prompt);
+const CLAUDE_AGENT_TOOLS = "Read,Grep,Glob,Skill";
+const CLAUDE_AGENT_DISALLOWED = "Bash,Edit,Write,WebFetch,WebSearch,Agent,Task,NotebookEdit";
+
+async function runClaude(model, prompt, { agent, cwd } = {}) {
+  if (agent && !/^[a-z0-9-]+$/.test(agent)) return { ok: false, error: `invalid agent name ${agent}` };
+  const args = agent
+    ? ["-p", "--model", model, "--output-format", "json", "--agent", agent, "--max-turns", "40", "--strict-mcp-config", "--allowedTools", CLAUDE_AGENT_TOOLS, "--disallowedTools", CLAUDE_AGENT_DISALLOWED]
+    : ["-p", "--model", model, "--output-format", "json", "--max-turns", "2", "--strict-mcp-config", "--disallowedTools", CLAUDE_DISALLOWED];
+  const res = await spawnCli("claude", args, prompt, { cwd: cwd ?? workDir });
   let out;
   try {
     out = JSON.parse(res.stdout);
@@ -111,7 +118,7 @@ export async function opencodeSessionUsage(sessionId) {
 }
 
 export function cliExecutor(cli) {
-  if (cli === "claude") return ({ model, prompt }) => runClaude(model, prompt);
+  if (cli === "claude") return ({ model, prompt, agent, cwd }) => runClaude(model, prompt, { agent, cwd });
   if (cli === "opencode") return ({ model, prompt, agent, cwd, configDir }) => runOpencode(model, prompt, { agent, cwd, configDir });
   throw new Error(`unsupported cli ${cli}`);
 }

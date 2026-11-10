@@ -48,6 +48,9 @@ test("diff is split per file and lens output lines become findings", () => {
   assert.equal(tierOf(f), "bug");
   assert.equal(tierOf({ ruleId: "olko-dotnet-security.x", sev: "risk" }), "security");
   assert.equal(parseVerdicts("CONFIRMED | a\nnoise\nREJECTED | b | why")[1].verdict, "REJECTED");
+  const [kept] = parseFindings("a.py:1 | r | risk | p | close in `finally`");
+  assert.equal(kept.fix, "close in `finally`");
+  assert.match(parseVerdicts("CONFIRMED | a.py:1 | r | nit | p | `node_function`")[0].rest, /`node_function`$/);
 });
 
 test("review run calls the real agent names per lens, verifies, ranks and prices every lens", async () => {

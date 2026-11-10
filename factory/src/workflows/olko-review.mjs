@@ -18,10 +18,15 @@ export function splitDiff(diff) {
   return files;
 }
 
+function cleanLine(line) {
+  const bare = line.trim().replace(/^[-*]\s+/, "");
+  return /^`[^`]*`$/.test(bare) ? bare.slice(1, -1) : bare;
+}
+
 export function parseFindings(text) {
   return String(text)
     .split("\n")
-    .map((line) => line.trim().replace(/^[-*]\s+/, "").replace(/^`|`$/g, ""))
+    .map(cleanLine)
     .filter((line) => line.split("|").length >= 5 && !/^path\s*\|/i.test(line))
     .map((line) => {
       const [location, ruleId, sev, problem, ...fix] = line.split("|").map((p) => p.trim());
@@ -32,7 +37,7 @@ export function parseFindings(text) {
 export function parseVerdicts(text) {
   return String(text)
     .split("\n")
-    .map((line) => line.trim().replace(/^[-*]\s+/, "").replace(/^`|`$/g, ""))
+    .map(cleanLine)
     .map((line) => line.match(/^(CONFIRMED-UNCHECKED|CONFIRMED|REJECTED)\s*\|\s*(.+)$/))
     .filter(Boolean)
     .map(([, verdict, rest]) => ({ verdict, rest }));

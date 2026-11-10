@@ -9,6 +9,11 @@ const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "
 const pr = Number(process.argv[2]);
 const model = process.argv[3] ?? "opencode/deepseek-v4.1-flash-free";
 const repo = process.argv[4] ?? "slawomirolko/marketplace";
+const cli = process.env.FACTORY_CLI ?? "opencode";
+if (!["opencode", "claude"].includes(cli)) {
+  console.error("FACTORY_CLI must be opencode or claude");
+  process.exit(2);
+}
 if (!Number.isInteger(pr)) {
   console.error("usage: node factory/host/review-run.mjs <pr-number> [model] [owner/repo]");
   process.exit(2);
@@ -22,9 +27,9 @@ for (const file of fs.readdirSync(agentsDir).filter((f) => /^olko-review-.+\.md$
 }
 
 const dataDir = process.env.FACTORY_DATA_DIR ?? path.join(repoRoot, "factory", ".viewer-data");
-const factory = new Factory(dataDir, { executors: { opencode: cliExecutor("opencode"), exec: hostExec } });
-const { run } = factory.start(`Review PR #${pr} in ${repo}`, undefined, { workflow: "olko-review", input: { repo, pr, cwd: repoRoot, agentConfigDir } });
-factory.confirm(run.runId, { backend: { kind: "cli", cli: "opencode" }, tierModels: { low: model, medium: model, high: model }, budget: { maxCostUsd: 20 } });
+const factory = new Factory(dataDir, { executors: { [cli]: cliExecutor(cli), exec: hostExec } });
+const { run } = factory.start(`Review PR #${pr} in ${repo} (${cli})`, undefined, { workflow: "olko-review", input: { repo, pr, cwd: repoRoot, agentConfigDir: cli === "opencode" ? agentConfigDir : undefined } });
+factory.confirm(run.runId, { backend: { kind: "cli", cli }, tierModels: { low: model, medium: model, high: model }, budget: { maxCostUsd: 20 } });
 
 for (;;) {
   const { run: current } = await factory.waitForChange(run.runId, 900000);
