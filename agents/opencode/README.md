@@ -43,6 +43,8 @@ against the acceptance criteria, and `olko-project-rules-check` checks confirmed
 against the project's decision store (see `docs/skill-adaptation-contract.md` §9).
 Its PLAN ROUTE reviews a plan before the user approves it.
 
+An orchestrator that calls `olko-review-orchestrator` nests subagents two levels deep. OpenCode allows one level by default, so the installer sets `experimental.subagent_depth` in the project's `opencode.json` to the deepest delegation chain it installs (it never lowers an existing value).
+
 `olko-review-orchestrator` is the entry point for code review. For
 someone else's PR or a local diff it runs a read-only review: one
 `olko-review-bugs-lens` plus one stack lens per changed stack in parallel,

@@ -432,3 +432,32 @@ test("an aborted install leaves no orphan memory stub", () => {
   const stubs = fs.existsSync(memoryDir) ? fs.readdirSync(memoryDir) : [];
   assert.deepEqual(stubs, [], `orphan memory stubs created: ${stubs.join(", ")}`);
 });
+
+test("sets experimental.subagent_depth for agents whose delegates delegate again", () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-opencode-agent-"));
+  const result = run(project, "--agent", "olko-implementation-orchestrator");
+
+  assert.equal(result.status, 0, result.stderr);
+  const config = JSON.parse(fs.readFileSync(path.join(project, "opencode.json"), "utf8"));
+  assert.ok(config.experimental.subagent_depth >= 2);
+});
+
+test("keeps a higher existing experimental.subagent_depth", () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-opencode-agent-"));
+  fs.writeFileSync(path.join(project, "opencode.json"), JSON.stringify({ experimental: { subagent_depth: 5 } }));
+  const result = run(project, "--agent", "olko-implementation-orchestrator");
+
+  assert.equal(result.status, 0, result.stderr);
+  const config = JSON.parse(fs.readFileSync(path.join(project, "opencode.json"), "utf8"));
+  assert.equal(config.experimental.subagent_depth, 5);
+});
+
+test("does not set experimental.subagent_depth for a single-level agent", () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-opencode-agent-"));
+  const result = run(project, "--agent", "olko-dotnet-implementer");
+
+  assert.equal(result.status, 0, result.stderr);
+  const configPath = path.join(project, "opencode.json");
+  const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, "utf8")) : {};
+  assert.equal(config.experimental?.subagent_depth, undefined);
+});

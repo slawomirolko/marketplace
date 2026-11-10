@@ -222,6 +222,37 @@ function installWatchdog(projectRoot, force) {
   console.log(`subagent rotation watchdog ${status}`);
 }
 
+function delegationDepth(manifest, name, seen = new Set()) {
+  const agent = manifest.agents.find((candidate) => candidate.name === name);
+  if (!agent || !agent.delegates || agent.delegates.length === 0 || seen.has(name)) {
+    return 0;
+  }
+  seen.add(name);
+  return 1 + Math.max(...agent.delegates.map((delegate) => delegationDepth(manifest, delegate, seen)));
+}
+
+function enableNestedSubagents(projectRoot, manifest, agents) {
+  const depth = Math.max(0, ...agents.map((agent) => delegationDepth(manifest, agent.name)));
+  if (depth < 2) {
+    return;
+  }
+
+  const configPath = path.join(projectRoot, "opencode.json");
+  const config = fs.existsSync(configPath) ? readJson(configPath) : { $schema: "https://opencode.ai/config.json" };
+  config.experimental ??= {};
+  if (typeof config.experimental !== "object" || Array.isArray(config.experimental)) {
+    throw new Error(`${configPath}: experimental must be an object`);
+  }
+  const current = config.experimental.subagent_depth;
+  if (typeof current === "number" && current >= depth) {
+    return;
+  }
+  config.experimental.subagent_depth = depth;
+  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}
+`);
+  console.log(`experimental.subagent_depth set to ${depth}`);
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const projectRoot = path.resolve(args.project);
@@ -261,6 +292,7 @@ function main() {
   // aborted run (e.g. a refused overwrite without --force) leaves no orphan
   // memory stub for an agent that was never installed.
   enableMemory(projectRoot, selected);
+  enableNestedSubagents(projectRoot, manifest, selected);
 }
 
 try {
