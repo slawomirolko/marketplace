@@ -23,6 +23,8 @@ Search for the first existing file in `agentsOptimizerTargets` from config/adapt
 
 If none found, ask the user to specify the target file path.
 
+**Target Type**: The script reports `type` — `agent` (frontmatter with `mode` or `permission`), `skill` (frontmatter with `name` and `description`), or `context` (no frontmatter). For an agent prompt or a SKILL.md, keep frontmatter, invocation contracts, tools, permissions, paths, thresholds, and behavior constraints; adapt the section review to the file's format instead of imposing the context-file structure of Step 3.
+
 **Small File Check**: If the target file has fewer than 20 lines, inform the user that the file is already minimal and optimization is unnecessary. Stop unless the user explicitly requests to proceed.
 
 ### Step 1: Baseline Analysis
@@ -40,8 +42,10 @@ $SCRIPT_PATH = '<resolved agentsOptimizerLineCountScript or bundled scripts/line
 Run the script if found:
 
 ```powershell
-node "$SCRIPT_PATH" '<TARGET_PATH>'
+node "$SCRIPT_PATH" '<TARGET_PATH>' --registry '<REGISTRY_PATH>'
 ```
+
+`--registry` is optional; with it, an agent's allowed skills get their description lengths. Sections of an agent prompt are detected from numbered steps and upper-case labels, so their boundaries are approximate.
 
 **Fallback** (if script not found): Count lines manually using PowerShell:
 
@@ -148,6 +152,30 @@ Present findings:
 | 1 | gRPC timeout mid-saga | Saga persists in Pending | Stuck rows | Yes → Add gotcha |
 ```
 
+### Step 2c: Token and Cache Audit
+
+Apply [`references/token-and-cache.md`](references/token-and-cache.md). Use the script output; do not count by hand.
+
+1. **Size**: words and estimated tokens for the file and for each section. Compare with `agentsOptimizerAgentWordBudget` (agent prompts) and `agentsOptimizerSkillDescriptionMax` (each allowed skill's description, and a SKILL.md's own description).
+2. **Prefix stability**: list every `prefixIssues` item and every section that changes per run, per user, or per machine. Classify each as delete, move out of the always-loaded file, or keep with a reason. Flag instructions that change permissions or the skill allowlist during a session, or that rewrite earlier context.
+3. **Placement**: hard rules near the top, the output contract at the end.
+4. **Examples over rules**: for each group of rules about one behavior, check whether 1–3 diverse input → output examples cover it. Propose the replacement; keep `NEVER` bans, numeric thresholds, and edge conditions as rules; confirm no example contradicts a kept rule; make several examples differ.
+5. **Split plan** (agent prompts and SKILL.md files over budget): classify every section with the section classes in the reference. For each section that leaves, give the target (new skill, reference file, or subagent), the exact line that replaces it ("in step X, load skill Y"), and the words saved. Never move an `every-step` section. This skill does not create the new skills or load other skills; the calling agent or the user executes the plan.
+6. **Providers**: for each entry in `agentsOptimizerProviders`, add the matching configuration advice from the reference (cache TTL, cache key, context size, keep-alive, warming cost).
+
+Present:
+
+```
+## Token and Cache Audit — <filename>
+
+Size: <words> words, ~<tokens> tokens (budget <budget>); allowed skills: <n>, descriptions <chars> chars
+| # | Kind | Location | Finding | Proposal | Words saved |
+|---|------|----------|---------|----------|-------------|
+| 1 | prefix | line 366 | dated user rule in always-loaded prompt | move to memory or delete | 12 |
+| 2 | examples | step 7b | 6 rules on path counting | 2 examples + keep the 15-path ceiling rule | 140 |
+| 3 | split | step 11a | runs once per feature | skill `<name>`, step 11a loads it | 675 |
+```
+
 ### Step 3: Generate Optimized File
 
 Use AskUserQuestion to confirm before modifying:
@@ -156,6 +184,7 @@ Use AskUserQuestion to confirm before modifying:
 > - **Remove**: X lines of discoverable content (Y sections)
 > - **Compress**: X lines → ~Y lines (Z sections)
 > - **Add**: X new gotcha items (from Step 2 mining + Step 2b code assessment)
+> - **Token and cache**: X prefix issues, X rule groups → examples, split plan saving ~X words (Step 2c)
 >
 > Options:
 > 1. **Apply all** — Remove discoverable, compress verbose, add gotchas
@@ -190,6 +219,9 @@ Re-run statistics (using the same script or fallback method from Step 1) and pre
 | Discoverable lines | 80 | 0 | Removed |
 | Operational lines | 60 | 55 | Kept |
 | Gotcha items | 0 | 25 | Added |
+| Words / est. tokens | 5419 / 9241 | 2900 / 5100 | -46% |
+| Prefix issues | 2 | 0 | Fixed |
+| Rule groups → examples | 0 | 3 | Replaced |
 
 Discoverability filter: all remaining lines pass "not discoverable from code" check.
 ```
@@ -199,4 +231,5 @@ Discoverability filter: all remaining lines pass "not discoverable from code" ch
 - **[`references/methodology.md`](references/methodology.md)** — Discoverability filter decision tree, category classification criteria, compression techniques, efficiency research data
 - **[`references/anti-patterns.md`](references/anti-patterns.md)** — 6 anti-pattern catalog with real before/after examples
 - **[`references/gotcha-mining.md`](references/gotcha-mining.md)** — 8-category mining checklist with Grep patterns and source code analysis techniques
+- **[`references/token-and-cache.md`](references/token-and-cache.md)** — What loads on every step, cache rules per provider, examples over rules, section classes for a split plan
 - **[`references/code-assessment.md`](references/code-assessment.md)** — Optimization opportunities, extension opportunities, and error prediction checklist with Grep patterns

@@ -2,7 +2,7 @@
 description: Read-only review lens for React/TypeScript diff hunks using olko-react skills and olko-design-rules.
 mode: subagent
 hidden: true
-model: ollama-cloud/deepseek-v4.1-flash:cloud
+model: ollama-cloud/deepseek-v4.1-flash
 permission:
   edit: deny
   bash: deny

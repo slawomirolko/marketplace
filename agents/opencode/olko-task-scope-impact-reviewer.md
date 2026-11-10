@@ -2,7 +2,7 @@
 description: Read-only triage that decides whether a material Task change needs the owning Feature and remaining Tasks re-evaluated.
 mode: subagent
 hidden: true
-model: ollama-cloud/deepseek-v4.1-flash:cloud
+model: ollama-cloud/deepseek-v4.1-flash
 permission:
   edit: deny
   write: deny
