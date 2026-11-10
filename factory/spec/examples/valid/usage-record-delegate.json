@@ -1,0 +1,14 @@
+{
+  "runId": "r-0001",
+  "workflow": "feature@0.1.0",
+  "nodePath": "feature/build/implement",
+  "kind": "llm",
+  "tier": "medium",
+  "model": "claude-haiku-5-5",
+  "backend": "host-subagent",
+  "turn": 1,
+  "tokens": { "input": null, "output": null, "total": 29469 },
+  "costUsd": null,
+  "costSource": "unknown",
+  "at": "2026-11-10T15:00:00Z"
+}

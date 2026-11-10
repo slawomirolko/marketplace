@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "tiers": ["low", "medium", "high"],
+  "backends": [{ "id": "claude-cli", "kind": "cli", "cli": "claude", "model": "claude-sonnet" }],
+  "roles": { "planner": "high" },
+  "budget": { "maxCostUsd": 5 }
+}

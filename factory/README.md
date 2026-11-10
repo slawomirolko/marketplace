@@ -28,12 +28,28 @@ Status: **proof of concept**. The model is a deterministic fake, so `costUsd` in
 
 Transport: streamable HTTP at `/mcp`, bearer token required (`FACTORY_TOKEN`), state and ledger under `FACTORY_DATA_DIR`.
 
+## Specification
+
+JSON Schemas (draft 2020-12) in `spec/`, validated by `src/spec.mjs` (Ajv plus graph and role checks):
+
+| Schema | Describes |
+|---|---|
+| `factory-config.schema.json` | backends (`api`, `cli`, `harness`, `delegate`), role-to-tier map, budget. No model names, keys only as env var names. |
+| `workflow.schema.json` | nodes (`llm`, `script`, `interrupt`, `subgraph`, `map`), edges with conditions, cycle limits |
+| `usage-record.schema.json` | one ledger line; `costSource` is `measured`, `reported`, `estimated` or `unknown` (then `costUsd` is null) |
+| `cost-footer.schema.json` | the footer in every response, with `scope: "factory-run"` and `factoryRunCostUsd`-style names so a client model does not mix it up with its own budget |
+
+`spec/examples/valid` and `spec/examples/invalid` hold examples checked by `test/spec.test.mjs`. The PoC server still emits the older footer field names; moving it to this schema is the next step.
+
 ## Layout
 
 ```text
 factory/
   src/engine.mjs        outer loop, sample workflow, ledger, checkpoints, budget
   src/server.mjs        MCP server, auth, wait and throttle
+  src/spec.mjs          schema validation for config, workflow, ledger, footer
+  spec/                 JSON Schemas and examples
+  test/spec.test.mjs    schema tests
   test/scenario.mjs     MCP client scenario tests
   test/restart.mjs      kill + restart resilience test
   py/langgraph_client.py  LangGraph host (legacy and new LangChain MCP API)
@@ -48,6 +64,12 @@ Tests run in a container without network access:
 ```powershell
 docker build -t skill-factory-poc:0.2 factory
 docker run --rm --network none --read-only --tmpfs /tmp --tmpfs /data:uid=10001 --cap-drop ALL --security-opt no-new-privileges skill-factory-poc:0.2
+```
+
+Schema tests only (mounting the sources into the image):
+
+```powershell
+docker run --rm --network none -v "${PWD}/factory/spec:/app/spec:ro" -v "${PWD}/factory/src:/app/src:ro" -v "${PWD}/factory/test:/app/test:ro" --entrypoint node skill-factory-poc:0.2 --test /app/test/spec.test.mjs
 ```
 
 ## Verified so far
@@ -67,7 +89,7 @@ Findings:
 ## Not verified yet
 
 - Codex as a client.
-- Delegate mode: running nodes in harness subagents with a per-tier model and reporting their usage.
+- Delegate mode end to end. Subagent usage itself is checked (see `docs/delegate-mode.md`): Claude Code exposes total tokens only, OpenCode exposes a full split through the child session.
 - Real models inside the factory (`api` mode) and real cost.
 - Live user questions in interactive harness UIs (tests answered through the prompt).
 - Installation from marketplaces, long runs, desktop apps.

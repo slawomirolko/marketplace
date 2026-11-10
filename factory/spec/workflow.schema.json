@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "workflow.schema.json",
+  "title": "Factory workflow",
+  "description": "A graph owned by the factory. Clients never send it; they name it at most.",
+  "type": "object",
+  "required": ["name", "version", "entry", "nodes", "edges"],
+  "additionalProperties": false,
+  "properties": {
+    "name": { "$ref": "#/$defs/id" },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "entry": { "$ref": "#/$defs/id" },
+    "nodes": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/node" } },
+    "edges": { "type": "array", "items": { "$ref": "#/$defs/edge" } },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxCycleIterations": { "type": "integer", "minimum": 1, "default": 3 },
+        "maxTurnsPerNode": { "type": "integer", "minimum": 1, "default": 20 }
+      }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "question": {
+      "type": "object",
+      "required": ["id", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^q-[a-z0-9-]+$" },
+        "text": { "type": "string", "minLength": 1 },
+        "allowed": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } }
+      }
+    },
+    "node": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "enum": ["llm", "script", "interrupt", "subgraph", "map"] },
+        "role": { "$ref": "#/$defs/id" },
+        "skill": { "type": "string", "minLength": 1 },
+        "run": { "type": "string", "minLength": 1 },
+        "workflow": { "$ref": "#/$defs/id" },
+        "over": { "type": "string", "pattern": "^state\\.[a-zA-Z0-9_.]+$" },
+        "question": { "$ref": "#/$defs/question" },
+        "outputSchema": { "type": "string", "minLength": 1 },
+        "maxTurns": { "type": "integer", "minimum": 1 }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "llm" } } }, "then": { "required": ["role"] } },
+        { "if": { "properties": { "kind": { "const": "script" } } }, "then": { "required": ["run"] } },
+        { "if": { "properties": { "kind": { "const": "interrupt" } } }, "then": { "required": ["question"] } },
+        { "if": { "properties": { "kind": { "const": "subgraph" } } }, "then": { "required": ["workflow"] } },
+        { "if": { "properties": { "kind": { "const": "map" } } }, "then": { "required": ["over", "workflow"] } }
+      ]
+    },
+    "edge": {
+      "type": "object",
+      "required": ["from", "to"],
+      "additionalProperties": false,
+      "properties": {
+        "from": { "$ref": "#/$defs/id" },
+        "to": { "anyOf": [{ "$ref": "#/$defs/id" }, { "const": "END" }] },
+        "when": { "type": "string", "minLength": 1, "description": "Condition over validated state fields only, never over prose." }
+      }
+    }
+  }
+}

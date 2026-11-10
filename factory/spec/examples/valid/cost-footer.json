@@ -1,0 +1,12 @@
+{
+  "scope": "factory-run",
+  "factoryRunCostUsd": 0.4715,
+  "factoryBudgetUsd": 1.5,
+  "factoryBudgetRatio": 0.3143,
+  "tokens": { "input": 52000, "output": 3250, "cacheRead": 0, "cacheWrite": 0 },
+  "steps": 9,
+  "perNodeCostUsd": { "hello/plan": 0.3601, "hello/build/implement": 0.1066, "hello/build/verify": 0, "hello/accountant": 0.005 },
+  "costSource": "measured",
+  "costIsSynthetic": true,
+  "warnings": []
+}

@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "factory-config.schema.json",
+  "title": "Factory configuration",
+  "description": "How the factory may reach models, which tier each role uses, and the budget. It never names a model: tier-to-model mapping is resolved and confirmed at run start.",
+  "type": "object",
+  "required": ["schemaVersion", "tiers", "backends", "roles", "budget"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "tiers": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/name" }
+    },
+    "backends": {
+      "description": "Ways to reach models, in order of preference.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/backend" }
+    },
+    "roles": {
+      "description": "Role name to tier name.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "$ref": "#/$defs/name" },
+      "additionalProperties": { "$ref": "#/$defs/name" }
+    },
+    "budget": {
+      "type": "object",
+      "required": ["maxCostUsd"],
+      "additionalProperties": false,
+      "properties": {
+        "maxCostUsd": { "type": "number", "exclusiveMinimum": 0 },
+        "infoRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1, "default": 0.5 },
+        "pauseRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1, "default": 0.8 },
+        "onExceeded": { "enum": ["ask_user", "stop"], "default": "ask_user" }
+      }
+    }
+  },
+  "$defs": {
+    "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "backend": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "properties": {
+        "id": { "$ref": "#/$defs/name" },
+        "kind": { "enum": ["api", "cli", "harness", "delegate"] }
+      },
+      "oneOf": [
+        {
+          "description": "The factory calls a model API directly. Keys come from environment variables only.",
+          "properties": {
+            "id": true,
+            "kind": { "const": "api" },
+            "protocol": { "enum": ["anthropic", "openai-compatible"] },
+            "apiKeyEnv": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+            "baseUrlEnv": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+            "discovery": { "enum": ["list_models", "ask_user"] }
+          },
+          "required": ["protocol", "apiKeyEnv"],
+          "additionalProperties": false
+        },
+        {
+          "description": "The factory runs a signed-in harness CLI headless (for example claude -p, opencode run) and reads tokens from its JSON output.",
+          "properties": {
+            "id": true,
+            "kind": { "const": "cli" },
+            "cli": { "enum": ["claude", "opencode", "codex"] },
+            "discovery": { "enum": ["list_models", "ask_user"] }
+          },
+          "required": ["cli"],
+          "additionalProperties": false
+        },
+        {
+          "description": "The calling harness tells the factory which of its models to use per tier.",
+          "properties": { "id": true, "kind": { "const": "harness" } },
+          "additionalProperties": false
+        },
+        {
+          "description": "The calling harness runs nodes in its own subagents. Usage is reported, not measured.",
+          "properties": { "id": true, "kind": { "const": "delegate" } },
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

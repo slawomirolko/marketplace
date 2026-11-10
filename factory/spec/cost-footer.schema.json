@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cost-footer.schema.json",
+  "title": "Cost footer",
+  "description": "Attached to every factory response. Field names say explicitly that they describe this factory run, not the calling harness session, so a client model does not confuse them with its own budget.",
+  "type": "object",
+  "required": ["scope", "factoryRunCostUsd", "factoryBudgetUsd", "factoryBudgetRatio", "tokens", "steps", "perNodeCostUsd", "costSource", "costIsSynthetic", "warnings"],
+  "additionalProperties": false,
+  "properties": {
+    "scope": { "const": "factory-run", "description": "Always factory-run: these numbers exclude the harness session that calls the factory." },
+    "factoryRunCostUsd": { "type": ["number", "null"], "minimum": 0 },
+    "factoryBudgetUsd": { "type": "number", "exclusiveMinimum": 0 },
+    "factoryBudgetRatio": { "type": ["number", "null"], "minimum": 0 },
+    "tokens": {
+      "type": "object",
+      "required": ["input", "output", "cacheRead", "cacheWrite"],
+      "additionalProperties": false,
+      "properties": {
+        "input": { "type": "integer", "minimum": 0 },
+        "output": { "type": "integer", "minimum": 0 },
+        "cacheRead": { "type": "integer", "minimum": 0 },
+        "cacheWrite": { "type": "integer", "minimum": 0 },
+        "totalOnly": { "type": "integer", "minimum": 0, "description": "Tokens known only as a total (no input/output split)." }
+      }
+    },
+    "steps": { "type": "integer", "minimum": 0 },
+    "perNodeCostUsd": { "type": "object", "additionalProperties": { "type": ["number", "null"], "minimum": 0 } },
+    "costSource": { "enum": ["measured", "reported", "estimated", "mixed", "unknown"] },
+    "costIsSynthetic": { "type": "boolean", "description": "True when a fake model produced the numbers." },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  }
+}

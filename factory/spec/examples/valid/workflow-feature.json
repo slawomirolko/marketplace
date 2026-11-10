@@ -1,0 +1,22 @@
+{
+  "name": "feature",
+  "version": "0.1.0",
+  "entry": "plan",
+  "nodes": [
+    { "id": "plan", "kind": "llm", "role": "planner", "skill": "olko-plan-editor", "outputSchema": "schemas/plan.json" },
+    { "id": "approve-plan", "kind": "interrupt", "question": { "id": "q-approve-plan", "text": "Approve the plan?", "allowed": ["yes", "no"] } },
+    { "id": "build", "kind": "subgraph", "workflow": "test-fix-loop" },
+    { "id": "review", "kind": "llm", "role": "reviewer", "maxTurns": 10 },
+    { "id": "accountant", "kind": "llm", "role": "accountant" }
+  ],
+  "edges": [
+    { "from": "plan", "to": "approve-plan" },
+    { "from": "approve-plan", "to": "build", "when": "answers.q-approve-plan == 'yes'" },
+    { "from": "approve-plan", "to": "plan", "when": "answers.q-approve-plan == 'no'" },
+    { "from": "build", "to": "review" },
+    { "from": "review", "to": "build", "when": "review.findings > 0" },
+    { "from": "review", "to": "accountant", "when": "review.findings == 0" },
+    { "from": "accountant", "to": "END" }
+  ],
+  "limits": { "maxCycleIterations": 3 }
+}

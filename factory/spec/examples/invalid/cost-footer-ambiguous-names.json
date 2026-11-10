@@ -1,0 +1,10 @@
+{
+  "costUsd": 0.4715,
+  "budgetUsd": 1.5,
+  "budgetRatio": 0.3143,
+  "tokens": 52750,
+  "steps": 9,
+  "perNode": {},
+  "source": "measured",
+  "warnings": []
+}
