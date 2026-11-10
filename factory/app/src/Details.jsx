@@ -1,5 +1,5 @@
 import { useViewer } from "./context.js";
-import { costOf, formatTokens, formatUsd, ledgerOf, tierOf } from "./tree.js";
+import { costOf, failureOf, formatTokens, formatUsd, ledgerOf, runFailure, tierOf } from "./tree.js";
 
 function usd(value) {
   return value == null ? "unknown" : `$${value.toFixed(6)}`;
@@ -59,7 +59,8 @@ function LedgerTable({ records }) {
 function AgentTable({ item }) {
   const { report } = useViewer();
   const byAgent = report?.byNode?.[item.key]?.byAgent;
-  if (!item.node?.agents) return null;
+  const agents = item.node?.agents ?? item.inner?.items.map((i) => ({ id: i.agent.id })) ?? null;
+  if (!agents) return null;
   return (
     <section>
       <h3>Agents</h3>
@@ -75,12 +76,12 @@ function AgentTable({ item }) {
             </tr>
           </thead>
           <tbody>
-            {item.node.agents.map((a) => {
+            {agents.map((a) => {
               const c = byAgent?.[a.id];
               return (
                 <tr key={a.id}>
                   <td>{a.id}</td>
-                  <td>{a.role ?? item.node.role}</td>
+                  <td>{c?.agentName ?? a.role ?? item.node.role}</td>
                   <td>{c ? `${c.tier} · ${c.model}` : "—"}</td>
                   <td>{c ? formatTokens(c.tokens, c.cacheTokens) : "—"}</td>
                   <td className={c?.costSource === "unknown" ? "cost-unknown" : ""}>{formatUsd(c)}</td>
@@ -111,6 +112,7 @@ function RunSummary() {
       <h2>Run {report.runId}</h2>
       <Row label="Goal" value={run.goal} />
       <Row label="Status" value={report.status} />
+      {runFailure(run) && <p className="cost-unknown">{runFailure(run)}</p>}
       <Row label="Cost" value={`${usd(report.cost.costUsd)} of ${usd(report.cost.budgetUsd)} (${Math.round(report.cost.budgetRatio * 100)}%)`} />
       <Row label="Tokens (in + out)" value={num(report.cost.tokens)} />
       <Row label="Cache tokens (read + write)" value={num(report.cacheTokens ?? 0)} />
@@ -136,15 +138,18 @@ export function Details({ item }) {
   const tier = tierOf(item, config, report);
   const question = item.kind !== "agent" ? item.node?.question : null;
   const records = ledgerOf(item, run);
-  const lastOutput = [...records].reverse().find((r) => r.outputPreview)?.outputPreview;
+  const outputs = records.filter((r) => r.output ?? r.outputPreview);
   return (
     <section>
       <h2>{item.kind === "agent" ? `${item.agent.id} (agent of ${item.node.id})` : item.node.id}</h2>
       <Row label="Path" value={item.kind === "agent" ? `${item.nodePath} / ${item.agent.id}` : item.key} />
-      <Row label="Kind" value={item.kind === "team" ? `llm, ${item.node.agents.length} agents` : item.kind === "agent" ? "agent" : item.node.kind} />
+      <Row label="Kind" value={item.kind === "team" ? `llm, ${item.inner.items.length} agents` : item.kind === "agent" ? "agent" : item.node.kind} />
+      {item.node?.run && <Row label="Runs" value={item.node.run} />}
+      {(item.node?.agent || records.find((r) => r.agentName)?.agentName) && <Row label="Harness agent" value={records.find((r) => r.agentName)?.agentName ?? item.node.agent} />}
       {(item.agent?.role ?? item.node.role) && <Row label="Role" value={item.agent?.role ?? item.node.role} />}
       {tier && <Row label="Tier" value={tier} />}
       {cost?.model && <Row label="Model" value={cost.model} />}
+      {failureOf(item, run) && <p className="cost-unknown">Failed: {failureOf(item, run)}</p>}
       {report && <Row label="Cost" value={formatUsd(cost)} />}
       {cost && <Row label="Tokens (in + out)" value={num(cost.tokens)} />}
       {cost && <Row label="Cache tokens (read + write)" value={num(cost.cacheTokens ?? 0)} />}
@@ -165,10 +170,15 @@ export function Details({ item }) {
           <LedgerTable records={records} />
         </section>
       )}
-      {lastOutput && (
+      {outputs.length > 0 && (
         <section>
-          <h3>Last output (preview)</h3>
-          <pre>{lastOutput}</pre>
+          <h3>Output</h3>
+          {outputs.map((r, i) => (
+            <div key={i}>
+              {outputs.length > 1 && <p className="muted">{r.agentId ?? r.nodePath}</p>}
+              <pre>{r.output ?? `${r.outputPreview} (first 200 characters only)`}</pre>
+            </div>
+          ))}
         </section>
       )}
     </section>

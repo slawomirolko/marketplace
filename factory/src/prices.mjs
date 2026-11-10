@@ -2,6 +2,7 @@ const PER_MTOK = {
   "claude-haiku-5-5": { input: 0.1, output: 0.5, cacheRead: 0.01, longContext: { overTokens: 100000, input: 0.5, output: 2.5, cacheRead: 0.05 } },
   "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.1 },
   "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2 },
+  "opencode/deepseek-v4.1-flash-free": { input: 0, output: 0, cacheRead: 0 },
 };
 
 const ALIASES = { haiku: "claude-haiku-5-5", sonnet: "claude-sonnet-5-5", opus: "claude-opus-5-5" };
@@ -9,7 +10,7 @@ const ALIASES = { haiku: "claude-haiku-5-5", sonnet: "claude-sonnet-5-5", opus: 
 const CACHE_WRITE_5M = 1.25;
 const CACHE_WRITE_1H = 2;
 
-export const PRICE_SOURCE = "https://platform.claude.com/docs/en/about-claude/pricing (read 2026-11-10)";
+export const PRICE_SOURCE = "https://platform.claude.com/docs/en/about-claude/pricing (read 2026-11-10); opencode/deepseek-v4.1-flash-free is OpenCode's free model (cost 0)";
 
 export function canonicalModel(model) {
   if (!model) return null;

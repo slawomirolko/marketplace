@@ -140,6 +140,16 @@
             "$ref": "#/$defs/agent"
           },
           "description": "Agents that run this node one after another; each one is priced on its own. role overrides the node role."
+        },
+        "agent": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "Harness agent that runs this node, for example an OpenCode agent from agents/opencode."
+        },
+        "agentsFrom": {
+          "type": "string",
+          "pattern": "^state.[a-zA-Z0-9_.]+$",
+          "description": "Agents chosen at run time from state; each one is priced on its own."
         }
       },
       "allOf": [

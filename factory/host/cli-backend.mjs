@@ -16,10 +16,10 @@ function cleanEnv() {
   return env;
 }
 
-function spawnCli(command, args, stdinText) {
+function spawnCli(command, args, stdinText, { cwd = workDir, env = {} } = {}) {
   return new Promise((resolve) => {
     const started = Date.now();
-    const child = spawn(command, args, { cwd: workDir, env: { ...cleanEnv(), PWD: workDir }, shell: process.platform === "win32" });
+    const child = spawn(command, args, { cwd, env: { ...cleanEnv(), PWD: cwd, ...env }, shell: process.platform === "win32" });
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => child.kill(), TIMEOUT_MS);
@@ -56,9 +56,11 @@ async function runClaude(model, prompt) {
   return { ok: !out.is_error, error: out.is_error ? String(out.result).slice(0, 300) : undefined, text: out.result, turns: out.num_turns, harnessCostUsd: out.total_cost_usd ?? null, usageByModel, durationMs: res.durationMs };
 }
 
-async function runOpencode(model, prompt) {
+async function runOpencode(model, prompt, { agent, cwd, configDir } = {}) {
   const id = OPENCODE_IDS[model] ?? model;
-  const res = await spawnCli("opencode", ["run", "--standalone", "--archived", "--format", "json", "-m", id], prompt);
+  if (agent && !/^[a-z0-9-]+$/.test(agent)) return { ok: false, error: `invalid agent name ${agent}` };
+  const args = ["run", "--standalone", "--archived", "--format", "json", "-m", id, ...(agent ? ["--agent", agent] : [])];
+  const res = await spawnCli("opencode", args, prompt, { cwd: cwd ?? workDir, env: configDir ? { OPENCODE_CONFIG_DIR: configDir } : {} });
   const events = res.stdout.trim().split("\n").filter(Boolean).map((l) => {
     try {
       return JSON.parse(l);
@@ -86,7 +88,8 @@ async function runOpencode(model, prompt) {
     if (p.type === "text") text = p.text ?? text;
   }
   if (error || steps === 0) return { ok: false, error: error ? JSON.stringify(error.error).slice(0, 300) : `opencode exit ${res.code}: ${res.stderr.slice(-300)}`, durationMs: res.durationMs };
-  return { ok: true, text, turns: steps, harnessCostUsd, usageByModel: [{ model: id, tokens, cacheWriteTtlKnown: false, harnessCostUsd }], durationMs: res.durationMs };
+  const sessionId = events.find((e) => e.sessionID)?.sessionID ?? null;
+  return { ok: true, text, turns: steps, sessionId, harnessCostUsd, usageByModel: [{ model: id, tokens, cacheWriteTtlKnown: false, harnessCostUsd }], durationMs: res.durationMs };
 }
 
 export async function opencodeSessionUsage(sessionId) {
@@ -109,6 +112,18 @@ export async function opencodeSessionUsage(sessionId) {
 
 export function cliExecutor(cli) {
   if (cli === "claude") return ({ model, prompt }) => runClaude(model, prompt);
-  if (cli === "opencode") return ({ model, prompt }) => runOpencode(model, prompt);
+  if (cli === "opencode") return ({ model, prompt, agent, cwd, configDir }) => runOpencode(model, prompt, { agent, cwd, configDir });
   throw new Error(`unsupported cli ${cli}`);
+}
+
+export function hostExec(command, args) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, { env: cleanEnv(), shell: false });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (d) => (stdout += d));
+    child.stderr.on("data", (d) => (stderr += d));
+    child.on("error", (error) => resolve({ code: -1, stdout, stderr: String(error) }));
+    child.on("close", (code) => resolve({ code, stdout, stderr }));
+  });
 }

@@ -1,6 +1,6 @@
 import { Handle, Position } from "@xyflow/react";
 import { useViewer } from "./context.js";
-import { costOf, formatTokens, formatUsd, isGroup, tierOf } from "./tree.js";
+import { costOf, failureOf, formatTokens, formatUsd, isGroup, tierOf } from "./tree.js";
 
 function Handles() {
   return (
@@ -18,15 +18,19 @@ function title(item) {
 
 function subtitle(item) {
   if (item.kind === "agent") return `agent · ${item.agent.role}`;
-  if (item.kind === "team") return `llm · ${item.node.agents.length} agents`;
+  if (item.kind === "team") return `llm · ${item.inner.items.length} agents`;
+  if (item.node?.agentsFrom) return `llm · agents from ${item.node.agentsFrom}`;
+  if (item.node?.agent) return `llm · ${item.node.agent}`;
   if (item.kind === "subgraph") return `subgraph · ${item.node.workflow}`;
   if (item.kind === "missing") return `subgraph · ${item.node.workflow} (not found)`;
   return item.node.role ? `${item.node.kind} · ${item.node.role}` : item.node.kind;
 }
 
 function CostLine({ item }) {
-  const { report } = useViewer();
+  const { report, run } = useViewer();
   if (!report) return null;
+  const failure = failureOf(item, run);
+  if (failure) return <div className="cost cost-unknown">failed: {failure.slice(0, 90)}</div>;
   const cost = costOf(item, report);
   return (
     <div className={`cost ${cost?.costSource === "unknown" ? "cost-unknown" : ""}`}>

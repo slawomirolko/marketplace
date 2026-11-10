@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { priceUsage } from "./prices.mjs";
+import { REVIEW_WORKFLOW } from "./workflows/olko-review.mjs";
 
 const FAKE_PRICE_PER_MTOK = {
   low: { input: 0.8, output: 4 },
@@ -58,6 +59,19 @@ export const WORKFLOW = {
     },
   ],
 };
+
+const WORKFLOWS = { hello: WORKFLOW, [REVIEW_WORKFLOW.name]: REVIEW_WORKFLOW };
+
+export function workflowOf(run) {
+  const workflow = WORKFLOWS[run.workflow ?? "hello"];
+  if (!workflow) throw new Error(`unknown workflow ${run.workflow}`);
+  return workflow;
+}
+
+function workflowLabel(run) {
+  const workflow = workflowOf(run);
+  return `${workflow.name}@${workflow.version}`;
+}
 
 const TURN_DELAY_MS = Number(process.env.FACTORY_TURN_DELAY_MS ?? 40);
 
@@ -122,7 +136,7 @@ export class Factory {
   }
 
   appendLedger(run, record) {
-    const entry = { runId: run.runId, workflow: `${WORKFLOW.name}@${WORKFLOW.version}`, at: new Date().toISOString(), ...record };
+    const entry = { runId: run.runId, workflow: workflowLabel(run), at: new Date().toISOString(), ...record };
     run.ledger.push(entry);
     fs.appendFileSync(path.join(this.dataDir, "ledger.jsonl"), JSON.stringify(entry) + "\n");
     this.event(run, "ledger_record", { node: record.nodePath, costUsd: record.costUsd, costSource: record.costSource });
@@ -138,7 +152,8 @@ export class Factory {
     return run;
   }
 
-  start(goal, idempotencyKey) {
+  start(goal, idempotencyKey, { workflow = "hello", input = {} } = {}) {
+    if (!WORKFLOWS[workflow]) throw new Error(`unknown workflow ${workflow}`);
     if (idempotencyKey && this.idempotency.has(idempotencyKey)) {
       return { run: this.get(this.idempotency.get(idempotencyKey)), reused: true };
     }
@@ -146,8 +161,12 @@ export class Factory {
       runId: `r-${crypto.randomUUID().slice(0, 8)}`,
       idempotencyKey: idempotencyKey ?? null,
       goal,
+      workflow,
+      input,
+      state: {},
+      nodeAgents: {},
       status: "needs_confirmation",
-      proposal: structuredClone(DEFAULT_CONFIG),
+      proposal: { ...structuredClone(DEFAULT_CONFIG), roles: { ...DEFAULT_CONFIG.roles, ...(WORKFLOWS[workflow].roles ?? {}) } },
       config: null,
       cursor: 0,
       nodeTurn: 0,
@@ -249,7 +268,7 @@ export class Factory {
     });
     run.pendingWork = null;
     run.status = "running";
-    this.finishAgent(run, WORKFLOW.nodes[run.cursor], { backend: "delegate" });
+    this.finishAgent(run, workflowOf(run).nodes[run.cursor], { backend: "delegate" });
     this.checkpoint(run);
     this.schedule(run);
     return { run, duplicate: false };
@@ -330,6 +349,7 @@ export class Factory {
   }
 
   prompt(run, node) {
+    if (typeof node.prompt === "function") return node.prompt({ goal: run.goal, input: run.input, state: run.state, agent: currentAgent(run, node) });
     return node.prompt
       .replace("{goal}", run.goal)
       .replace("{answer}", run.answers[node.question?.id] ?? "")
@@ -343,7 +363,7 @@ export class Factory {
       return;
     }
     if (!this.checkBudget(run)) return;
-    const node = WORKFLOW.nodes[run.cursor];
+    const node = workflowOf(run).nodes[run.cursor];
     if (!node) {
       run.status = "done";
       this.event(run, "run_completed", this.totals(run));
@@ -355,8 +375,11 @@ export class Factory {
 
     if (node.kind === "script") {
       run.steps += 1;
-      this.appendLedger(run, { nodePath: node.path, kind: "script", tier: null, model: null, backend: "script", turn: 1, inputTokens: 0, outputTokens: 0, costUsd: 0, costSource: "measured" });
-      this.event(run, "node_completed", { node: node.path, result: "verify passed" });
+      const started = Date.now();
+      const result = node.script ? await node.script({ input: run.input ?? {}, state: run.state ?? {}, exec: this.executors.exec }) : { state: { passed: true }, output: "verify passed" };
+      if (run.state) run.state[node.id] = result.state;
+      this.appendLedger(run, { nodePath: node.path, agentId: node.id, kind: "script", tier: null, model: null, backend: "script", turn: 1, inputTokens: 0, outputTokens: 0, costUsd: 0, costSource: "measured", durationMs: Date.now() - started, output: result.output ?? null });
+      this.event(run, "node_completed", { node: node.path, result: String(result.output ?? "").split(/\r?\n/)[0].slice(0, 200) });
       run.cursor += 1;
       run.nodeTurn = 0;
       return;
@@ -371,6 +394,18 @@ export class Factory {
       return;
     }
 
+    if (node.agentsFrom && run.nodeAgents?.[node.id] === undefined) {
+      run.nodeAgents ??= {};
+      run.nodeAgents[node.id] = node.agentsFrom(run.state);
+      this.event(run, "agents_selected", { node: node.path, agents: run.nodeAgents[node.id].map((a) => a.id) });
+    }
+    if (agentsOf(run, node)?.length === 0 || node.skipIf?.(run.state)) {
+      this.event(run, "node_skipped", { node: node.path, reason: node.skipReason ?? "no work" });
+      run.cursor += 1;
+      run.nodeTurn = 0;
+      run.agentIndex = 0;
+      return;
+    }
     const agent = currentAgent(run, node);
     const tier = run.config.roles[agent.role];
     if (backend === "cli") return this.runCliNode(run, node, tier);
@@ -391,9 +426,10 @@ export class Factory {
 
   finishAgent(run, node, details) {
     const agent = currentAgent(run, node);
-    if (node.agents) this.event(run, "agent_completed", { node: node.path, agentId: agent.id, ...details });
+    const agents = agentsOf(run, node);
+    if (agents) this.event(run, "agent_completed", { node: node.path, agentId: agent.id, ...details });
     run.nodeTurn = 0;
-    if (node.agents && (run.agentIndex ?? 0) + 1 < node.agents.length) {
+    if (agents && (run.agentIndex ?? 0) + 1 < agents.length) {
       run.agentIndex = (run.agentIndex ?? 0) + 1;
       return;
     }
@@ -405,8 +441,9 @@ export class Factory {
   async runCliNode(run, node, tier) {
     const { cli } = run.config.backend;
     const model = run.config.tiers[tier];
-    const agentId = currentAgent(run, node).id;
-    const result = await this.executors[cli]({ model, prompt: this.prompt(run, node) });
+    const agent = currentAgent(run, node);
+    const agentId = agent.id;
+    const result = await this.executors[cli]({ model, prompt: this.prompt(run, node), agent: agent.agentName, cwd: run.input?.cwd, configDir: run.input?.agentConfigDir });
     run.steps += 1;
     if (!result.ok) {
       run.status = "failed";
@@ -435,8 +472,11 @@ export class Factory {
         harnessCostUsd: u.harnessCostUsd,
         durationMs: result.durationMs,
         outputPreview: String(result.text ?? "").slice(0, 200),
+        output: result.text ?? null,
+        agentName: agent.agentName ?? null,
       });
     }
+    if (node.parse && run.state) run.state[node.id] = { ...(run.state[node.id] ?? {}), [agentId]: node.parse(result.text ?? "") };
     this.finishAgent(run, node, { backend: `cli:${cli}` });
   }
 
@@ -458,7 +498,7 @@ export class Factory {
   }
 
   status(run) {
-    const node = WORKFLOW.nodes[run.cursor];
+    const node = workflowOf(run).nodes[run.cursor];
     return {
       runId: run.runId,
       status: run.status,
@@ -485,7 +525,7 @@ export class Factory {
       byNode[r.nodePath] ??= { steps: 0, tokens: 0, cacheTokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null, byAgent: {} };
       byNode[r.nodePath].cacheTokens += cache;
       const agentKey = r.agentId ?? r.nodePath.split("/").at(-1);
-      const agentEntry = (byNode[r.nodePath].byAgent[agentKey] ??= { steps: 0, tokens: 0, cacheTokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null, sources: [] });
+      const agentEntry = (byNode[r.nodePath].byAgent[agentKey] ??= { steps: 0, tokens: 0, cacheTokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null, agentName: r.agentName ?? null, sources: [] });
       agentEntry.cacheTokens += cache;
       agentEntry.steps += 1;
       agentEntry.tokens += (r.inputTokens ?? 0) + (r.outputTokens ?? 0);
@@ -515,11 +555,11 @@ export class Factory {
       entry.costSource = costSourceSummary(run.ledger.filter((r) => r.nodePath === nodePath));
     }
     for (const totals of [byTier, byModel]) for (const key of Object.keys(totals)) totals[key] = round(totals[key]);
-    return { runId: run.runId, status: run.status, workflow: `${WORKFLOW.name}@${WORKFLOW.version}`, backend: run.config?.backend, tierModels: run.config?.tiers, byNode, byTier, byModel, byCostSource, cacheTokens, harnessCostUsd: round(harnessCostUsd), cost: this.footer(run) };
+    return { runId: run.runId, status: run.status, workflow: workflowLabel(run), backend: run.config?.backend, tierModels: run.config?.tiers, byNode, byTier, byModel, byCostSource, cacheTokens, harnessCostUsd: round(harnessCostUsd), cost: this.footer(run) };
   }
 
   trace(run) {
-    const lines = [`run ${run.runId} [${run.status}] ${WORKFLOW.name}@${WORKFLOW.version}  $${round(this.totals(run).costUsd)}`];
+    const lines = [`run ${run.runId} [${run.status}] ${workflowLabel(run)}  $${round(this.totals(run).costUsd)}`];
     let lastNode = null;
     for (const r of run.ledger) {
       if (r.nodePath !== lastNode) {
@@ -535,10 +575,15 @@ export class Factory {
   }
 }
 
+function agentsOf(run, node) {
+  return run.nodeAgents?.[node.id] ?? node.agents ?? null;
+}
+
 function currentAgent(run, node) {
-  if (!node.agents) return { id: node.id, role: node.role };
-  const agent = node.agents[run.agentIndex ?? 0];
-  return { id: agent.id, role: agent.role ?? node.role };
+  const agents = agentsOf(run, node);
+  if (!agents) return { id: node.id, role: node.role, agentName: node.agent };
+  const agent = agents[run.agentIndex ?? 0];
+  return { ...agent, role: agent.role ?? node.role, agentName: agent.agentName ?? node.agent };
 }
 
 function costSourceSummary(ledger) {

@@ -58,6 +58,16 @@ It installs the app dependencies (first time only), starts Vite on <http://127.0
 
 Data comes read-only from the factory data directory. Without `FACTORY_DATA_DIR` the app uses `factory/.viewer-data` (git-ignored) and creates one finished demo run with the fake model on first start. To look at real runs, set `FACTORY_DATA_DIR` to the directory the factory writes to (it holds `runs/*.json`). The Vite server listens on 127.0.0.1 only and serves GET requests only.
 
+## Real workflow: olko-review
+
+`src/workflows/olko-review.mjs` runs the REVIEW ROUTE of `agents/opencode/olko-review-orchestrator.md` through the factory: `scope` (`gh pr view` + `gh pr diff`), `detect` (changed paths to lenses), `memory` (not loaded in the PoC, stated in the report), `lenses` (one OpenCode agent per detected stack, chosen at run time), `merge`, `verify` (`olko-review-verifier`, skipped without findings) and `rank` (tiers and report). Each LLM node runs the real marketplace agent with `opencode run --agent <name>`; the agent files are copied to a temporary `OPENCODE_CONFIG_DIR`, so nothing is installed globally. Generated lockfiles are not sent to the lenses.
+
+```bash
+node factory/host/review-run.mjs 74 opencode/deepseek-v4.1-flash-free
+```
+
+The run is written to `factory/.viewer-data` and shows up in the viewer app.
+
 The sample workflow has a `review` node with four agents (`security`, `style`, `tests`, `docs`); the ledger records `agentId` and `factory_report` returns `byNode[path].byAgent`.
 
 ## Mermaid export

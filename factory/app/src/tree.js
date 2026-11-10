@@ -5,7 +5,7 @@ export function isGroup(item) {
   return item.kind === "subgraph" || item.kind === "team";
 }
 
-export function buildLevel(workflows, name, prefix = name, stack = [name]) {
+export function buildLevel(workflows, name, prefix = name, stack = [name], report = null) {
   const workflow = workflows.find((w) => w.name === name);
   if (!workflow) throw new Error(`workflow '${name}' not found`);
   const isRoot = stack.length === 1;
@@ -14,10 +14,11 @@ export function buildLevel(workflows, name, prefix = name, stack = [name]) {
     if (node.kind === "subgraph" || node.kind === "map") {
       const known = workflows.some((w) => w.name === node.workflow) && !stack.includes(node.workflow);
       if (!known) return { key, kind: "missing", node };
-      return { key, kind: "subgraph", node, inner: buildLevel(workflows, node.workflow, key, [...stack, node.workflow]) };
+      return { key, kind: "subgraph", node, inner: buildLevel(workflows, node.workflow, key, [...stack, node.workflow], report) };
     }
-    if (node.agents && node.agents.length > 1) {
-      const agents = node.agents.map((a) => ({ key: `${key}#${a.id}`, kind: "agent", node, agent: { id: a.id, role: a.role ?? node.role }, nodePath: key }));
+    const declared = node.agents ?? (node.agentsFrom ? Object.keys(report?.byNode?.[key]?.byAgent ?? {}).map((id) => ({ id })) : []);
+    if (declared.length > 1 || (node.agentsFrom && declared.length > 0)) {
+      const agents = declared.map((a) => ({ key: `${key}#${a.id}`, kind: "agent", node, agent: { id: a.id, role: a.role ?? node.role }, nodePath: key }));
       return { key, kind: "team", node, inner: { items: agents, edges: [] } };
     }
     return { key, kind: "step", node };
@@ -63,6 +64,26 @@ export function ledgerOf(item, run) {
   if (item.kind === "agent") return run.ledger.filter((r) => r.nodePath === item.nodePath && r.agentId === item.agent.id);
   if (item.kind === "subgraph") return run.ledger.filter((r) => r.nodePath.startsWith(`${item.key}/`));
   return run.ledger.filter((r) => r.nodePath === item.key);
+}
+
+function errorMessage(error) {
+  try {
+    return JSON.parse(error).message ?? String(error);
+  } catch {
+    return String(error ?? "failed");
+  }
+}
+
+export function failureOf(item, run) {
+  if (!run || item.kind === "terminal") return null;
+  const key = item.kind === "agent" ? item.nodePath : item.key;
+  const event = run.events.find((e) => e.type === "node_failed" && (e.node === key || (item.kind === "subgraph" && e.node?.startsWith(`${key}/`))));
+  return event ? errorMessage(event.error) : null;
+}
+
+export function runFailure(run) {
+  const event = run?.events.find((e) => e.type === "node_failed" || e.type === "run_failed");
+  return event ? `${event.node ? `${event.node}: ` : ""}${errorMessage(event.error)}` : null;
 }
 
 export function formatTokens(tokens, cacheTokens) {

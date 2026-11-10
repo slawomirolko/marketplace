@@ -52,7 +52,7 @@ function Viewer() {
   }, [runId]);
 
   const rootName = detail?.report.workflow.split("@")[0] ?? "hello";
-  const level = useMemo(() => (workflows ? buildLevel(workflows, rootName) : null), [workflows, rootName]);
+  const level = useMemo(() => (workflows ? buildLevel(workflows, rootName, rootName, [rootName], detail?.report ?? null) : null), [workflows, rootName, detail]);
   const graph = useMemo(() => (level ? layoutGraph(level, expanded) : { nodes: [], edges: [], bounds: null }), [level, expanded]);
   const nodes = useMemo(() => graph.nodes.map((n) => ({ ...n, selected: n.id === selected?.key })), [graph, selected]);
 
