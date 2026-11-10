@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Background, Controls, ReactFlow, ReactFlowProvider, useReactFlow } from "@xyflow/react";
+import { Background, Controls, ReactFlow, ReactFlowProvider, useReactFlow, useStore } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import "./styles.css";
 import { ViewerContext } from "./context.js";
 import { Details } from "./Details.jsx";
 import { layoutGraph } from "./layout.js";
 import { nodeTypes } from "./nodes.jsx";
-import { buildLevel, formatTokens } from "./tree.js";
+import { buildLevel, formatAmount, formatTokens, isUnknownCost } from "./tree.js";
 
 async function getJson(url) {
   const response = await fetch(url);
@@ -16,11 +16,14 @@ async function getJson(url) {
 
 function FitToBounds({ bounds }) {
   const { fitBounds } = useReactFlow();
+  const width = useStore((state) => state.width);
+  const height = useStore((state) => state.height);
+  const zoomReady = useStore((state) => Boolean(state.panZoom));
   useEffect(() => {
-    if (!bounds) return undefined;
-    const id = requestAnimationFrame(() => fitBounds(bounds, { padding: 0.1, duration: 200 }));
-    return () => cancelAnimationFrame(id);
-  }, [bounds, fitBounds]);
+    if (!bounds || !width || !height || !zoomReady) return undefined;
+    const id = setTimeout(() => fitBounds(bounds, { padding: 0.1 }), 0);
+    return () => clearTimeout(id);
+  }, [bounds, width, height, zoomReady, fitBounds]);
   return null;
 }
 
@@ -103,14 +106,14 @@ function Viewer() {
               <option value="">no run (structure only)</option>
               {runs.map((r) => (
                 <option key={r.runId} value={r.runId}>
-                  {r.runId} · {r.status} · {r.harness ?? "?"} · {(r.usedModels.length ? r.usedModels : r.requestedModels).join(", ")}{r.usedModels.length ? "" : " (requested, none ran)"} · ${r.costUsd.toFixed(6)} · {r.goal}
+                  {r.runId} · {r.status} · {r.harness ?? "?"} · {(r.usedModels.length ? r.usedModels : r.requestedModels).join(", ")}{r.usedModels.length ? "" : " (requested, none ran)"} · {formatAmount(r.costUsd, r.coverage)} · {r.goal}
                 </option>
               ))}
             </select>
           </label>
           {total && (
             <span className="total">
-              Total <strong>${total.costUsd.toFixed(6)}</strong> of ${total.budgetUsd.toFixed(2)} · {formatTokens(total.tokens, detail.report.cacheTokens)} · {total.steps} steps · {total.source}
+              Total <strong className={isUnknownCost(detail.report.coverage?.run) ? "cost-unknown" : ""}>{formatAmount(total.costUsd, detail.report.coverage?.run)}</strong> of ${total.budgetUsd.toFixed(2)} · {formatTokens(total.tokens, detail.report.cacheTokens)} · {total.steps} steps · {total.source}
             </span>
           )}
         </header>

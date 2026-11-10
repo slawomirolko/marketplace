@@ -46,6 +46,8 @@ export function costOf(item, report) {
       tokens: parts.reduce((s, c) => s + c.tokens, 0),
       cacheTokens: parts.reduce((s, c) => s + (c.cacheTokens ?? 0), 0),
       steps: parts.reduce((s, c) => s + c.steps, 0),
+      llmSteps: parts.reduce((s, c) => s + (c.llmSteps ?? 0), 0),
+      unknownSteps: parts.reduce((s, c) => s + (c.unknownSteps ?? 0), 0),
       costSource: sources.size === 1 ? [...sources][0] : "mixed",
     };
   }
@@ -96,8 +98,19 @@ export function formatTokens(tokens, cacheTokens) {
   return cacheTokens ? `${base} + ${cacheTokens.toLocaleString("en-US")} cache` : base;
 }
 
+export function formatAmount(costUsd, coverage) {
+  const unknown = coverage?.unknownSteps ?? 0;
+  if (unknown > 0 && unknown === coverage.llmSteps) return "unknown";
+  const amount = `$${(costUsd ?? 0).toFixed(6)}`;
+  return unknown > 0 ? `≥ ${amount} (partial, ${unknown} of ${coverage.llmSteps} LLM steps unknown)` : amount;
+}
+
+export function isUnknownCost(coverage) {
+  return (coverage?.unknownSteps ?? 0) > 0;
+}
+
 export function formatUsd(cost) {
   if (!cost) return "not run";
   if (cost.costSource === "unknown") return "unknown";
-  return `$${cost.costUsd.toFixed(6)}`;
+  return formatAmount(cost.costUsd, cost);
 }

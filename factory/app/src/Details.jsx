@@ -1,5 +1,5 @@
 import { useViewer } from "./context.js";
-import { costOf, failureOf, formatTokens, formatUsd, ledgerOf, runFailure, tierOf } from "./tree.js";
+import { costOf, failureOf, formatAmount, formatTokens, formatUsd, ledgerOf, runFailure, tierOf } from "./tree.js";
 
 function usd(value) {
   return value == null ? "unknown" : `$${value.toFixed(6)}`;
@@ -106,14 +106,14 @@ function RunSummary() {
       </section>
     );
   }
-  const group = (entries, format) => entries.map(([k, v]) => <Row key={k} label={k} value={format(v)} />);
+  const group = (entries, format) => entries.map(([k, v]) => <Row key={k} label={k} value={format(v, k)} />);
   return (
     <section>
       <h2>Run {report.runId}</h2>
       <Row label="Goal" value={run.goal} />
       <Row label="Status" value={report.status} />
       {runFailure(run) && <p className="cost-unknown">{runFailure(run)}</p>}
-      <Row label="Cost" value={`${usd(report.cost.costUsd)} of ${usd(report.cost.budgetUsd)} (${Math.round(report.cost.budgetRatio * 100)}%)`} />
+      <Row label="Cost" value={`${formatAmount(report.cost.costUsd, report.coverage?.run)} of ${usd(report.cost.budgetUsd)} (${Math.round(report.cost.budgetRatio * 100)}%)`} />
       <Row label="Tokens (in + out)" value={num(report.cost.tokens)} />
       <Row label="Cache tokens (read + write)" value={num(report.cacheTokens ?? 0)} />
       <Row label="Steps" value={report.cost.steps} />
@@ -122,9 +122,9 @@ function RunSummary() {
       <h3>Requested tier → model</h3>
       {group(Object.entries(report.tierModels ?? {}), (v) => v)}
       <h3>Models that actually ran</h3>
-      {Object.keys(report.byModel ?? {}).length ? group(Object.entries(report.byModel), usd) : <p className="muted">None. No LLM step finished in this run.</p>}
+      {Object.keys(report.byModel ?? {}).length ? group(Object.entries(report.byModel), (v, k) => formatAmount(v, report.coverage?.byModel?.[k])) : <p className="muted">None. No LLM step finished in this run.</p>}
       <h3>Cost by tier</h3>
-      {group(Object.entries(report.byTier ?? {}), usd)}
+      {group(Object.entries(report.byTier ?? {}), (v, k) => formatAmount(v, report.coverage?.byTier?.[k]))}
       <h3>LLM steps by cost source</h3>
       {group(Object.entries(report.byCostSource ?? {}), (v) => v)}
       <p className="muted">Click a node to see its agents, ledger records and questions.</p>

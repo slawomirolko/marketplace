@@ -519,13 +519,19 @@ export class Factory {
     const byCostSource = {};
     let harnessCostUsd = 0;
     let cacheTokens = 0;
+    const coverage = { run: { llmSteps: 0, unknownSteps: 0 }, byTier: {}, byModel: {} };
+    const count = (target) => {
+      target.llmSteps = (target.llmSteps ?? 0) + 1;
+      target.unknownSteps = target.unknownSteps ?? 0;
+    };
+    const countUnknown = (target) => (target.unknownSteps = (target.unknownSteps ?? 0) + 1);
     for (const r of run.ledger) {
       const cache = (r.cacheReadTokens ?? 0) + (r.cacheWrite5mTokens ?? 0) + (r.cacheWrite1hTokens ?? 0);
       cacheTokens += cache;
-      byNode[r.nodePath] ??= { steps: 0, tokens: 0, cacheTokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null, byAgent: {} };
+      byNode[r.nodePath] ??= { steps: 0, llmSteps: 0, unknownSteps: 0, tokens: 0, cacheTokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null, byAgent: {} };
       byNode[r.nodePath].cacheTokens += cache;
       const agentKey = r.agentId ?? r.nodePath.split("/").at(-1);
-      const agentEntry = (byNode[r.nodePath].byAgent[agentKey] ??= { steps: 0, tokens: 0, cacheTokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null, agentName: r.agentName ?? null, sources: [] });
+      const agentEntry = (byNode[r.nodePath].byAgent[agentKey] ??= { steps: 0, llmSteps: 0, unknownSteps: 0, tokens: 0, cacheTokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null, agentName: r.agentName ?? null, sources: [] });
       agentEntry.cacheTokens += cache;
       agentEntry.steps += 1;
       agentEntry.tokens += (r.inputTokens ?? 0) + (r.outputTokens ?? 0);
@@ -539,6 +545,9 @@ export class Factory {
       if (r.kind === "llm") {
         byModel[r.model ?? "unknown"] = (byModel[r.model ?? "unknown"] ?? 0) + (r.costUsd ?? 0);
         byCostSource[r.costSource] = (byCostSource[r.costSource] ?? 0) + 1;
+        const targets = [coverage.run, (coverage.byTier[tierKey] ??= {}), (coverage.byModel[r.model ?? "unknown"] ??= {}), byNode[r.nodePath], agentEntry];
+        targets.forEach(count);
+        if (r.costSource === "unknown") targets.forEach(countUnknown);
       }
       harnessCostUsd += r.harnessCostUsd ?? 0;
     }
@@ -556,7 +565,7 @@ export class Factory {
       entry.costSource = nodeSources.size === 1 ? [...nodeSources][0] : "mixed";
     }
     for (const totals of [byTier, byModel]) for (const key of Object.keys(totals)) totals[key] = round(totals[key]);
-    return { runId: run.runId, status: run.status, workflow: workflowLabel(run), backend: run.config?.backend, tierModels: run.config?.tiers, byNode, byTier, byModel, byCostSource, cacheTokens, harnessCostUsd: round(harnessCostUsd), cost: this.footer(run) };
+    return { runId: run.runId, status: run.status, workflow: workflowLabel(run), backend: run.config?.backend, tierModels: run.config?.tiers, byNode, byTier, byModel, byCostSource, coverage, cacheTokens, harnessCostUsd: round(harnessCostUsd), cost: this.footer(run) };
   }
 
   trace(run) {

@@ -50,12 +50,14 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo }) {
     runs() {
       return runFiles()
         .map((f) => readJson(path.join(runsDir, f)))
-        .map((run) => ({
+        .map((run) => ({ run, report: runReport(run) }))
+        .map(({ run, report }) => ({
           runId: run.runId,
           goal: run.goal,
           status: run.status,
           createdAt: run.events[0]?.at ?? null,
-          costUsd: runReport(run).cost.costUsd,
+          costUsd: report.cost.costUsd,
+          coverage: report.coverage.run,
           harness: run.config?.backend?.kind === "cli" ? run.config.backend.cli : run.config?.backend?.kind ?? null,
           requestedModels: [...new Set(Object.values(run.config?.tiers ?? {}))],
           usedModels: [...new Set(run.ledger.filter((r) => r.kind === "llm" && r.model).map((r) => r.model))],

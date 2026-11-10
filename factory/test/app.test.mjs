@@ -161,3 +161,29 @@ test("api passes non-GET requests and other paths on to the next handler", async
   assert.equal((await call("POST", "/api/runs")).status, "next");
   assert.equal((await call("GET", "/index.html")).status, "next");
 });
+
+test("totals with unknown steps are shown as unknown or partial, never as an exact amount", async () => {
+  const { runReport } = await import("../src/engine.mjs");
+  const { formatAmount, formatUsd } = await import("../app/src/tree.js");
+  const record = (nodePath, model, costUsd, costSource) => ({ nodePath, agentId: nodePath.split("/").at(-1), kind: "llm", tier: "medium", model, inputTokens: 10, outputTokens: 1, costUsd, costSource });
+  const run = {
+    runId: "r-0000abcd",
+    status: "done",
+    workflow: "hello",
+    config: { tiers: { medium: "m" }, backend: { kind: "delegate" }, budget: { maxCostUsd: 1 } },
+    proposal: { budget: { maxCostUsd: 1 } },
+    steps: 3,
+    thresholdsHit: [],
+    ledger: [record("hello/plan", "known", 0.25, "measured"), record("hello/build/implement", "known", null, "unknown"), record("hello/build/verify", "lost", null, "unknown")],
+  };
+  const report = runReport(run);
+  assert.deepEqual(report.coverage.run, { llmSteps: 3, unknownSteps: 2 });
+  assert.equal(formatAmount(report.cost.costUsd, report.coverage.run), "≥ $0.250000 (partial, 2 of 3 LLM steps unknown)");
+  assert.equal(formatAmount(report.byModel.lost, report.coverage.byModel.lost), "unknown", "a model with only unknown steps is not $0");
+  assert.equal(formatAmount(report.byModel.known, report.coverage.byModel.known), "≥ $0.250000 (partial, 1 of 2 LLM steps unknown)");
+  assert.equal(formatAmount(report.byTier.medium, report.coverage.byTier.medium), "≥ $0.250000 (partial, 2 of 3 LLM steps unknown)");
+  assert.equal(formatAmount(0.25, { llmSteps: 1, unknownSteps: 0 }), "$0.250000");
+  const level = buildLevel(api(false).workflows(), "hello");
+  const build = level.items.find((i) => i.key === "hello/build");
+  assert.equal(formatUsd(costOf(build, report)), "unknown", "a subgraph whose LLM steps are all unknown is not $0");
+});
