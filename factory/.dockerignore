@@ -1,0 +1,11 @@
+.viewer-data
+app/node_modules
+app/src
+app/index.html
+app/vite.config.mjs
+app/pnpm-lock.yaml
+node_modules
+host
+viewer
+docs
+*.md

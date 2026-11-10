@@ -613,7 +613,7 @@ function nextHint(run) {
     case "waiting_for_client":
       return "Run pendingWork.prompt in a subagent. Use the model in pendingWork.model. Then call factory_submit with the subagent output. If pendingWork has an agentId, pass the same agentId. If the subagent result shows a session id (for example <subagent sessionID=\"ses_...\">), pass it as usage.childSessionId.";
     default:
-      return "The run has ended (done, stopped, cancelled or failed). Call factory_report. Do not call factory_wait or factory_status again.";
+      return "The run has ended (done, stopped, cancelled or failed). Call factory_report. Show the user viewerUrl: it shows the whole flow and the cost of each agent. Do not call factory_wait or factory_status again.";
   }
 }
 

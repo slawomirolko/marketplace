@@ -8,8 +8,10 @@ import { layoutGraph } from "./layout.js";
 import { nodeAriaLabel, nodeTypes } from "./nodes.jsx";
 import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost } from "./tree.js";
 
+const API = `${import.meta.env.BASE_URL}api`;
+
 async function getJson(url) {
-  const response = await fetch(url);
+  const response = await fetch(`${API}${url}`);
   if (!response.ok) throw new Error(`${url}: ${response.status}`);
   return response.json();
 }
@@ -38,12 +40,13 @@ function Viewer() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    Promise.all([getJson("/api/workflows"), getJson("/api/config"), getJson("/api/runs")])
+    Promise.all([getJson("/workflows"), getJson("/config"), getJson("/runs")])
       .then(([workflowList, factoryConfig, runList]) => {
         setWorkflows(workflowList);
         setConfig(factoryConfig);
         setRuns(runList);
-        setRunId(runList[0]?.runId ?? "");
+        const requested = new URLSearchParams(window.location.search).get("run");
+        setRunId(runList.some((r) => r.runId === requested) ? requested : (runList[0]?.runId ?? ""));
       })
       .catch((loadError) => setError(loadError.message));
   }, []);
@@ -55,7 +58,7 @@ function Viewer() {
       return undefined;
     }
     let current = true;
-    getJson(`/api/runs/${runId}`)
+    getJson(`/runs/${runId}`)
       .then((runDetail) => {
         if (current) setDetail(runDetail);
       })

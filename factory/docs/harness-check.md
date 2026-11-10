@@ -87,7 +87,10 @@ Tool descriptions and `next` hints were rewritten from the prompt optimizer revi
 
 Interactive OpenCode needs `opencode --standalone` in the folder that holds `opencode.json`: the plain TUI talks to the background OpenCode service, which did not have the `factory` server (or `FACTORY_TOKEN`) and reported no factory tools.
 
-Still open: interactive Claude Code UI.
+| interactive | Claude Code 2.1.319, Haiku, a person answering | showed the proposal and waited for approval, asked the node question and waited; the person answered `extend` about 8 s later; run done, 2 `factory_wait`, 0 `factory_status` |
+| thin client | OpenCode 2.2.7, Haiku, neutral prompt, factory with the run page | done; the client ended its answer with `Viewer: http://127.0.0.1:7340/viewer/?run=<runId>` without being asked |
+
+Interactive Claude Code asks whether you trust the folder on the first start; answer that yourself.
 
 ## 5. Cleanup
 

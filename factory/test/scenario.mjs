@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import http from "node:http";
 
 const URL_ = process.env.FACTORY_URL ?? "http://127.0.0.1:7340/mcp";
 const TOKEN = process.env.FACTORY_TOKEN;
@@ -175,6 +176,39 @@ await check("throttle: tight factory_wait loop on an ended run is slowed and tol
   assert.match(last.payload.next, /Do not call factory_wait/);
   assert.ok(elapsed >= 5 * 450, `6 calls took only ${elapsed} ms`);
   console.log(`      6 rapid waits on an ended run took ${elapsed} ms`);
+});
+
+function get(path, { host, method = "GET" } = {}) {
+  const base = new URL(URL_);
+  return new Promise((resolve, reject) => {
+    const req = http.request({ hostname: base.hostname, port: base.port, path, method, headers: host ? { host } : {} }, (res) => {
+      let body = "";
+      res.on("data", (d) => (body += d));
+      res.on("end", () => resolve({ status: res.statusCode, headers: res.headers, body }));
+    });
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+await check("viewer: run responses link to a localhost page that shows the run without the MCP token", async () => {
+  const { payload } = await call(client, "factory_start", { goal: "viewer test" });
+  assert.ok(payload.viewerUrl.endsWith(`/viewer/?run=${payload.runId}`), payload.viewerUrl);
+  const page = await get("/viewer/");
+  if (page.status === 503) console.log("      viewer is not built in this image; checked the API only");
+  else {
+    assert.equal(page.status, 200);
+    assert.match(page.headers["content-security-policy"] ?? "", /script-src 'self' 'nonce-/);
+    assert.doesNotMatch(page.body, /FACTORYCSPNONCEPLACEHOLD/);
+    assert.equal((await get("/viewer/..%2f..%2fsrc%2fserver.mjs")).status, 404, "no path traversal out of the viewer folder");
+  }
+  const detail = await get(`/viewer/api/runs/${payload.runId}`);
+  assert.equal(detail.status, 200, "the viewer API does not need the MCP token");
+  assert.equal(JSON.parse(detail.body).report.runId, payload.runId);
+  assert.equal((await get("/viewer/api/runs", { host: "evil.example:7340" })).status, 403, "other Host headers are refused");
+  assert.equal((await get("/viewer/api/runs", { method: "POST" })).status, 405);
+  assert.equal((await get("/mcp")).status, 401, "the MCP endpoint still needs the token");
+  await call(client, "factory_cancel", { runId: payload.runId });
 });
 
 await client.close();

@@ -13,6 +13,10 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --omit=dev --no-audit --no-fund
 COPY src ./src
+COPY spec ./spec
+COPY workflows ./workflows
+COPY app/csp.mjs app/data.mjs ./app/
+COPY app/dist ./app/dist
 COPY test ./test
 COPY py ./py
 COPY run-tests.sh ./

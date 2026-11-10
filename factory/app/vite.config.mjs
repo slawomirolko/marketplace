@@ -25,8 +25,9 @@ function factoryData() {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  base: command === "build" ? "/viewer/" : "/",
   plugins: [react(), factoryData()],
   html: { cspNonce: NONCE_PLACEHOLDER },
   server: { host: "127.0.0.1", port: 5180, open: true },
-});
+}));

@@ -41,6 +41,16 @@ JSON Schemas (draft 2020-12) in `spec/`, validated by `src/spec.mjs` (Ajv plus g
 
 `spec/examples/valid` and `spec/examples/invalid` hold examples checked by `test/spec.test.mjs`. The PoC server still emits the older footer field names; moving it to this schema is the next step.
 
+## Setup and the run page
+
+```bash
+node factory/setup.mjs
+```
+
+Installs the viewer dependencies (`pnpm install --frozen-lockfile`), builds the viewer (`vite build`) and builds the factory image (`skill-factory-poc:0.3`), then prints the `docker run` command. The factory server serves the built viewer at `http://127.0.0.1:7340/viewer/`, reading the same runs as the MCP endpoint. Every response that has a `runId` also has `viewerUrl` (`/viewer/?run=<runId>`), and the end hint and the `factory_report` description tell the client to show it to the user. `FACTORY_PUBLIC_URL` changes the base when the port is mapped differently.
+
+The run page needs no MCP token. It is read-only (GET), answers only requests whose Host is the factory's own local address (protection against DNS rebinding), and sends a Content-Security-Policy with a new nonce per request. The page shows prompts and agent outputs, so keep the port bound to 127.0.0.1.
+
 ## Viewer app
 
 One command, from `factory/`:

@@ -2,12 +2,24 @@ import http from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Factory } from "./engine.mjs";
+import { allowedHostsFor, viewerHandler, viewerUrlFor } from "./viewer-routes.mjs";
 
 const PORT = Number(process.env.FACTORY_PORT ?? 7340);
 const HOST = process.env.FACTORY_HOST ?? "127.0.0.1";
 const TOKEN = process.env.FACTORY_TOKEN;
 const DATA_DIR = process.env.FACTORY_DATA_DIR ?? "/data";
+const FACTORY_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+const PUBLIC_URL = process.env.FACTORY_PUBLIC_URL ?? `http://127.0.0.1:${PORT}`;
+const viewer = viewerHandler({
+  viewerDir: process.env.FACTORY_VIEWER_DIR ?? path.join(FACTORY_DIR, "app", "dist"),
+  dataDir: DATA_DIR,
+  factoryDir: FACTORY_DIR,
+  configFile: path.join(FACTORY_DIR, "spec", "examples", "valid", "factory-config.json"),
+  allowedHosts: allowedHostsFor(PUBLIC_URL, PORT),
+});
 
 if (!TOKEN) {
   console.error("FACTORY_TOKEN is required");
@@ -41,6 +53,7 @@ async function throttle(runId) {
 }
 
 function reply(payload) {
+  if (payload?.runId && !payload.viewerUrl) payload.viewerUrl = viewerUrlFor(PUBLIC_URL, payload.runId);
   return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
 }
 
@@ -172,7 +185,7 @@ function buildServer() {
 
   server.registerTool(
     "factory_report",
-    { description: "Get the steps, tokens and cost of a factory run for each node, agent, tier and model. The cost is the factory run cost, not the cost of your own session. Call this tool after the run has ended.", inputSchema: { runId: z.string() } },
+    { description: "Get the steps, tokens and cost of a factory run for each node, agent, tier and model. The cost is the factory run cost, not the cost of your own session. Call this tool after the run has ended. The result has viewerUrl: a local page that shows the whole flow and the cost of each agent. Show viewerUrl to the user.", inputSchema: { runId: z.string() } },
     guarded(({ runId }) => factory.report(factory.get(runId))),
   );
 
@@ -217,6 +230,7 @@ const httpServer = http.createServer(async (req, res) => {
     res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ statusCalls, throttledCalls, waitCalls, throttledWaitCalls }));
     return;
   }
+  if (viewer(req, res)) return;
   if (req.headers.authorization !== `Bearer ${TOKEN}`) {
     res.writeHead(401, { "content-type": "application/json" }).end(JSON.stringify({ error: "unauthorized" }));
     return;
@@ -244,4 +258,4 @@ const httpServer = http.createServer(async (req, res) => {
   }
 });
 
-httpServer.listen(PORT, HOST, () => console.log(`skill-factory-poc listening on http://${HOST}:${PORT}/mcp`));
+httpServer.listen(PORT, HOST, () => console.log(`skill-factory-poc listening on http://${HOST}:${PORT}/mcp, viewer ${PUBLIC_URL}/viewer/`));
