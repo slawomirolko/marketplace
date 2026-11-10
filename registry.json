@@ -4,12 +4,14 @@
     {
       "name": "olko-agents-optimizer",
       "category": "ai",
-      "version": "1.1.0",
-      "description": "Optimize agent context files (AGENTS.md, CLAUDE.md, .github/copilot-instructions.md, .windsurfrules, codex.md, etc.) using Addy Osmani's agents-md methodology. Triggers: 'optimize CLAUDE.md', 'streamline CLAUDE.md', 'agents-md', 'discoverability filter', 'add gotchas', 'optimize AGENTS.md', 'optimize context file', 'optimize .windsurfrules', 'optimize copilot-instructions', 'optimize codex.md'.",
+      "version": "1.2.0",
+      "description": "Optimize agent context files (AGENTS.md, CLAUDE.md, .github/copilot-instructions.md, .windsurfrules, codex.md, etc.), agent prompts, and SKILL.md files using Addy Osmani's agents-md methodology plus a token and cache audit (stable prefix, examples over rules, split plan). Triggers: 'optimize CLAUDE.md', 'streamline CLAUDE.md', 'agents-md', 'discoverability filter', 'add gotchas', 'optimize AGENTS.md', 'optimize context file', 'optimize .windsurfrules', 'optimize copilot-instructions', 'optimize codex.md', 'optimize agent prompt', 'reduce agent tokens', 'prompt caching'.",
       "tags": [
         "ai",
         "agents",
-        "optimizer"
+        "optimizer",
+        "tokens",
+        "cache"
       ],
       "capabilities": [
         "ai",
@@ -25,6 +27,7 @@
         "references/code-assessment.md",
         "references/gotcha-mining.md",
         "references/methodology.md",
+        "references/token-and-cache.md",
         "scripts/line-count.mjs",
         "workflow.md"
       ],
@@ -1149,6 +1152,41 @@
       }
     },
     {
+      "name": "olko-init-project-docs",
+      "category": "project",
+      "version": "1.0.1",
+      "description": "Initialize a project's decision store — ADRs, scoped rule files, and C4 architecture docs — from the existing codebase. Scans the code read-only, grills the user one candidate at a time (record / reword / skip), then writes the approved files itself. Re-runs fill only missing files and never overwrite. Use when a project has no docs/adr or docs/rules yet, or when the user asks to init or bootstrap project docs. Triggers: 'init project docs', 'seed ADRs', 'bootstrap docs/rules', 'create decision store', 'olko-init-project-docs'.",
+      "tags": [
+        "project",
+        "docs",
+        "adr",
+        "rules",
+        "architecture"
+      ],
+      "capabilities": [
+        "project",
+        "project.docs.init"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
       "name": "olko-mobile-network-sync",
       "category": "project",
       "version": "1.0.1",
@@ -1599,7 +1637,7 @@
       "name": "grill-with-docs",
       "category": "workflow",
       "origin": "vendored",
-      "version": "1.2.1",
+      "version": "1.3.0",
       "description": "A grilling session that stress-tests a plan against the project's documented domain model — sharpens fuzzy terminology, challenges it against the existing glossary, cross-references it with the code, and updates documentation (CONTEXT.md, ADRs) inline as decisions crystallize. The domain-aware variant of grill-me — use this instead when the repo has (or should have) a CONTEXT.md glossary or docs/adr/ decision records. Triggers include \"grill with docs\", \"stress-test this against our domain model\", \"does this match our language\", \"check this against our glossary\", \"grill this and update the docs\", or any time a non-trivial plan needs to be reconciled with the project's documented decisions.",
       "tags": [
         "workflow",
@@ -1757,6 +1795,60 @@
       }
     },
     {
+      "name": "olko-implementation-closure",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Post-merge steps 11, 11a, and 11b of olko-implementation-orchestrator: main-stack verification, Task plan removal, Feature completion audit, and Feature plan cleanup.",
+      "tags": [
+        "workflow",
+        "implementation"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.implementation.closure"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-implementation-journal",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Implementation journal template and resume procedure for olko-implementation-orchestrator; load when creating the journal or resuming a Task.",
+      "tags": [
+        "workflow",
+        "implementation"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.implementation.journal"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-implementation-pr-gates",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Steps 8b (Obsidian knowledge-base gate) and 8c (editor verification gate) of olko-implementation-orchestrator; both must pass before the merge.",
+      "tags": [
+        "workflow",
+        "implementation"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.implementation.pr-gates"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
       "name": "olko-investigate-existing",
       "category": "workflow",
       "version": "1.4.0",
@@ -1788,6 +1880,42 @@
           "edge-cases"
         ]
       }
+    },
+    {
+      "name": "olko-plan-backlog-discovery",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Epic/Feature/Task discovery path of olko-plan-documentation-orchestrator: draft, one content review, approval-gated publish to YouTrack, and read-back.",
+      "tags": [
+        "workflow",
+        "planning"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.plan.backlog-discovery"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-plan-change-triage",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Task change impact triage and step 8c tracker reconciliation for olko-plan-documentation-orchestrator; load when a material change to a Task's scope appears.",
+      "tags": [
+        "workflow",
+        "planning"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.plan.change-triage"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
     },
     {
       "name": "olko-plan-editor",
@@ -1822,6 +1950,24 @@
           "edge-cases"
         ]
       }
+    },
+    {
+      "name": "olko-plan-finalization",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Final steps 9–11 and the completion report of olko-plan-documentation-orchestrator: Domain changes recommendation, memory persist, opening the plan directory.",
+      "tags": [
+        "workflow",
+        "planning"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.plan.finalization"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
     },
     {
       "name": "olko-research-new-functionality",
@@ -1906,6 +2052,42 @@
           "edge-cases"
         ]
       }
+    },
+    {
+      "name": "olko-task-scope-gates",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Task-to-PR scope gate with the code-path budget (step 7b), and the procedure for work found outside a Task's scope, for olko-implementation-orchestrator.",
+      "tags": [
+        "workflow",
+        "implementation"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.task.scope-gates"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-worktree-compose-isolation",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Canonical Compose isolation contract for worktree builds, restarts, and log/trace/DB checks; load in steps 6, 7, and 11 of olko-implementation-orchestrator.",
+      "tags": [
+        "workflow",
+        "implementation"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.worktree.compose-isolation"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
     }
   ]
 }

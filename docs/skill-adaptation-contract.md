@@ -110,3 +110,25 @@ a skill is added to `registry.json`, verify:
   [Explicit Skill Reuse](explicit-skill-reuse.md)).
 
 A skill that cannot satisfy this checklist is not eligible for the marketplace.
+
+## 9. Project decision store
+
+A project may keep its decisions and rules in a decision store. Skills and
+agents that read or write the store locate it only through these
+`.agents/skill-config.md` keys:
+
+| Key | Default | Holds |
+|-----|---------|-------|
+| `adrDirectory` | `docs/adr` | ADR files, `TEMPLATE.md`, and the `README.md` log (`ADR \| Title \| Status \| Scope`). |
+| `rulesDirectory` | `docs/rules` | Rule files with `scope` (path globs) and `summary` front matter, and the `README.md` table (`File \| Scope \| Summary`). |
+| `architectureDirectory` | `docs/architecture` | C4 level 1 and level 2 descriptions. |
+
+Rules:
+
+- Load only the entries whose scope globs match the paths the task touches.
+  Open only `Accepted` ADRs; follow `Superseded by NNNN` to the newer ADR.
+- `AGENTS.md` keeps commands and gotchas. A contradiction between `AGENTS.md`
+  and a store entry is a blocker: stop and ask the user.
+- A project without the store gets the default behavior: steps that need the
+  store are skipped.
+- `olko-init-project-docs` creates the store.

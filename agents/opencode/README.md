@@ -31,7 +31,21 @@ comparison per skill, aggregates the results, and waits for an explicit
 per-skill decision before changing marketplace content, publishing, or
 reinstalling anything.
 
-`olko-review-orchestrator` is a visible primary agent for code review. For
+`olko-implementation-orchestrator` writes failing tests before code: step 3a
+delegates `olko-test-first-author` (one failing test per acceptance criterion, one call
+per stack); step 3b implementers make those tests pass and never write or change
+tests. Children return `Blocked:` instead of choosing a new dependency or
+convention alone. Step 7c runs `olko-review-orchestrator` on the local Task diff.
+
+Review runs with `mode: all`, so other orchestrators can call
+`olko-review-orchestrator`. `olko-review-requirements-lens` checks the diff or a plan
+against the acceptance criteria, and `olko-project-rules-check` checks confirmed findings
+against the project's decision store (see `docs/skill-adaptation-contract.md` §9).
+Its PLAN ROUTE reviews a plan before the user approves it.
+
+An orchestrator that calls `olko-review-orchestrator` nests subagents two levels deep. OpenCode allows one level by default, so the installer sets `experimental.subagent_depth` in the project's `opencode.json` to the deepest delegation chain it installs (it never lowers an existing value).
+
+`olko-review-orchestrator` is the entry point for code review. For
 someone else's PR or a local diff it runs a read-only review: one
 `olko-review-bugs-lens` plus one stack lens per changed stack in parallel,
 every finding checked by `olko-review-verifier`, then a ranked list. None of

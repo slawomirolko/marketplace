@@ -2,7 +2,7 @@
 description: "Runs delivery gates and Git handoff for an implementation worktree: style, Docker rebuild, commit, push, and PR creation."
 mode: subagent
 hidden: true
-model: ollama-cloud/deepseek-v4.1-flash:cloud
+model: ollama-cloud/deepseek-v4.1-flash
 permission:
   edit: allow
   bash:

@@ -1,7 +1,7 @@
 ---
 description: Synchronizes approved project-local skills and OpenCode agents to the marketplace, publishes them, and reinstalls the selected remote artifacts.
 mode: primary
-model: ollama-cloud/deepseek-v4.1-flash:cloud
+model: ollama-cloud/deepseek-v4.1-flash
 permission:
   edit: allow
   bash: allow

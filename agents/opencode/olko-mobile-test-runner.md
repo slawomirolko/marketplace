@@ -2,7 +2,7 @@
 description: Runs affected Android and Kotlin tests using the olko-test skill and reports actionable failures.
 mode: subagent
 hidden: true
-model: ollama-cloud/deepseek-v4.1-flash:cloud
+model: ollama-cloud/deepseek-v4.1-flash
 permission:
   edit: deny
   task: deny

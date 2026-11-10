@@ -2,7 +2,7 @@
 description: Audits and improves Android Kotlin architecture, style, and test architecture using olko-kotlin skills.
 mode: subagent
 hidden: true
-model: ollama-cloud/deepseek-v4.1-flash:cloud
+model: ollama-cloud/deepseek-v4.1-flash
 permission:
   edit: allow
   bash: deny

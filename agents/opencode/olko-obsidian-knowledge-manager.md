@@ -2,7 +2,7 @@
 description: Verifies the Obsidian knowledge base against docs/knowledge, proposes precise note changes, and applies only user-approved updates.
 mode: all
 hidden: false
-model: ollama-cloud/deepseek-v4.1-flash:cloud
+model: ollama-cloud/deepseek-v4.1-flash
 permission:
   edit: allow
   bash: allow
