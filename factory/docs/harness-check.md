@@ -1,6 +1,6 @@
 # Harness check
 
-Manual check that a real harness can drive the factory as a thin MCP client. Use synthetic data only. The factory uses a fake model, so it calls no LLM; each harness still uses its own model to call the tools, billed to the account it is signed in with.
+Manual check that a real harness can drive the factory as a thin MCP client. Use synthetic data only. Start the factory with `FACTORY_BACKEND=fake` so it calls no LLM; each harness still uses its own model to call the tools, billed to the account it is signed in with.
 
 ## 1. Start the server (localhost only)
 
@@ -8,8 +8,8 @@ Manual check that a real harness can drive the factory as a thin MCP client. Use
 export FACTORY_TOKEN=$(openssl rand -hex 24)
 MSYS_NO_PATHCONV=1 docker run -d --name skill-factory-poc --read-only --tmpfs /tmp --tmpfs /data:uid=10001 \
   --cap-drop ALL --security-opt no-new-privileges -p 127.0.0.1:7340:7340 \
-  -e FACTORY_HOST=0.0.0.0 -e FACTORY_TOKEN -e FACTORY_TURN_DELAY_MS=300 \
-  --entrypoint node skill-factory-poc:0.2 src/server.mjs
+  -e FACTORY_HOST=0.0.0.0 -e FACTORY_TOKEN -e FACTORY_BACKEND=fake -e FACTORY_TURN_DELAY_MS=300 \
+  --entrypoint node skill-factory-poc:0.3 src/server.ts
 ```
 
 Run each harness from an empty temporary folder, not from a repository.

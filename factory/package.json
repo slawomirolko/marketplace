@@ -1,21 +1,30 @@
 {
-  "name": "skill-factory-poc",
-  "version": "0.1.0",
+  "name": "skill-factory",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=26.13.0"
+  },
   "scripts": {
-    "server": "node src/server.mjs",
-    "test": "node test/scenario.mjs",
-    "test:spec": "node --test test/spec.test.mjs",
-    "viewer": "pnpm --dir app install && pnpm --dir app run dev",
-    "viewer:mermaid": "node viewer/render.mjs",
-    "test:viewer": "node --test test/viewer.test.mjs test/app.test.mjs test/csp.test.mjs",
-    "setup": "node setup.mjs"
+    "server": "node src/server.ts",
+    "typecheck": "tsc -p tsconfig.json && tsc -p app/tsconfig.json",
+    "test": "node --test test/*.test.ts",
+    "test:scenario": "node test/scenario.ts",
+    "viewer": "pnpm --dir app run dev",
+    "viewer:build": "pnpm --dir app run build",
+    "viewer:mermaid": "node viewer/render.ts",
+    "setup": "node setup.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.20.0",
-    "ajv": "^8.20.0",
-    "ajv-formats": "^3.0.1",
-    "zod": "^3.25.0"
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2"
   }
 }
