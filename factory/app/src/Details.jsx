@@ -77,14 +77,14 @@ function AgentTable({ item }) {
           </thead>
           <tbody>
             {agents.map((a) => {
-              const c = byAgent?.[a.id];
+              const agentCost = byAgent?.[a.id];
               return (
                 <tr key={a.id}>
                   <td>{a.id}</td>
-                  <td>{c?.agentName ?? a.role ?? item.node.role}</td>
-                  <td>{c ? `${c.tier} · ${c.model}` : "—"}</td>
-                  <td>{c ? formatTokens(c.tokens, c.cacheTokens) : "—"}</td>
-                  <td className={c?.costSource === "unknown" ? "cost-unknown" : ""}>{formatUsd(c)}</td>
+                  <td>{agentCost?.agentName ?? a.role ?? item.node.role}</td>
+                  <td>{agentCost ? `${agentCost.tier} · ${agentCost.model}` : "—"}</td>
+                  <td>{agentCost ? formatTokens(agentCost.tokens, agentCost.cacheTokens) : "—"}</td>
+                  <td className={agentCost?.costSource === "unknown" ? "cost-unknown" : ""}>{formatUsd(agentCost)}</td>
                 </tr>
               );
             })}

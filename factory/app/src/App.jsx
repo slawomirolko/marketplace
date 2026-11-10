@@ -39,13 +39,13 @@ function Viewer() {
 
   useEffect(() => {
     Promise.all([getJson("/api/workflows"), getJson("/api/config"), getJson("/api/runs")])
-      .then(([w, c, r]) => {
-        setWorkflows(w);
-        setConfig(c);
-        setRuns(r);
-        setRunId(r[0]?.runId ?? "");
+      .then(([workflowList, factoryConfig, runList]) => {
+        setWorkflows(workflowList);
+        setConfig(factoryConfig);
+        setRuns(runList);
+        setRunId(runList[0]?.runId ?? "");
       })
-      .catch((e) => setError(e.message));
+      .catch((loadError) => setError(loadError.message));
   }, []);
 
   useEffect(() => {
@@ -56,11 +56,11 @@ function Viewer() {
     }
     let current = true;
     getJson(`/api/runs/${runId}`)
-      .then((d) => {
-        if (current) setDetail(d);
+      .then((runDetail) => {
+        if (current) setDetail(runDetail);
       })
-      .catch((e) => {
-        if (current) setError(e.message);
+      .catch((loadError) => {
+        if (current) setError(loadError.message);
       });
     return () => {
       current = false;
