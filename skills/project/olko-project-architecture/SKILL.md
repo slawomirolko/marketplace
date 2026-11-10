@@ -1,5 +1,6 @@
 ---
 name: olko-project-architecture
+version: 1.1.0
 description: "Check whole-monorepo architecture compliance for a project with marketplace defaults. Discover app/service/platform surfaces and workspace packages; verify top-level separation, DDD module boundaries, dependency direction, shared-code ownership, independent buildability, React Native workspace/package/Metro/native-linking boundaries, and AI context layout. Use when reviewing monorepo architecture, onboarding a surface/module, or checking repository structure for drift."
 ---
 

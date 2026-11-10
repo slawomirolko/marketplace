@@ -1,5 +1,6 @@
 ---
 name: olko-kotlin-testing
+version: 1.1.0
 description: "Check Kotlin/Android test conventions for changed Kotlin projects with marketplace defaults. Reads project docs/adapters, maps source changes to test files, verifies instrumentation vs unit tier rules, Gradle harness conventions, no-skip/no-silent-pass policy, MockK/fake test-double boundaries, parametrization, fixture reuse, Compose UI testing conventions, Windows Gradle hang handling, new-component test requirements, cross-boundary contract tests, and reports violations with rule sources. Use when validating Kotlin/Android tests, before commit/test gates, or when olko-test/olko-commit-style delegates Kotlin test-convention checks."
 ---
 
