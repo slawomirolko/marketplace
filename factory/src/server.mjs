@@ -64,19 +64,19 @@ function buildServer() {
   server.registerTool(
     "factory_start",
     {
-      description: "Create a factory run for a goal. Returns proposed settings that must be confirmed with factory_confirm after asking the user.",
+      description: "Create a factory run for a goal. The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
       inputSchema: { goal: z.string().min(1), idempotencyKey: z.string().optional() },
     },
     guarded(({ goal, idempotencyKey }) => {
       const { run, reused } = factory.start(goal, idempotencyKey);
-      return { ...factory.status(run), reused, next: "Show the proposal to the user, then call factory_confirm." };
+      return { ...factory.status(run), reused, next: "Show the proposal to the user. After the user replies, call factory_confirm." };
     }),
   );
 
   server.registerTool(
     "factory_confirm",
     {
-      description: "Confirm (optionally override) the proposed role-to-tier mapping and budget, then start the run asynchronously.",
+      description: "Confirm the proposed role-to-tier mapping and budget, and start the run. To change a proposed value, put it in overrides. The run continues in the background; this call does not wait for it.",
       inputSchema: {
         runId: z.string(),
         overrides: z
@@ -95,7 +95,7 @@ function buildServer() {
   server.registerTool(
     "factory_next",
     {
-      description: "In delegate mode: the node work the client should run now (prompt, tier, model), or null.",
+      description: "Delegate mode only. Get pendingWork: the node work that you must run now (prompt, tier and model). The result is null when there is no work.",
       inputSchema: { runId: z.string() },
     },
     guarded(({ runId }) => ({ pendingWork: factory.next(runId), ...factory.status(factory.get(runId)) })),
@@ -105,7 +105,7 @@ function buildServer() {
     "factory_submit",
     {
       description:
-        "In delegate mode: submit the output of pendingWork (pass its agentId when it has one) and the usage of the subagent that ran it. If the subagent result shows a session id (for example <subagent sessionID=\"ses_...\">), always pass it as usage.childSessionId: the factory reads the exact token usage from that session. Add token numbers only if you actually observed them; omit the rest.",
+        "Delegate mode only. Submit the output of pendingWork and the usage of the subagent that ran it. If pendingWork has an agentId, pass the same agentId. If the subagent result shows a session id (for example <subagent sessionID=\"ses_...\">), always pass it as usage.childSessionId. The factory reads the exact token usage from that session. Add token numbers only if you saw them. Do not send token numbers that you did not see.",
       inputSchema: {
         runId: z.string(),
         nodePath: z.string(),
@@ -134,7 +134,7 @@ function buildServer() {
     "factory_status",
     {
       description:
-        "Current status of a factory run (returns immediately). The cost fields are the cost and budget of this factory run, not of your own session. The run has ended when status is done, stopped, cancelled or failed. To wait for progress, call factory_wait. Do not call factory_status in a loop: the server delays calls closer than the minimum interval.",
+        "Get the current status of a factory run. This call returns immediately. The cost fields show the cost and budget of this factory run, not of your own session. The run has ended when status is done, stopped, cancelled or failed. To wait for progress, call factory_wait. Do not call factory_status in a loop. The server delays calls that come sooner than the minimum interval.",
       inputSchema: { runId: z.string() },
     },
     guarded(async ({ runId }) => {
@@ -147,7 +147,7 @@ function buildServer() {
     "factory_wait",
     {
       description:
-        "Block until the run needs the user (waiting_for_user), ends, or timeoutSec passes. The run has ended when status is done, stopped, cancelled or failed; then stop calling factory_wait. Use this instead of polling. On waiting_for_user, ask the user pendingQuestion.text and send the user's answer with factory_answer. If it returns status 'running' (timedOut), call it again. The server delays calls closer than the minimum interval when the run is not running.",
+        "Wait until the run needs the user (waiting_for_user), the run ends, or timeoutSec passes. Use this tool instead of polling. The run has ended when status is done, stopped, cancelled or failed. After that, stop calling factory_wait. On waiting_for_user, ask the user pendingQuestion.text. Then send the user's answer with factory_answer. If the result has status 'running' and timedOut is true, call factory_wait again. When the run is not running, the server delays calls that come sooner than the minimum interval.",
       inputSchema: { runId: z.string(), timeoutSec: z.number().int().min(1).max(MAX_WAIT_SEC).optional() },
     },
     guarded(async ({ runId, timeoutSec }) => {
@@ -161,7 +161,7 @@ function buildServer() {
   server.registerTool(
     "factory_answer",
     {
-      description: "Send the user's answer to the pending question of a factory run (pendingQuestion). Idempotent for the same questionId and answer.",
+      description: "Send the user's answer to the pending question of a factory run (pendingQuestion). If you send the same questionId and answer again, the call has no new effect and returns duplicate: true.",
       inputSchema: { runId: z.string(), questionId: z.string(), answer: z.string() },
     },
     guarded(({ runId, questionId, answer }) => {
@@ -172,13 +172,13 @@ function buildServer() {
 
   server.registerTool(
     "factory_report",
-    { description: "Steps, tokens and cost of a factory run per node, agent, tier and model. This is the factory run cost, not the cost of your own session. Call it when the run has ended.", inputSchema: { runId: z.string() } },
+    { description: "Get the steps, tokens and cost of a factory run for each node, agent, tier and model. The cost is the factory run cost, not the cost of your own session. Call this tool after the run has ended.", inputSchema: { runId: z.string() } },
     guarded(({ runId }) => factory.report(factory.get(runId))),
   );
 
   server.registerTool(
     "factory_trace",
-    { description: "Trace tree of a factory run: nodes, turns, tokens, factory run cost and events.", inputSchema: { runId: z.string() } },
+    { description: "Get the trace tree of a factory run: nodes, turns, tokens, factory run cost and events.", inputSchema: { runId: z.string() } },
     guarded(({ runId }) => {
       const run = factory.get(runId);
       return { trace: factory.trace(run), cost: factory.footer(run) };
@@ -187,7 +187,7 @@ function buildServer() {
 
   server.registerTool(
     "factory_cancel",
-    { description: "Cancel a factory run. Call it when the user asks to stop the run.", inputSchema: { runId: z.string() } },
+    { description: "Cancel a factory run. Call this tool when the user asks to stop the run.", inputSchema: { runId: z.string() } },
     guarded(({ runId }) => factory.status(factory.cancel(runId))),
   );
 

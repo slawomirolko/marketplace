@@ -66,8 +66,8 @@ function lensPrompt({ state, agent }) {
     `Files for this lens (${files.length}):`,
     ...files.map((f) => `- ${f.path}`),
     "",
-    "Suppress: none. Prioritize: none. The memory layer was not loaded for this run.",
-    "The current branch is the PR head, so working-tree files match the diff.",
+    "Suppress: none. Prioritize: none. The factory did not load the memory layer for this run.",
+    "The current branch is the PR head. The files in the working tree match the diff.",
     "",
     "Diff hunks:",
     ...files.map((f) => f.diff),
@@ -78,7 +78,7 @@ function verifierPrompt({ state }) {
   const findings = state.merge.findings;
   return [
     `PR #${state.scope.pr}: ${state.scope.title}`,
-    "The current branch is the PR head, so working-tree files match the diff.",
+    "The current branch is the PR head. The files in the working tree match the diff.",
     "",
     `Findings (${findings.length}), one per line:`,
     ...findings.map((f) => f.line),
