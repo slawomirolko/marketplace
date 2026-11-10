@@ -56,7 +56,7 @@ It installs the app dependencies (first time only), starts Vite on <http://127.0
 - on click, a side panel with the agents table, every ledger record (input, output, cache tokens, cost, source), the question to the user and its answer, and the last output preview;
 - a run selector and run totals by tier, model and cost source.
 
-Data comes read-only from the factory data directory. Without `FACTORY_DATA_DIR` the app uses `factory/.viewer-data` (git-ignored) and creates one finished demo run with the fake model on first start. To look at real runs, set `FACTORY_DATA_DIR` to the directory the factory writes to (it holds `runs/*.json`). The Vite server listens on 127.0.0.1 only and serves GET requests only.
+Data comes read-only from the factory data directory. Without `FACTORY_DATA_DIR` the app uses `factory/.viewer-data` (git-ignored) and creates one finished demo run with the fake model on first start. To look at real runs, set `FACTORY_DATA_DIR` to the directory the factory writes to (it holds `runs/*.json`). The Vite server listens on 127.0.0.1 only and serves GET requests only. HTML responses carry a Content-Security-Policy with a new nonce per request (`app/csp.mjs`): no unsafe-inline, no unsafe-eval.
 
 ## Real workflow: olko-review
 
