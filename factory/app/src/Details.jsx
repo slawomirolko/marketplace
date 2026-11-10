@@ -113,12 +113,13 @@ function RunSummary() {
     );
   }
   const group = (entries, format) => entries.map(([k, v]) => <Row key={k} label={k} value={format(v, k)} />);
+  const runError = runFailure(run);
   return (
     <section>
       <h2>Run {report.runId}</h2>
       <Row label="Goal" value={run.goal} />
       <Row label="Status" value={report.status} />
-      {runFailure(run) && <p className="cost-unknown">{runFailure(run)}</p>}
+      {runError && <p className="cost-unknown">{runError}</p>}
       <Row label="Cost" value={`${formatAmount(report.cost.costUsd, report.coverage?.run)} of ${usd(report.cost.budgetUsd)} (${Math.round(report.cost.budgetRatio * 100)}%)`} />
       <Row label="Tokens (in + out)" value={num(report.cost.tokens)} />
       <Row label="Cache tokens (read + write)" value={num(report.cacheTokens ?? 0)} />
@@ -146,17 +147,20 @@ export function Details({ item }) {
   const question = item.kind !== "agent" ? item.node?.question : null;
   const records = ledgerOf(item, run);
   const outputs = records.filter((r) => r.output ?? r.outputPreview);
+  const harnessAgent = records.find((r) => r.agentName)?.agentName ?? item.node?.agent;
+  const role = item.agent?.role ?? item.node.role;
+  const failure = failureOf(item, run);
   return (
     <section>
       <h2>{item.kind === "agent" ? `${item.agent.id} (agent of ${item.node.id})` : item.node.id}</h2>
       <Row label="Path" value={item.kind === "agent" ? `${item.nodePath} / ${item.agent.id}` : item.key} />
       <Row label="Kind" value={kindLabel(item)} />
       {item.node?.run && <Row label="Runs" value={item.node.run} />}
-      {(item.node?.agent || records.find((r) => r.agentName)?.agentName) && <Row label="Harness agent" value={records.find((r) => r.agentName)?.agentName ?? item.node.agent} />}
-      {(item.agent?.role ?? item.node.role) && <Row label="Role" value={item.agent?.role ?? item.node.role} />}
+      {harnessAgent && <Row label="Harness agent" value={harnessAgent} />}
+      {role && <Row label="Role" value={role} />}
       {tier && <Row label="Tier" value={tier} />}
       {cost?.model && <Row label="Model" value={cost.model} />}
-      {failureOf(item, run) && <p className="cost-unknown">Failed: {failureOf(item, run)}</p>}
+      {failure && <p className="cost-unknown">Failed: {failure}</p>}
       {report && <Row label="Cost" value={formatUsd(cost)} />}
       {cost && <Row label="Tokens (in + out)" value={num(cost.tokens)} />}
       {cost && <Row label="Cache tokens (read + write)" value={num(cost.cacheTokens ?? 0)} />}
