@@ -67,11 +67,16 @@ export function ledgerOf(item, run) {
 }
 
 function errorMessage(error) {
+  const text = String(error ?? "failed");
+  let parsed = null;
   try {
-    return JSON.parse(error).message ?? String(error);
+    parsed = JSON.parse(text);
   } catch {
-    return String(error ?? "failed");
+    const first = (pattern) => text.match(pattern)?.[1] ?? null;
+    if (text.startsWith("{")) parsed = { type: first(/^\{"type":"([^"]+)"/), status: first(/"status":(\d+)/), message: first(/"message":"([^"]*)"/) };
   }
+  if (!parsed) return text;
+  return [parsed.type, parsed.status].filter(Boolean).join(" ") + (parsed.message ? `: ${parsed.message}` : "");
 }
 
 export function failureOf(item, run) {

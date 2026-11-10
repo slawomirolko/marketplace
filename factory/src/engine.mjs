@@ -552,7 +552,8 @@ export class Factory {
         agentEntry.costSource = sources.size === 1 ? [...sources][0] : "mixed";
         delete agentEntry.sources;
       }
-      entry.costSource = costSourceSummary(run.ledger.filter((r) => r.nodePath === nodePath));
+      const nodeSources = new Set(run.ledger.filter((r) => r.nodePath === nodePath).map((r) => r.costSource));
+      entry.costSource = nodeSources.size === 1 ? [...nodeSources][0] : "mixed";
     }
     for (const totals of [byTier, byModel]) for (const key of Object.keys(totals)) totals[key] = round(totals[key]);
     return { runId: run.runId, status: run.status, workflow: workflowLabel(run), backend: run.config?.backend, tierModels: run.config?.tiers, byNode, byTier, byModel, byCostSource, cacheTokens, harnessCostUsd: round(harnessCostUsd), cost: this.footer(run) };
@@ -588,7 +589,7 @@ function currentAgent(run, node) {
 
 function costSourceSummary(ledger) {
   const sources = new Set(ledger.filter((r) => r.kind === "llm").map((r) => r.costSource));
-  if (sources.size === 0) return "measured";
+  if (sources.size === 0) return "none";
   return sources.size === 1 ? [...sources][0] : "mixed";
 }
 

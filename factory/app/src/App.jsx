@@ -82,7 +82,7 @@ function Viewer() {
               <option value="">no run (structure only)</option>
               {runs.map((r) => (
                 <option key={r.runId} value={r.runId}>
-                  {r.runId} · {r.status} · ${r.costUsd.toFixed(6)} · {r.goal}
+                  {r.runId} · {r.status} · {r.harness ?? "?"} · {(r.usedModels.length ? r.usedModels : r.requestedModels).join(", ")}{r.usedModels.length ? "" : " (requested, none ran)"} · ${r.costUsd.toFixed(6)} · {r.goal}
                 </option>
               ))}
             </select>

@@ -118,12 +118,13 @@ function RunSummary() {
       <Row label="Cache tokens (read + write)" value={num(report.cacheTokens ?? 0)} />
       <Row label="Steps" value={report.cost.steps} />
       <Row label="Cost source" value={report.cost.source} />
-      <h3>Tier → model</h3>
+      <Row label="Harness" value={report.backend?.kind === "cli" ? `${report.backend.cli} CLI` : report.backend?.kind ?? "—"} />
+      <h3>Requested tier → model</h3>
       {group(Object.entries(report.tierModels ?? {}), (v) => v)}
+      <h3>Models that actually ran</h3>
+      {Object.keys(report.byModel ?? {}).length ? group(Object.entries(report.byModel), usd) : <p className="muted">None. No LLM step finished in this run.</p>}
       <h3>Cost by tier</h3>
       {group(Object.entries(report.byTier ?? {}), usd)}
-      <h3>Cost by model</h3>
-      {group(Object.entries(report.byModel ?? {}), usd)}
       <h3>LLM steps by cost source</h3>
       {group(Object.entries(report.byCostSource ?? {}), (v) => v)}
       <p className="muted">Click a node to see its agents, ledger records and questions.</p>
