@@ -1,5 +1,6 @@
 ---
 name: olko-kotlin-style
+version: 1.2.0
 description: "Check Kotlin/Android style compliance for changed Kotlin files with marketplace defaults. Reads project docs and adapters, maps .kt/.kts files to Gradle module roots, runs documented format/lint commands such as ktlint/detekt when configured, checks common Kotlin style expectations that docs enable (naming, formatting, imports, classes, value classes, extension/scope functions, collection ops, nullability, coroutines/Flow, Compose, networking), and reports violations with rule sources. Use when validating Kotlin style, linting Kotlin changes, before commit/test gates, or when olko-commit-style delegates Kotlin style checks."
 ---
 

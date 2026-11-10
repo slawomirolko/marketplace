@@ -1,5 +1,6 @@
 ---
 name: olko-python-testing
+version: 1.1.0
 description: "Check Python test conventions for changed Python projects with marketplace defaults. Reads project docs/adapters, maps source changes to test files, verifies integration vs unit tier rules, pytest harness conventions, no-skip/no-silent-pass policy, monkeypatch/unit-only doubles, parametrization, fixture reuse, integration boundary rules, new-component test requirements, contract tests, and reports violations with rule sources. Use when validating Python tests, before commit/test gates, or when olko-test/olko-commit-style delegates Python test-convention checks."
 ---
 
