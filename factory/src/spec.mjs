@@ -35,9 +35,13 @@ function workflowGraphErrors(workflow) {
   const errors = [];
   if (ids.size !== workflow.nodes.length) errors.push("node ids must be unique");
   if (!ids.has(workflow.entry)) errors.push(`entry '${workflow.entry}' is not a node`);
+  const pairs = new Set();
   for (const edge of workflow.edges) {
     if (!ids.has(edge.from)) errors.push(`edge from unknown node '${edge.from}'`);
     if (edge.to !== "END" && !ids.has(edge.to)) errors.push(`edge to unknown node '${edge.to}'`);
+    const pair = `${edge.from}->${edge.to}`;
+    if (pairs.has(pair)) errors.push(`more than one edge ${pair}; merge their conditions into one edge`);
+    pairs.add(pair);
   }
   if (!workflow.edges.some((e) => e.to === "END")) errors.push("no edge reaches END");
   return errors;
