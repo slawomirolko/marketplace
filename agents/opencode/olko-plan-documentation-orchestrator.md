@@ -238,8 +238,8 @@ verdict.
     ROUTE) once for the Feature `implementation.md` and once per Task file. Pass
     the plan text, its acceptance criteria, and the target paths it names. Fold
     every `CONFIRMED` finding into the plan through `olko-plan-editor` and rerun
-    the consistency gate. Add every `ask` verdict (the plan breaks a project
-    ADR or rule file) and every vague criterion to the step 7 question
+    the consistency gate. Add every confirmed project violation and every `ask` verdict (the plan
+    breaks a project ADR or rule file) and every vague criterion to the step 7 question
     batch; never resolve one yourself. Record the review result in
     `tracker.md`. Rerun 6a for every plan file that changes later, including
     changes from steps 8, 8b, 8c, or a `PLAN_UPDATE_REQUIRED` from the

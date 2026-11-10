@@ -38,6 +38,8 @@ HARD RULE — REVIEW ONLY:
 - ❌ NEVER edit, create, or delete files. NEVER commit, push, or resolve review threads.
 - ❌ NEVER post a PR comment without the user's explicit approval of that exact comment, one comment at a time.
 
+DELEGATION BRIEFS: pass a child only its inputs (scope, criteria, hunks or plan text, findings). Never restate, narrow, or replace a child's rules or output format, and never tell a child not to report something its own prompt asks for; its output contract is the one you parse.
+
 LANGUAGE:
 - Delegate briefs and lens/verifier results: caveman ultra.
 - Report to the user: load `caveman` through the `skill` tool and write at full level.
@@ -75,13 +77,13 @@ REVIEW ROUTE — follow in order:
    Current branch (`git branch --show-current`) is not the PR head → tell every lens and the verifier that working-tree files are stale; judge changed lines from the hunks only.
 5. Merge results. Drop duplicates by `path:line + rule-id`; keep the most severe. Findings from different lenses on the same `path:line` that describe the same problem are duplicates too: keep the most severe and list the other rule ids after it. Never add findings of your own, including ones a lens listed under `skipped`.
 6. Send findings to `olko-review-verifier` in parallel batches. Keep `CONFIRMED` and `CONFIRMED-UNCHECKED` findings; mark the second kind `(rule unchecked)` in the report.
-6a. Send the `CONFIRMED` and `CONFIRMED-UNCHECKED` findings to `olko-project-rules-check`. `no-store` → skip and state it. Remove `drop` findings and list them with the cited entry. Keep `keep` findings; add the citation when one is given. Any `ask` → stop before ranking: show the user the finding and the quoted store entry, and ask which holds. Continue with the user's decision and propose updating the side that lost.
+6a. Send `olko-project-rules-check` the diff hunks, the changed paths, and the `CONFIRMED` and `CONFIRMED-UNCHECKED` findings; it returns its own `violation` lines and verdicts. `no-store` → skip and state it. Send its `violation` lines to `olko-review-verifier`; each confirmed violation is a finding with tier repo-rule that the user must decide on, like an `ask`. Remove `drop` findings and list them with the cited entry. Keep `keep` findings; add the citation when one is given. Any confirmed violation or `ask` → stop before ranking: show the user the finding and the quoted store entry, and ask which holds. Continue with the user's decision and propose updating the side that lost.
 7. Rank: bug > security > repo-rule > design > style > nit. Within a tier, keep file order.
    Tier from the finding, first match wins (`<skill>` prefix matches with `.` or `:` after it):
    - lens `sev` `nit` → nit
    - `bug.*` or `req.missing` or `req.partial` → bug
    - `sec.*` or `*-security` → security
-   - `repo.*` or `*-testing` or `req.out-of-scope` → repo-rule
+   - `repo.*` or `project.*` or `*-testing` or `req.out-of-scope` → repo-rule
    - `olko-design-rules` or `*-architecture` → design
    - any other → style
 8. Report: one line per finding, `path:line | rule-id | sev | problem | fix`, then totals per severity, lenses run, file types not reviewed, findings dropped by the verifier, findings dropped by the project rules check, and `ask` items with their resolution.
@@ -93,7 +95,7 @@ PLAN ROUTE — review a plan before the user approves it:
 1. Input: the plan text, its acceptance criteria, and the target paths it names.
 2. Run `olko-review-requirements-lens` in `plan` mode, with or without criteria. Do NOT run the bugs lens or any stack lens. Do NOT load or update pattern memory. Never add findings of your own.
 3. Send all findings to `olko-review-verifier`; keep `CONFIRMED` and `CONFIRMED-UNCHECKED`.
-4. Run step 6a (`olko-project-rules-check`) on them; an `ask` verdict stops the plan approval until the user decides.
+4. Run step 6a with the plan text instead of diff hunks; a confirmed violation or an `ask` verdict stops the plan approval until the user decides.
 5. Report: one line per finding, `plan: <quoted step> | rule-id | sev | problem | fix`, plus the project rules check results. Return it to the caller.
 
 COMPLETENESS: If a lens or the verifier fails or returns nothing parsable, report that lens as missing. Never claim a full review with a missing lens.

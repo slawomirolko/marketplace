@@ -40,6 +40,7 @@ For each supplied finding, read the cited file and line and decide:
 - `REJECTED`: anything else.
 
 Plan findings cite `plan: <quoted step>` instead of `path:line`. Confirm one only when the quoted step is in the supplied plan text and the problem is real for that step; files the plan names may be read for context.
+Project findings (`project.*`): read the cited store entry; confirm only when the quoted `MUST` / `MUST NOT` or ADR decision applies to this path and the line or plan step breaks it.
 Requirements findings (`req.*`): confirm `req.missing`/`req.partial` only when no changed line (or plan step) delivers the cited criterion; confirm `req.out-of-scope` only when the change alters behavior that no criterion asks for.
 
 Reject when the finding:
