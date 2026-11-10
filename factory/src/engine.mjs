@@ -507,7 +507,7 @@ function nextHint(run) {
     case "waiting_for_user":
       return "Ask the user pendingQuestion.text and send the answer with factory_answer.";
     case "waiting_for_client":
-      return "Run pendingWork.prompt in a subagent that uses model pendingWork.model, then call factory_submit with the subagent output and whatever token usage you can see for it.";
+      return "Run pendingWork.prompt in a subagent that uses model pendingWork.model, then call factory_submit with the subagent output. If the subagent result shows a session id, pass it as usage.childSessionId.";
     default:
       return "Run finished. Call factory_report.";
   }

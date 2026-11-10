@@ -101,7 +101,7 @@ function buildServer() {
     "factory_submit",
     {
       description:
-        "In delegate mode: submit the output of pendingWork and the token usage you can see for the subagent that ran it. Send only numbers you actually observed; omit the rest.",
+        "In delegate mode: submit the output of pendingWork and the usage of the subagent that ran it. If the subagent result shows a session id (for example <subagent sessionID=\"ses_...\">), always pass it as usage.childSessionId: the factory reads the exact token usage from that session. Add token numbers only if you actually observed them; omit the rest.",
       inputSchema: {
         runId: z.string(),
         nodePath: z.string(),

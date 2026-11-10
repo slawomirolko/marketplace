@@ -13,6 +13,8 @@ Prices: `src/prices.mjs`, from <https://platform.claude.com/docs/en/about-claude
 | `delegate`: the harness runs nodes in its subagents, neutral prompt | Claude Code | 0 | 0 | **9** |
 | `delegate`, neutral prompt | OpenCode | 0 | 0 | **9** |
 | `delegate`, prompt asks for the subagent `sessionID` | OpenCode | 6 | 3 | 0 (after reading the child sessions) |
+| `delegate`, neutral prompt, `factory_submit` description asks for the session id | OpenCode | 6 | 3 | **0** (after reading the child sessions) |
+| `delegate`, neutral prompt, same description | Claude Code | 0 | 0 | **9** |
 
 - `estimated` only appears when OpenCode reports cache writes. OpenCode does not say whether a write was 5-minute or 1-hour, so the factory prices it at the 5-minute rate and marks it `estimated`.
 - In `delegate` mode Claude Code sent `totalTokens` for 9 of 9 nodes, but a total without an input/output/cache split cannot be priced, so it stays `unknown`.
@@ -43,7 +45,7 @@ Most of the cost is cache writes of the harness system prompt (about 25,000 to 2
 ## Consequences for the factory
 
 1. Prefer the `cli` backend (or a direct API backend) for nodes whose cost must be known: 0 of 18 nodes were `unknown`.
-2. In `delegate` mode, cost is only usable when the harness exposes a per-subagent split. OpenCode does, through the child session, if the client passes the `sessionID`: put that request in the `factory_submit` description. Claude Code exposes only a total, so `delegate` nodes on Claude Code stay `unknown` unless the factory estimates from the total.
+2. In `delegate` mode, cost is only usable when the harness exposes a per-subagent split. OpenCode does, through the child session. Asking for the session id in the `factory_submit` tool description is enough: with a neutral prompt, OpenCode passed it for 9 of 9 nodes. Claude Code exposes only a total (in one run it passed its agent id instead, which carries no usage), so `delegate` nodes on Claude Code stay `unknown` unless the factory estimates from the total.
 
 ## Reproduce
 
