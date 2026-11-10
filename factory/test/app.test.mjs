@@ -32,6 +32,20 @@ test("first start creates one finished demo run, later starts reuse it", async (
   assert.ok(runs[0].costUsd > 0, `demo run cost ${runs[0].costUsd}`);
 });
 
+test("concurrent first requests wait for one finished demo run", async () => {
+  const data = api(true);
+  const request = async () => {
+    const created = await data.ensureDemo();
+    return { created, runs: data.runs() };
+  };
+  const results = await Promise.all([request(), request(), request()]);
+  assert.equal(results.filter((r) => r.created).length, 1, "exactly one call creates the demo run");
+  for (const { runs } of results) {
+    assert.equal(runs.length, 1, "one demo run, not one per request");
+    assert.equal(runs[0].status, "done", "every caller sees the finished run as soon as its call returns");
+  }
+});
+
 test("a real data dir never gets a demo run", async () => {
   const data = api(false);
   assert.equal(await data.ensureDemo(), false);

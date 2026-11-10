@@ -29,12 +29,22 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo }) {
     return fs.readdirSync(runsDir).filter((f) => RUN_ID.test(path.basename(f, ".json")));
   }
 
+  let demoRun = null;
+
   return {
     dataDir,
 
     async ensureDemo() {
+      if (demoRun) {
+        await demoRun;
+        return false;
+      }
       if (!demo || runFiles().length > 0) return false;
-      await finishFakeRun(new Factory(dataDir), "add a greeting function (demo run, fake model)");
+      demoRun = finishFakeRun(new Factory(dataDir), "add a greeting function (demo run, fake model)").catch((error) => {
+        demoRun = null;
+        throw error;
+      });
+      await demoRun;
       return true;
     },
 
