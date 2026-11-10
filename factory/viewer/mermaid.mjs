@@ -20,7 +20,7 @@ function mermaidId(scope, id) {
 }
 
 function formatUsd(value) {
-  return `$${Number(value).toFixed(4)}`;
+  return `$${Number(value).toFixed(6)}`;
 }
 
 function costLine(cost) {

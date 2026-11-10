@@ -101,10 +101,11 @@ function buildServer() {
     "factory_submit",
     {
       description:
-        "In delegate mode: submit the output of pendingWork and the usage of the subagent that ran it. If the subagent result shows a session id (for example <subagent sessionID=\"ses_...\">), always pass it as usage.childSessionId: the factory reads the exact token usage from that session. Add token numbers only if you actually observed them; omit the rest.",
+        "In delegate mode: submit the output of pendingWork (pass its agentId when it has one) and the usage of the subagent that ran it. If the subagent result shows a session id (for example <subagent sessionID=\"ses_...\">), always pass it as usage.childSessionId: the factory reads the exact token usage from that session. Add token numbers only if you actually observed them; omit the rest.",
       inputSchema: {
         runId: z.string(),
         nodePath: z.string(),
+        agentId: z.string().optional(),
         output: z.string(),
         usage: z
           .object({
@@ -119,8 +120,8 @@ function buildServer() {
           .optional(),
       },
     },
-    guarded(({ runId, nodePath, output, usage }) => {
-      const { run, duplicate } = factory.submit(runId, nodePath, output, usage);
+    guarded(({ runId, nodePath, agentId, output, usage }) => {
+      const { run, duplicate } = factory.submit(runId, nodePath, output, usage, agentId);
       return { ...factory.status(run), duplicate };
     }),
   );

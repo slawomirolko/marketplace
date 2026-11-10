@@ -7,8 +7,9 @@
     "server": "node src/server.mjs",
     "test": "node test/scenario.mjs",
     "test:spec": "node --test test/spec.test.mjs",
-    "test:viewer": "node --test test/viewer.test.mjs",
-    "viewer": "node viewer/render.mjs"
+    "viewer": "pnpm --dir app install && pnpm --dir app run dev",
+    "viewer:mermaid": "node viewer/render.mjs",
+    "test:viewer": "node --test test/viewer.test.mjs test/app.test.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",

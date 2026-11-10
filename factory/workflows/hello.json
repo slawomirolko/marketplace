@@ -3,13 +3,61 @@
   "version": "0.1.0",
   "entry": "plan",
   "nodes": [
-    { "id": "plan", "kind": "llm", "role": "planner", "maxTurns": 3 },
-    { "id": "build", "kind": "subgraph", "workflow": "hello-build" },
-    { "id": "accountant", "kind": "llm", "role": "accountant", "maxTurns": 1 }
+    {
+      "id": "plan",
+      "kind": "llm",
+      "role": "planner",
+      "maxTurns": 3
+    },
+    {
+      "id": "build",
+      "kind": "subgraph",
+      "workflow": "hello-build"
+    },
+    {
+      "id": "review",
+      "kind": "llm",
+      "role": "reviewer",
+      "maxTurns": 1,
+      "agents": [
+        {
+          "id": "security"
+        },
+        {
+          "id": "style"
+        },
+        {
+          "id": "tests"
+        },
+        {
+          "id": "docs",
+          "role": "accountant"
+        }
+      ]
+    },
+    {
+      "id": "accountant",
+      "kind": "llm",
+      "role": "accountant",
+      "maxTurns": 1
+    }
   ],
   "edges": [
-    { "from": "plan", "to": "build" },
-    { "from": "build", "to": "accountant" },
-    { "from": "accountant", "to": "END" }
+    {
+      "from": "plan",
+      "to": "build"
+    },
+    {
+      "from": "build",
+      "to": "review"
+    },
+    {
+      "from": "review",
+      "to": "accountant"
+    },
+    {
+      "from": "accountant",
+      "to": "END"
+    }
   ]
 }

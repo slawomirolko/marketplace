@@ -28,9 +28,12 @@ test("hello workflow file matches the node paths the engine runs", () => {
 
 test("node costs in the report add up to the run cost", async () => {
   const report = await fakeRunReport();
-  const sum = (values) => Math.round(values.reduce((a, b) => a + b, 0) * 10000) / 10000;
-  assert.equal(sum(Object.values(report.byNode).map((n) => n.costUsd)), report.cost.costUsd);
-  assert.equal(sum(Object.values(report.byTier)), report.cost.costUsd);
+  const close = (values, label) => {
+    const sum = values.reduce((a, b) => a + b, 0);
+    assert.ok(Math.abs(sum - report.cost.costUsd) <= values.length * 1e-6, `${label}: ${sum} vs ${report.cost.costUsd}`);
+  };
+  close(Object.values(report.byNode).map((n) => n.costUsd), "nodes");
+  close(Object.values(report.byTier), "tiers");
   for (const node of Object.values(report.byNode)) assert.ok(node.costSource, "every node has a cost source");
 });
 
@@ -41,7 +44,7 @@ test("diagram of a run shows cost, tier and model on every node", async () => {
     const id = `n_${nodePath.split("/").slice(1).join("__")}`;
     const line = diagram.split("\n").find((l) => l.trim().startsWith(id));
     assert.ok(line, `node ${nodePath} drawn`);
-    assert.match(line, new RegExp(`\\$${cost.costUsd.toFixed(4).replace(".", "\\.")} · ${cost.tokens} tok`));
+    assert.match(line, new RegExp(`\\$${cost.costUsd.toFixed(6).replace(".", "\\.")} · ${cost.tokens} tok`));
   }
   assert.match(diagram, /planner → high · fake-high/);
   assert.match(diagram, /subgraph n_build\["build · subgraph hello-build · \$/);

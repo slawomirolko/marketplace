@@ -61,7 +61,7 @@ await check("start returns proposal waiting for confirmation (no model names in 
   const { payload } = await call(client, "factory_start", { goal: "hello feature", idempotencyKey: "k-1" });
   runId = payload.runId;
   assert.equal(payload.status, "needs_confirmation");
-  assert.deepEqual(payload.proposal.roles, { planner: "high", implementer: "medium", accountant: "low" });
+  assert.deepEqual(payload.proposal.roles, { planner: "high", implementer: "medium", reviewer: "medium", accountant: "low" });
   assert.equal(payload.cost.costUsd, 0);
 });
 
@@ -101,7 +101,7 @@ await check("report: steps and cost per node and tier add up to the footer", asy
   const sumSteps = Object.values(payload.byNode).reduce((s, n) => s + n.steps, 0);
   assert.ok(Math.abs(sumNodes - payload.cost.costUsd) < 0.001, `nodes ${sumNodes} vs total ${payload.cost.costUsd}`);
   assert.equal(sumSteps, payload.cost.steps);
-  assert.equal(payload.cost.steps, 3 + 4 + 1 + 1);
+  assert.equal(payload.cost.steps, 3 + 4 + 1 + 4 + 1);
   assert.deepEqual(Object.keys(payload.byTier).sort(), ["high", "low", "medium", "script"]);
   assert.equal(payload.byNode["hello/build/verify"].costUsd, 0);
   console.log(`      total $${payload.cost.costUsd}, tokens ${payload.cost.tokens}, steps ${payload.cost.steps}`);

@@ -10,7 +10,7 @@ const FAKE_PRICE_PER_MTOK = {
 };
 
 const DEFAULT_CONFIG = {
-  roles: { planner: "high", implementer: "medium", accountant: "low" },
+  roles: { planner: "high", implementer: "medium", reviewer: "medium", accountant: "low" },
   tiers: { low: "fake-low", medium: "fake-medium", high: "fake-high" },
   backend: { kind: "fake" },
   budget: { maxCostUsd: 1.5, infoRatio: 0.5, pauseRatio: 0.8 },
@@ -40,6 +40,15 @@ export const WORKFLOW = {
     },
     { id: "verify", path: "hello/build/verify", kind: "script" },
     {
+      id: "review",
+      path: "hello/review",
+      kind: "llm",
+      role: "reviewer",
+      turns: 1,
+      agents: [{ id: "security" }, { id: "style" }, { id: "tests" }, { id: "docs", role: "accountant" }],
+      prompt: "You are the {agent} reviewer of a test workflow. Goal: {goal}. In one sentence, name one {agent} risk of a greeting function. Do not use any tools.",
+    },
+    {
       id: "accountant",
       path: "hello/accountant",
       kind: "llm",
@@ -52,8 +61,8 @@ export const WORKFLOW = {
 
 const TURN_DELAY_MS = Number(process.env.FACTORY_TURN_DELAY_MS ?? 40);
 
-function fakeModelTurn(tier, turn) {
-  const inputTokens = 3000 + turn * 1500;
+function fakeModelTurn(tier, turn, agentIndex = 0) {
+  const inputTokens = 3000 + turn * 1500 + agentIndex * 700;
   const outputTokens = 300 + turn * 50;
   const price = FAKE_PRICE_PER_MTOK[tier];
   const costUsd = (inputTokens * price.input + outputTokens * price.output) / 1_000_000;
@@ -201,11 +210,11 @@ export class Factory {
     return run.status === "waiting_for_client" ? run.pendingWork : null;
   }
 
-  submit(runId, nodePath, output, usage = {}) {
+  submit(runId, nodePath, output, usage = {}, agentId = undefined) {
     const run = this.get(runId);
     const work = run.pendingWork;
     if (run.status !== "waiting_for_client" || !work || work.nodePath !== nodePath) {
-      const done = run.ledger.find((r) => r.nodePath === nodePath && r.backend === "delegate");
+      const done = run.ledger.find((r) => r.nodePath === nodePath && r.backend === "delegate" && (!agentId || r.agentId === agentId));
       if (done) return { run, duplicate: true };
       throw new Error(`no pending work for node ${nodePath}`);
     }
@@ -221,6 +230,7 @@ export class Factory {
     run.steps += 1;
     this.appendLedger(run, {
       nodePath,
+      agentId: work.agentId,
       kind: "llm",
       tier: work.tier,
       model: usage.model ?? work.model,
@@ -238,10 +248,8 @@ export class Factory {
       outputPreview: String(output ?? "").slice(0, 200),
     });
     run.pendingWork = null;
-    run.cursor += 1;
-    run.nodeTurn = 0;
     run.status = "running";
-    this.event(run, "node_completed", { node: nodePath, backend: "delegate" });
+    this.finishAgent(run, WORKFLOW.nodes[run.cursor], { backend: "delegate" });
     this.checkpoint(run);
     this.schedule(run);
     return { run, duplicate: false };
@@ -325,7 +333,8 @@ export class Factory {
     return node.prompt
       .replace("{goal}", run.goal)
       .replace("{answer}", run.answers[node.question?.id] ?? "")
-      .replace("{steps}", String(run.steps));
+      .replace("{steps}", String(run.steps))
+      .replaceAll("{agent}", currentAgent(run, node).id);
   }
 
   async step(run) {
@@ -362,30 +371,41 @@ export class Factory {
       return;
     }
 
-    const tier = run.config.roles[node.role];
+    const agent = currentAgent(run, node);
+    const tier = run.config.roles[agent.role];
     if (backend === "cli") return this.runCliNode(run, node, tier);
     if (backend === "delegate") {
-      run.pendingWork = { nodePath: node.path, tier, model: run.config.tiers[tier], prompt: this.prompt(run, node) };
+      run.pendingWork = { nodePath: node.path, agentId: agent.id, tier, model: run.config.tiers[tier], prompt: this.prompt(run, node) };
       run.status = "waiting_for_client";
-      this.event(run, "work_offered", { node: node.path, tier });
+      this.event(run, "work_offered", { node: node.path, agentId: agent.id, tier });
       return;
     }
 
     const turn = run.nodeTurn + 1;
-    const usage = fakeModelTurn(tier, turn);
+    const usage = fakeModelTurn(tier, turn, run.agentIndex ?? 0);
     run.steps += 1;
     run.nodeTurn = turn;
-    this.appendLedger(run, { nodePath: node.path, kind: "llm", tier, model: run.config.tiers[tier], backend: "fake", turn, ...usage, costSource: "measured" });
-    if (turn >= node.turns) {
-      this.event(run, "node_completed", { node: node.path, turns: turn });
-      run.cursor += 1;
-      run.nodeTurn = 0;
+    this.appendLedger(run, { nodePath: node.path, agentId: agent.id, kind: "llm", tier, model: run.config.tiers[tier], backend: "fake", turn, ...usage, costSource: "measured" });
+    if (turn >= node.turns) this.finishAgent(run, node, { turns: turn });
+  }
+
+  finishAgent(run, node, details) {
+    const agent = currentAgent(run, node);
+    if (node.agents) this.event(run, "agent_completed", { node: node.path, agentId: agent.id, ...details });
+    run.nodeTurn = 0;
+    if (node.agents && (run.agentIndex ?? 0) + 1 < node.agents.length) {
+      run.agentIndex = (run.agentIndex ?? 0) + 1;
+      return;
     }
+    run.agentIndex = 0;
+    run.cursor += 1;
+    this.event(run, "node_completed", { node: node.path, ...details });
   }
 
   async runCliNode(run, node, tier) {
     const { cli } = run.config.backend;
     const model = run.config.tiers[tier];
+    const agentId = currentAgent(run, node).id;
     const result = await this.executors[cli]({ model, prompt: this.prompt(run, node) });
     run.steps += 1;
     if (!result.ok) {
@@ -397,6 +417,7 @@ export class Factory {
       const priced = priceUsage(u.model, u.tokens, u.cacheWriteTtlKnown);
       this.appendLedger(run, {
         nodePath: node.path,
+        agentId,
         kind: "llm",
         tier,
         model: u.model,
@@ -416,9 +437,7 @@ export class Factory {
         outputPreview: String(result.text ?? "").slice(0, 200),
       });
     }
-    this.event(run, "node_completed", { node: node.path, backend: `cli:${cli}` });
-    run.cursor += 1;
-    run.nodeTurn = 0;
+    this.finishAgent(run, node, { backend: `cli:${cli}` });
   }
 
   footer(run) {
@@ -460,7 +479,13 @@ export class Factory {
     const byCostSource = {};
     let harnessCostUsd = 0;
     for (const r of run.ledger) {
-      byNode[r.nodePath] ??= { steps: 0, tokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null };
+      byNode[r.nodePath] ??= { steps: 0, tokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null, byAgent: {} };
+      const agentKey = r.agentId ?? r.nodePath.split("/").at(-1);
+      const agentEntry = (byNode[r.nodePath].byAgent[agentKey] ??= { steps: 0, tokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null, sources: [] });
+      agentEntry.steps += 1;
+      agentEntry.tokens += (r.inputTokens ?? 0) + (r.outputTokens ?? 0);
+      agentEntry.costUsd += r.costUsd ?? 0;
+      agentEntry.sources.push(r.costSource);
       byNode[r.nodePath].steps += 1;
       byNode[r.nodePath].tokens += (r.inputTokens ?? 0) + (r.outputTokens ?? 0);
       byNode[r.nodePath].costUsd += r.costUsd ?? 0;
@@ -474,6 +499,14 @@ export class Factory {
     }
     for (const [nodePath, entry] of Object.entries(byNode)) {
       entry.costUsd = round(entry.costUsd);
+      const agentTiers = new Set(Object.values(entry.byAgent).map((x) => x.tier));
+      if (agentTiers.size > 1) Object.assign(entry, { tier: "mixed", model: "mixed" });
+      for (const agentEntry of Object.values(entry.byAgent)) {
+        agentEntry.costUsd = round(agentEntry.costUsd);
+        const sources = new Set(agentEntry.sources);
+        agentEntry.costSource = sources.size === 1 ? [...sources][0] : "mixed";
+        delete agentEntry.sources;
+      }
       entry.costSource = costSourceSummary(run.ledger.filter((r) => r.nodePath === nodePath));
     }
     for (const totals of [byTier, byModel]) for (const key of Object.keys(totals)) totals[key] = round(totals[key]);
@@ -495,6 +528,12 @@ export class Factory {
     }
     return lines.join("\n");
   }
+}
+
+function currentAgent(run, node) {
+  if (!node.agents) return { id: node.id, role: node.role };
+  const agent = node.agents[run.agentIndex ?? 0];
+  return { id: agent.id, role: agent.role ?? node.role };
 }
 
 function costSourceSummary(ledger) {
@@ -519,5 +558,9 @@ function nextHint(run) {
 }
 
 function round(v) {
-  return Math.round(v * 10000) / 10000;
+  return Math.round(v * 1e6) / 1e6;
+}
+
+export function runReport(run) {
+  return Factory.prototype.report.call(Factory.prototype, run);
 }

@@ -41,7 +41,26 @@ JSON Schemas (draft 2020-12) in `spec/`, validated by `src/spec.mjs` (Ajv plus g
 
 `spec/examples/valid` and `spec/examples/invalid` hold examples checked by `test/spec.test.mjs`. The PoC server still emits the older footer field names; moving it to this schema is the next step.
 
-## Viewer
+## Viewer app
+
+One command, from `factory/`:
+
+```bash
+pnpm viewer
+```
+
+It installs the app dependencies (first time only), starts Vite on <http://127.0.0.1:5180> and opens the browser. The app (`app/`, React + React Flow + dagre, all MIT) shows:
+
+- the workflow graph: subgraphs and nodes with several agents are collapsible groups (collapsed groups show their total cost);
+- per node and per agent: role, tier, model, cost, tokens, steps and cost source; an unknown cost is shown as "unknown", never as $0;
+- on click, a side panel with the agents table, every ledger record (input, output, cache tokens, cost, source), the question to the user and its answer, and the last output preview;
+- a run selector and run totals by tier, model and cost source.
+
+Data comes read-only from the factory data directory. Without `FACTORY_DATA_DIR` the app uses `factory/.viewer-data` (git-ignored) and creates one finished demo run with the fake model on first start. To look at real runs, set `FACTORY_DATA_DIR` to the directory the factory writes to (it holds `runs/*.json`). The Vite server listens on 127.0.0.1 only and serves GET requests only.
+
+The sample workflow has a `review` node with four agents (`security`, `style`, `tests`, `docs`); the ledger records `agentId` and `factory_report` returns `byNode[path].byAgent`.
+
+## Mermaid export
 
 `viewer/` draws a workflow as a Mermaid flowchart: nodes, subgraphs as clusters, edge conditions, role to tier, and (for a run) the model, cost, tokens, steps and cost source of every node. A node whose cost is `unknown` shows "$ unknown" with a red dashed border, never $0.
 
@@ -64,6 +83,7 @@ factory/
   src/spec.mjs          schema validation for config, workflow, ledger, footer
   spec/                 JSON Schemas and examples
   workflows/            sample workflow in the workflow schema format
+  app/                  viewer app (Vite + React Flow), read-only data API in app/data.mjs
   viewer/               Mermaid diagram of a workflow, with per-node cost from a run report
   test/spec.test.mjs    schema tests
   test/viewer.test.mjs  viewer and per-node cost tests

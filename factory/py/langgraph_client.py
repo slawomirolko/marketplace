@@ -126,7 +126,7 @@ async def main():
     ok = (
         rep["status"] == "done"
         and interrupts_seen == ["confirm", "question"]
-        and rep["cost"]["steps"] == 9
+        and rep["cost"]["steps"] == 13
         and rep["cost"]["costUsd"] > 0
     )
     print(f"PASS  langgraph host ({API} MCP API): direct tool calls + interrupt mapping" if ok else f"FAIL  langgraph host ({API})")

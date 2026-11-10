@@ -36,8 +36,8 @@ function escapeHtml(text) {
 function summaryRows(report) {
   if (!report) return "";
   const rows = [
-    ...Object.entries(report.byTier ?? {}).map(([k, v]) => ["tier", k, `$${v.toFixed(4)}`]),
-    ...Object.entries(report.byModel ?? {}).map(([k, v]) => ["model", k, `$${v.toFixed(4)}`]),
+    ...Object.entries(report.byTier ?? {}).map(([k, v]) => ["tier", k, `$${v.toFixed(6)}`]),
+    ...Object.entries(report.byModel ?? {}).map(([k, v]) => ["model", k, `$${v.toFixed(6)}`]),
     ...Object.entries(report.byCostSource ?? {}).map(([k, v]) => ["cost source", k, `${v} LLM steps`]),
   ];
   const body = rows.map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(c)}</td>`).join("")}</tr>`).join("");

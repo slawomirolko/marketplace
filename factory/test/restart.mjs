@@ -32,7 +32,7 @@ if (phase === "begin") {
     await call("factory_answer", { runId: runIdArg, questionId: "q-endpoint", answer: "extend" });
     const done = await pollUntil(runIdArg, ["done"]);
     const report = await call("factory_report", { runId: runIdArg });
-    assert.equal(done.cost.steps, 9);
+    assert.equal(done.cost.steps, 13);
     assert.equal(report.byNode["hello/plan"].steps, 3);
     console.log("PASS  run survives server kill + restart, no duplicated turns");
   } catch (error) {
