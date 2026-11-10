@@ -807,11 +807,16 @@
         "olko-feature-planner",
         "olko-implement-current-code",
         "olko-implement-new",
+        "olko-implementation-closure",
+        "olko-implementation-journal",
+        "olko-implementation-pr-gates",
         "olko-investigate-existing",
         "olko-plan-editor",
         "olko-research-new-functionality",
         "olko-ste100-skill-adapter",
-        "olko-summary"
+        "olko-summary",
+        "olko-task-scope-gates",
+        "olko-worktree-compose-isolation"
       ],
       "related": [
         "workflow.research",
@@ -884,6 +889,36 @@
       "prerequisites": []
     },
     {
+      "id": "workflow.implementation.closure",
+      "skills": [
+        "olko-implementation-closure"
+      ],
+      "related": [
+        "workflow"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "workflow.implementation.journal",
+      "skills": [
+        "olko-implementation-journal"
+      ],
+      "related": [
+        "workflow"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "workflow.implementation.pr-gates",
+      "skills": [
+        "olko-implementation-pr-gates"
+      ],
+      "related": [
+        "workflow"
+      ],
+      "prerequisites": []
+    },
+    {
       "id": "workflow.investigate.existing",
       "skills": [
         "olko-investigate-existing"
@@ -927,6 +962,26 @@
       "id": "workflow.summary",
       "skills": [
         "olko-summary"
+      ],
+      "related": [
+        "workflow"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "workflow.task.scope-gates",
+      "skills": [
+        "olko-task-scope-gates"
+      ],
+      "related": [
+        "workflow"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "workflow.worktree.compose-isolation",
+      "skills": [
+        "olko-worktree-compose-isolation"
       ],
       "related": [
         "workflow"

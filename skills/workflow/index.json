@@ -183,6 +183,60 @@
       }
     },
     {
+      "name": "olko-implementation-closure",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Post-merge steps 11, 11a, and 11b of olko-implementation-orchestrator: main-stack verification, Task plan removal, Feature completion audit, and Feature plan cleanup.",
+      "tags": [
+        "workflow",
+        "implementation"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.implementation.closure"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-implementation-journal",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Implementation journal template and resume procedure for olko-implementation-orchestrator; load when creating the journal or resuming a Task.",
+      "tags": [
+        "workflow",
+        "implementation"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.implementation.journal"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-implementation-pr-gates",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Steps 8b (Obsidian knowledge-base gate) and 8c (editor verification gate) of olko-implementation-orchestrator; both must pass before the merge.",
+      "tags": [
+        "workflow",
+        "implementation"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.implementation.pr-gates"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
       "name": "olko-investigate-existing",
       "category": "workflow",
       "version": "1.4.0",
@@ -332,6 +386,42 @@
           "edge-cases"
         ]
       }
+    },
+    {
+      "name": "olko-task-scope-gates",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Task-to-PR scope gate with the code-path budget (step 7b), and the procedure for work found outside a Task's scope, for olko-implementation-orchestrator.",
+      "tags": [
+        "workflow",
+        "implementation"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.task.scope-gates"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-worktree-compose-isolation",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Canonical Compose isolation contract for worktree builds, restarts, and log/trace/DB checks; load in steps 6, 7, and 11 of olko-implementation-orchestrator.",
+      "tags": [
+        "workflow",
+        "implementation"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.worktree.compose-isolation"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
     }
   ]
 }

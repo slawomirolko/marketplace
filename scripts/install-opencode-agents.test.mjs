@@ -123,6 +123,10 @@ test("installs the implementation orchestrator with delegation-only permissions"
   assert.match(agent, /olko-worktree-lifecycle-manager: allow/);
   assert.match(agent, /olko-git-delivery-manager: allow/);
   assert.match(agent, /Do not load or follow `olko-implement-new`/);
+  for (const skill of ["olko-implementation-closure", "olko-implementation-journal", "olko-worktree-compose-isolation", "olko-implementation-pr-gates", "olko-task-scope-gates"]) {
+    assert.match(agent, new RegExp(`${skill}: allow`));
+    assert.ok(fs.existsSync(path.join(project, ".agents", "skills", skill, "SKILL.md")));
+  }
   assert.match(agent, /maintain one shared, persistent `?<mainRepoPath>\/plans\/features\/<feature-id>\/feature-tracker\.md/);
   assert.match(agent, /## Implementation/);
   assert.match(agent, /Never assign two editing agents the same file/);

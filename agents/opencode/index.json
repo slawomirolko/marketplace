@@ -4,7 +4,7 @@
   "agents": [
     {
       "name": "olko-implementation-orchestrator",
-      "version": "2.4.0",
+      "version": "2.5.0",
       "file": "olko-implementation-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -14,7 +14,12 @@
         "olko-pr-check",
         "olko-implement-current-code",
         "olko-ste100-skill-adapter",
-        "grill-with-docs"
+        "grill-with-docs",
+        "olko-implementation-closure",
+        "olko-implementation-journal",
+        "olko-worktree-compose-isolation",
+        "olko-implementation-pr-gates",
+        "olko-task-scope-gates"
       ],
       "delegates": [
         "olko-marketplace-skill-bootstrapper",

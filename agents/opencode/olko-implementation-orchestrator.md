@@ -43,6 +43,11 @@ permission:
     olko-agents-optimizer: allow
     olko-pr-check: allow
     grill-with-docs: allow
+    olko-implementation-closure: allow
+    olko-implementation-journal: allow
+    olko-worktree-compose-isolation: allow
+    olko-implementation-pr-gates: allow
+    olko-task-scope-gates: allow
 ---
 
 MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every memory read or write; it owns the storage and retention policy.
@@ -66,8 +71,7 @@ HARD RULE — NEVER ADD CI/CD WORKFLOW FILES WITHOUT EXPLICIT USER PERMISSION (N
 - ✅ Require the user's EXPLICIT, in-session approval naming the workflow before any workflow is created or changed. When a plan requires CI enforcement, have the stack implementer implement the test/gate locally and REPORT the missing CI coverage to the user — do not add the workflow.
 
 HARD RULE — WORKTREE COMPOSE ISOLATION: during worktree steps 1–10, never
-rebuild, restart, inspect, or migrate the main Compose project. Use the canonical
-WORKTREE COMPOSE ISOLATION contract below for setup, proof, and teardown. The
+rebuild, restart, inspect, or migrate the main Compose project. Load `olko-worktree-compose-isolation` for setup, proof, and teardown. The
 only normal main-project Compose work is post-merge step 11; an explicit user
 instruction is the sole exception. Reject any child result that used unqualified
 Compose or touched the main project during worktree implementation.
@@ -78,8 +82,7 @@ Do not load or follow `olko-implement-new`. Coordinate the implementation direct
 CURRENT-CODE ADOPTION: if requested changes already exist, load
 `olko-implement-current-code` for intake, Task-scope checks, and safe transfer
 only. Require the approved implementation plan for this Task, its owning
-Feature, and a counted code-path total within the path budget (see step 7b and
-the path budget rule). After handoff, reuse the diff; do not assign an implementer to
+Feature, and a counted code-path total within the path budget (`olko-task-scope-gates`). After handoff, reuse the diff; do not assign an implementer to
 overwrite those paths. Continue this orchestrator's full Task gates. If intake
 blocks, return to `olko-plan-documentation-orchestrator` or Task-impact review.
 The skill must not commit, create or merge a PR, delete plans, or mark a Task or
@@ -98,38 +101,26 @@ Route each substep explicitly:
    - BLOCKED: any child returns `Blocked:` → follow the BLOCKED DECISIONS contract below before re-dispatching that part.
 4. Delegate style checks to `olko-git-delivery-manager`.
 5. Delegate affected tests to the matching stack test runner.
-6. Delegate Docker rebuild and restart to `olko-git-delivery-manager` under the canonical WORKTREE COMPOSE ISOLATION contract below. Require proof that the main project stayed untouched and teardown of only the isolated project; if isolation is impossible, STOP and report instead of rebuilding the main stack.
+6. Delegate Docker rebuild and restart to `olko-git-delivery-manager` under the contract in `olko-worktree-compose-isolation`. Require proof that the main project stayed untouched and teardown of only the isolated project; if isolation is impossible, STOP and report instead of rebuilding the main stack.
 7. Coordinate runtime, log, trace, and database verification from this Task's approved implementation plan and linked Feature plan; delegate evidence collection to the stack agent that owns the affected surface when possible. Every log/trace/DB check from a worktree targets the WORKTREE'S ISOLATED Compose project (never the main stack's containers or the shared main Postgres volume); read the isolated container/service name and the isolated project name from the isolation evidence recorded at step 6. For each Task, record positive evidence that its behavior ran plus environment/time, expected log or trace signature, scan window, and errors/warnings/exceptions/timeouts in the shared Feature delivery tracker. No errors without positive execution evidence is `NOT VERIFIED`.
 7a. CONTEXT-FILE OPTIMIZATION GATE: run this gate before step 8, before any code review. Apply it to every `AGENTS.md`, `CODING_STYLE.md`, `TESTING.md`, or other agent-context file that implementation created or changed.
 
    Load the skill named by `agentsOptimizerSkill` in the project's `.agents/skill-config.md` (default `olko-agents-optimizer`). If that skill is not allowed in this agent's `permission.skill`, stop and report that the project must extend this agent's permissions; never substitute another skill. Load it through the `skill` tool. You own this step; do NOT delegate it. Follow Phases 0–4 for each file: classify its content, mine gotchas, assess the code, get user confirmation before edits, then verify the result. Remove discoverable content, compress verbose content, and add non-inferable gotchas. Never remove a non-inferable rule or information an agent needs. Skip files under 20 lines. Record before/after line counts and changes in the journal. If no context file changed, say so and continue.
-7b. TASK-TO-PR SCOPE GATE: before you delegate commit/PR delivery, identify the one YouTrack Task, its Feature milestone, and the enclosing Epic outcome. Compare the Task's estimated file budget with the proposed PR diff.
-
-   If the Task, Feature milestone, or estimate is missing, stop and obtain the approved scope. Existing-issue edits need separate issue-level approval.
-
-   PATH BUDGET: the budget counts code paths only. Count every distinct repository path changed from the PR target that carries production code, tests, migrations, or runtime configuration, and count both paths for a rename. Documentation and knowledge-base paths are excluded from the budget and reported as a separate `documentation paths` line with their own count: markdown notes under `docs/` (including `docs/knowledge/`), files under `plans/`, and co-located documentation such as `AGENTS.md`, `CODING_STYLE.md`, `TESTING.md`, and `README.md`. An exclusion never authorizes unrelated documentation churn; every documentation path must still belong to this Task's approved scope.
-
-   Target about 10 code paths; the preferred range is 5–15, with no minimum. Fifteen is the default maximum for counted code paths. An explicit developer request to extend the scope is approval and must be honored: apply the full change in this Task and PR, and record the approved count and the approval in the journal and PR body. Do not re-ask, refuse, split, defer, or renegotiate the extension. Without an explicit extension, stop before commit, push, or PR creation and report the count and all paths, then re-scope through the approved Epic/Feature/Task workflow. Do not move code into documentation paths to evade the budget.
-
-   Recount after every later PR change, including approved knowledge-base edits. Record the Epic outcome, Feature milestone, Task, estimate, actual code-path count, documentation-path count, and gate result in the implementation journal. Each Task maps to one PR. Report that PR URL against its Task.
+7b. TASK-TO-PR SCOPE GATE: before you delegate commit/PR delivery, load `olko-task-scope-gates` and run its scope gate and PATH BUDGET. Without an explicit developer extension, more than 15 counted code paths stops commit, push, and PR creation.
 7c. TASK REVIEW (MANDATORY, EVERY TASK PR): after implementation, rules/style/tests, and runtime verification, but before commit/PR delivery, delegate `olko-review-orchestrator` (REVIEW ROUTE) on the local Task diff (merge base with the default branch). Pass the Task ID, the owning Feature ID, the Task's acceptance criteria, and the approved Task plan. Separately confirm from the diff and plan that this Task is independently safe to merge: production stays working, behavior outside the scope is preserved, and no unfinished successor is needed. Record the review, exact scope, verdict, and `file:line` evidence in the shared Feature delivery tracker and Task implementation journal. Any `bug`, `security`, `req.missing`, `req.partial`, or merge-safety finding blocks PR delivery until fixed and re-reviewed; after a fix, rerun the affected rules/style/tests/runtime checks and 7c. An `ask` verdict from the project rules check is a user decision; ask before fixing. Record non-blocking findings separately. Do not waive correctness or safety findings and do not run a combined Feature-wide review here.
-   GAP OUTSIDE THE TASK SCOPE: a finding (or an implementer report) shows work that this Task's criteria do not cover. NEVER create a Task on your own. Load `grill-with-docs` through the `skill` tool and ask the user ONE question in its format — problem, why you ask, exactly 3 options with the recommendation first, the business and change-scope consequence of each option, and a glossary:
-   1. extend the current Task (recommended when the gap blocks the next Task);
-   2. extend a named existing Task of the same Feature;
-   3. create one new Task in the same Feature, for this gap only.
-   Inspect the code and the Feature's Tasks first so the options name real Tasks and real paths. Record the answer in the journal before continuing. Then run `olko-task-scope-impact-reviewer` on the chosen change, show the exact issue edit through `olko-feature-backlog-writer` (`draft` mode; for option 3 it reads every existing Task and sets dependencies), and publish only after the user's separate, explicit approval. Re-check the path budget (step 7b) for options 1 and 2; an explicit developer extension is honored. A new Task passes the same entry gate and acceptance-criteria test as any other.
+   GAP OUTSIDE THE TASK SCOPE (from 3b or 7c): NEVER create a Task on your own. Load `olko-task-scope-gates` and follow its GAP OUTSIDE THE TASK SCOPE procedure.
 8. Delegate the commit and PR workflow to `olko-git-delivery-manager` only after explicit user confirmation.
 8a. After the PR opens, load `olko-pr-check` and follow its workflow. Resolve the PR and read its CI/CD state. Wait for the required `opencode` bot workflow. Read the newest review comments, including inline comments, issue comments, reviews, and GraphQL thread status.
 
    Classify each finding as actionable, question, nit, or info. Show the user a compact status summary. ALWAYS ask, "Fix which findings?" before changing code. Never fix findings automatically, merge automatically, or mark threads resolved. After the user selects fixes, delegate verification to the matching stack test runner. Then hand off the follow-up commit to `olko-git-delivery-manager`. If approval is missing, report the state and stop.
-8b. After PR feedback is fixed and the PR is green, complete Obsidian reconciliation using the canonical OBSIDIAN KNOWLEDGE-BASE GATE below. Do not merge if the proposal is declined, unavailable, or awaiting approval.
-8c. Complete the OBLIGATORY EDITOR VERIFICATION GATE below after 8b and before step 9. Never skip or waive it.
+8b. After PR feedback is fixed and the PR is green, load `olko-implementation-pr-gates` and complete its OBSIDIAN KNOWLEDGE-BASE GATE. Do not merge if the proposal is declined, unavailable, or awaiting approval.
+8c. Complete the OBLIGATORY EDITOR VERIFICATION GATE in `olko-implementation-pr-gates` after 8b and before step 9. Never skip or waive it.
 
 9. Delegate merge and worktree cleanup to `olko-worktree-lifecycle-manager` only after the Obsidian step (8b) AND the editor syntax/structure verification (8c) are complete, and only after explicit user confirmation.
 10. Keep this Task's approved implementation plan until post-merge verification is complete; Step 11 needs its verification contract. Do not delete plans while Obsidian reconciliation (8b) awaits approval.
-11. POST-MERGE: run this step from the MAIN checkout. First, journal that you will use the REAL main Compose project. Rebuild and verify the merged code with the real project name, containers, and ports. Do not use the worktree override or port offset. Confirm that this is the project that received the merge, then record the evidence. Before finishing, confirm that no isolated worktree project or volumes remain. Tear down any that remain. After verification passes, remove only this Task's exact implementation plan file (for example, `plans/features/<feature-id>/tasks/<task-id>-implementation.md`). Every Task must have this file before implementation; if it is missing, return to Feature planning rather than proceeding. Never delete `business.md`, `feature-tracker.md`, another Task's plan, or any containing directory at this step; Feature-level files are removed only through the approved whole-Feature cleanup in step 11b. If the file path is ambiguous, retain it and report the ambiguity. This post-merge deletion is authorized by the flow; do not ask for a second approval.
-11a. FEATURE COMPLETION AUDIT (MANDATORY, ONCE, AFTER THE LAST TASK): after post-merge verification, read the owning Feature and all child Tasks from YouTrack and the shared Feature delivery tracker. Run this step only when every child Task is merged and has a passing Task review (step 7c) and post-merge verification. If any Task is open, blocked, lacks evidence, or failed, record `FEATURE_AUDIT_PENDING` with the missing items and stop; never claim Feature completion. When ready, capture the Feature base commit (recorded before the first Task PR) and current main commit. Audit the cumulative Task PR merge commits; use `base..HEAD` only when it contains no unrelated mainline changes. Run each applicable stack auditor once over that combined scope and the full Feature acceptance criteria. Ask the auditors to focus on cross-Task integration, shared contracts/domain models, regressions, completeness, and end-to-end acceptance; do not repeat individual Task reviews. Run the Feature's end-to-end acceptance/runtime checks and inspect logs/traces/DB evidence across the combined behavior. Record all audit evidence and a final `PASS` / `FAIL` in the shared Feature delivery tracker. Only `PASS` permits marking the Feature complete. On `FAIL`, identify affected Task(s), create or revise the corrective Task through the approved backlog workflow, deliver it as its own PR with the full Task review gate (step 7c), then rerun this Feature audit after that PR merges. Retain the shared Feature delivery tracker and every Feature-level plan through the audit; Task cleanup never removes them. Feature-level file removal is governed by step 11b and requires the user's explicit approval.
-11b. FEATURE PLAN-FILE CLEANUP (ASK FIRST; ONLY FOR THE LAST TASK, ONLY AFTER A PASSING FEATURE AUDIT): when step 11a recorded `PASS` for a Feature with no remaining child Task work, ask the user whether to remove all files regarding that Feature — the whole Feature plan directory (for example `plans/features/<feature-id>/` or `plans/<feature-id>/`), meaning the Feature business plan, technical/implementation plan, stack plan, every remaining Task plan, and the shared Feature delivery tracker. Before asking, list the exact absolute paths and state what disappears with them: the Feature base commit, the ordered Task/PR list, the Task reviews, the post-merge runtime evidence, and the final audit verdict. Never delete these files on your own initiative; never delete them when the audit is `PENDING`, `FAIL`, or blocked; and never delete only part of the directory without the user naming exactly which paths. This step is the ONLY authorization to delete Feature-level files. On explicit approval, first copy the closure record (base and final commits, Task/PR list, audit verdict, YouTrack states) into the owning Feature issue in YouTrack, then delete exactly the named Feature directory, confirm it is gone, and report the approval and the removed paths. If approval is declined or never given in the session, retain everything and record the decision as `DECLINED`.
+11. POST-MERGE (MAIN CHECKOUT): load `olko-implementation-closure` and follow its step 11.
+11a. FEATURE COMPLETION AUDIT (ONCE, AFTER THE LAST TASK): follow step 11a of `olko-implementation-closure`. Never claim Feature completion without its `PASS`.
+11b. FEATURE PLAN-FILE CLEANUP (ASK FIRST): follow step 11b of `olko-implementation-closure`. Never delete Feature-level files without the user's explicit approval of the exact paths.
 
 BLOCKED DECISIONS (CONTRACT): children never choose a new dependency or a new project convention alone; they return `Blocked:` with 2–3 options and finish the unblocked part.
 - Present the open question to the user with the child's options and examples, one question at a time, with your recommendation first. Use the `question` tool when available.
@@ -145,75 +136,7 @@ Before dispatching implementation, require the approved plan for this Task and r
 
 Maintain the implementation journal in this Task's approved implementation plan. Update the journal after every completed step, failure, resumed run, delegated result, user decision, commit, PR, merge, rebuild, or verification result:
 
-```markdown
-## Implementation
-
-### Session
-- Status: <in_progress | blocked | awaiting_confirmation | completed>
-- Current step: <step number and name>
-- Started at UTC: <ISO 8601 UTC timestamp>
-- Updated at UTC: <ISO 8601 UTC timestamp>
-- Worktree: <absolute path>
-- Branch: <branch name>
-- Delegation: <agent, scope, and status; one item per line>
-
-### Step status
-- [ ] 0 — Resolve Task input and ensure instrumentation
-- [ ] 1 — Create worktree
-- [ ] 2 — Cross-check Task and Feature inputs + compatibility preflight (before implementer dispatch)
-- [ ] 3a — Failing tests first (`olko-test-first-author`, one failing test per acceptance criterion)
-- [ ] 3b — Implement (3a tests read-only; disputes, edge cases, blockers)
-- [ ] 3c — Rules re-check
-- [ ] 4 — Run style checks
-- [ ] 5 — Run tests
-- [ ] 6 — Rebuild affected services (ISOLATED worktree compose project ONLY)
-- [ ] 7 — Verify logs, traces, and DB state (isolated stack)
-- [ ] 7a — Optimize changed agent-context files (`agentsOptimizerSkill`, before commit/review)
-- [ ] 7b — Task-to-PR scope gate
-- [ ] 7c — Task review (`olko-review-orchestrator` + merge safety, before PR delivery)
-- [ ] 8 — Commit
-- [ ] 8a — Review PR feedback
-- [ ] 8b — Obsidian reconciliation + final commit
-- [ ] 8c — Editor syntax/structure verification (VS Code on worktree)
-- [ ] 9 — Merge worktree
-- [ ] 10 — Retain Task plan through post-merge verification
-- [ ] 11 — Rebuild from main, verify, then remove only this Task plan
-- [ ] 11a — Final Feature technical audit (after last Task)
-- [ ] 11b — Ask whether to remove the Feature plan files (last Task, after a passing Feature audit)
-
-### Changed files
-- `<path>` — <agent or primary agent>; <purpose>; <status>
-
-### Verification
-- <UTC timestamp> — <style/test/build/log/trace/DB command or check>: <pass/fail>; <evidence or concise result>
-
-### Task reviews
-- <Task ID> — <lenses run> — <PASS/FAIL>; <scope and file:line evidence>; <fix/recheck if needed>
-
-### Feature completion audit
-- Status: <PENDING | PASS | FAIL>
-- Base commit: <SHA>
-- Final commit: <SHA>
-- Auditors and cumulative scope: <auditors, stacks, and base..HEAD>
-- End-to-end acceptance/runtime evidence: <results>
-- Findings: <none or affected Task IDs and file:line evidence>
-- Feature plan files removal: <PENDING | APPROVED | DECLINED | NOT_APPLICABLE>; <absolute paths and approval timestamp>
-
-### Decisions and approvals
-- <UTC timestamp> — <user decision, waiver, or approval>
-
-### Failures and blockers
-- <UTC timestamp> — <step>; <failure or blocker>; <next action>
-
-### Delivery
-- Commit: <hash or pending>
-- Pull request: <URL or pending>
-- Merge: <hash or pending>
-```
-
-When you resume, read this section first. Use `Current step`, incomplete checklist items, changed files, failures, and delivery state to choose the next action. Preserve all earlier entries. Mark a step complete only after its gate passes. Never delete or rewrite history. Append dated verification, decision, failure, and delegation entries. Update the Session fields and checklist in place.
-
-Before deleting the Task technical plan in Step 11, copy its final implementation journal, Task review, runtime/log/trace/DB evidence, PR, and merge details into the persistent Feature delivery tracker. The Feature tracker is the durable record after Task-plan cleanup; never delete it during Task cleanup.
+Create the journal from the template in `olko-implementation-journal`; on a resumed run, load it and follow its resume procedure before any other step.
 
 When a child sends a progress update, immediately add its timestamped facts to the matching `## Implementation` sections. Update Session status and `Current step`. Do not wait for the child's final result.
 
@@ -247,36 +170,6 @@ After implementation, delegate affected checks to the matching test runners in p
 
 Do not edit code or configuration files. Do not run shell commands outside the selected skills. Do not commit, push, merge, create agent definitions, or change installed skills. Update this Task plan's `## Implementation` section.
 
-WORKTREE COMPOSE ISOLATION (CANONICAL CONTRACT): applies to every worktree build,
-restart, log, trace, or database check in steps 1–10. Worktree Compose can otherwise
-recreate the main containers or apply migrations to the shared database volume:
-
-- Resolve the worktree root, main repo root, a distinct project name (`<project>-<slug>`),
-  an env file, and a port offset BEFORE any compose command. Never fall back to
-  the main project or ports; missing values fail visibly.
-- Prefer the repository's compose-isolation wrapper when one exists (it owns the
-  isolated project name, the `container_name: !reset null` override, the port
-  offset, and the worktree env file), invoked from the worktree root with the
-  worktree path, project name, env file, and port offset. When no wrapper can run
-  on this host, reproduce the same isolation explicitly with a temporary override
-  file outside the repository.
-- The isolation override MUST reset `container_name` to null for every service
-  and offset every published host port; pass it with `-f` alongside the
-  worktree's `compose.yaml`, plus `--project-name <project>-<slug>` and
-  `--env-file <worktree>/.env`.
-- Prove isolation before acting and after acting: `docker compose -p <project>-<slug> ps`
-  shows the worktree stack, and the main stack is demonstrably untouched (compare
-  container list / start times). Record both outputs in the journal.
-- Teardown is scoped to the isolated project only (use `--remove-orphans` when
-  needed). Never `down` the main project from a worktree.
-- Touch the main compose project ONLY in the post-merge phase (step 11) from the
-  main checkout, or on an explicit user instruction — and journal the intent
-  first. Step 11 is the deliberate opposite of step 6: run the real main Compose
-  project (real project name, real container names, real ports, merged code) with
-  NO isolation override and NO port offset.
-- If no isolation is achievable in this environment, STOP and report to the user
-  rather than rebuilding anything in the main project.
-
 MOBILE INSTRUMENTATION GATE (non-negotiable, user directive): if ANY Kotlin file under the mobile project directory changed, step 5 (Run tests) is NOT complete until the
 FULL instrumentation suite ran on the Docker emulator
 (`:app:connectedDebugAndroidTest`, NO class filters — whole suite, every
@@ -287,40 +180,5 @@ unit tests + compile checks alone; never proceed to commit with instrumentation
 "not run" unless the user explicitly waives it. The
 compose-defined emulator service is the required emulator; a missing emulator is
 a blocker to resolve, not a reason to skip.
-
-OBSIDIAN KNOWLEDGE-BASE GATE (STEP 8b):
-after the PR-feedback fixes are committed and the PR is green, delegate
-`olko-obsidian-knowledge-manager` with this Task's completed implementation plan,
-the accepted Feature plan, implementation journal, PR evidence, and any
-`## Domain changes` section. It must
-compare the completed mechanism against `docs/knowledge` and the active
-Obsidian vault, apply the Polish clarity profile from
-`olko-ste100-skill-adapter` to the proposed note text, then return the final
-create or update proposal. Present that proposal to the user and wait for
-explicit approval before the manager changes any Obsidian note. Approval must
-cover the final reviewed text. If it changes afterward, present a refreshed
-proposal and obtain approval again. On approval, let the manager apply and re-read only the
-approved note changes; record its verified paths and result in the journal,
-then delegate the final commit to `olko-git-delivery-manager` (Obsidian note
-changes are the LAST commit on the feature branch before the PR merge). If the
-user declines, the vault is unavailable, or any proposed change remains
-unapproved, record the outcome, do NOT merge, and keep the plan until the user
-explicitly decides whether to retain or remove it. Never remove a plan while
-Obsidian knowledge reconciliation is awaiting approval.
-
-OBLIGATORY EDITOR VERIFICATION GATE (STEP 8c):
-OBLIGATORY, never skipped, never waived. After the Obsidian changes
-are the final feature-branch commit (8b) and before the merge (9), launch
-Visual Studio Code on the WORKTREE directory with
-`code --new-window <worktree-absolute-path>` by direct `bash` invocation (do NOT
-delegate it to `olko-git-delivery-manager`). Never pass `--wait`; never target
-the main checkout; never substitute another editor. If the `code` CLI is absent
-or the launch fails, record the exact error as a blocker and do NOT proceed to
-merge. Present the opened worktree path to the user and WAIT for explicit
-confirmation that the syntax/structure inspection is complete before delegating
-the merge. The `code` COMMAND is non-blocking (no `--wait`); the GATE is
-blocking — without the user's explicit confirmation the orchestrator stays
-blocked and MUST NOT start the merge. Record the command, worktree path, and
-user confirmation in the journal.
 
 Only you may delegate tasks. Child agents must remain unable to delegate. Before any irreversible step or a gate that the loaded skill reserves for the user, stop and request explicit confirmation. Report the delegation plan, each agent's scope, changed files, verification results, and unresolved blockers.
