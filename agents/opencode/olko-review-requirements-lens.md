@@ -2,7 +2,7 @@
 description: Read-only review lens that checks a diff, or a plan, against the supplied acceptance criteria — missing criteria and out-of-scope changes.
 mode: subagent
 hidden: true
-model: ollama-cloud/deepseek-v4.1-flash:cloud
+model: ollama-cloud/deepseek-v4.1-flash
 permission:
   edit: deny
   bash: deny

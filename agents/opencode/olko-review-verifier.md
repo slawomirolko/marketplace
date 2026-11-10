@@ -2,7 +2,7 @@
 description: Read-only verifier that confirms or rejects code review findings against the code and a false-positive list.
 mode: subagent
 hidden: true
-model: ollama-cloud/deepseek-v4.1-flash:cloud
+model: ollama-cloud/deepseek-v4.1-flash
 permission:
   edit: deny
   bash: deny

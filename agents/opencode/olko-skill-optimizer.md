@@ -1,7 +1,7 @@
 ---
 description: Optimize AI skills, agents, prompts, and context resources for tokens and cache — audit all agents by cost, optimize one selected resource, or split an oversized agent into on-demand skills — combining olko-agents-optimizer with the ASD-STE100 language adapter.
 mode: primary
-model: ollama-cloud/deepseek-v4.1-flash:cloud
+model: ollama-cloud/deepseek-v4.1-flash
 hidden: false
 permission:
   edit: allow

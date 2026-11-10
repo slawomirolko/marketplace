@@ -2,7 +2,7 @@
 description: Read-only check of confirmed review findings against the project's own ADRs and rule files; returns keep, drop, or ask for each finding.
 mode: subagent
 hidden: true
-model: ollama-cloud/deepseek-v4.1-flash:cloud
+model: ollama-cloud/deepseek-v4.1-flash
 permission:
   edit: deny
   bash: deny

@@ -1,7 +1,7 @@
 ---
 description: Code review entry point. Someone else's PR or a local diff gets a read-only review by parallel stack lenses; your own PR routes to the review-feedback handler.
 mode: all
-model: ollama-cloud/deepseek-v4.1-flash:cloud
+model: ollama-cloud/deepseek-v4.1-flash
 permission:
   edit: deny
   bash:

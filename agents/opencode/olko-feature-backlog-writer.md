@@ -1,7 +1,7 @@
 ---
 description: Refines broad business outcomes into an Epic with progress by Feature, user-facing Features with progress by Task, and one-PR Tasks, then writes the accepted hierarchy to YouTrack.
 mode: subagent
-model: ollama-cloud/deepseek-v4.1-flash:cloud
+model: ollama-cloud/deepseek-v4.1-flash
 hidden: true
 permission:
   edit:

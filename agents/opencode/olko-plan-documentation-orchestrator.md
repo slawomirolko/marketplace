@@ -1,7 +1,7 @@
 ---
 description: Routes backlog work or creates Feature-level business plans and task-sized implementation plans with only the depth each scope needs.
 mode: primary
-model: ollama-cloud/deepseek-v4.1-flash:cloud
+model: ollama-cloud/deepseek-v4.1-flash
 permission:
   edit:
     "*": deny
