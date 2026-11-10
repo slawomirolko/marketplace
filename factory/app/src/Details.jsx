@@ -1,5 +1,5 @@
 import { useViewer } from "./context.js";
-import { costOf, formatUsd, ledgerOf, tierOf } from "./tree.js";
+import { costOf, formatTokens, formatUsd, ledgerOf, tierOf } from "./tree.js";
 
 function usd(value) {
   return value == null ? "unknown" : `$${value.toFixed(6)}`;
@@ -82,7 +82,7 @@ function AgentTable({ item }) {
                   <td>{a.id}</td>
                   <td>{a.role ?? item.node.role}</td>
                   <td>{c ? `${c.tier} · ${c.model}` : "—"}</td>
-                  <td>{c ? num(c.tokens) : "—"}</td>
+                  <td>{c ? formatTokens(c.tokens, c.cacheTokens) : "—"}</td>
                   <td className={c?.costSource === "unknown" ? "cost-unknown" : ""}>{formatUsd(c)}</td>
                 </tr>
               );
@@ -112,7 +112,8 @@ function RunSummary() {
       <Row label="Goal" value={run.goal} />
       <Row label="Status" value={report.status} />
       <Row label="Cost" value={`${usd(report.cost.costUsd)} of ${usd(report.cost.budgetUsd)} (${Math.round(report.cost.budgetRatio * 100)}%)`} />
-      <Row label="Tokens" value={num(report.cost.tokens)} />
+      <Row label="Tokens (in + out)" value={num(report.cost.tokens)} />
+      <Row label="Cache tokens (read + write)" value={num(report.cacheTokens ?? 0)} />
       <Row label="Steps" value={report.cost.steps} />
       <Row label="Cost source" value={report.cost.source} />
       <h3>Tier → model</h3>
@@ -145,7 +146,8 @@ export function Details({ item }) {
       {tier && <Row label="Tier" value={tier} />}
       {cost?.model && <Row label="Model" value={cost.model} />}
       {report && <Row label="Cost" value={formatUsd(cost)} />}
-      {cost && <Row label="Tokens" value={num(cost.tokens)} />}
+      {cost && <Row label="Tokens (in + out)" value={num(cost.tokens)} />}
+      {cost && <Row label="Cache tokens (read + write)" value={num(cost.cacheTokens ?? 0)} />}
       {cost && <Row label="Steps" value={cost.steps} />}
       {cost && <Row label="Cost source" value={cost.costSource} />}
       {question && (

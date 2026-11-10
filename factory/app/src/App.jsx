@@ -6,7 +6,7 @@ import { ViewerContext } from "./context.js";
 import { Details } from "./Details.jsx";
 import { layoutGraph } from "./layout.js";
 import { nodeTypes } from "./nodes.jsx";
-import { buildLevel } from "./tree.js";
+import { buildLevel, formatTokens } from "./tree.js";
 
 async function getJson(url) {
   const response = await fetch(url);
@@ -89,7 +89,7 @@ function Viewer() {
           </label>
           {total && (
             <span className="total">
-              Total <strong>${total.costUsd.toFixed(6)}</strong> of ${total.budgetUsd.toFixed(2)} · {total.tokens.toLocaleString("en-US")} tok · {total.steps} steps · {total.source}
+              Total <strong>${total.costUsd.toFixed(6)}</strong> of ${total.budgetUsd.toFixed(2)} · {formatTokens(total.tokens, detail.report.cacheTokens)} · {total.steps} steps · {total.source}
             </span>
           )}
         </header>

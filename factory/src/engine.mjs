@@ -478,10 +478,15 @@ export class Factory {
     const byModel = {};
     const byCostSource = {};
     let harnessCostUsd = 0;
+    let cacheTokens = 0;
     for (const r of run.ledger) {
-      byNode[r.nodePath] ??= { steps: 0, tokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null, byAgent: {} };
+      const cache = (r.cacheReadTokens ?? 0) + (r.cacheWrite5mTokens ?? 0) + (r.cacheWrite1hTokens ?? 0);
+      cacheTokens += cache;
+      byNode[r.nodePath] ??= { steps: 0, tokens: 0, cacheTokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null, byAgent: {} };
+      byNode[r.nodePath].cacheTokens += cache;
       const agentKey = r.agentId ?? r.nodePath.split("/").at(-1);
-      const agentEntry = (byNode[r.nodePath].byAgent[agentKey] ??= { steps: 0, tokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null, sources: [] });
+      const agentEntry = (byNode[r.nodePath].byAgent[agentKey] ??= { steps: 0, tokens: 0, cacheTokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null, sources: [] });
+      agentEntry.cacheTokens += cache;
       agentEntry.steps += 1;
       agentEntry.tokens += (r.inputTokens ?? 0) + (r.outputTokens ?? 0);
       agentEntry.costUsd += r.costUsd ?? 0;
@@ -510,7 +515,7 @@ export class Factory {
       entry.costSource = costSourceSummary(run.ledger.filter((r) => r.nodePath === nodePath));
     }
     for (const totals of [byTier, byModel]) for (const key of Object.keys(totals)) totals[key] = round(totals[key]);
-    return { runId: run.runId, status: run.status, workflow: `${WORKFLOW.name}@${WORKFLOW.version}`, backend: run.config?.backend, tierModels: run.config?.tiers, byNode, byTier, byModel, byCostSource, harnessCostUsd: round(harnessCostUsd), cost: this.footer(run) };
+    return { runId: run.runId, status: run.status, workflow: `${WORKFLOW.name}@${WORKFLOW.version}`, backend: run.config?.backend, tierModels: run.config?.tiers, byNode, byTier, byModel, byCostSource, cacheTokens, harnessCostUsd: round(harnessCostUsd), cost: this.footer(run) };
   }
 
   trace(run) {

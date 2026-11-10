@@ -9,7 +9,7 @@ const repeats = Number(process.argv[3] ?? 3);
 const tierModels = { low: "haiku", medium: "sonnet", high: "opus" };
 const outFile = process.argv[4] ?? path.join(process.cwd(), "cli-matrix-results.json");
 
-const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-cli-matrix-"));
+const dataDir = process.env.FACTORY_DATA_DIR ?? fs.mkdtempSync(path.join(os.tmpdir(), "factory-cli-matrix-"));
 const factory = new Factory(dataDir, { executors: { claude: cliExecutor("claude"), opencode: cliExecutor("opencode") } });
 
 async function untilSettled(runId) {

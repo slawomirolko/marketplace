@@ -1,6 +1,6 @@
 import { Handle, Position } from "@xyflow/react";
 import { useViewer } from "./context.js";
-import { costOf, formatUsd, isGroup, tierOf } from "./tree.js";
+import { costOf, formatTokens, formatUsd, isGroup, tierOf } from "./tree.js";
 
 function Handles() {
   return (
@@ -31,7 +31,7 @@ function CostLine({ item }) {
   return (
     <div className={`cost ${cost?.costSource === "unknown" ? "cost-unknown" : ""}`}>
       <strong>{formatUsd(cost)}</strong>
-      {cost && <span> · {cost.tokens.toLocaleString("en-US")} tok · {cost.steps} steps · {cost.costSource}</span>}
+      {cost && <span> · {formatTokens(cost.tokens, cost.cacheTokens)} · {cost.steps} steps · {cost.costSource}</span>}
     </div>
   );
 }

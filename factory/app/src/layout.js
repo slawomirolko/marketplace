@@ -1,9 +1,9 @@
 import dagre from "@dagrejs/dagre";
 import { isGroup } from "./tree.js";
 
-const STEP = { width: 250, height: 104 };
+const STEP = { width: 270, height: 112 };
 const TERMINAL = { width: 90, height: 40 };
-const AGENT = { width: 190, height: 84 };
+const AGENT = { width: 220, height: 124 };
 const PAD = 20;
 const HEADER = 72;
 

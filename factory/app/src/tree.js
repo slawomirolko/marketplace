@@ -43,6 +43,7 @@ export function costOf(item, report) {
     return {
       costUsd: Math.round(parts.reduce((s, c) => s + c.costUsd, 0) * 1e6) / 1e6,
       tokens: parts.reduce((s, c) => s + c.tokens, 0),
+      cacheTokens: parts.reduce((s, c) => s + (c.cacheTokens ?? 0), 0),
       steps: parts.reduce((s, c) => s + c.steps, 0),
       costSource: sources.size === 1 ? [...sources][0] : "mixed",
     };
@@ -62,6 +63,11 @@ export function ledgerOf(item, run) {
   if (item.kind === "agent") return run.ledger.filter((r) => r.nodePath === item.nodePath && r.agentId === item.agent.id);
   if (item.kind === "subgraph") return run.ledger.filter((r) => r.nodePath.startsWith(`${item.key}/`));
   return run.ledger.filter((r) => r.nodePath === item.key);
+}
+
+export function formatTokens(tokens, cacheTokens) {
+  const base = `${(tokens ?? 0).toLocaleString("en-US")} tok`;
+  return cacheTokens ? `${base} + ${cacheTokens.toLocaleString("en-US")} cache` : base;
 }
 
 export function formatUsd(cost) {
