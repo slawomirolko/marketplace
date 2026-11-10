@@ -42,6 +42,14 @@ test("workflow rejects edges to unknown nodes and a missing END", () => {
   assert.ok(errors.some((e) => e.includes("no edge reaches END")));
 });
 
+test("workflow rejects two edges between the same nodes", () => {
+  const workflow = read("valid", "workflow-feature.json");
+  workflow.edges.push({ from: "review", to: "build", when: "review.blocking > 0" });
+  const { valid, errors } = validate("workflow", workflow);
+  assert.equal(valid, false);
+  assert.ok(errors.some((e) => e.includes("more than one edge review->build")), errors.join("; "));
+});
+
 test("usage record for a script step must cost exactly 0 and be measured", () => {
   const record = { ...read("valid", "usage-record-delegate.json"), kind: "script", tier: null, model: null, costUsd: 0.01, costSource: "measured", tokens: { input: 0, output: 0 } };
   assert.equal(validate("usage-record", record).valid, false);
