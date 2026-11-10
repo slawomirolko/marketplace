@@ -79,11 +79,50 @@ function buildServer() {
           .object({
             roles: z.record(z.enum(["low", "medium", "high"])).optional(),
             budget: z.object({ maxCostUsd: z.number().positive() }).partial().optional(),
+            backend: z.object({ kind: z.enum(["fake", "cli", "delegate"]), cli: z.enum(["claude", "opencode"]).optional() }).optional(),
+            tierModels: z.object({ low: z.string(), medium: z.string(), high: z.string() }).partial().optional(),
           })
           .optional(),
       },
     },
     guarded(({ runId, overrides }) => factory.status(factory.confirm(runId, overrides))),
+  );
+
+  server.registerTool(
+    "factory_next",
+    {
+      description: "In delegate mode: the node work the client should run now (prompt, tier, model), or null.",
+      inputSchema: { runId: z.string() },
+    },
+    guarded(({ runId }) => ({ pendingWork: factory.next(runId), ...factory.status(factory.get(runId)) })),
+  );
+
+  server.registerTool(
+    "factory_submit",
+    {
+      description:
+        "In delegate mode: submit the output of pendingWork and the token usage you can see for the subagent that ran it. Send only numbers you actually observed; omit the rest.",
+      inputSchema: {
+        runId: z.string(),
+        nodePath: z.string(),
+        output: z.string(),
+        usage: z
+          .object({
+            model: z.string().optional(),
+            totalTokens: z.number().int().nonnegative().optional(),
+            inputTokens: z.number().int().nonnegative().optional(),
+            outputTokens: z.number().int().nonnegative().optional(),
+            cacheReadTokens: z.number().int().nonnegative().optional(),
+            cacheWriteTokens: z.number().int().nonnegative().optional(),
+            childSessionId: z.string().optional(),
+          })
+          .optional(),
+      },
+    },
+    guarded(({ runId, nodePath, output, usage }) => {
+      const { run, duplicate } = factory.submit(runId, nodePath, output, usage);
+      return { ...factory.status(run), duplicate };
+    }),
   );
 
   server.registerTool(

@@ -48,7 +48,7 @@ const client = await connect();
 await check("tools are listed", async () => {
   const { tools } = await client.listTools();
   const names = tools.map((t) => t.name).sort();
-  assert.deepEqual(names, ["factory_answer", "factory_cancel", "factory_confirm", "factory_report", "factory_start", "factory_status", "factory_trace", "factory_wait"]);
+  assert.deepEqual(names, ["factory_answer", "factory_cancel", "factory_confirm", "factory_next", "factory_report", "factory_start", "factory_status", "factory_submit", "factory_trace", "factory_wait"]);
 });
 
 await check("wrong token is rejected with 401", async () => {

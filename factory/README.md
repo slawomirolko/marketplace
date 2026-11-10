@@ -85,11 +85,18 @@ Findings:
 - The legacy `langchain-mcp-adapters` and `langchain[mcp]` cannot share one Python environment (the new one pulls `mcp` 2.x).
 - OpenCode V2 is published as `@opencode/cli`; `opencode-ai` stops at 1.19.x. V2 reaches MCP tools through its `execute` code tool, which produced a tight polling loop before `factory_wait` and the throttle existed.
 - Harness-reported cost is not comparable across harnesses (list price vs. 0 on a subscription), so the factory must compute cost from tokens itself.
+- Real models per tier (Opus / Sonnet / Haiku 5.5) through the `cli` backend and through `delegate` subagents: 0 of 18 `cli` nodes had unknown cost; 18 of 18 `delegate` nodes did with a neutral prompt. Details in `docs/cost-measurement.md`.
+
+## Backends
+
+- `fake`: deterministic fake model (default, used by the offline tests).
+- `cli`: the factory runs a signed-in CLI headless per node (`host/cli-backend.mjs`, prompt on stdin) and prices tokens with `src/prices.mjs`. It needs the CLIs on the same machine, so it runs on the host (`host/cli-matrix.mjs`), not in the container.
+- `delegate`: the client runs `pendingWork` in its own subagent and calls `factory_submit` (`factory_next` shows the work).
 
 ## Not verified yet
 
 - Codex as a client.
-- Delegate mode end to end. Subagent usage itself is checked (see `docs/delegate-mode.md`): Claude Code exposes total tokens only, OpenCode exposes a full split through the child session.
-- Real models inside the factory (`api` mode) and real cost.
+- Delegate mode on Claude Code: the model actually used by each subagent was not checked.
+- Direct API backend (`api` kind in the config schema).
 - Live user questions in interactive harness UIs (tests answered through the prompt).
 - Installation from marketplaces, long runs, desktop apps.
