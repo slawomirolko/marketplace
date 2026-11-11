@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -6,6 +7,11 @@ import { errorMessage } from "./engine.ts";
 import type { Factory } from "./engine.ts";
 import { viewerUrlFor } from "./viewer-routes.ts";
 import { HARNESSES, installGuide } from "./install-guide.ts";
+
+function longPath(p: string): string {
+  const resolved = path.resolve(p);
+  return fs.existsSync(resolved) ? fs.realpathSync.native(resolved) : resolved;
+}
 
 export interface ToolMetrics {
   statusCalls: number;
@@ -80,7 +86,7 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
         },
       },
       guarded(({ goal, workflow, input, idempotencyKey }) => {
-        const runInput = { ...(input?.repo ? { repo: input.repo } : {}), ...(input?.pr ? { pr: input.pr } : {}), ...(input?.fresh ? { fresh: true } : {}), ...(input?.plan ? { plan: input.plan } : {}), ...(input?.criteria ? { criteria: input.criteria } : {}), ...(input?.project ? { project: path.resolve(input.project) } : {}), ...(input?.marketplace ? { marketplace: path.resolve(input.marketplace) } : {}), ...(input?.artifacts ? { artifacts: input.artifacts } : {}) };
+        const runInput = { ...(input?.repo ? { repo: input.repo } : {}), ...(input?.pr ? { pr: input.pr } : {}), ...(input?.fresh ? { fresh: true } : {}), ...(input?.plan ? { plan: input.plan } : {}), ...(input?.criteria ? { criteria: input.criteria } : {}), ...(input?.project ? { project: longPath(input.project) } : {}), ...(input?.marketplace ? { marketplace: longPath(input.marketplace) } : {}), ...(input?.artifacts ? { artifacts: input.artifacts } : {}) };
         const { run, reused } = factory.start(goal, idempotencyKey, { ...(workflow ? { workflow } : {}), input: runInput });
         return { ...factory.status(run), reused, next: "Show the proposal to the user. After the user replies, call factory_confirm." };
       }),

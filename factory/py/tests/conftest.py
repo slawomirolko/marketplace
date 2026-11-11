@@ -75,7 +75,10 @@ def factory_server():
     finally:
         process.terminate()
         process.wait(timeout=10)
-        shutil.rmtree(data_dir, ignore_errors=True)
+        if os.environ.get("FACTORY_KEEP_DATA"):
+            print(f"factory data kept in {data_dir}")
+        else:
+            shutil.rmtree(data_dir, ignore_errors=True)
 
 
 @pytest.fixture(scope="session")
@@ -153,7 +156,7 @@ def marketplace_snapshot(path: Path) -> dict:
 @pytest.fixture(scope="session")
 async def sync_run(factory_server) -> ReviewRun:
     assert SYNC_PROJECT, "set FACTORY_SYNC_PROJECT to the owner/name of a real project with .agents/skills and .opencode/agents"
-    root = Path(tempfile.mkdtemp(prefix="factory-sync-"))
+    root = Path(os.path.realpath(tempfile.mkdtemp(prefix="factory-sync-")))
     project, marketplace = root / "project", root / "marketplace"
     subprocess.run(["gh", "repo", "clone", SYNC_PROJECT, str(project), "--", "--depth", "1"], check=True, capture_output=True)
     subprocess.run(["gh", "repo", "clone", MARKETPLACE_REMOTE, str(marketplace), "--", "--depth", "50"], check=True, capture_output=True)
@@ -172,4 +175,48 @@ async def sync_run(factory_server) -> ReviewRun:
     run.artifacts = SYNC_ARTIFACTS
     run.skill_files = [project / ".agents" / "skills" / name / "SKILL.md" for name in SYNC_ARTIFACTS if (project / ".agents" / "skills" / name / "SKILL.md").exists()]
     print(json.dumps({"runId": run.run_id, "path": [e["node"] for e in run.events if e["type"] == "node_started"], "costUsd": run.report["cost"]["costUsd"], "viewerUrl": run.viewer_url}))
+    return run
+
+
+def remote_heads(path: Path) -> str:
+    return git(path, "ls-remote", "--heads", "origin")
+
+
+def accept_first_decision(question: dict, accepted: list[str]) -> str:
+    allowed = question.get("allowed") or []
+    if question["id"].startswith("q-sync-") and question["id"][7:].isdigit() and not accepted:
+        choice = next((a for a in ("create", "adopt-patch") if a in allowed), "leave")
+        if choice != "leave":
+            accepted.append(question["id"])
+        return choice
+    if question["id"] == "q-sync-publish":
+        return "stop"
+    return "leave" if "leave" in allowed else "stop"
+
+
+@pytest.fixture(scope="session")
+async def sync_apply_run(factory_server) -> ReviewRun:
+    assert SYNC_PROJECT, "set FACTORY_SYNC_PROJECT to the owner/name of a real project with .agents/skills and .opencode/agents"
+    root = Path(os.path.realpath(tempfile.mkdtemp(prefix="factory-sync-apply-")))
+    project, marketplace = root / "project", root / "marketplace"
+    subprocess.run(["gh", "repo", "clone", SYNC_PROJECT, str(project), "--", "--depth", "1"], check=True, capture_output=True)
+    subprocess.run(["gh", "repo", "clone", MARKETPLACE_REMOTE, str(marketplace), "--", "--depth", "50"], check=True, capture_output=True)
+    before = {**marketplace_snapshot(marketplace), "remote": remote_heads(marketplace)}
+    accepted: list[str] = []
+    run = await run_workflow(
+        url=f"{factory_server['url']}/mcp",
+        token=factory_server["token"],
+        workflow="olko-marketplace-skill-sync",
+        goal="Sync project-local skills and agents to the marketplace and apply one decision",
+        workflow_input={"project": str(project), "marketplace": str(marketplace), "artifacts": SYNC_ARTIFACTS},
+        answer=lambda question: accept_first_decision(question, accepted),
+    )
+    after = marketplace_snapshot(marketplace)
+    run.marketplace = marketplace
+    run.marketplace_before = before
+    run.marketplace_after = {**after, "status": before["status"], "remote": remote_heads(marketplace)}
+    run.changed_files = [line.split(maxsplit=1)[1] for line in after["status"].splitlines()]
+    run.accepted = accepted
+    run.artifacts = SYNC_ARTIFACTS
+    print(json.dumps({"runId": run.run_id, "accepted": accepted, "changed": run.changed_files, "costUsd": run.report["cost"]["costUsd"], "viewerUrl": run.viewer_url}))
     return run

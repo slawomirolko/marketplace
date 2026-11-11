@@ -438,9 +438,9 @@ export class Factory {
   }
 
   dirs(run: Run, node: WorkflowNode, agent: CurrentAgent): string[] {
-    const skillDir = agent.agentName ? readMarketplaceAgent(agent.agentName).skillDir : undefined;
+    const marketplace = agent.agentName ? readMarketplaceAgent(agent.agentName).dirs : [];
     const listed = node.dirs?.({ goal: run.goal, input: run.input, state: run.state, agent }) ?? [];
-    return [...new Set([...listed, ...(skillDir ? [skillDir] : [])])];
+    return [...new Set([...listed, ...marketplace])];
   }
 
   storeParsed(run: Run, node: WorkflowNode, agentId: string, output: string): void {

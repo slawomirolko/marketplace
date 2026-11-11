@@ -86,7 +86,7 @@ export interface ExecResult {
   stderr: string;
 }
 
-export type HostExec = (command: string, args: string[]) => ExecResult | Promise<ExecResult>;
+export type HostExec = (command: string, args: string[], options?: { cwd?: string }) => ExecResult | Promise<ExecResult>;
 
 export interface TokenCounts {
   input: number | null;

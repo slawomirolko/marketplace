@@ -1,10 +1,12 @@
 name: olko-marketplace-skill-sync
-version: 0.1.0
-source: agents/opencode/olko-marketplace-skill-sync-manager.md (phases 1-3; applying, publishing and installing accepted decisions stops with an error)
+version: 0.2.0
+source: agents/opencode/olko-marketplace-skill-sync-manager.md (phases 1-5)
 roles:
   bootstrap: low
   adapter: medium
   comparator: medium
+  sync: medium
+  publisher: medium
 entry: resolve-path
 limits:
   maxCycleIterations: 3
@@ -106,9 +108,125 @@ nodes:
   - id: plan
     kind: script
     op: sync.plan
-  - id: apply
+  - id: apply-next
     kind: script
-    op: sync.applyNotAvailable
+    op: list.next
+    maxVisits: 200
+    with: { over: plan.accepted }
+  - id: apply
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    tools: [read, edit]
+    dirs: ["{{state.resolve-path.path}}"]
+    maxVisits: 200
+    parse: sync.applied
+    prompt: |
+      Do only Phase 4 of your workflow for this one accepted decision. The factory owns every other phase and every question: do not ask, do not commit, push, install, run registry --fix, or touch any other artifact.
+      Decision: {{state.apply-next.item.decision}} for {{state.apply-next.item.type}} {{state.apply-next.item.name}} (classification {{state.apply-next.item.classification}}).
+      Local project: {{state.discover.project}}
+      Marketplace: {{state.resolve-path.path}}
+
+      {{state.apply-next.item.instruction}}
+      The user approved version {{state.apply-next.item.version}}: set it on the manifest entry even when the body has no portable change. Use `blocked` only when a write fails.
+
+      Reply with one line: `applied | <changed files, comma separated> | <version>`, or `blocked | <reason>` when you could not apply it.
+  - id: adapter-draft
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    dirs: ["{{state.resolve-path.path}}"]
+    maxVisits: 200
+    parse: text.raw
+    prompt: |
+      Do only step (1) of the move-to-adapter decision in Phase 4 for {{state.apply-next.item.type}} {{state.apply-next.item.name}}, and do not write any file: draft the exact diff for the project's `.agents/skill-config.md` or `.agents/skills/{{state.apply-next.item.name}}/project.md` (every reported project value and every delegated skill in `uses`), and list the keys the marketplace skill does not expose yet (step 2, a marketplace change with at least a minor bump).
+      Local project: {{state.discover.project}}
+      Local path: {{state.apply-next.item.localPath}}
+      Marketplace path: {{state.apply-next.item.marketplacePath}}
+      Reply with the diff and the key list only.
+  - id: ask-adapter
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-sync-adapter-{{state.apply-next.index}}"
+      text: "Adapter change for {{state.apply-next.item.type}} {{state.apply-next.item.name}}:\n{{state.adapter-draft.adapter-draft}}\n\nWrite the adapter and the marketplace keys?"
+      allowed: [write, skip]
+  - id: adapter-write
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    tools: [read, edit]
+    dirs: ["{{state.resolve-path.path}}"]
+    maxVisits: 200
+    parse: sync.applied
+    prompt: |
+      Do only steps (1) and (2) of the move-to-adapter decision in Phase 4 for {{state.apply-next.item.type}} {{state.apply-next.item.name}}, exactly as the approved draft below. Do not replace the local skill body (the factory does step 3 after one more confirmation), do not commit, push or install.
+      Local project: {{state.discover.project}}
+      Marketplace: {{state.resolve-path.path}}
+
+      Approved draft:
+      {{state.adapter-draft.adapter-draft}}
+
+      Reply with one line: `applied | <changed files, comma separated> | <version>`, or `blocked | <reason>` when you could not apply it.
+  - id: ask-revert
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-sync-revert-{{state.apply-next.index}}"
+      text: "Final confirmation: replace the local {{state.apply-next.item.type}} {{state.apply-next.item.localPath}} with its marketplace counterpart {{state.apply-next.item.marketplacePath}}? This overwrites the local copy."
+      allowed: [revert, keep]
+  - id: revert
+    kind: script
+    op: sync.revertLocal
+    maxVisits: 200
+  - id: validate
+    kind: script
+    op: sync.validate
+  - id: ask-publish
+    kind: interrupt
+    question:
+      id: q-sync-publish
+      text: "Marketplace diff:\n{{state.validate.status}}\n{{state.validate.diffStat}}\n\nVersions:\n{{state.validate.versions}}\n\nValidation: {{state.validate.summary}}\n\nCommit and push on a feature branch and open a PR?"
+      allowed: [publish, stop]
+  - id: publish
+    kind: llm
+    role: publisher
+    skill: olko-commit
+    tools: [read, edit, bash]
+    dirs: ["{{state.resolve-path.path}}"]
+    parse: sync.prLine
+    prompt: |
+      Run the olko-commit workflow in the marketplace repository {{state.resolve-path.path}} (use `git -C` or change into it), not in the current directory.
+      Never pass --force, never push to main: use its scope-named feature branch and PR flow. Do not merge. Do not ask questions; the user already approved this publish.
+      PR title: the conventional commit subject for this change, for example `feat(sync): {{#state.plan.accepted}}{{name}} {{/state.plan.accepted}}`.
+      PR description, concise: the artifacts and versions below, and the validation result.
+      {{state.validate.versions}}
+      Validation: {{state.validate.summary}}
+
+      End with exactly one line: `pr | <PR URL> | <branch> | <commit sha>`.
+  - id: publish-pr
+    kind: script
+    op: sync.prOf
+  - id: ask-pr
+    kind: interrupt
+    maxVisits: 20
+    question:
+      id: "q-sync-pr-{{state.wait-ci.round}}"
+      text: "Published: {{state.publish-pr.publish.url}}{{#state.wait-ci}}\nCI checks passed: {{state.wait-ci.passed}}{{/state.wait-ci}}\nLeave it open, wait for CI, or squash merge? Installing needs the merge."
+      allowed: [leave, wait, merge]
+  - id: wait-ci
+    kind: script
+    op: sync.waitChecks
+    maxVisits: 20
+  - id: merge
+    kind: script
+    op: sync.merge
+  - id: install
+    kind: script
+    op: sync.install
+  - id: memory-save
+    kind: script
+    op: sync.memorySave
   - id: report
     kind: script
     op: sync.report
@@ -135,7 +253,31 @@ edges:
   - { from: decide-next, to: decide, when: "decide-next.done == false" }
   - { from: decide-next, to: plan, when: "decide-next.done == true" }
   - { from: decide, to: decide-next }
-  - { from: plan, to: apply, when: "plan.accepted > 0" }
+  - { from: plan, to: apply-next, when: "plan.accepted > 0" }
   - { from: plan, to: report, when: "plan.accepted == 0" }
-  - { from: apply, to: END }
+  - { from: apply-next, to: validate, when: "apply-next.done == true" }
+  - { from: apply-next, to: apply, when: 'apply-next.item.route == "change"' }
+  - { from: apply-next, to: ask-revert, when: 'apply-next.item.route == "revert"' }
+  - { from: apply-next, to: adapter-draft, when: 'apply-next.item.route == "adapter"' }
+  - { from: apply, to: apply-next }
+  - { from: adapter-draft, to: ask-adapter }
+  - { from: ask-adapter, to: adapter-write, when: 'ask-adapter.answer == "write"' }
+  - { from: ask-adapter, to: apply-next, when: 'ask-adapter.answer == "skip"' }
+  - { from: adapter-write, to: ask-revert }
+  - { from: ask-revert, to: revert, when: 'ask-revert.answer == "revert"' }
+  - { from: ask-revert, to: apply-next, when: 'ask-revert.answer == "keep"' }
+  - { from: revert, to: apply-next }
+  - { from: validate, to: ask-publish, when: "validate.changed > 0" }
+  - { from: validate, to: report, when: "validate.changed == 0" }
+  - { from: ask-publish, to: publish, when: 'ask-publish.answer == "publish"' }
+  - { from: ask-publish, to: report, when: 'ask-publish.answer == "stop"' }
+  - { from: publish, to: publish-pr }
+  - { from: publish-pr, to: ask-pr }
+  - { from: ask-pr, to: merge, when: 'ask-pr.answer == "merge"' }
+  - { from: ask-pr, to: wait-ci, when: 'ask-pr.answer == "wait"' }
+  - { from: ask-pr, to: report, when: 'ask-pr.answer == "leave"' }
+  - { from: wait-ci, to: ask-pr }
+  - { from: merge, to: install }
+  - { from: install, to: memory-save }
+  - { from: memory-save, to: report }
   - { from: report, to: END }

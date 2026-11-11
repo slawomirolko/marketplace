@@ -4,8 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { evaluateWhen, loadWorkflowFile } from "../src/workflow-yaml.ts";
-import { claudeTools, readMarketplaceAgent } from "../src/marketplace-agents.ts";
-import { parseComparison, syncOptions } from "../src/ops.ts";
+import { claudeAgentsFile, claudeTools, marketplaceDir, readMarketplaceAgent } from "../src/marketplace-agents.ts";
+import { bumpVersion, parseComparison, parsePrLine, syncOptions } from "../src/ops.ts";
 
 function writeYaml(text: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-yaml-"));
@@ -92,8 +92,9 @@ test("decision options follow the classification as the source agent lists them"
   assert.deepEqual(syncOptions("conflict"), ["adopt-patch", "adopt-minor", "adopt-major", "revert-local", "leave"]);
 });
 
-test("node tools map to Claude Code tools; everything else is disallowed", () => {
-  assert.deepEqual(claudeTools(["read"]).allowed, ["Read", "Grep", "Glob", "Skill"]);
+test("node tools map to Claude Code tools; the Skill tool is never allowed, so installed skill copies are never used", () => {
+  assert.deepEqual(claudeTools(["read"]).allowed, ["Read", "Grep", "Glob"]);
+  assert.ok(claudeTools(["read", "edit", "bash"]).disallowed.includes("Skill"));
   const write = claudeTools(["read", "edit"]);
   assert.ok(write.allowed.includes("Edit") && write.disallowed.includes("Bash"));
   assert.ok(claudeTools(["read", "bash"]).allowed.includes("Bash"));
@@ -142,4 +143,47 @@ test("the marketplace skill sync workflow loads from YAML", () => {
   assert.equal(workflow.name, "olko-marketplace-skill-sync");
   assert.equal(workflow.nodes.find((n) => n.id === "adapt")?.agent, "olko-adapt-to-marketplace");
   assert.deepEqual(workflow.nodes.find((n) => n.id === "compare")?.tools, undefined);
+});
+
+test("an adopt decision bumps the marketplace version by its part", () => {
+  assert.equal(bumpVersion("1.2.3", "patch"), "1.2.4");
+  assert.equal(bumpVersion("1.2.3", "minor"), "1.3.0");
+  assert.equal(bumpVersion("1.2.3", "major"), "2.0.0");
+  assert.equal(bumpVersion("none", "patch"), "1.0.0");
+});
+
+test("the publish result line gives the PR; a push to main or a missing PR URL is rejected", () => {
+  assert.deepEqual(parsePrLine("done\npr | https://github.com/o/r/pull/7 | feat/sync-x | abc123"), { url: "https://github.com/o/r/pull/7", branch: "feat/sync-x", commit: "abc123" });
+  assert.throws(() => parsePrLine("pr | https://github.com/o/r/pull/7 | main | abc"), /feature branch/);
+  assert.throws(() => parsePrLine("pr | none | feat/x | abc"), /no PR URL/);
+  assert.throws(() => parsePrLine("no line"), /no 'pr \|' line/);
+});
+
+test("an agent's declared skills are read from the marketplace checkout, not from installed copies", () => {
+  const agent = readMarketplaceAgent("olko-review-bugs-lens");
+  const caveman = path.join(marketplaceDir(), "skills", "caveman", "caveman", "SKILL.md");
+  assert.deepEqual(agent.skills, [{ name: "caveman", file: caveman }]);
+  assert.ok(agent.prompt.includes(caveman), "the instructions name the marketplace SKILL.md path");
+  assert.match(agent.prompt, /not through the Skill tool/);
+  assert.deepEqual(agent.dirs, [path.dirname(caveman)]);
+});
+
+test("a changed agent or skill in the marketplace reaches the next run without a factory restart", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "factory-marketplace-"));
+  const source = marketplaceDir();
+  for (const rel of ["agents/opencode/olko-review-bugs-lens.md", "agents/opencode/index.json", "skills/caveman/caveman/SKILL.md"]) {
+    fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+    fs.copyFileSync(path.join(source, rel), path.join(root, rel));
+  }
+  const previous = process.env.FACTORY_MARKETPLACE_DIR;
+  process.env.FACTORY_MARKETPLACE_DIR = root;
+  try {
+    const read = () => JSON.parse(fs.readFileSync(claudeAgentsFile("olko-review-bugs-lens"), "utf8"))["olko-review-bugs-lens"].prompt as string;
+    assert.ok(!read().includes("Changed rule"));
+    fs.appendFileSync(path.join(root, "agents/opencode/olko-review-bugs-lens.md"), "\nChanged rule.\n");
+    assert.ok(read().includes("Changed rule"));
+  } finally {
+    if (previous === undefined) delete process.env.FACTORY_MARKETPLACE_DIR;
+    else process.env.FACTORY_MARKETPLACE_DIR = previous;
+  }
 });

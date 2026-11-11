@@ -14,7 +14,7 @@ const factoryDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
 const PROJECT = process.env.FACTORY_SYNC_PROJECT;
 const ARTIFACTS = (process.env.FACTORY_SYNC_ARTIFACTS ?? "olko-design-rules,olko-review-verifier,olko-e2e-acceptance-runner").split(",");
 const MARKETPLACE = process.env.FACTORY_SYNC_MARKETPLACE ?? "slawomirolko/marketplace";
-const TOOLS: Record<string, string> = { read: "Read,Grep,Glob,Skill", edit: "Edit,Write", bash: "Bash" };
+const TOOLS: Record<string, string> = { read: "Read,Grep,Glob", edit: "Edit,Write", bash: "Bash" };
 const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
 
 type Payload = Record<string, any>;
@@ -53,7 +53,7 @@ function runSubagent(work: Payload, cwd: string): Promise<SubagentResult> {
   fs.writeFileSync(agentsFile, JSON.stringify({ [work.agentName]: { description: work.agentDescription, prompt: work.agentInstructions, tools: allowed.split(",") } }));
   const dirs = (work.dirs as string[]).flatMap((d) => ["--add-dir", d]);
   return new Promise((resolve, reject) => {
-    const child = spawn("claude", ["-p", "--agents", agentsFile, "--agent", work.agentName, "--model", work.model, "--output-format", "json", "--allowedTools", allowed, ...dirs, "--max-turns", "40"], { cwd, shell: process.platform === "win32" });
+    const child = spawn("claude", ["-p", "--agents", agentsFile, "--agent", work.agentName, "--model", work.model, "--output-format", "json", "--allowedTools", allowed, ...((work.tools as string[]).includes("edit") ? ["--permission-mode", "acceptEdits"] : []), ...dirs, "--max-turns", "40"], { cwd, shell: process.platform === "win32" });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d) => (stdout += d));
@@ -71,7 +71,7 @@ function runSubagent(work: Payload, cwd: string): Promise<SubagentResult> {
 
 test("a harness drives the YAML marketplace skill sync over stdio in delegate mode, honours per-node tools, and leave on every decision changes nothing", async () => {
   assert.ok(PROJECT, "set FACTORY_SYNC_PROJECT to the owner/name of a real project with .agents/skills and .opencode/agents");
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "factory-sync-ts-"));
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "factory-sync-ts-")));
   const project = path.join(root, "project");
   const marketplace = path.join(root, "marketplace");
   execFileSync("gh", ["repo", "clone", PROJECT, project, "--", "--depth", "1"]);

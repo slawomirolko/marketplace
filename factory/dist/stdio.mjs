@@ -7885,6 +7885,7 @@ function parseEvents(stdout) {
 }
 function claudeAgentArgs(agent, tools, dirs) {
 	const { allowed, disallowed } = claudeTools(tools);
+	const permission = tools.includes("edit") ? ["--permission-mode", "acceptEdits"] : [];
 	return [
 		"--agents",
 		claudeAgentsFile(agent, tools),
@@ -7897,6 +7898,7 @@ function claudeAgentArgs(agent, tools, dirs) {
 		allowed.join(","),
 		"--disallowedTools",
 		disallowed.join(","),
+		...permission,
 		...dirs.flatMap((d) => ["--add-dir", d])
 	];
 }
@@ -8030,11 +8032,12 @@ function cliExecutor(cli) {
 	if (cli === "opencode") return ({ model, prompt, ...options }) => runOpencode(model, prompt, options);
 	throw new Error(`unsupported cli ${cli}`);
 }
-function hostExec(command, args) {
+function hostExec(command, args, options = {}) {
 	return new Promise((resolve) => {
 		const child = spawn(command, args, {
 			env: cleanEnv(),
-			shell: false
+			shell: false,
+			...options.cwd ? { cwd: options.cwd } : {}
 		});
 		let stdout = "";
 		let stderr = "";
@@ -15255,6 +15258,10 @@ function installGuide(requested, clientName) {
 	};
 }
 // src/tools.ts
+function longPath(p) {
+	const resolved = path.resolve(p);
+	return fs.existsSync(resolved) ? fs.realpathSync.native(resolved) : resolved;
+}
 var MIN_STATUS_INTERVAL_MS = Number(process.env.FACTORY_MIN_STATUS_INTERVAL_MS ?? 500);
 var DEFAULT_WAIT_SEC = 20;
 var MAX_WAIT_SEC = 50;
@@ -15335,8 +15342,8 @@ function createFactoryTools(factory, publicUrl) {
 				...input?.fresh ? { fresh: true } : {},
 				...input?.plan ? { plan: input.plan } : {},
 				...input?.criteria ? { criteria: input.criteria } : {},
-				...input?.project ? { project: path.resolve(input.project) } : {},
-				...input?.marketplace ? { marketplace: path.resolve(input.marketplace) } : {},
+				...input?.project ? { project: longPath(input.project) } : {},
+				...input?.marketplace ? { marketplace: longPath(input.marketplace) } : {},
 				...input?.artifacts ? { artifacts: input.artifacts } : {}
 			};
 			const { run, reused } = factory.start(goal, idempotencyKey, {

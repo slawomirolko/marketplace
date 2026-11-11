@@ -18,6 +18,8 @@ roles:
   bootstrap: low
   adapter: medium
   comparator: medium
+  sync: medium
+  publisher: medium
 budget:
   maxCostUsd: 20
   infoRatio: 0.5

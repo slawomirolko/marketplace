@@ -26,6 +26,8 @@ class ReviewRun:
     marketplace_after: dict = field(default_factory=dict)
     artifacts: list = field(default_factory=list)
     skill_files: list = field(default_factory=list)
+    changed_files: list = field(default_factory=list)
+    accepted: list = field(default_factory=list)
 
 
 class HostState(TypedDict, total=False):

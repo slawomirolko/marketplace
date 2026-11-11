@@ -33,7 +33,7 @@ Status: in progress. `olko-review` runs from YAML with all three routes: REVIEW 
 | E12 | Memory layer ops (`memory.load`, `memory.persist`) over the agent memory block `.opencode/memory/<agent>.md` | done | review, sync, plan |
 | E13 | Workflow call with input mapping (`kind: workflow`, `input:`), not only inline subgraph, so implementation can call the review PLAN/REVIEW route | to do | implementation, plan |
 | E14 | Configuration file in YAML (`config/factory.yaml`): roles to tiers, backends, budget, read at start and shown in the proposal; models are proposed per backend and confirmed by the user | done |
-| E15 | Marketplace agents without installation: the cli backend gives the CLI the agent definition from `agents/opencode/<name>.md`; delegate `pendingWork` carries `agentInstructions` for any harness | done | all |
+| E15 | Marketplace agents without installation: the cli backend gives the CLI the agent definition from `agents/opencode/<name>.md`; delegate `pendingWork` carries `agentInstructions` for any harness | done; definitions and declared skills are read from the marketplace checkout at every agent step, the Skill tool is off, nothing is installed or cached | all |
 
 ## Workflows
 

@@ -38,11 +38,13 @@ function freePort(): Promise<number> {
   });
 }
 
-function runSubagent(agentName: string, instructions: string, description: string, model: string, prompt: string): Promise<SubagentResult> {
+function runSubagent(work: Payload): Promise<SubagentResult> {
+  const { agentName, agentInstructions: instructions, agentDescription: description, model, prompt } = work;
+  const dirs = (work.dirs as string[]).flatMap((d) => ["--add-dir", d]);
   const agentsFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "harness-agent-")), "agents.json");
-  fs.writeFileSync(agentsFile, JSON.stringify({ [agentName]: { description, prompt: instructions, tools: ["Read", "Grep", "Glob", "Skill"] } }));
+  fs.writeFileSync(agentsFile, JSON.stringify({ [agentName]: { description, prompt: instructions, tools: ["Read", "Grep", "Glob"] } }));
   return new Promise((resolve, reject) => {
-    const child = spawn("claude", ["-p", "--agents", agentsFile, "--agent", agentName, "--model", model, "--output-format", "json", "--allowedTools", "Read,Grep,Glob,Skill", "--max-turns", "40"], { cwd: repoRoot, shell: process.platform === "win32" });
+    const child = spawn("claude", ["-p", "--agents", agentsFile, "--agent", agentName, "--model", model, "--output-format", "json", "--allowedTools", "Read,Grep,Glob", ...dirs, "--max-turns", "40"], { cwd: repoRoot, shell: process.platform === "win32" });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d) => (stdout += d));
@@ -76,7 +78,7 @@ test("a harness drives the YAML olko-review workflow over stdio in delegate mode
         const items = status.pendingWorkItems as Payload[];
         for (const work of items) assert.ok(work.agentName && work.agentInstructions, `pendingWork for ${work.nodePath} carries the marketplace agent to run`);
         batches.push(items.map((w) => w.agentName));
-        const results = await Promise.all(items.map((w) => runSubagent(w.agentName, w.agentInstructions, w.agentDescription, w.model, w.prompt)));
+        const results = await Promise.all(items.map((w) => runSubagent(w)));
         for (const [i, work] of items.entries()) {
           const result = results[i]!;
           submitted.push({ agentName: work.agentName, usage: result.usage });

@@ -109,7 +109,8 @@ interface AgentRunOptions {
 
 function claudeAgentArgs(agent: string, tools: AgentTool[], dirs: string[]): string[] {
   const { allowed, disallowed } = claudeTools(tools);
-  return ["--agents", claudeAgentsFile(agent, tools), "--agent", agent, "--max-turns", "40", "--strict-mcp-config", "--allowedTools", allowed.join(","), "--disallowedTools", disallowed.join(","), ...dirs.flatMap((d) => ["--add-dir", d])];
+  const permission = tools.includes("edit") ? ["--permission-mode", "acceptEdits"] : [];
+  return ["--agents", claudeAgentsFile(agent, tools), "--agent", agent, "--max-turns", "40", "--strict-mcp-config", "--allowedTools", allowed.join(","), "--disallowedTools", disallowed.join(","), ...permission, ...dirs.flatMap((d) => ["--add-dir", d])];
 }
 
 async function runClaude(model: string, prompt: string, { agent, cwd, tools = ["read"], dirs = [] }: AgentRunOptions = {}): Promise<CliResult> {
@@ -194,9 +195,9 @@ export function cliExecutor(cli: CliName): CliExecutor {
   throw new Error(`unsupported cli ${cli}`);
 }
 
-export function hostExec(command: string, args: string[]): Promise<ExecResult> {
+export function hostExec(command: string, args: string[], options: { cwd?: string } = {}): Promise<ExecResult> {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { env: cleanEnv(), shell: false });
+    const child = spawn(command, args, { env: cleanEnv(), shell: false, ...(options.cwd ? { cwd: options.cwd } : {}) });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d) => (stdout += d));

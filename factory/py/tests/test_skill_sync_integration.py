@@ -9,6 +9,7 @@ OPTIONS = {
     "local-only": ["create", "reject", "leave"],
     "adapter-candidate": ["move-to-adapter", "adopt-patch", "adopt-minor", "adopt-major", "revert-local", "leave"],
 }
+DERIVED = {"registry.json", "search-index.json", "capability-graph.json", "agents/opencode/index.json", "README.md"}
 DEFAULT_OPTIONS = ["adopt-patch", "adopt-minor", "adopt-major", "revert-local", "leave"]
 
 
@@ -69,6 +70,53 @@ async def test_leave_on_every_decision_changes_nothing_in_the_marketplace(sync_r
 
 async def test_every_sync_llm_step_has_measured_cost(sync_run: ReviewRun):
     for path, node in sync_run.report["byNode"].items():
+        if node["tier"] is None:
+            continue
+        assert node["unknownSteps"] == 0, path
+        assert all(agent["costSource"] == "measured" for agent in node["byAgent"].values()), path
+
+
+def accepted_name(run: ReviewRun) -> str:
+    question_id = run.accepted[0]
+    question = next(i["question"] for i in run.interrupts if i["kind"] == "question" and i["question"]["id"] == question_id)
+    decided = question["text"].split("\n\nAll artifacts:")[0]
+    return next(name for name in run.artifacts if f" {name}:" in decided)
+
+
+async def test_apply_run_finishes_after_publish_is_declined(sync_apply_run: ReviewRun):
+    assert sync_apply_run.report["status"] == "done", sync_apply_run.report
+    assert sync_apply_run.accepted, "no artifact offered create or adopt; the run had nothing to apply"
+
+
+async def test_only_the_accepted_artifact_is_applied_then_validated(sync_apply_run: ReviewRun):
+    path = visited(sync_apply_run)
+    assert path.count("apply") == 1
+    assert path.index("apply") < path.index("validate") < path.index("ask-publish")
+    assert completed(sync_apply_run, "validate")["metrics"]["failed"] == 0
+
+
+async def test_marketplace_changes_stay_inside_the_accepted_artifact_and_derived_files(sync_apply_run: ReviewRun):
+    name = accepted_name(sync_apply_run)
+    assert sync_apply_run.changed_files
+    for changed in sync_apply_run.changed_files:
+        assert name in changed or changed in DERIVED, changed
+
+
+async def test_publish_question_shows_the_diff_and_versions(sync_apply_run: ReviewRun):
+    question = next(i["question"] for i in sync_apply_run.interrupts if i["kind"] == "question" and i["question"]["id"] == "q-sync-publish")
+    assert accepted_name(sync_apply_run) in question["text"]
+    assert "Validation:" in question["text"]
+    assert question["allowed"] == ["publish", "stop"]
+
+
+async def test_declined_publish_commits_pushes_and_installs_nothing(sync_apply_run: ReviewRun):
+    assert not {"publish", "merge", "install"} & set(visited(sync_apply_run))
+    assert sync_apply_run.marketplace_after == sync_apply_run.marketplace_before
+    assert "not published" in sync_apply_run.report["result"]
+
+
+async def test_every_apply_llm_step_has_measured_cost(sync_apply_run: ReviewRun):
+    for path, node in sync_apply_run.report["byNode"].items():
         if node["tier"] is None:
             continue
         assert node["unknownSteps"] == 0, path
