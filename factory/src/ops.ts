@@ -110,14 +110,15 @@ export function tierOf(finding: Pick<Finding, "ruleId" | "sev">): string {
 const pass: Operation = async () => ({ state: { passed: true }, output: "verify passed" });
 
 const reviewRoute: Operation = async ({ input, exec }) => {
+  if (input.plan) return { state: { route: "PLAN" }, output: `PLAN (${input.plan})` };
   if (!exec) throw new Error("review.route needs the host exec tool");
-  if (input.pr === undefined || !input.repo) throw new Error("review.route needs repo and pr in the input");
+  if (input.pr === undefined || !input.repo) throw new Error("review.route needs repo and pr, or plan, in the input");
   const view = await exec("gh", ["pr", "view", String(input.pr), "--repo", input.repo, "--json", "author"]);
   const user = await exec("gh", ["api", "user", "--jq", ".login"]);
   if (view.code !== 0 || user.code !== 0) throw new Error(`gh failed: ${(view.stderr || user.stderr).slice(-300)}`);
   const author = (JSON.parse(view.stdout) as { author: { login: string } }).author.login;
   const own = author === user.stdout.trim();
-  if (own && !input.fresh) throw new Error("the PR author is the signed-in user: that is the FEEDBACK ROUTE, which the factory does not run yet (docs/yaml-migration-plan.md, workflow 1). Pass fresh: true for a fresh review of your own PR.");
+  if (own && !input.fresh) return { state: { route: "FEEDBACK", own }, output: "FEEDBACK (the PR author is the signed-in user)" };
   const reason = own ? "fresh review of own PR" : `PR by ${author}`;
   return { state: { route: "REVIEW", own }, output: `REVIEW (${reason})` };
 };
@@ -205,9 +206,15 @@ const memoryLoad: Operation = async ({ args, cwd }) => {
   };
 };
 
-const mergeFindings: Operation = async ({ state }) => {
+function nodeArg(args: Record<string, unknown>, key: string, fallback: string): string {
+  const value = args[key] ?? fallback;
+  if (typeof value !== "string") throw new Error(`with.${key} must name a node`);
+  return value;
+}
+
+const mergeFindings: Operation = async ({ state, args }) => {
   const byKey = new Map<string, Finding>();
-  const lensResults = (state.lenses ?? {}) as Record<string, Finding[]>;
+  const lensResults = (state[nodeArg(args, "from", "lenses")] ?? {}) as Record<string, Finding[]>;
   for (const [lens, findings] of Object.entries(lensResults)) {
     for (const f of findings) {
       const key = `${f.location}|${f.ruleId}`;
@@ -219,9 +226,10 @@ const mergeFindings: Operation = async ({ state }) => {
   return { state: { findings }, metrics: { findings: findings.length }, output: findings.length ? findings.map((f) => f.line).join("\n") : "No findings from the lenses." };
 };
 
-const confirmFindings: Operation = async ({ state }) => {
-  const findings = stateOf<{ findings: Finding[] }>(state, "merge").findings;
-  const verdicts = (state.verify as Record<string, Verdict[]> | undefined)?.verify ?? [];
+const confirmFindings: Operation = async ({ state, args }) => {
+  const findings = stateOf<{ findings: Finding[] }>(state, nodeArg(args, "findings", "merge")).findings;
+  const verifyNode = nodeArg(args, "verdicts", "verify");
+  const verdicts = (state[verifyNode] as Record<string, Verdict[]> | undefined)?.[verifyNode] ?? [];
   const confirmed: Ranked[] = [];
   const dropped: (Finding & { reason: string })[] = [];
   findings.forEach((f, i) => {
@@ -255,9 +263,9 @@ interface Decision {
   cite: string;
 }
 
-const mergeRules: Operation = async ({ state }) => {
-  const confirmed = stateOf<{ confirmed: Ranked[] }>(state, "confirm").confirmed;
-  const check = Object.values((state["rules-check"] ?? {}) as Record<string, RulesCheck>)[0];
+const mergeRules: Operation = async ({ state, args }) => {
+  const confirmed = stateOf<{ confirmed: Ranked[] }>(state, nodeArg(args, "confirmed", "confirm")).confirmed;
+  const check = Object.values((state[nodeArg(args, "check", "rules-check")] ?? {}) as Record<string, RulesCheck>)[0];
   if (!check) throw new Error("rules-check returned nothing");
   if (check.noStore) {
     return { state: { kept: confirmed, dropped: [], decide: [], violations: [], noStore: true }, metrics: { noStore: 1, decide: 0, violations: 0, dropped: 0 }, output: "Project rules check: no-store (no ADR or rule directory). Skipped." };
@@ -278,9 +286,10 @@ const mergeRules: Operation = async ({ state }) => {
   };
 };
 
-const addViolations: Operation = async ({ state }) => {
-  const rules = stateOf<{ decide: Decision[]; violations: string[] }>(state, "rules-merge");
-  const verdicts = (state["verify-violations"] as Record<string, Verdict[]> | undefined)?.verify ?? [];
+const addViolations: Operation = async ({ state, args }) => {
+  const rules = stateOf<{ decide: Decision[]; violations: string[] }>(state, nodeArg(args, "rules", "rules-merge"));
+  const verifyNode = nodeArg(args, "verdicts", "verify-violations");
+  const verdicts = (state[verifyNode] as Record<string, Verdict[]> | undefined)?.[verifyNode] ?? [];
   const confirmed = rules.violations.filter((_, i) => verdicts[i] && verdicts[i].verdict !== "REJECTED");
   const decide = [...rules.decide, ...confirmed.map((line) => ({ kind: "violation" as const, line, cite: line.split("|").slice(-2).join("|").trim() }))];
   return { state: { decide }, metrics: { decide: decide.length, violations: confirmed.length }, output: `${confirmed.length} store violations confirmed by the verifier.` };
@@ -359,11 +368,170 @@ const memoryPersist: Operation = async ({ state, answers, args }) => {
   return { state: { written: lines.length }, metrics: { written: lines.length }, output: lines.length ? `Memory: ${lines.length} decisions recorded in ${memory.file}.` : "Memory: nothing durable happened." };
 };
 
+const planRead: Operation = async ({ input, cwd }) => {
+  const root = path.resolve(cwd ?? process.cwd());
+  const file = path.resolve(root, input.plan ?? "");
+  if (!input.plan || (file !== root && !file.startsWith(root + path.sep))) throw new Error("input.plan must be a file inside the workspace");
+  if (!fs.existsSync(file)) throw new Error(`plan file ${input.plan} does not exist in ${root}`);
+  const text = fs.readFileSync(file, "utf8");
+  const criteria = (input.criteria ?? "").trim();
+  return { state: { path: input.plan, text, criteria: criteria || "none" }, metrics: { characters: text.length, criteria: criteria ? 1 : 0 }, output: `Plan ${input.plan}: ${text.length} characters. Acceptance criteria: ${criteria ? "given" : "none (design rules only)"}.` };
+};
+
+function decisions(state: WorkflowState, answers: Record<string, string> | undefined, violationsNode: string, rulesNode: string, prefix: string) {
+  const decide = (state[violationsNode] as { decide?: Decision[] } | undefined)?.decide ?? (state[rulesNode] as { decide?: Decision[] } | undefined)?.decide ?? [];
+  return decide.map((d, i) => ({ ...d, answer: answers?.[`${prefix}${i}`] ?? "unanswered" }));
+}
+
+const planReport: Operation = async ({ state, answers }) => {
+  const plan = stateOf<{ path: string; criteria: string }>(state, "plan-read");
+  const confirm = stateOf<{ dropped: (Finding & { reason: string })[] }>(state, "plan-confirm");
+  const rules = stateOf<{ kept: Ranked[]; dropped: { line: string; cite: string }[]; noStore: boolean }>(state, "plan-rules-merge");
+  const asPlanLine = (line: string) => (line.startsWith("plan:") ? line : `plan: ${line}`);
+  const lines = [
+    `Plan review of ${plan.path}`,
+    "",
+    ...(rules.kept.length ? rules.kept.map((f) => `${asPlanLine(f.line)}${f.unchecked ? " (rule unchecked)" : ""}`) : ["No confirmed findings."]),
+    "",
+    `Totals: ${TIERS.map((t) => `${t}: ${rules.kept.filter((f) => tierOf(f) === t).length}`).join(", ")}`,
+    `Acceptance criteria: ${plan.criteria === "none" ? "none, design rules only" : "given"}`,
+    `Dropped by the verifier: ${confirm.dropped.length}`,
+    ...confirm.dropped.map((f) => `  - ${f.line} | ${f.reason}`),
+    `Project rules check: ${rules.noStore ? "no-store, skipped" : `${rules.dropped.length} dropped by the store`}`,
+    ...rules.dropped.map((d) => `  - ${d.line} | ${d.cite}`),
+    ...decisions(state, answers, "plan-rules-violations", "plan-rules-merge", "q-plan-rule-").map((d) => `Decided (${d.kind}): ${d.line} -> ${d.answer === "store" ? "store entry holds" : d.answer === "finding" ? "finding holds" : "not decided"}`),
+  ];
+  return { state: { kept: rules.kept, count: rules.kept.length }, metrics: { kept: rules.kept.length }, output: lines.join("\n") };
+};
+
+export interface FeedbackComment {
+  id: string;
+  kind: "thread" | "comment";
+  author: string;
+  path: string | null;
+  line: number | null;
+  body: string;
+  url: string;
+}
+
+export interface FeedbackItem {
+  index: number;
+  path: string | null;
+  line: number | null;
+  comments: FeedbackComment[];
+}
+
+export function groupComments(comments: FeedbackComment[], nearbyLines = 3): FeedbackItem[] {
+  const items: FeedbackItem[] = [];
+  for (const comment of comments) {
+    const near = comment.path
+      ? items.find((i) => i.path === comment.path && i.line !== null && comment.line !== null && Math.abs(i.line - comment.line) <= nearbyLines)
+      : undefined;
+    if (near) near.comments.push(comment);
+    else items.push({ index: items.length, path: comment.path, line: comment.line, comments: [comment] });
+  }
+  return items;
+}
+
+interface ThreadNode {
+  id: string;
+  isResolved: boolean;
+  isOutdated: boolean;
+  comments: { nodes: { author: { login: string } | null; path: string | null; line: number | null; body: string; url: string }[] };
+}
+
+const prFeedback: Operation = async ({ input, exec, cwd }) => {
+  if (!exec) throw new Error("github.prFeedback needs the host exec tool");
+  const repo = input.repo ?? "";
+  const [owner, name] = repo.split("/");
+  if (!owner || !name || input.pr === undefined) throw new Error("github.prFeedback needs repo and pr");
+  const view = await exec("gh", ["pr", "view", String(input.pr), "--repo", repo, "--json", "headRefName,author,comments"]);
+  if (view.code !== 0) throw new Error(`gh pr view failed: ${view.stderr.slice(-300)}`);
+  const meta = JSON.parse(view.stdout) as { headRefName: string; author: { login: string }; comments: { id: string; author: { login: string } | null; body: string; url: string }[] };
+  const branch = await exec("git", ["-C", cwd ?? ".", "branch", "--show-current"]);
+  if (branch.code !== 0 || branch.stdout.trim() !== meta.headRefName) {
+    throw new Error(`the local branch (${branch.stdout.trim() || "unknown"}) is not the PR head branch ${meta.headRefName}: check out ${meta.headRefName} first`);
+  }
+  const checks = await exec("gh", ["pr", "checks", String(input.pr), "--repo", repo, "--json", "name,state"]);
+  const checkList = checks.code === 0 && checks.stdout.trim() ? (JSON.parse(checks.stdout) as { name: string; state: string }[]) : [];
+  const query = `query { repository(owner: "${owner}", name: "${name}") { pullRequest(number: ${input.pr}) { reviewThreads(first: 100) { nodes { id isResolved isOutdated comments(first: 1) { nodes { author { login } path line body url } } } } } } }`;
+  const threads = await exec("gh", ["api", "graphql", "-f", `query=${query}`]);
+  if (threads.code !== 0) throw new Error(`gh api graphql failed: ${threads.stderr.slice(-300)}`);
+  const nodes = (JSON.parse(threads.stdout) as { data: { repository: { pullRequest: { reviewThreads: { nodes: ThreadNode[] } } } } }).data.repository.pullRequest.reviewThreads.nodes;
+  const comments: FeedbackComment[] = [
+    ...nodes
+      .filter((t) => !t.isResolved && !t.isOutdated && t.comments.nodes[0])
+      .map((t) => {
+        const c = t.comments.nodes[0]!;
+        return { id: t.id, kind: "thread" as const, author: c.author?.login ?? "unknown", path: c.path, line: c.line, body: c.body, url: c.url };
+      }),
+    ...meta.comments
+      .filter((c) => c.author?.login !== meta.author.login)
+      .map((c) => ({ id: c.id, kind: "comment" as const, author: c.author?.login ?? "unknown", path: null, line: null, body: c.body, url: c.url })),
+  ];
+  const items = groupComments(comments);
+  const ci = checkList.length ? checkList.map((c) => `${c.name}: ${c.state}`).join(", ") : "no checks";
+  return {
+    state: { head: meta.headRefName, checks: checkList, ci, comments, items },
+    metrics: { checks: checkList.length, comments: comments.length, items: items.length },
+    output: `CI: ${ci}. Unresolved comments: ${comments.length} in ${items.length} items.`,
+  };
+};
+
+const feedbackPlan: Operation = async ({ state, answers }) => {
+  const items = stateOf<{ items: FeedbackItem[] }>(state, "fb-check").items;
+  const decided = items.map((item) => ({ ...item, decision: answers?.[`q-feedback-${item.index}`] ?? "skip" }));
+  const count = (d: string) => decided.filter((i) => i.decision === d).length;
+  const replies = decided.filter((i) => i.decision === "wont-fix" || i.decision === "question");
+  return {
+    state: { decided, replies, fixes: count("fix") },
+    metrics: { fixes: count("fix"), wontFix: count("wont-fix"), questions: count("question"), skipped: count("skip"), replies: replies.length },
+    output: `Plan: ${count("fix")} fix, ${count("wont-fix")} won't fix, ${count("question")} question, ${count("skip")} skipped.`,
+  };
+};
+
+const postReply: Operation = async ({ state, exec, input, args }) => {
+  if (!exec) throw new Error("github.postReply needs the host exec tool");
+  const from = nodeArg(args, "from", "fb-reply-next");
+  const draftNode = nodeArg(args, "draft", "fb-draft");
+  const item = (state[from] as { item?: FeedbackItem } | undefined)?.item;
+  const draft = Object.values((state[draftNode] ?? {}) as Record<string, string>)[0];
+  if (!item || !draft) throw new Error("no reply to post");
+  const first = item.comments[0]!;
+  const result = first.kind === "thread"
+    ? await exec("gh", ["api", "graphql", "-f", `query=mutation { addPullRequestReviewThreadReply(input: { pullRequestReviewThreadId: "${first.id}", body: ${JSON.stringify(draft)} }) { comment { url } } }`])
+    : await exec("gh", ["pr", "comment", String(input.pr), "--repo", input.repo ?? "", "--body", draft]);
+  if (result.code !== 0) throw new Error(`posting the reply failed: ${result.stderr.slice(-300)}`);
+  return { state: { posted: first.url }, metrics: { posted: 1 }, output: `Reply posted to ${first.url}` };
+};
+
+const feedbackReport: Operation = async ({ state, answers }) => {
+  const check = stateOf<{ ci: string; comments: FeedbackComment[] }>(state, "fb-check");
+  const plan = stateOf<{ decided: (FeedbackItem & { decision: string })[] }>(state, "fb-plan");
+  const implement = answers?.["q-feedback-implement"];
+  const lines = [
+    `CI: ${check.ci}`,
+    `Unresolved comments: ${check.comments.length}`,
+    ...plan.decided.map((i) => `  - ${i.path ?? "PR"}${i.line ? `:${i.line}` : ""} (${i.comments.length} comments): ${i.decision}`),
+    `Implementation: ${implement === "yes" ? "approved" : implement === "no" ? "declined" : "nothing to implement"}`,
+  ];
+  return { state: { done: true }, output: lines.join("\n") };
+};
+
 export const OPERATIONS: Record<string, Operation> = {
   "builtin.pass": pass,
   "github.prScope": prScope,
   "github.postComment": postComment,
   "list.next": listNext,
+  "plan.read": planRead,
+  "review.planReport": planReport,
+  "github.prFeedback": prFeedback,
+  "github.postReply": postReply,
+  "feedback.plan": feedbackPlan,
+  "feedback.report": feedbackReport,
+  "feedback.fixNotAvailable": async () => {
+    throw new Error("Fixing code from review comments needs write-capable agents in the factory (docs/yaml-migration-plan.md, E9). The decisions are recorded in this run; nothing was changed.");
+  },
   "memory.load": memoryLoad,
   "memory.persist": memoryPersist,
   "review.route": reviewRoute,
@@ -376,6 +544,7 @@ export const OPERATIONS: Record<string, Operation> = {
 };
 
 export const PARSERS: Record<string, (text: string) => unknown> = {
+  "text.raw": (text) => String(text).trim(),
   "review.findings": parseFindings,
   "review.verdicts": parseVerdicts,
   "review.rulesCheck": parseRulesCheck,

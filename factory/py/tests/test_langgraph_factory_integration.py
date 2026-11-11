@@ -37,7 +37,7 @@ async def test_proposal_takes_roles_and_budget_from_the_factory_config_file(revi
     proposal = review_run.interrupts[0]["proposal"]
     assert review_run.interrupts[0]["kind"] == "confirm"
     assert proposal["budget"]["maxCostUsd"] == config["budget"]["maxCostUsd"]
-    assert set(proposal["roles"]) == {"lens", "verifier", "rules"}
+    assert set(proposal["roles"]) == {"lens", "verifier", "rules", "feedback"}
     for role, tier in proposal["roles"].items():
         assert tier == config["roles"][role]
 

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { memoryDecisionLines, memoryLists, parseFindings, parseRulesCheck, parseVerdicts, splitDiff, tierOf } from "../src/ops.ts";
+import { groupComments, memoryDecisionLines, memoryLists, parseFindings, parseRulesCheck, parseVerdicts, splitDiff, tierOf } from "../src/ops.ts";
 import type { RulesCheck } from "../src/ops.ts";
 
 const DIFF = [
@@ -72,3 +72,16 @@ const RULES_CASES: [string, string, RulesCheck][] = [
 for (const [label, text, expected] of RULES_CASES) {
   test(`project rules check output: ${label}`, () => assert.deepEqual(parseRulesCheck(text), expected));
 }
+
+test("review comments on the same file within three lines form one item; PR-level comments stay separate", () => {
+  const base = { kind: "thread" as const, author: "a", body: "b", url: "u" };
+  const items = groupComments([
+    { ...base, id: "1", path: "a.ts", line: 10 },
+    { ...base, id: "2", path: "a.ts", line: 12 },
+    { ...base, id: "3", path: "a.ts", line: 20 },
+    { ...base, id: "4", path: "b.ts", line: 11 },
+    { ...base, id: "5", kind: "comment", path: null, line: null },
+  ]);
+  assert.deepEqual(items.map((i) => i.comments.map((c) => c.id)), [["1", "2"], ["3"], ["4"], ["5"]]);
+  assert.deepEqual(items.map((i) => i.index), [0, 1, 2, 3]);
+});

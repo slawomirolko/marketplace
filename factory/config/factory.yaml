@@ -14,6 +14,7 @@ roles:
   lens: medium
   verifier: medium
   rules: medium
+  feedback: medium
 budget:
   maxCostUsd: 20
   infoRatio: 0.5

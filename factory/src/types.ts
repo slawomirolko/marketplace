@@ -68,6 +68,8 @@ export interface RunInput {
   repo?: string;
   pr?: number;
   fresh?: boolean;
+  plan?: string;
+  criteria?: string;
 }
 
 export interface ExecResult {
@@ -311,6 +313,7 @@ export interface Report {
   coverage: { run: Coverage; byTier: Record<string, Coverage>; byModel: Record<string, Coverage> };
   cacheTokens: number;
   harnessCostUsd: number;
+  result: string | null;
   cost: CostFooter;
 }
 

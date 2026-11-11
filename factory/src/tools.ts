@@ -70,16 +70,16 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
     server.registerTool(
       "factory_start",
       {
-        description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name, pr number, and fresh: true for a fresh review of your own PR). The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
+        description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name and pr number, plus fresh: true for a fresh review of your own PR; or plan, a plan file path in the workspace, and optional criteria). The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
         inputSchema: {
           goal: z.string().min(1),
           workflow: z.string().regex(/^[a-z][a-z0-9-]*$/).optional(),
-          input: z.object({ repo: z.string().regex(/^[\w.-]+\/[\w.-]+$/).optional(), pr: z.number().int().positive().optional(), fresh: z.boolean().optional() }).strict().optional(),
+          input: z.object({ repo: z.string().regex(/^[\w.-]+\/[\w.-]+$/).optional(), pr: z.number().int().positive().optional(), fresh: z.boolean().optional(), plan: z.string().regex(/^[\w./-]+$/).optional(), criteria: z.string().max(20000).optional() }).strict().optional(),
           idempotencyKey: z.string().optional(),
         },
       },
       guarded(({ goal, workflow, input, idempotencyKey }) => {
-        const runInput = { ...(input?.repo ? { repo: input.repo } : {}), ...(input?.pr ? { pr: input.pr } : {}), ...(input?.fresh ? { fresh: true } : {}) };
+        const runInput = { ...(input?.repo ? { repo: input.repo } : {}), ...(input?.pr ? { pr: input.pr } : {}), ...(input?.fresh ? { fresh: true } : {}), ...(input?.plan ? { plan: input.plan } : {}), ...(input?.criteria ? { criteria: input.criteria } : {}) };
         const { run, reused } = factory.start(goal, idempotencyKey, { ...(workflow ? { workflow } : {}), input: runInput });
         return { ...factory.status(run), reused, next: "Show the proposal to the user. After the user replies, call factory_confirm." };
       }),

@@ -320,6 +320,11 @@
         },
         "role": {
           "$ref": "#/$defs/id"
+        },
+        "agent": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "Marketplace agent that runs this agent slot."
         }
       }
     }

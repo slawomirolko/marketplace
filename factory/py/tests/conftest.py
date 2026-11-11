@@ -94,3 +94,39 @@ async def review_run(factory_server) -> ReviewRun:
     run.comments_after = pr_comment_count()
     print(json.dumps({"runId": run.run_id, "path": [e["node"] for e in run.events if e["type"] == "node_started"], "interrupts": [i["kind"] for i in run.interrupts], "costUsd": run.report["cost"]["costUsd"]}))
     return run
+
+
+PLAN_FILE = "docs/yaml-migration-plan.md"
+FEEDBACK_PR = int(os.environ.get("FACTORY_FEEDBACK_PR", "74"))
+
+
+def gh_json(args: list[str]):
+    return json.loads(subprocess.run(["gh", *args], check=True, capture_output=True, text=True).stdout)
+
+
+@pytest.fixture(scope="session")
+async def plan_run(factory_server) -> ReviewRun:
+    return await run_workflow(
+        url=f"{factory_server['url']}/mcp",
+        token=factory_server["token"],
+        workflow="olko-review",
+        goal=f"Review the plan {PLAN_FILE}",
+        workflow_input={"plan": PLAN_FILE},
+        answer=lambda question: "skip",
+    )
+
+
+@pytest.fixture(scope="session")
+async def feedback_run(factory_server) -> ReviewRun:
+    comments_before = len(gh_json(["pr", "view", str(FEEDBACK_PR), "--repo", REVIEW_REPO, "--json", "comments"])["comments"])
+    run = await run_workflow(
+        url=f"{factory_server['url']}/mcp",
+        token=factory_server["token"],
+        workflow="olko-review",
+        goal=f"Work through feedback on PR #{FEEDBACK_PR}",
+        workflow_input={"repo": REVIEW_REPO, "pr": FEEDBACK_PR},
+        answer=lambda question: "skip",
+    )
+    run.comments_before = comments_before
+    run.comments_after = len(gh_json(["pr", "view", str(FEEDBACK_PR), "--repo", REVIEW_REPO, "--json", "comments"])["comments"])
+    return run

@@ -1,6 +1,6 @@
 # Plan: move the five Olko workflows to factory YAML
 
-Status: in progress. `olko-review` REVIEW ROUTE runs from YAML in full (route, memory, lenses with requirements lens, verifier, project rules check, decisions, ranking, one question per comment, memory update). Its FEEDBACK and PLAN routes and workflows 2–5 are still to do. Line references point to the agent files in this repository.
+Status: in progress. `olko-review` runs from YAML with all three routes: REVIEW in full; PLAN in full (requirements lens in plan mode, verifier, project rules check, store decisions, report); FEEDBACK up to the decisions and replies (CI state, unresolved comments, one assessment and one decision per item, implement question, one reply draft and one post question per reply). Fixing code from comments stops with an error until write-capable agents exist (E9). The per-comment path is covered by unit tests only, because no PR of this repository has review comments. Workflows 2–5 are still to do.
 
 ## Requirements every migrated workflow keeps
 

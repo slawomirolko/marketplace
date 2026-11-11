@@ -741,6 +741,7 @@ export class Factory {
       coverage,
       cacheTokens,
       harnessCostUsd: round(harnessCostUsd),
+      result: [...run.ledger].reverse().find((r) => typeof r.output === "string")?.output ?? null,
       cost: this.footer(run),
     };
   }

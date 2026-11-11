@@ -108,12 +108,12 @@ async def run_workflow(url: str, token: str, workflow: str, goal: str, workflow_
     failures = [e for e in events if e["type"] in ("run_failed", "node_failed", "agent_failed")]
     if failures:
         raise RuntimeError(f"factory run {run_id} failed: {failures}")
-    merged = next(e for e in events if e["type"] == "node_completed" and e["node"].endswith("/merge"))
+    merged = next((e for e in events if e["type"] == "node_completed" and e["node"].endswith("/merge")), None)
     return ReviewRun(
         run_id=run_id,
         report=result["report"],
         events=events,
         interrupts=interrupts,
         viewer_url=result["report"]["viewerUrl"],
-        lens_findings_found=merged["metrics"]["findings"] > 0,
+        lens_findings_found=bool(merged and merged["metrics"]["findings"] > 0),
     )

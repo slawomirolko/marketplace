@@ -15314,14 +15314,16 @@ function createFactoryTools(factory, publicUrl) {
 			version: "0.1.0"
 		});
 		server.registerTool("factory_start", {
-			description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name, pr number, and fresh: true for a fresh review of your own PR). The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
+			description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name and pr number, plus fresh: true for a fresh review of your own PR; or plan, a plan file path in the workspace, and optional criteria). The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
 			inputSchema: {
 				goal: string().min(1),
 				workflow: string().regex(/^[a-z][a-z0-9-]*$/).optional(),
 				input: object$1({
 					repo: string().regex(/^[\w.-]+\/[\w.-]+$/).optional(),
 					pr: number().int().positive().optional(),
-					fresh: boolean().optional()
+					fresh: boolean().optional(),
+					plan: string().regex(/^[\w./-]+$/).optional(),
+					criteria: string().max(2e4).optional()
 				}).strict().optional(),
 				idempotencyKey: string().optional()
 			}
@@ -15329,7 +15331,9 @@ function createFactoryTools(factory, publicUrl) {
 			const runInput = {
 				...input?.repo ? { repo: input.repo } : {},
 				...input?.pr ? { pr: input.pr } : {},
-				...input?.fresh ? { fresh: true } : {}
+				...input?.fresh ? { fresh: true } : {},
+				...input?.plan ? { plan: input.plan } : {},
+				...input?.criteria ? { criteria: input.criteria } : {}
 			};
 			const { run, reused } = factory.start(goal, idempotencyKey, {
 				...workflow ? { workflow } : {},
