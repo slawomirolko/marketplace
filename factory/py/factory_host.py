@@ -28,6 +28,12 @@ class ReviewRun:
     skill_files: list = field(default_factory=list)
     changed_files: list = field(default_factory=list)
     accepted: list = field(default_factory=list)
+    stores: dict = field(default_factory=dict)
+    stores_before: dict = field(default_factory=dict)
+    stores_after: dict = field(default_factory=dict)
+    real_unchanged: bool = False
+    new_temp_dirs: list = field(default_factory=list)
+    skipped_user: list = field(default_factory=list)
 
 
 class HostState(TypedDict, total=False):

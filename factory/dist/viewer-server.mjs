@@ -1,4 +1,4 @@
-import { h as viewerOptions, m as defaultDataDir, n as viewerHandler, p as VIEWER_HEALTH, t as allowedHostsFor } from "./viewer-routes.mjs";
+import { _ as viewerOptions, g as defaultDataDir, h as VIEWER_HEALTH, n as viewerHandler, t as allowedHostsFor } from "./viewer-routes.mjs";
 import path from "node:path";
 import fs from "node:fs";
 import http from "node:http";

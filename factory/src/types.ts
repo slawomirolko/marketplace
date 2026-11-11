@@ -78,6 +78,11 @@ export interface RunInput {
   project?: string;
   marketplace?: string;
   artifacts?: string[];
+  target?: string;
+  targetName?: string;
+  olko?: string;
+  user?: string;
+  stateDir?: string;
 }
 
 export interface ExecResult {

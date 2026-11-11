@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { evaluateWhen, loadWorkflowFile } from "../src/workflow-yaml.ts";
 import { claudeAgentsFile, claudeTools, marketplaceDir, readMarketplaceAgent } from "../src/marketplace-agents.ts";
-import { bumpVersion, parseComparison, parsePrLine, syncOptions } from "../src/ops.ts";
+import { bumpVersion, claudeSyncActions, normalizeName, parseCapabilities, parseComparison, parsePrLine, parseVerdict, syncOptions } from "../src/ops.ts";
 
 function writeYaml(text: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-yaml-"));
@@ -186,4 +186,34 @@ test("a changed agent or skill in the marketplace reaches the next run without a
     if (previous === undefined) delete process.env.FACTORY_MARKETPLACE_DIR;
     else process.env.FACTORY_MARKETPLACE_DIR = previous;
   }
+});
+
+test("a Claude Code plugin agent loads with its plugin root and its namespaced preloaded skills from the marketplace", () => {
+  const agent = readMarketplaceAgent("olko-claude-sync-inventory");
+  const root = path.join(marketplaceDir(), "plugins", "olko-sync");
+  assert.equal(agent.pluginRoot, root);
+  assert.deepEqual(agent.skills, [{ name: "olko-sync:olko-sync-state", file: path.join(root, "skills", "olko-sync-state", "SKILL.md") }]);
+  assert.ok(!agent.prompt.includes("${CLAUDE_PLUGIN_ROOT}/skills"), "the plugin root is filled in");
+  assert.ok(agent.prompt.includes(`CLAUDE_PLUGIN_ROOT is ${root}`));
+  assert.ok(agent.dirs.includes(root));
+});
+
+test("the matcher's last json block becomes capabilities; a malformed one is rejected", () => {
+  const text = 'table...\n```json\n{"capabilities":[{"id":"design-rules","basis":"name","kind":"skill","copies":{"olko":{"name":"olko-design-rules","path":"skills/workflow/olko-design-rules","version":"1.0.0"}}}],"probable":[]}\n```';
+  assert.equal(parseCapabilities(text).capabilities[0]!.id, "design-rules");
+  assert.throws(() => parseCapabilities("no json"), /no ```json block/);
+  assert.throws(() => parseCapabilities('```json\n{"capabilities":[{"id":"x","kind":"tool","copies":{}}]}\n```'), /malformed/);
+});
+
+test("names match across stores without the olko- prefix or a plugin namespace", () => {
+  assert.equal(normalizeName("olko-design-rules"), "design-rules");
+  assert.equal(normalizeName("frontend-design:frontend-design"), "frontend-design");
+});
+
+test("comparator verdicts map to the actions of the source table", () => {
+  assert.equal(parseVerdict("x\nresult | target-ahead | minor | 1.1.0 | port").verdict, "target-ahead");
+  assert.throws(() => parseVerdict("result | newer | none | none | x"), /unknown verdict 'newer'/);
+  assert.deepEqual(claudeSyncActions("olko-only"), ["install-user", "reject", "exclude", "leave"]);
+  assert.deepEqual(claudeSyncActions("platform-delta-only"), ["leave", "exclude"]);
+  assert.deepEqual(claudeSyncActions("identical"), []);
 });

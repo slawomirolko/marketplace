@@ -1,4 +1,4 @@
-import { _ as require_ajv, a as errorMessage, c as claudeAgentsFile, f as FACTORY_DIR, g as require_dist, i as Factory, l as claudeTools, m as defaultDataDir, o as parseBackend, r as viewerUrlFor, s as parseCli, u as opencodeConfigDir, v as __toESM } from "./viewer-routes.mjs";
+import { a as errorMessage, c as require_dist, d as claudeTools, f as opencodeConfigDir, g as defaultDataDir, i as Factory, l as require_ajv, m as FACTORY_DIR, o as parseBackend, r as viewerUrlFor, s as parseCli, u as claudeAgentsFile, v as __toESM } from "./viewer-routes.mjs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15332,7 +15332,7 @@ function createFactoryTools(factory, publicUrl) {
 			version: "0.1.0"
 		});
 		server.registerTool("factory_start", {
-			description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name and pr number, plus fresh: true for a fresh review of your own PR; or plan, a plan file path in the workspace, and optional criteria; for olko-marketplace-skill-sync: project, the absolute path of the local project, optional marketplace, the absolute path of the marketplace checkout, and optional artifacts, the skill and agent names to sync). The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
+			description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name and pr number, plus fresh: true for a fresh review of your own PR; or plan, a plan file path in the workspace, and optional criteria; for olko-marketplace-skill-sync: project, the absolute path of the local project, optional marketplace, the absolute path of the marketplace checkout, and optional artifacts, the skill and agent names to sync; for olko-claude-sync: target and targetName, a Claude Code plugin marketplace checkout and a kebab-case name for it, olko, the Olko checkout, optional user, the user scope (default ~/.claude), optional stateDir (default ~/.olko-sync) and optional artifacts). The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
 			inputSchema: {
 				goal: string().min(1),
 				workflow: string().regex(/^[a-z][a-z0-9-]*$/).optional(),
@@ -15344,7 +15344,12 @@ function createFactoryTools(factory, publicUrl) {
 					criteria: string().max(2e4).optional(),
 					project: string().min(1).optional(),
 					marketplace: string().min(1).optional(),
-					artifacts: array(string().regex(/^[a-z0-9-]+$/)).min(1).optional()
+					artifacts: array(string().regex(/^[a-z0-9-]+$/)).min(1).optional(),
+					target: string().min(1).optional(),
+					targetName: string().regex(/^[a-z0-9-]+$/).optional(),
+					olko: string().min(1).optional(),
+					user: string().min(1).optional(),
+					stateDir: string().min(1).optional()
 				}).strict().optional(),
 				idempotencyKey: string().optional()
 			}
@@ -15357,7 +15362,12 @@ function createFactoryTools(factory, publicUrl) {
 				...input?.criteria ? { criteria: input.criteria } : {},
 				...input?.project ? { project: longPath(input.project) } : {},
 				...input?.marketplace ? { marketplace: longPath(input.marketplace) } : {},
-				...input?.artifacts ? { artifacts: input.artifacts } : {}
+				...input?.artifacts ? { artifacts: input.artifacts } : {},
+				...input?.target ? { target: longPath(input.target) } : {},
+				...input?.targetName ? { targetName: input.targetName } : {},
+				...input?.olko ? { olko: longPath(input.olko) } : {},
+				...input?.user ? { user: longPath(input.user) } : {},
+				...input?.stateDir ? { stateDir: path.resolve(input.stateDir) } : {}
 			};
 			const { run, reused } = factory.start(goal, idempotencyKey, {
 				...workflow ? { workflow } : {},

@@ -7227,8 +7227,8 @@ var require_public_api = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.parseDocument = parseDocument;
 	exports.stringify = stringify;
 }));
-// src/ops.ts
-var import_dist = (/* @__PURE__ */ __commonJSMin(((exports) => {
+// src/paths.ts
+var import_dist$1 = (/* @__PURE__ */ __commonJSMin(((exports) => {
 	var composer = require_composer();
 	var Document = require_Document();
 	var Schema = require_Schema();
@@ -7274,6 +7274,199 @@ var import_dist = (/* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.visit = visit.visit;
 	exports.visitAsync = visit.visitAsync;
 })))();
+var FACTORY_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+var VIEWER_HEALTH = "skill-factory-viewer";
+var DEFAULT_VIEWER_PORT = 7340;
+function defaultDataDir() {
+	return process.env.FACTORY_DATA_DIR ?? path.join(os.homedir(), ".skill-factory");
+}
+function viewerOptions(dataDir) {
+	return {
+		viewerDir: process.env.FACTORY_VIEWER_DIR ?? path.join(FACTORY_DIR, "app", "dist"),
+		dataDir,
+		factoryDir: FACTORY_DIR,
+		configFile: path.join(FACTORY_DIR, "spec", "examples", "valid", "factory-config.json")
+	};
+}
+// src/marketplace-agents.ts
+var AGENT_NAME = /^[a-z0-9-]+$/;
+var CLAUDE_TOOLS = {
+	read: [
+		"Read",
+		"Grep",
+		"Glob"
+	],
+	edit: ["Edit", "Write"],
+	bash: ["Bash"]
+};
+var CLAUDE_ALL_TOOLS = [
+	"Read",
+	"Grep",
+	"Glob",
+	"Skill",
+	"Edit",
+	"Write",
+	"Bash",
+	"WebFetch",
+	"WebSearch",
+	"Agent",
+	"Task",
+	"NotebookEdit"
+];
+function marketplaceDir() {
+	return process.env.FACTORY_MARKETPLACE_DIR ?? path.join(FACTORY_DIR, "..");
+}
+function readFrontmatter(file) {
+	const match = fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n").match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+	if (!match?.[1] || match[2] === void 0) throw new Error(`${file}: no frontmatter`);
+	return {
+		front: (0, import_dist$1.parse)(match[1]),
+		raw: match[1],
+		body: match[2].trim()
+	};
+}
+function findSkill(name) {
+	const root = path.join(marketplaceDir(), "skills");
+	if (!fs.existsSync(root)) return void 0;
+	for (const category of fs.readdirSync(root)) {
+		const file = path.join(root, category, name, "SKILL.md");
+		if (fs.existsSync(file)) return file;
+	}
+}
+function findPluginAgent(name) {
+	const plugins = path.join(marketplaceDir(), "plugins");
+	if (!fs.existsSync(plugins)) return void 0;
+	return fs.readdirSync(plugins).map((p) => path.join(plugins, p, "agents", `${name}.md`)).find((f) => fs.existsSync(f));
+}
+function findPluginSkill(ref, pluginRoot) {
+	const [plugin, skill] = ref.includes(":") ? ref.split(":", 2) : [path.basename(pluginRoot), ref];
+	const file = path.join(marketplaceDir(), "plugins", plugin, "skills", skill, "SKILL.md");
+	return fs.existsSync(file) ? file : findSkill(skill);
+}
+function withPluginRoot(text, pluginRoot) {
+	return pluginRoot ? text.split("${CLAUDE_PLUGIN_ROOT}").join(pluginRoot) : text;
+}
+function declaredSkills(name, front) {
+	const allowed = Object.entries(front.permission?.skill ?? {}).filter(([skill, rule]) => skill !== "*" && rule === "allow").map(([skill]) => skill);
+	const manifest = path.join(marketplaceDir(), "agents", "opencode", "index.json");
+	const listed = fs.existsSync(manifest) ? JSON.parse(fs.readFileSync(manifest, "utf8")).agents.find((a) => a.name === name)?.skills ?? [] : [];
+	return [.../* @__PURE__ */ new Set([...allowed, ...listed])];
+}
+function skillsSection(skills, missing, pluginRoot) {
+	const root = pluginRoot ? `\n\nCLAUDE_PLUGIN_ROOT is ${pluginRoot}; use that path wherever a skill or these instructions write \${CLAUDE_PLUGIN_ROOT}.` : "";
+	if (!skills.length && !missing.length) return root;
+	const lines = skills.map((s) => `- ${s.name}: ${s.file}`);
+	const absent = missing.length ? `\nNot in the marketplace, so not available in this run: ${missing.join(", ")}.` : "";
+	return `${root}\n\nSkills: when these instructions load a skill or say a skill is preloaded, read its SKILL.md from the marketplace path below and follow it, not through the Skill tool and not from an installed copy. Files a skill names are next to its SKILL.md.\n${lines.join("\n")}${absent}`;
+}
+function readMarketplaceAgent(name) {
+	if (!AGENT_NAME.test(name)) throw new Error(`invalid agent name ${name}`);
+	const file = path.join(marketplaceDir(), "agents", "opencode", `${name}.md`);
+	if (fs.existsSync(file)) {
+		const { front, raw, body } = readFrontmatter(file);
+		const names = declaredSkills(name, front);
+		const skills = names.flatMap((skill) => {
+			const found = findSkill(skill);
+			return found ? [{
+				name: skill,
+				file: found
+			}] : [];
+		});
+		const missing = names.filter((skill) => !skills.some((s) => s.name === skill));
+		return {
+			name,
+			description: front.description ?? name,
+			prompt: body + skillsSection(skills, missing),
+			file,
+			frontmatter: raw,
+			skills,
+			dirs: skills.map((s) => path.dirname(s.file))
+		};
+	}
+	const pluginFile = findPluginAgent(name);
+	if (pluginFile) {
+		const pluginRoot = path.dirname(path.dirname(pluginFile));
+		const { front, raw, body } = readFrontmatter(pluginFile);
+		const refs = front.skills ?? [];
+		const skills = refs.flatMap((ref) => {
+			const found = findPluginSkill(ref, pluginRoot);
+			return found ? [{
+				name: ref,
+				file: found
+			}] : [];
+		});
+		const missing = refs.filter((ref) => !skills.some((s) => s.name === ref));
+		return {
+			name,
+			description: front.description ?? name,
+			prompt: withPluginRoot(body, pluginRoot) + skillsSection(skills, missing, pluginRoot),
+			file: pluginFile,
+			frontmatter: raw,
+			skills,
+			dirs: [pluginRoot, ...skills.map((s) => path.dirname(s.file))],
+			pluginRoot
+		};
+	}
+	const skillFile = findSkill(name);
+	if (!skillFile) throw new Error(`agent or skill ${name} is not in the marketplace (${file})`);
+	const skillDir = path.dirname(skillFile);
+	const { front, body } = readFrontmatter(skillFile);
+	const prompt = `Follow the skill ${name} below for the task in the user message. The skill directory is ${skillDir}; read the files it names from there.\n\n${body}`;
+	return {
+		name,
+		description: front.description ?? name,
+		prompt,
+		file: skillFile,
+		frontmatter: "",
+		skills: [],
+		dirs: [skillDir],
+		skillDir
+	};
+}
+function claudeTools(tools) {
+	const allowed = [...new Set(tools.flatMap((t) => CLAUDE_TOOLS[t]))];
+	return {
+		allowed,
+		disallowed: CLAUDE_ALL_TOOLS.filter((t) => !allowed.includes(t))
+	};
+}
+function freshDir(prefix) {
+	return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+function claudeAgentsFile(name, tools = ["read"]) {
+	const agent = readMarketplaceAgent(name);
+	const file = path.join(freshDir("factory-agent-"), `claude-${name}.json`);
+	fs.writeFileSync(file, JSON.stringify({ [name]: {
+		description: agent.description,
+		prompt: agent.prompt,
+		tools: claudeTools(tools).allowed
+	} }));
+	return file;
+}
+function opencodeConfigDir(name, tools = ["read"]) {
+	const agent = readMarketplaceAgent(name);
+	const dir = freshDir("factory-opencode-");
+	const target = path.join(dir, "agents", `${name}.md`);
+	fs.mkdirSync(path.dirname(target), { recursive: true });
+	if (agent.skillDir || agent.pluginRoot) {
+		const allow = (tool) => tools.includes(tool) ? "allow" : "deny";
+		const front = {
+			description: agent.description,
+			mode: "subagent",
+			permission: {
+				edit: allow("edit"),
+				bash: allow("bash"),
+				task: "deny",
+				webfetch: "deny",
+				websearch: "deny",
+				external_directory: "allow"
+			}
+		};
+		fs.writeFileSync(target, `---\n${JSON.stringify(front)}\n---\n\n${agent.prompt}\n`);
+	} else fs.writeFileSync(target, `---\n${agent.frontmatter}\n---\n\n${agent.prompt}\n`);
+	return dir;
+}
+// src/ops.ts
 var TIERS = [
 	"bug",
 	"security",
@@ -8059,9 +8252,11 @@ var resolveMarketplacePath = async ({ input, exec, cwd }) => {
 		output: `Marketplace (${source}): ${resolved}`
 	};
 };
-var safeSource = async ({ state, exec, answers }) => {
+var safeSource = async ({ state, exec, answers, args }) => {
 	if (!exec) throw new Error("sync.safeSource needs the host exec tool");
-	const root = marketplaceRoot(state);
+	const root = typeof args.path === "string" ? String(args.path.split(".").reduce((v, k) => v && typeof v === "object" ? v[k] : void 0, state) ?? "") : marketplaceRoot(state);
+	if (!root) throw new Error(`with.path ${String(args.path)} is not set in state`);
+	const switchQuestion = typeof args.question === "string" ? args.question : "q-marketplace-main";
 	const git = (...args) => exec("git", [
 		"-C",
 		root,
@@ -8084,7 +8279,7 @@ var safeSource = async ({ state, exec, answers }) => {
 	if (status.stdout.trim()) return stop("dirty", `the worktree of ${root} has local changes`, 0);
 	let branch = (await git("branch", "--show-current")).stdout.trim();
 	if (branch !== "main") {
-		if (answers?.["q-marketplace-main"] !== "switch") return {
+		if (answers?.[switchQuestion] !== "switch") return {
 			state: {
 				ok: false,
 				reason: "not-main",
@@ -8649,6 +8844,396 @@ var syncReport = async ({ state }) => {
 		].join("\n")
 	};
 };
+var DIRECTIONS = [
+	["target", "target->olko"],
+	["olko", "olko->user"],
+	["user", "user->olko"]
+];
+var BUMPS = [
+	"patch",
+	"minor",
+	"major"
+];
+var VERDICT_ACTIONS = {
+	"target-only": [
+		"port-to-olko",
+		"exclude",
+		"leave"
+	],
+	"olko-only": [
+		"install-user",
+		"reject",
+		"exclude",
+		"leave"
+	],
+	"user-only": [
+		"publish-to-olko",
+		"exclude",
+		"leave"
+	],
+	"target-ahead": [
+		...BUMPS.map((b) => `port-to-olko-${b}`),
+		"exclude",
+		"leave"
+	],
+	"olko-ahead": [
+		"update-user",
+		"exclude",
+		"leave"
+	],
+	"user-ahead": [
+		...BUMPS.map((b) => `publish-to-olko-${b}`),
+		"revert-user",
+		"exclude",
+		"leave"
+	],
+	diverged: [
+		"take-target",
+		"take-olko",
+		"exclude",
+		"leave"
+	],
+	"platform-delta-only": ["leave", "exclude"]
+};
+function syncStateScript() {
+	return path.join(marketplaceDir(), "plugins", "olko-sync", "skills", "olko-sync-state", "scripts", "sync-state.mjs");
+}
+async function syncState(exec, stateDir, args) {
+	const res = await exec("node", [
+		syncStateScript(),
+		...args,
+		"--state-dir",
+		stateDir
+	]);
+	if (res.code !== 0) throw new Error(`sync-state ${args.slice(0, 2).join(" ")} failed: ${(res.stderr || res.stdout).trim()}`);
+	return res.stdout;
+}
+function longPathOf(p) {
+	const resolved = path.resolve(p);
+	return fs.existsSync(resolved) ? fs.realpathSync.native(resolved) : resolved;
+}
+var claudeSyncState = async ({ input, exec }) => {
+	if (!exec) throw new Error("csync.state needs the host exec tool");
+	const stateDir = longPathOf(input.stateDir ?? process.env.OLKO_SYNC_HOME ?? path.join(os.homedir(), ".olko-sync"));
+	await syncState(exec, stateDir, ["init"]);
+	if (input.olko) await syncState(exec, stateDir, [
+		"target",
+		"set-olko",
+		"--path",
+		longPathOf(input.olko)
+	]);
+	if (input.target) {
+		if (!input.targetName || !/^[a-z0-9-]+$/.test(input.targetName)) throw new Error("input.targetName must be a kebab-case name for the Claude marketplace in input.target");
+		await syncState(exec, stateDir, [
+			"target",
+			"set",
+			"--name",
+			input.targetName,
+			"--path",
+			longPathOf(input.target)
+		]);
+	}
+	const targets = JSON.parse(await syncState(exec, stateDir, ["target", "get"]));
+	const name = input.targetName ?? targets.default;
+	const target = name ? targets.targets[name]?.path : void 0;
+	if (!targets.olko?.path) throw new Error("no Olko checkout: give input.olko (the Olko marketplace checkout path)");
+	if (!target) throw new Error("no Claude marketplace target: give input.target and input.targetName");
+	const user = longPathOf(input.user ?? path.join(os.homedir(), ".claude"));
+	const stores = [
+		{
+			id: "target",
+			path: target,
+			layout: "plugins/*/skills/*/SKILL.md and plugins/*/agents/*.md"
+		},
+		{
+			id: "olko",
+			path: targets.olko.path,
+			layout: "skills/*/*/SKILL.md, plugins/*/skills/*/SKILL.md, agents/opencode/*.md (versions in agents/opencode/index.json), plugins/*/agents/*.md (version in plugin.json)"
+		},
+		{
+			id: "user",
+			path: user,
+			layout: "skills/*/SKILL.md and agents/*.md"
+		}
+	];
+	return {
+		state: {
+			stateDir,
+			olko: targets.olko.path,
+			target,
+			user,
+			stores,
+			leakTerms: targets.leakTerms,
+			leakTermsText: targets.leakTerms.length ? `${targets.leakTerms.length} saved` : "none saved",
+			script: syncStateScript()
+		},
+		metrics: { leakTerms: targets.leakTerms.length },
+		output: `Sync state ready in ${stateDir}: Olko ${targets.olko.path}, user store ${user}, target set (name and path stay out of logs).`
+	};
+};
+var claudeSyncLeakSave = async ({ state, exec, answers }) => {
+	if (!exec) throw new Error("csync.leakSave needs the host exec tool");
+	const { stateDir } = stateOf(state, "state");
+	const answer = (answers?.["q-claude-sync-leak"] ?? "none").trim();
+	const terms = /^none$/i.test(answer) ? [] : answer.split(",").map((t) => t.trim()).filter(Boolean);
+	for (const term of terms) await syncState(exec, stateDir, [
+		"target",
+		"add-leak-term",
+		"--term",
+		term
+	]);
+	return {
+		state: { added: terms.length },
+		metrics: { added: terms.length },
+		output: terms.length ? `${terms.length} leak terms added.` : "No leak terms added."
+	};
+};
+function lastJsonBlock(text) {
+	const raw = [...String(text).matchAll(/```json\s*([\s\S]*?)```/g)].at(-1)?.[1];
+	if (!raw) throw new Error("matcher output has no ```json block");
+	return JSON.parse(raw);
+}
+function parseCapabilities(text) {
+	const data = lastJsonBlock(text);
+	if (!Array.isArray(data.capabilities)) throw new Error("matcher JSON has no capabilities list");
+	for (const c of data.capabilities) if (!c.id || !["skill", "agent"].includes(c.kind) || typeof c.copies !== "object") throw new Error(`matcher capability is malformed: ${JSON.stringify(c).slice(0, 200)}`);
+	return {
+		capabilities: data.capabilities,
+		probable: data.probable ?? []
+	};
+}
+function normalizeName(name) {
+	return name.toLowerCase().replace(/^[a-z0-9-]+:/, "").replace(/^olko-/, "");
+}
+var claudeSyncCapabilities = async ({ state }) => {
+	const parsed = Object.values(stateOf(state, "match"))[0];
+	if (!parsed) throw new Error("the matcher returned nothing");
+	return {
+		state: parsed,
+		metrics: {
+			capabilities: parsed.capabilities.length,
+			probable: parsed.probable.length
+		},
+		output: `${parsed.capabilities.length} capabilities, ${parsed.probable.length} probable links.`
+	};
+};
+var claudeSyncSelect = async ({ state, input }) => {
+	const { capabilities, probable } = stateOf(state, "capabilities");
+	const wanted = input.artifacts?.map(normalizeName);
+	const matches = (c) => !wanted || [c.id, ...Object.values(c.copies).map((copy) => copy?.name ?? "")].some((n) => wanted.includes(normalizeName(n)));
+	const selected = capabilities.filter(matches);
+	if (wanted) {
+		const missing = input.artifacts.filter((a) => !selected.some((c) => [c.id, ...Object.values(c.copies).map((copy) => copy?.name ?? "")].some((n) => normalizeName(n) === normalizeName(a))));
+		if (missing.length) throw new Error(`input.artifacts not found in any store: ${missing.join(", ")}`);
+	}
+	const ask = probable.filter((p) => selected.some((c) => c.id === p.id));
+	return {
+		state: {
+			selected,
+			probable: ask
+		},
+		metrics: {
+			selected: selected.length,
+			probable: ask.length
+		},
+		output: `${selected.length} capabilities selected${wanted ? ` from input.artifacts` : ""}; ${ask.length} probable links to confirm.`
+	};
+};
+var claudeSyncExclusions = async ({ state, exec, answers }) => {
+	if (!exec) throw new Error("csync.exclusions needs the host exec tool");
+	const { stateDir } = stateOf(state, "state");
+	const { selected, probable } = stateOf(state, "select");
+	const split = new Set(probable.filter((_, i) => answers?.[`q-claude-sync-probable-${i}`] === "split").map((p) => p.id));
+	const capabilities = selected.flatMap((c) => split.has(c.id) ? Object.entries(c.copies).map(([store, copy]) => ({
+		...c,
+		id: `${c.id}@${store}`,
+		basis: "split",
+		copies: { [store]: copy }
+	})) : [c]);
+	const compare = [];
+	const excluded = [];
+	for (const c of capabilities) {
+		const checks = [];
+		for (const [store, direction] of DIRECTIONS) {
+			const copy = c.copies[store];
+			if (!copy) continue;
+			const out = await syncState(exec, stateDir, [
+				"exclusion",
+				"check",
+				"--artifact",
+				`${c.kind}:${copy.name}`,
+				"--direction",
+				direction,
+				...copy.version && copy.version !== "—" ? ["--version", copy.version] : []
+			]);
+			checks.push(JSON.parse(out));
+		}
+		if (checks.length && checks.every((x) => x.status === "excluded")) excluded.push({
+			id: c.id,
+			reason: checks[0]?.reason ?? "excluded"
+		});
+		else compare.push({
+			...c,
+			copiesText: Object.entries(c.copies).map(([store, copy]) => `${store}: ${copy?.name} ${copy?.path} version ${copy?.version ?? "—"} hash ${copy?.hash ?? "—"}`).join("\n")
+		});
+	}
+	return {
+		state: {
+			compare,
+			excluded
+		},
+		metrics: {
+			compare: compare.length,
+			excluded: excluded.length
+		},
+		output: `${compare.length} capabilities to compare, ${excluded.length} excluded.`
+	};
+};
+function parseVerdict(text) {
+	const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.startsWith("result |"));
+	if (!line) throw new Error("comparator report has no 'result |' line");
+	const [, verdict = "", bump = "none", nextVersion = "none", action = ""] = line.split("|").map((p) => p.trim());
+	if (verdict !== "identical" && !VERDICT_ACTIONS[verdict]) throw new Error(`comparator returned unknown verdict '${verdict}'`);
+	return {
+		verdict,
+		bump,
+		nextVersion,
+		action,
+		report: String(text).trim()
+	};
+}
+function claudeSyncActions(verdict) {
+	return VERDICT_ACTIONS[verdict] ?? [];
+}
+var claudeSyncRows = async ({ state }) => {
+	const { compare, excluded } = stateOf(state, "exclusions");
+	const verdicts = state.compare ?? {};
+	const rows = compare.map((c) => {
+		const v = verdicts[c.id];
+		if (!v) throw new Error(`no verdict for capability ${c.id}`);
+		const copies = Object.entries(c.copies).map(([store, copy]) => `${store} ${copy?.version ?? "—"}`).join(", ");
+		return {
+			id: c.id,
+			kind: c.kind,
+			verdict: v.verdict,
+			bump: v.bump,
+			nextVersion: v.nextVersion,
+			action: v.action,
+			options: claudeSyncActions(v.verdict),
+			line: `${c.kind} ${c.id}: ${v.verdict}; copies ${copies}; recommended ${v.action || "none"}; proposed Olko version ${v.nextVersion}`
+		};
+	});
+	const decide = rows.filter((r) => r.verdict !== "identical");
+	return {
+		state: {
+			rows,
+			decide,
+			excluded,
+			table: [...rows.map((r) => r.line), ...excluded.map((e) => `${e.id}: excluded (${e.reason})`)].join("\n")
+		},
+		metrics: {
+			rows: rows.length,
+			decide: decide.length
+		},
+		output: `${rows.length} capabilities compared, ${decide.length} need a decision, ${excluded.length} excluded.`
+	};
+};
+var claudeSyncPlan = async ({ state, answers }) => {
+	const { rows, decide } = stateOf(state, "rows");
+	const decided = rows.map((r) => {
+		const index = decide.findIndex((d) => d.id === r.id);
+		return {
+			...r,
+			decision: index < 0 ? "none" : answers?.[`q-claude-sync-${index}`] ?? "unanswered"
+		};
+	});
+	const records = decided.filter((r) => r.decision === "exclude");
+	const rejects = decided.filter((r) => r.decision === "reject");
+	const changes = decided.filter((r) => ![
+		"none",
+		"leave",
+		"exclude",
+		"reject",
+		"unanswered"
+	].includes(r.decision));
+	return {
+		state: {
+			decided,
+			records,
+			rejects,
+			changes
+		},
+		metrics: {
+			records: records.length,
+			rejects: rejects.length,
+			changes: changes.length
+		},
+		output: `${changes.length} rows to apply, ${records.length} exclusions and ${rejects.length} rejections to record.`
+	};
+};
+var claudeSyncRecord = async ({ state, exec, answers }) => {
+	if (!exec) throw new Error("csync.record needs the host exec tool");
+	const { stateDir } = stateOf(state, "state");
+	const { compare } = stateOf(state, "exclusions");
+	const { records, rejects } = stateOf(state, "plan");
+	const lines = [];
+	for (const [i, r] of [...records, ...rejects].entries()) {
+		const c = compare.find((x) => x.id === r.id);
+		const source = c.copies.target ?? c.copies.olko ?? c.copies.user;
+		const artifact = `${r.kind}:${source?.name}`;
+		if (r.decision === "reject") await syncState(exec, stateDir, [
+			"exclusion",
+			"add",
+			"--artifact",
+			artifact,
+			"--reason",
+			"rejected new artifact",
+			"--kind",
+			"rejected-new",
+			"--version",
+			c.copies.olko?.version ?? "0.0.0"
+		]);
+		else {
+			const scope = answers?.[`q-claude-sync-scope-${i}`] ?? "all";
+			await syncState(exec, stateDir, [
+				"exclusion",
+				"add",
+				"--artifact",
+				artifact,
+				"--reason",
+				answers?.[`q-claude-sync-reason-${i}`] ?? "excluded by the user",
+				...scope === "all" ? [] : ["--scope", scope]
+			]);
+		}
+		lines.push(`${artifact} ${r.decision}`);
+	}
+	return {
+		state: { lines },
+		metrics: { recorded: lines.length },
+		output: lines.length ? `Recorded: ${lines.join(", ")}.` : "Nothing to record."
+	};
+};
+var claudeSyncReport = async ({ state }) => {
+	const plan = stateOf(state, "plan");
+	const { excluded } = stateOf(state, "exclusions");
+	const lines = [...plan.decided.map((r) => `row | ${r.id} | ${r.verdict} | ${r.decision}`), ...excluded.map((e) => `row | ${e.id} | excluded | excluded`)];
+	const changes = plan.decided.filter((r) => ![
+		"none",
+		"leave",
+		"exclude",
+		"reject",
+		"unanswered"
+	].includes(r.decision)).length;
+	return {
+		state: { lines },
+		metrics: { rows: lines.length },
+		output: [
+			"Claude sync report",
+			...lines,
+			changes ? `${changes} rows to apply.` : "Olko, the target and the user scope: unchanged."
+		].join("\n")
+	};
+};
 var OPERATIONS = {
 	"builtin.pass": pass,
 	"github.prScope": prScope,
@@ -8685,9 +9270,21 @@ var OPERATIONS = {
 	"sync.merge": squashMerge,
 	"sync.install": installArtifacts,
 	"sync.memorySave": syncMemorySave,
+	"csync.state": claudeSyncState,
+	"csync.leakSave": claudeSyncLeakSave,
+	"csync.capabilities": claudeSyncCapabilities,
+	"csync.select": claudeSyncSelect,
+	"csync.exclusions": claudeSyncExclusions,
+	"csync.rows": claudeSyncRows,
+	"csync.plan": claudeSyncPlan,
+	"csync.record": claudeSyncRecord,
+	"csync.report": claudeSyncReport,
+	"csync.applyNotAvailable": async () => {
+		throw new Error("Applying claude sync rows (porting, installing into ~/.claude, publishing) is not in the factory yet. The run stops before any change.");
+	},
 	"sync.report": syncReport,
-	"sync.stopUnsafe": async ({ state }) => {
-		const source = stateOf(state, "safe-source");
+	"sync.stopUnsafe": async ({ state, args }) => {
+		const source = stateOf(state, typeof args.from === "string" ? args.from : "safe-source");
 		throw new Error(`Marketplace sync stopped before any comparison: ${source.detail ?? "the marketplace checkout is not safe"}.`);
 	}
 };
@@ -8698,7 +9295,9 @@ var PARSERS = {
 	"review.rulesCheck": parseRulesCheck,
 	"sync.comparison": parseComparison,
 	"sync.prLine": parsePrLine,
-	"sync.applied": parseApplied
+	"sync.applied": parseApplied,
+	"csync.capabilities": parseCapabilities,
+	"csync.verdict": parseVerdict
 };
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/code.js
 var require_code$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
@@ -16186,7 +16785,7 @@ var require_dist = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 }));
 // src/spec.ts
 var import__2020 = require__2020();
-var import_dist$1 = /* @__PURE__ */ __toESM(require_dist(), 1);
+var import_dist = /* @__PURE__ */ __toESM(require_dist(), 1);
 var specDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "spec");
 var SCHEMAS = [
 	"factory-config",
@@ -16194,7 +16793,7 @@ var SCHEMAS = [
 	"usage-record",
 	"cost-footer"
 ];
-var addFormats = import_dist$1.default.default;
+var addFormats = import_dist.default.default;
 function createValidators() {
 	const ajv = new import__2020.Ajv2020({
 		allErrors: true,
@@ -16337,9 +16936,9 @@ function buildNode(workflow, spec) {
 function readSpec(file) {
 	let spec;
 	try {
-		spec = (0, import_dist.parse)(fs.readFileSync(file, "utf8"));
+		spec = (0, import_dist$1.parse)(fs.readFileSync(file, "utf8"));
 	} catch (error) {
-		if (error instanceof import_dist.YAMLParseError) throw new Error(`${file}: invalid YAML: ${error.message}`);
+		if (error instanceof import_dist$1.YAMLParseError) throw new Error(`${file}: invalid YAML: ${error.message}`);
 		throw error;
 	}
 	const result = validate("workflow", spec);
@@ -16436,27 +17035,12 @@ function loadWorkflowDir(dir) {
 function loadWorkflowSpecs(dir) {
 	return fs.readdirSync(dir).filter((f) => /.ya?ml$/.test(f)).sort().map((f) => readSpec(path.join(dir, f)));
 }
-// src/paths.ts
-var FACTORY_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-var VIEWER_HEALTH = "skill-factory-viewer";
-var DEFAULT_VIEWER_PORT = 7340;
-function defaultDataDir() {
-	return process.env.FACTORY_DATA_DIR ?? path.join(os.homedir(), ".skill-factory");
-}
-function viewerOptions(dataDir) {
-	return {
-		viewerDir: process.env.FACTORY_VIEWER_DIR ?? path.join(FACTORY_DIR, "app", "dist"),
-		dataDir,
-		factoryDir: FACTORY_DIR,
-		configFile: path.join(FACTORY_DIR, "spec", "examples", "valid", "factory-config.json")
-	};
-}
 // src/config.ts
 function configFile() {
 	return process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR, "config", "factory.yaml");
 }
 function loadFactoryConfig(file = configFile()) {
-	const raw = (0, import_dist.parse)(fs.readFileSync(file, "utf8"));
+	const raw = (0, import_dist$1.parse)(fs.readFileSync(file, "utf8"));
 	const result = validate("factory-config", raw);
 	if (!result.valid) throw new Error(`${file}: ${result.errors.join("; ")}`);
 	return {
@@ -16467,146 +17051,6 @@ function loadFactoryConfig(file = configFile()) {
 			pauseRatio: raw.budget.pauseRatio ?? .8
 		}
 	};
-}
-// src/marketplace-agents.ts
-var AGENT_NAME = /^[a-z0-9-]+$/;
-var CLAUDE_TOOLS = {
-	read: [
-		"Read",
-		"Grep",
-		"Glob"
-	],
-	edit: ["Edit", "Write"],
-	bash: ["Bash"]
-};
-var CLAUDE_ALL_TOOLS = [
-	"Read",
-	"Grep",
-	"Glob",
-	"Skill",
-	"Edit",
-	"Write",
-	"Bash",
-	"WebFetch",
-	"WebSearch",
-	"Agent",
-	"Task",
-	"NotebookEdit"
-];
-function marketplaceDir() {
-	return process.env.FACTORY_MARKETPLACE_DIR ?? path.join(FACTORY_DIR, "..");
-}
-function readFrontmatter(file) {
-	const match = fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n").match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-	if (!match?.[1] || match[2] === void 0) throw new Error(`${file}: no frontmatter`);
-	return {
-		front: (0, import_dist.parse)(match[1]),
-		raw: match[1],
-		body: match[2].trim()
-	};
-}
-function findSkill(name) {
-	const root = path.join(marketplaceDir(), "skills");
-	if (!fs.existsSync(root)) return void 0;
-	for (const category of fs.readdirSync(root)) {
-		const file = path.join(root, category, name, "SKILL.md");
-		if (fs.existsSync(file)) return file;
-	}
-}
-function declaredSkills(name, front) {
-	const allowed = Object.entries(front.permission?.skill ?? {}).filter(([skill, rule]) => skill !== "*" && rule === "allow").map(([skill]) => skill);
-	const manifest = path.join(marketplaceDir(), "agents", "opencode", "index.json");
-	const listed = fs.existsSync(manifest) ? JSON.parse(fs.readFileSync(manifest, "utf8")).agents.find((a) => a.name === name)?.skills ?? [] : [];
-	return [.../* @__PURE__ */ new Set([...allowed, ...listed])];
-}
-function skillsSection(skills, missing) {
-	if (!skills.length && !missing.length) return "";
-	const lines = skills.map((s) => `- ${s.name}: ${s.file}`);
-	const absent = missing.length ? `\nNot in the marketplace, so not available in this run: ${missing.join(", ")}.` : "";
-	return `\n\nSkills: when these instructions load a skill, read its SKILL.md from the marketplace path below and follow it, not through the Skill tool and not from an installed copy. Files a skill names are next to its SKILL.md.\n${lines.join("\n")}${absent}`;
-}
-function readMarketplaceAgent(name) {
-	if (!AGENT_NAME.test(name)) throw new Error(`invalid agent name ${name}`);
-	const file = path.join(marketplaceDir(), "agents", "opencode", `${name}.md`);
-	if (fs.existsSync(file)) {
-		const { front, raw, body } = readFrontmatter(file);
-		const names = declaredSkills(name, front);
-		const skills = names.flatMap((skill) => {
-			const found = findSkill(skill);
-			return found ? [{
-				name: skill,
-				file: found
-			}] : [];
-		});
-		const missing = names.filter((skill) => !skills.some((s) => s.name === skill));
-		return {
-			name,
-			description: front.description ?? name,
-			prompt: body + skillsSection(skills, missing),
-			file,
-			frontmatter: raw,
-			skills,
-			dirs: skills.map((s) => path.dirname(s.file))
-		};
-	}
-	const skillFile = findSkill(name);
-	if (!skillFile) throw new Error(`agent or skill ${name} is not in the marketplace (${file})`);
-	const skillDir = path.dirname(skillFile);
-	const { front, body } = readFrontmatter(skillFile);
-	const prompt = `Follow the skill ${name} below for the task in the user message. The skill directory is ${skillDir}; read the files it names from there.\n\n${body}`;
-	return {
-		name,
-		description: front.description ?? name,
-		prompt,
-		file: skillFile,
-		frontmatter: "",
-		skills: [],
-		dirs: [skillDir],
-		skillDir
-	};
-}
-function claudeTools(tools) {
-	const allowed = [...new Set(tools.flatMap((t) => CLAUDE_TOOLS[t]))];
-	return {
-		allowed,
-		disallowed: CLAUDE_ALL_TOOLS.filter((t) => !allowed.includes(t))
-	};
-}
-function freshDir(prefix) {
-	return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-}
-function claudeAgentsFile(name, tools = ["read"]) {
-	const agent = readMarketplaceAgent(name);
-	const file = path.join(freshDir("factory-agent-"), `claude-${name}.json`);
-	fs.writeFileSync(file, JSON.stringify({ [name]: {
-		description: agent.description,
-		prompt: agent.prompt,
-		tools: claudeTools(tools).allowed
-	} }));
-	return file;
-}
-function opencodeConfigDir(name, tools = ["read"]) {
-	const agent = readMarketplaceAgent(name);
-	const dir = freshDir("factory-opencode-");
-	const target = path.join(dir, "agents", `${name}.md`);
-	fs.mkdirSync(path.dirname(target), { recursive: true });
-	if (agent.skillDir) {
-		const allow = (tool) => tools.includes(tool) ? "allow" : "deny";
-		const front = {
-			description: agent.description,
-			mode: "subagent",
-			permission: {
-				edit: allow("edit"),
-				bash: allow("bash"),
-				task: "deny",
-				webfetch: "deny",
-				websearch: "deny",
-				external_directory: "allow"
-			}
-		};
-		fs.writeFileSync(target, `---\n${JSON.stringify(front)}\n---\n\n${agent.prompt}\n`);
-	} else fs.writeFileSync(target, `---\n${agent.frontmatter}\n---\n\n${agent.prompt}\n`);
-	return dir;
 }
 // src/engine.ts
 var FAKE_PRICE_PER_MTOK = {
@@ -17841,4 +18285,4 @@ function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHost
 		return true;
 	};
 }
-export { require_ajv as _, errorMessage as a, claudeAgentsFile as c, DEFAULT_VIEWER_PORT as d, FACTORY_DIR as f, require_dist as g, viewerOptions as h, Factory as i, claudeTools as l, defaultDataDir as m, viewerHandler as n, parseBackend as o, VIEWER_HEALTH as p, viewerUrlFor as r, parseCli as s, allowedHostsFor as t, opencodeConfigDir as u, __toESM as v };
+export { viewerOptions as _, errorMessage as a, require_dist as c, claudeTools as d, opencodeConfigDir as f, defaultDataDir as g, VIEWER_HEALTH as h, Factory as i, require_ajv as l, FACTORY_DIR as m, viewerHandler as n, parseBackend as o, DEFAULT_VIEWER_PORT as p, viewerUrlFor as r, parseCli as s, allowedHostsFor as t, claudeAgentsFile as u, __toESM as v };

@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import secrets
@@ -219,4 +220,75 @@ async def sync_apply_run(factory_server) -> ReviewRun:
     run.accepted = accepted
     run.artifacts = SYNC_ARTIFACTS
     print(json.dumps({"runId": run.run_id, "accepted": accepted, "changed": run.changed_files, "costUsd": run.report["cost"]["costUsd"], "viewerUrl": run.viewer_url}))
+    return run
+
+
+CLAUDE_SYNC_TARGET = os.environ.get("FACTORY_CLAUDE_SYNC_TARGET", "anthropics/claude-plugins-official")
+CLAUDE_SYNC_ARTIFACTS = os.environ.get("FACTORY_CLAUDE_SYNC_ARTIFACTS", "olko-design-rules,olko-review-verifier,frontend-design").split(",")
+REAL_SYNC_HOME = Path(os.environ.get("OLKO_SYNC_HOME", Path.home() / ".olko-sync"))
+
+
+def leak_terms() -> list[str]:
+    targets = REAL_SYNC_HOME / "targets.json"
+    terms = json.loads(targets.read_text(encoding="utf-8")).get("leakTerms", []) if targets.exists() else []
+    return [t.lower() for t in terms + [t for t in os.environ.get("FACTORY_LEAK_TERMS", "").split(",") if t]]
+
+
+def tree_hash(root: Path) -> str:
+    digest = hashlib.sha256()
+    for file in sorted(p for p in root.rglob("*") if p.is_file()):
+        digest.update(str(file.relative_to(root)).encode())
+        digest.update(file.read_bytes())
+    return digest.hexdigest()
+
+
+def copy_user_store(destination: Path, terms: list[str]) -> list[str]:
+    skipped = []
+    for kind in ("skills", "agents"):
+        source = Path.home() / ".claude" / kind
+        (destination / kind).mkdir(parents=True, exist_ok=True)
+        for entry in source.iterdir() if source.exists() else []:
+            files = [entry] if entry.is_file() else [p for p in entry.rglob("*") if p.is_file()]
+            text = "\n".join(f.read_text(encoding="utf-8", errors="ignore").lower() for f in files) + entry.name.lower()
+            if any(term in text for term in terms):
+                skipped.append(f"{kind}/{entry.name}")
+                continue
+            if entry.is_dir():
+                shutil.copytree(entry, destination / kind / entry.name)
+            else:
+                shutil.copy2(entry, destination / kind / entry.name)
+    return skipped
+
+
+def agent_temp_dirs() -> set[str]:
+    return {p.name for p in Path(tempfile.gettempdir()).iterdir() if p.name.startswith(("factory-agent-", "factory-opencode-"))}
+
+
+@pytest.fixture(scope="session")
+async def claude_sync_run(factory_server) -> ReviewRun:
+    root = Path(os.path.realpath(tempfile.mkdtemp(prefix="factory-claude-sync-")))
+    target, olko, user, state = root / "target", root / "olko", root / "user", root / "state"
+    subprocess.run(["gh", "repo", "clone", CLAUDE_SYNC_TARGET, str(target), "--", "--depth", "50"], check=True, capture_output=True)
+    subprocess.run(["gh", "repo", "clone", MARKETPLACE_REMOTE, str(olko), "--", "--depth", "50"], check=True, capture_output=True)
+    skipped = copy_user_store(user, leak_terms())
+    real_claude = {kind: tree_hash(Path.home() / ".claude" / kind) for kind in ("skills", "agents")}
+    real_state = tree_hash(REAL_SYNC_HOME) if REAL_SYNC_HOME.exists() else ""
+    before = {"target": marketplace_snapshot(target), "olko": marketplace_snapshot(olko), "user": tree_hash(user)}
+    temp_before = agent_temp_dirs()
+    run = await run_workflow(
+        url=f"{factory_server['url']}/mcp",
+        token=factory_server["token"],
+        workflow="olko-claude-sync",
+        goal="Sync skills and agents between a Claude marketplace, Olko and the user scope",
+        workflow_input={"target": str(target), "targetName": "public-plugins", "olko": str(olko), "user": str(user), "stateDir": str(state), "artifacts": CLAUDE_SYNC_ARTIFACTS},
+        answer=lambda q: "none" if q["id"] == "q-claude-sync-leak" else "confirm" if q["id"].startswith("q-claude-sync-probable-") else "leave" if "leave" in (q.get("allowed") or []) else "stop",
+    )
+    run.stores = {"target": target, "olko": olko, "user": user, "state": state}
+    run.stores_before = before
+    run.stores_after = {"target": marketplace_snapshot(target), "olko": marketplace_snapshot(olko), "user": tree_hash(user)}
+    run.real_unchanged = real_claude == {kind: tree_hash(Path.home() / ".claude" / kind) for kind in ("skills", "agents")} and real_state == (tree_hash(REAL_SYNC_HOME) if REAL_SYNC_HOME.exists() else "")
+    run.new_temp_dirs = sorted(agent_temp_dirs() - temp_before)
+    run.artifacts = CLAUDE_SYNC_ARTIFACTS
+    run.skipped_user = skipped
+    print(json.dumps({"runId": run.run_id, "skippedUser": len(skipped), "costUsd": run.report["cost"]["costUsd"], "viewerUrl": run.viewer_url}))
     return run

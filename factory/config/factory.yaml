@@ -20,6 +20,7 @@ roles:
   comparator: medium
   sync: medium
   publisher: medium
+  sync-worker: low
 budget:
   maxCostUsd: 20
   infoRatio: 0.5

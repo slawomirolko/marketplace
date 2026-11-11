@@ -1,0 +1,204 @@
+name: olko-claude-sync
+version: 0.1.0
+source: plugins/olko-sync/agents/olko-claude-sync-manager.md (phases 0-3 and exclusion records; applying rows, publishing and consolidation stop with an error)
+roles:
+  sync-worker: low
+entry: state
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: state
+    kind: script
+    op: csync.state
+  - id: ask-leak
+    kind: interrupt
+    question:
+      id: q-claude-sync-leak
+      text: "Leak terms are words that must never reach Olko ({{state.state.leakTermsText}}). Add more? Reply with comma-separated words, or none."
+  - id: leak-save
+    kind: script
+    op: csync.leakSave
+  - id: safe-olko
+    kind: script
+    op: sync.safeSource
+    maxVisits: 2
+    with: { path: state.olko, question: q-claude-sync-main-olko }
+  - id: ask-main-olko
+    kind: interrupt
+    question:
+      id: q-claude-sync-main-olko
+      text: "The Olko checkout {{state.state.olko}} is on {{state.safe-olko.detail}}, not main. Switch it to main?"
+      allowed: [switch, stop]
+  - id: stop-olko
+    kind: script
+    op: sync.stopUnsafe
+    with: { from: safe-olko }
+  - id: safe-target
+    kind: script
+    op: sync.safeSource
+    maxVisits: 2
+    with: { path: state.target, question: q-claude-sync-main-target }
+  - id: ask-main-target
+    kind: interrupt
+    question:
+      id: q-claude-sync-main-target
+      text: "The Claude marketplace target is on {{state.safe-target.detail}}, not main. Switch it to main?"
+      allowed: [switch, stop]
+  - id: stop-target
+    kind: script
+    op: sync.stopUnsafe
+    with: { from: safe-target }
+  - id: inventory
+    kind: llm
+    role: sync-worker
+    agent: olko-claude-sync-inventory
+    agentsFrom: state.state.stores
+    tools: [read, bash]
+    dirs: ["{{state.state.target}}", "{{state.state.olko}}", "{{state.state.user}}", "{{state.state.stateDir}}"]
+    parse: text.raw
+    prompt: |
+      Store: {{agent.id}}
+      Store path: {{agent.path}}
+      Discover in: {{agent.layout}} (relative to the store path)
+      Sync state directory: {{state.state.stateDir}} (pass --state-dir with it to sync-state.mjs)
+  - id: match
+    kind: llm
+    role: sync-worker
+    agent: olko-claude-sync-matcher
+    dirs: ["{{state.state.target}}", "{{state.state.olko}}", "{{state.state.user}}", "{{state.state.stateDir}}"]
+    parse: csync.capabilities
+    prompt: |
+      Lineage file: {{state.state.stateDir}}/lineage.json
+
+      Inventory of store target:
+      {{state.inventory.target}}
+
+      Inventory of store olko:
+      {{state.inventory.olko}}
+
+      Inventory of store user:
+      {{state.inventory.user}}
+
+      After your report, end with one ```json block in this exact shape (every copy you list, every capability including single-store ones):
+      {"capabilities": [{"id": "<capability id>", "basis": "lineage|marker|name|probable|single", "kind": "skill|agent", "copies": {"target": {"name": "", "path": "", "version": "", "hash": ""}, "olko": {...}, "user": {...}}}], "probable": [{"id": "<capability id>", "evidence": "<one line>"}]}
+      Leave out a store key when the capability has no copy there.
+  - id: capabilities
+    kind: script
+    op: csync.capabilities
+  - id: select
+    kind: script
+    op: csync.select
+  - id: probable-next
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: select.probable }
+  - id: ask-probable
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-probable-{{state.probable-next.index}}"
+      text: "Probable link for capability {{state.probable-next.item.id}}: {{state.probable-next.item.evidence}}. Confirm it as one capability, or split it per store?"
+      allowed: [confirm, split]
+  - id: exclusions
+    kind: script
+    op: csync.exclusions
+  - id: compare
+    kind: llm
+    role: sync-worker
+    agent: olko-claude-sync-comparator
+    agentsFrom: state.exclusions.compare
+    tools: [read, bash]
+    dirs: ["{{state.state.target}}", "{{state.state.olko}}", "{{state.state.user}}", "{{state.state.stateDir}}"]
+    parse: csync.verdict
+    prompt: |
+      Capability: {{agent.id}} ({{agent.kind}}), link basis {{agent.basis}}
+      Copies:
+      {{agent.copiesText}}
+      Lineage: run sync-state.mjs lineage get --capability {{agent.id}} --state-dir {{state.state.stateDir}}
+
+      End your report with exactly one line:
+      result | <identical|platform-delta-only|target-only|olko-only|user-only|target-ahead|olko-ahead|user-ahead|diverged> | <none|patch|minor|major> | <proposed next Olko version or none> | <recommended action>
+  - id: rows
+    kind: script
+    op: csync.rows
+  - id: decide-next
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: rows.decide }
+  - id: decide
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-{{state.decide-next.index}}"
+      text: "Row {{state.decide-next.number}} of {{state.decide-next.total}} needs a decision.\n{{state.decide-next.item.line}}\n\nAll rows:\n{{state.rows.table}}\n\nNothing changes until you decide. take-* and revert-user overwrite a copy after one more confirmation."
+      allowedFrom: state.decide-next.item.options
+  - id: plan
+    kind: script
+    op: csync.plan
+  - id: record-next
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: plan.records }
+  - id: ask-scope
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-scope-{{state.record-next.index}}"
+      text: "Exclude {{state.record-next.item.kind}} {{state.record-next.item.id}} for all directions or one?"
+      allowed: [all, "target->olko", "olko->user", "user->olko"]
+  - id: ask-reason
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-reason-{{state.record-next.index}}"
+      text: "Why exclude {{state.record-next.item.kind}} {{state.record-next.item.id}}? One line."
+  - id: record
+    kind: script
+    op: csync.record
+  - id: apply
+    kind: script
+    op: csync.applyNotAvailable
+  - id: report
+    kind: script
+    op: csync.report
+edges:
+  - { from: state, to: ask-leak }
+  - { from: ask-leak, to: leak-save }
+  - { from: leak-save, to: safe-olko }
+  - { from: safe-olko, to: safe-target, when: "safe-olko.ok == true" }
+  - { from: safe-olko, to: ask-main-olko, when: 'safe-olko.reason == "not-main"' }
+  - { from: safe-olko, to: stop-olko }
+  - { from: ask-main-olko, to: safe-olko, when: 'ask-main-olko.answer == "switch"' }
+  - { from: ask-main-olko, to: stop-olko, when: 'ask-main-olko.answer == "stop"' }
+  - { from: stop-olko, to: END }
+  - { from: safe-target, to: inventory, when: "safe-target.ok == true" }
+  - { from: safe-target, to: ask-main-target, when: 'safe-target.reason == "not-main"' }
+  - { from: safe-target, to: stop-target }
+  - { from: ask-main-target, to: safe-target, when: 'ask-main-target.answer == "switch"' }
+  - { from: ask-main-target, to: stop-target, when: 'ask-main-target.answer == "stop"' }
+  - { from: stop-target, to: END }
+  - { from: inventory, to: match }
+  - { from: match, to: capabilities }
+  - { from: capabilities, to: select }
+  - { from: select, to: probable-next }
+  - { from: probable-next, to: ask-probable, when: "probable-next.done == false" }
+  - { from: probable-next, to: exclusions, when: "probable-next.done == true" }
+  - { from: ask-probable, to: probable-next }
+  - { from: exclusions, to: compare }
+  - { from: compare, to: rows }
+  - { from: rows, to: decide-next }
+  - { from: decide-next, to: decide, when: "decide-next.done == false" }
+  - { from: decide-next, to: plan, when: "decide-next.done == true" }
+  - { from: decide, to: decide-next }
+  - { from: plan, to: record-next }
+  - { from: record-next, to: ask-scope, when: 'record-next.done == false' }
+  - { from: record-next, to: record, when: "record-next.done == true" }
+  - { from: ask-scope, to: ask-reason }
+  - { from: ask-reason, to: record-next }
+  - { from: record, to: apply, when: "plan.changes > 0" }
+  - { from: record, to: report, when: "plan.changes == 0" }
+  - { from: apply, to: END }
+  - { from: report, to: END }
