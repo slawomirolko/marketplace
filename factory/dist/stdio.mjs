@@ -1,8 +1,9 @@
-import { c as Factory, l as errorMessage, n as VIEWER_HEALTH, r as defaultDataDir, s as viewerUrlFor, u as parseBackend } from "./paths.mjs";
+import { c as viewerUrlFor, d as parseBackend, i as defaultDataDir, l as Factory, n as FACTORY_DIR, r as VIEWER_HEALTH, u as errorMessage } from "./paths.mjs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import process$1 from "node:process";
+import os from "node:os";
 // \0rolldown/runtime.js
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -21601,6 +21602,88 @@ var EMPTY_COMPLETION_RESULT = { completion: {
 	values: [],
 	hasMore: false
 } };
+// src/install-guide.ts
+var HARNESSES = [
+	"claude-code",
+	"opencode",
+	"codex",
+	"other"
+];
+function harnessFromClient(clientName) {
+	const name = (clientName ?? "").toLowerCase();
+	if (name.includes("opencode")) return "opencode";
+	if (name.includes("codex")) return "codex";
+	if (name.includes("claude-code") || name === "claude") return "claude-code";
+	return null;
+}
+function installGuide(requested, clientName) {
+	const detected = harnessFromClient(clientName);
+	const harness = requested ?? detected ?? "other";
+	const entry = path.join(FACTORY_DIR, "dist", "stdio.mjs").replaceAll("\\", "/");
+	const installer = path.join(FACTORY_DIR, "dist", "install-opencode.mjs").replaceAll("\\", "/");
+	const base = {
+		harness,
+		detectedFrom: requested ? null : clientName ?? null,
+		serverName: "factory",
+		command: "node",
+		args: [entry],
+		afterInstall: "Each new session starts the factory by itself. After a run ends, show the user viewerUrl: a local page with the whole flow and the cost of each agent.",
+		otherHarnesses: HARNESSES.filter((h) => h !== harness)
+	};
+	if (harness === "claude-code" && process.env.CLAUDE_PLUGIN_ROOT) return {
+		...base,
+		steps: ["Nothing to do: Claude Code already starts the factory from the skill-factory plugin in every session."],
+		commands: [],
+		config: null,
+		verify: "Run `/plugin` in Claude Code. skill-factory is enabled."
+	};
+	if (harness === "claude-code") return {
+		...base,
+		steps: ["Run the command below in a shell. It adds the factory for all projects of this user.", "Start a new Claude Code session."],
+		commands: [`claude mcp add --scope user factory -- node ${entry}`],
+		config: null,
+		verify: "Run `claude mcp list`. The list shows factory as connected."
+	};
+	if (harness === "opencode") {
+		const file = path.join(os.homedir(), ".config", "opencode", "opencode.json").replaceAll("\\", "/");
+		return {
+			...base,
+			steps: ["Run the command below in a shell. It adds a local server named factory to the global OpenCode config, keeps a backup copy of the file, and changes nothing when the entry is already there.", "Restart OpenCode."],
+			commands: [`node ${installer}`],
+			config: {
+				file,
+				content: { mcp: { servers: { factory: {
+					type: "local",
+					command: ["node", entry]
+				} } } }
+			},
+			verify: "In a new OpenCode session the factory_* tools are available."
+		};
+	}
+	if (harness === "codex") return {
+		...base,
+		steps: ["Run the command below in a shell.", "Start a new Codex session."],
+		commands: [`codex mcp add factory -- node ${entry}`],
+		config: {
+			file: path.join(os.homedir(), ".codex", "config.toml").replaceAll("\\", "/"),
+			content: `[mcp_servers.factory]\ncommand = "node"\nargs = ["${entry}"]`
+		},
+		verify: "Run `codex mcp list`. The list shows factory."
+	};
+	return {
+		...base,
+		steps: ["Add a stdio MCP server named factory to the MCP configuration of your client, with the command and args below.", "Restart the client."],
+		commands: [],
+		config: {
+			file: "the MCP configuration file of your client",
+			content: { mcpServers: { factory: {
+				command: "node",
+				args: [entry]
+			} } }
+		},
+		verify: "The client lists the factory_* tools."
+	};
+}
 // src/tools.ts
 var MIN_STATUS_INTERVAL_MS = Number(process.env.FACTORY_MIN_STATUS_INTERVAL_MS ?? 500);
 var DEFAULT_WAIT_SEC = 20;
@@ -21780,6 +21863,10 @@ function createFactoryTools(factory, publicUrl) {
 				cost: factory.footer(run)
 			};
 		}));
+		server.registerTool("factory_install_guide", {
+			description: "Get the steps to install this factory permanently in a harness, so that every new session starts it. Call this tool when the user asks how to install, add or set up the factory. Without harness, the tool uses the harness that is connected now. Show the steps to the user. Run the commands only after the user agrees, because they change the user's harness configuration.",
+			inputSchema: { harness: _enum(HARNESSES).optional() }
+		}, guarded(({ harness }) => installGuide(harness, server.server.getClientVersion()?.name)));
 		server.registerTool("factory_cancel", {
 			description: "Cancel a factory run. Call this tool when the user asks to stop the run.",
 			inputSchema: { runId: string() }

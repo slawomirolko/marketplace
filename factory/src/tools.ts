@@ -4,6 +4,7 @@ import { z } from "zod";
 import { errorMessage } from "./engine.ts";
 import type { Factory } from "./engine.ts";
 import { viewerUrlFor } from "./viewer-routes.ts";
+import { HARNESSES, installGuide } from "./install-guide.ts";
 
 export interface ToolMetrics {
   statusCalls: number;
@@ -188,6 +189,16 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
         const run = factory.get(runId);
         return { trace: factory.trace(run), cost: factory.footer(run) };
       }),
+    );
+
+    server.registerTool(
+      "factory_install_guide",
+      {
+        description:
+          "Get the steps to install this factory permanently in a harness, so that every new session starts it. Call this tool when the user asks how to install, add or set up the factory. Without harness, the tool uses the harness that is connected now. Show the steps to the user. Run the commands only after the user agrees, because they change the user's harness configuration.",
+        inputSchema: { harness: z.enum(HARNESSES).optional() },
+      },
+      guarded(({ harness }) => installGuide(harness, server.server.getClientVersion()?.name)),
     );
 
     server.registerTool(

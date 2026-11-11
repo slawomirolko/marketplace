@@ -31,7 +31,7 @@ async function waitUntil(client: Client, runId: string, status: string): Promise
 test("a harness starts the factory over stdio, runs a flow and gets a working run page link", { skip: !fs.existsSync(entry) && `missing ${entry}` }, async () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-stdio-"));
   const env = { ...process.env, FACTORY_DATA_DIR: dataDir, FACTORY_BACKEND: "fake", FACTORY_VIEWER_PORT: String(port), FACTORY_TURN_DELAY_MS: "0" } as Record<string, string>;
-  const client = new Client({ name: "stdio-test", version: "0.1.0" });
+  const client = new Client({ name: "claude-code", version: "0.1.0" });
   await client.connect(new StdioClientTransport({ command: process.execPath, args: [entry], env, stderr: "pipe" }));
   try {
     const started = await call(client, "factory_start", { goal: "hello", idempotencyKey: "stdio-1" });
@@ -49,6 +49,13 @@ test("a harness starts the factory over stdio, runs a flow and gets a working ru
     const data = (await (await fetch(`http://127.0.0.1:${port}/viewer/api/runs/${runId}`)).json()) as { report: { status: string; synthetic: boolean } };
     assert.equal(data.report.status, "done");
     assert.equal(data.report.synthetic, true);
+
+    const guide = await call(client, "factory_install_guide", {});
+    assert.equal(guide.harness, "claude-code");
+    assert.equal(guide.detectedFrom, "claude-code");
+    assert.deepEqual(guide.commands, [`claude mcp add --scope user factory -- node ${path.join(factoryDir, "dist", "stdio.mjs").replaceAll("\\", "/")}`]);
+    const opencode = await call(client, "factory_install_guide", { harness: "opencode" });
+    assert.match(String((opencode.commands as string[])[0]), /install-opencode.mjs$/);
   } finally {
     await client.close();
     const pidFile = path.join(dataDir, "viewer.pid");

@@ -27,6 +27,7 @@ Stack: Node 26.13 LTS (TypeScript run directly with type stripping), TypeScript 
 | `factory_report(runId)` | steps, tokens and cost per node and tier |
 | `factory_trace(runId)` | trace tree with nested node paths and events |
 | `factory_cancel(runId)` | cancel the run |
+| `factory_install_guide(harness?)` | steps, commands and config entry to install the factory in a harness |
 
 Transport: streamable HTTP at `/mcp`, bearer token required (`FACTORY_TOKEN`), state and ledger under `FACTORY_DATA_DIR`.
 
@@ -54,6 +55,8 @@ Claude Code (one step, from the Olko marketplace):
 The plugin declares the MCP server `factory` (`node ${CLAUDE_PLUGIN_ROOT}/dist/stdio.mjs`). Claude Code starts it by itself in every session; there is no install step, no Docker and no token. `dist/` and `app/dist/` are committed build output, so the plugin needs only Node (22.18 or newer runs the bundle; development uses 26.13).
 
 OpenCode: run once `node factory/dist/install-opencode.mjs` (from a clone or from the Claude Code plugin folder). It adds a `factory` local server to `~/.config/opencode/opencode.json` in the shape the file already uses, keeps a `.bak-<time>` copy, and does nothing when the entry is already there. Pass another config path as the first argument.
+
+Ask the factory: the MCP tool `factory_install_guide(harness?)` returns the exact steps, commands and config entry to install the factory permanently in `claude-code`, `opencode`, `codex` or any other MCP client (`other`). Without `harness` it uses the client that is connected (MCP `clientInfo.name`). The paths in the answer point to the running copy of the factory. When Claude Code already runs it from the plugin, the answer says that nothing is needed. The tool only describes the steps; the client runs them after the user agrees.
 
 What happens at start (`src/stdio.ts`):
 - The harness talks to the factory over stdio, so only that harness can reach the tools.

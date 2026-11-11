@@ -1514,4 +1514,4 @@ function viewerOptions(dataDir) {
 		configFile: path.join(FACTORY_DIR, "spec", "examples", "valid", "factory-config.json")
 	};
 }
-export { allowedHostsFor as a, Factory as c, viewerOptions as i, errorMessage as l, VIEWER_HEALTH as n, viewerHandler as o, defaultDataDir as r, viewerUrlFor as s, DEFAULT_VIEWER_PORT as t, parseBackend as u };
+export { viewerOptions as a, viewerUrlFor as c, parseBackend as d, defaultDataDir as i, Factory as l, FACTORY_DIR as n, allowedHostsFor as o, VIEWER_HEALTH as r, viewerHandler as s, DEFAULT_VIEWER_PORT as t, errorMessage as u };
