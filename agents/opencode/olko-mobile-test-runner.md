@@ -33,6 +33,9 @@ permission:
     "*": deny
     olko-memory-layer: allow
     olko-test: allow
+    olko-kotlin-testing: allow
+    olko-kotlin-style: allow
+    olko-kotlin-architecture: allow
 ---
 
 MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every memory read or write; it owns the storage and retention policy.

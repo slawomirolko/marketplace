@@ -1101,7 +1101,7 @@
       "name": "obsidian-cli",
       "category": "obsidian",
       "origin": "vendored",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Interact with Obsidian vaults using the Obsidian CLI to read, create, search, and manage notes, tasks, properties, and more. Also supports plugin and theme development with commands to reload plugins, run JavaScript, capture errors, take screenshots, and inspect the DOM. Use when the user asks to interact with their Obsidian vault, manage notes, search vault content, perform vault operations from the command line, or develop and debug Obsidian plugins and themes.",
       "tags": [
         "obsidian",
@@ -1154,7 +1154,7 @@
     {
       "name": "olko-init-project-docs",
       "category": "project",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "description": "Initialize a project's decision store — ADRs, scoped rule files, and C4 architecture docs — from the existing codebase. Scans the code read-only, grills the user one candidate at a time (record / reword / skip), then writes the approved files itself. Re-runs fill only missing files and never overwrite. Use when a project has no docs/adr or docs/rules yet, or when the user asks to init or bootstrap project docs. Triggers: 'init project docs', 'seed ADRs', 'bootstrap docs/rules', 'create decision store', 'olko-init-project-docs'.",
       "tags": [
         "project",
