@@ -1,13 +1,14 @@
 ---
 name: olko-worktree-merge
-description: "Merge a git worktree branch into the default branch through a GitHub PR, including commit/push handoff, CI and review checks, worktree compose teardown, main checkout update, optional main compose rebuild, and local worktree/branch cleanup. Triggers: 'merge worktree', 'olko-worktree-merge', 'merge this branch to main', 'create PR for this worktree', 'finish worktree', 'close worktree'."
+version: 1.1.0
+description: "Merge a git worktree branch into the default branch through a GitHub PR, including commit/push handoff, CI and review checks, optional mandatory post-merge acceptance E2E, main checkout update, optional main compose rebuild, and worktree cleanup after verification. Triggers: 'merge worktree', 'olko-worktree-merge', 'merge this branch to main', 'create PR for this worktree', 'finish worktree', 'close worktree'."
 user_invocable: true
 ---
 
 # olko-worktree-merge
 
 ## Routing Summary
-Merge worktree branch through GitHub PR. Checks commit/push state, conflicts, CI, reviews, compose teardown, main checkout update, optional compose rebuild, then cleanup. Triggers: "merge worktree", "olko-worktree-merge", "merge this branch to main", "create PR for this worktree", "finish worktree", "close worktree".
+Merge worktree branch through GitHub PR. Checks commit/push state, conflicts, CI, reviews, compose teardown, main checkout update, required post-merge acceptance E2E when configured, optional compose rebuild, then cleanup. E2E failure retains the worktree. Triggers: "merge worktree", "olko-worktree-merge", "merge this branch to main", "create PR for this worktree", "finish worktree", "close worktree".
 
 ## Progressive Loading
 - Load `overview.md` first after registry/category routing.

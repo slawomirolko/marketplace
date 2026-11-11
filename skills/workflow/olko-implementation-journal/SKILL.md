@@ -1,6 +1,6 @@
 ---
 name: olko-implementation-journal
-version: 1.0.0
+version: 1.1.0
 description: "Implementation journal template and resume procedure for olko-implementation-orchestrator; load when creating the journal or resuming a Task."
 ---
 
@@ -32,12 +32,13 @@ Journal template:
 ### Step status
 - [ ] 0 — Resolve Task input and ensure instrumentation
 - [ ] 1 — Create worktree
+- [ ] 1a — Acceptance E2E baseline (`olko-e2e-acceptance-runner`, phase `baseline`)
 - [ ] 2 — Cross-check Task and Feature inputs + compatibility preflight (before implementer dispatch)
 - [ ] 3a — Failing tests first (`olko-test-first-author`, one failing test per acceptance criterion)
 - [ ] 3b — Implement (3a tests read-only; disputes, edge cases, blockers)
 - [ ] 3c — Rules re-check
 - [ ] 4 — Run style checks
-- [ ] 5 — Run tests
+- [ ] 5 — Run tests + post-implementation acceptance E2E (phase `implementation`)
 - [ ] 6 — Rebuild affected services (ISOLATED worktree compose project ONLY)
 - [ ] 7 — Verify logs, traces, and DB state (isolated stack)
 - [ ] 7a — Optimize changed agent-context files (`agentsOptimizerSkill`, before commit/review)
@@ -47,11 +48,13 @@ Journal template:
 - [ ] 8a — Review PR feedback
 - [ ] 8b — Obsidian reconciliation + final commit
 - [ ] 8c — Editor syntax/structure verification (VS Code on worktree)
-- [ ] 9 — Merge worktree
+- [ ] 9 — Merge worktree (phase `merge-retain`, Task worktree retained)
 - [ ] 10 — Retain Task plan through post-merge verification
-- [ ] 11 — Rebuild from main, verify, then remove only this Task plan
-- [ ] 11a — Final Feature technical audit (after last Task)
-- [ ] 11b — Ask whether to remove the Feature plan files (last Task, after a passing Feature audit)
+- [ ] 11 — Post-merge acceptance E2E (screenshots, evidence upload, cleanup proof)
+- [ ] 12 — Rebuild from main and verify runtime
+- [ ] 13 — Remove disposable checkout, Task worktree, and this Task plan
+- [ ] 12a — Final Feature technical audit (after last Task)
+- [ ] 12b — Ask whether to remove the Feature plan files (last Task, after a passing Feature audit)
 
 ### Changed files
 - `<path>` — <agent or primary agent>; <purpose>; <status>
