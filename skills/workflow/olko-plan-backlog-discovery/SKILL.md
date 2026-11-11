@@ -1,6 +1,6 @@
 ---
 name: olko-plan-backlog-discovery
-version: 1.0.0
+version: 1.1.0
 description: "Epic/Feature/Task discovery path of olko-plan-documentation-orchestrator: draft, one content review, approval-gated publish to YouTrack, and read-back."
 ---
 
@@ -20,6 +20,8 @@ Load when `olko-plan-documentation-orchestrator` routes a request to EPIC/FEATUR
   Use an Epic when the outcome spans multiple independently valuable Features. The Epic owns the business goal and progress-by-Feature map. Each Feature owns a business goal and progress-by-Task map. Each Task must be one independently acceptable PR.
 
   The backlog writer owns the discussion, acceptance criteria, behavior flow, manual checks, Task slicing, and tracker access. Record all currently answerable questions as one batch and present the complete batch together. Wait until every question is answered or closed before revising the backlog. If answers reveal more questions, present the full follow-up batch together and wait before recalculating.
+
+  **Question ownership gate:** The orchestrator must not independently ask the user tracker-content, product, or acceptance-criteria questions. Delegate the complete open-question batch to the same backlog writer and present its consolidated batch. Before presenting it, compare every question with the locked decisions and prior answers; remove answered questions. If the agent's draft contradicts a locked decision, do not present that contradiction as a new choice: return it to the backlog writer with the locked decisions and require a corrected draft. Repeat this reconciliation after each answer batch and before showing final issue text. Never ask one-off follow-up questions outside this flow.
 
   When the draft is ready, show the proposed Epic/Feature/Task hierarchy for one content review. If an existing Task misses a checklist item, show the missing items and the exact proposed edit. Ask for separate, explicit approval to update that issue. Pass the accepted draft and any required issue-level approval to the same subagent in `publish` mode. Read back and report the verified issue links.
 

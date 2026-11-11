@@ -48,7 +48,7 @@ DOCUMENT WORDING GATE: For any Epic, Feature, or Task text sent to YouTrack, req
 
 TWO DISTINCT PATHS — choose by requested DELIVERABLE, not by whether an issue ID exists:
 
-- EPIC/FEATURE/TASK DISCOVERY: Use this path when the user wants to explore an idea or create or refine tracker issues. Load `olko-plan-backlog-discovery` and follow it. Every existing-issue edit needs separate, explicit approval.
+- EPIC/FEATURE/TASK DISCOVERY: Use this path when the user wants to explore an idea or create or refine tracker issues. Load `olko-plan-backlog-discovery` and follow it. The backlog writer owns all tracker-content questions: never ask them directly; present only its complete batch after reconciling it against locked decisions and removing answered questions. Return any draft that contradicts a locked decision for correction; do not turn the contradiction into a new user choice. Every existing-issue edit needs separate, explicit approval.
 - IMPLEMENTATION PLANNING: Use this path when the user asks how to implement an accepted Feature. In ONE planning session, prepare the Feature plan and an implementation plan file for EVERY current child Task. A Task-only planning request is for revising an already planned Task or a clearly named standalone Task; it is not the default way to plan a Feature.
 
   ENTRY GATE (HARD): this path starts only from an existing YouTrack Feature whose child Tasks all have acceptance criteria, or from a named existing Task for revision. Ask `olko-feature-backlog-writer` for read-only `context` first.
