@@ -109,38 +109,42 @@ user asks for the note to open. Do not use shell redirection or direct
 filesystem writes to a vault; use the Obsidian CLI so the running application
 observes the changes.
 
-POLISH LANGUAGE RULE: All vault note content is written in Polish — for humans,
-not for machines. Before saving any create or update, rewrite the proposed
-content in natural, readable Polish prose (code identifiers, file paths, env
-var names, and technical terms like `TransactionDecision`, `TradingGateway`,
-`exit_wait/rules.py` stay verbatim). Never save English prose into the vault.
+DOCUMENTATION LANGUAGE RULE (configurable): All vault note content is written in
+the language selected by the `docsLanguage` key in `.agents/skill-config.md`.
+The default is `English` when the key is absent or unset. Any language name may
+be configured, e.g. `docsLanguage: Polish`. Resolve the key before drafting and
+state the resolved language in the proposal. Before saving any create or update,
+rewrite the proposed content in natural, readable prose in that language (code
+identifiers, file paths, env var names, and technical terms stay verbatim).
+Never save prose in a language other than the configured one into the vault.
 
 HUMAN READABILITY RULE (hard): A note must read like a note a human colleague
-wrote in Polish, not like machine-translated word salad. Hard requirements:
-- Full correct Polish sentences with correct grammar, agreement, and
-  punctuation — no calques, no English syntax with Polish words, no hybrid
-  gibberish (`"Durations jako int sekundy"` is WRONG; write
-  `"Czasy trwania podajemy w sekundach jako int"`).
+wrote in the configured language, not like machine-translated word salad. Hard
+requirements:
+- Full correct sentences in the configured language with correct grammar,
+  agreement, and punctuation — no calques, no syntax carried over from another
+  language, and no hybrid gibberish. When `docsLanguage` is not `English`, do
+  not fall back to English syntax with foreign words substituted.
 - Prefer short, simple, declarative sentences. One idea per sentence.
 - No raw config/trace dumps pasted as prose. When a default matters, state it
-  naturally in the sentence („okno domyślnie trwa 300 s przed i 900 s po
-  publikacji"), keeping identifiers verbatim only where they name code.
+  naturally in the sentence in the configured language, keeping identifiers
+  verbatim only where they name code.
 - Lists and tables may be terse, but every cell/line must still be
-  understandable standalone in Polish.
+  understandable standalone in the configured language.
 - Mixed-language salad, telegraphic fragments with missing verbs, and
   literal machine translations are forbidden. If a sentence feels hard to
-  read aloud in Polish, rewrite it before proposing it.
-Present the Polish version in the proposal so the user approves exactly what
-will be written.
+  read aloud in the configured language, rewrite it before proposing it.
+Present the version in the configured language in the proposal so the user
+approves exactly what will be written.
 
 STE-INSPIRED EDITORIAL PASS (required): After you verify the note's facts and
 structure, load `olko-ste100-skill-adapter` and review the complete proposed
 note. Keep one main idea in each sentence, use direct verbs, and keep each term
 consistent. Make headings and list items specific. Preserve all verified facts,
 links, identifiers, paths, names, and technical values. Do not add claims that
-the source does not support. The proposal must contain the final reviewed
-Polish text. User approval applies to that text; do not make further wording
-changes after approval without presenting a refreshed proposal.
+the source does not support. The proposal must contain the final reviewed text
+in the configured language. User approval applies to that text; do not make
+further wording changes after approval without presenting a refreshed proposal.
 
 Do not commit, push, change OpenCode configuration, install plugins, modify
 repository documentation, or modify Obsidian plugin/theme files unless the
