@@ -30,7 +30,7 @@ test("installs the .NET audit agent with all its declared skills", () => {
   assert.match(result.stdout, /memory block olko-dotnet-auditor initialized/);
   assert.match(
     fs.readFileSync(path.join(project, ".opencode", "agents", "olko-dotnet-auditor.md"), "utf8"),
-    /model: ollama-cloud\/deepseek-v4.1-flash:cloud/,
+    /model: ollama-cloud\/deepseek-v4.1-flash$/m,
   );
   const agent = fs.readFileSync(path.join(project, ".opencode", "agents", "olko-dotnet-auditor.md"), "utf8");
   assert.match(agent, /edit: allow/);
@@ -79,7 +79,7 @@ test("installs the .NET test runner with its declared skills", () => {
 
   assert.equal(result.status, 0, result.stderr);
   const agent = fs.readFileSync(path.join(project, ".opencode", "agents", "olko-dotnet-test-runner.md"), "utf8");
-  assert.match(agent, /model: ollama-cloud\/deepseek-v4.1-flash:cloud/);
+  assert.match(agent, /model: ollama-cloud\/deepseek-v4.1-flash$/m);
   assert.match(agent, /edit: deny/);
   assert.match(agent, /bash:\s+"\*": allow/);
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-test", "SKILL.md")));
@@ -99,9 +99,12 @@ test("installs the .NET implementer with its review and verification skills", ()
   assert.match(agent, /"git push \*": deny/);
   assert.match(agent, /task: deny/);
   assert.match(agent, /Do not commit, push/);
-  for (const skill of ["olko-dotnet-architecture", "olko-dotnet-style", "olko-dotnet-testing", "olko-test"]) {
+  for (const skill of ["olko-dotnet-architecture", "olko-dotnet-style", "olko-test"]) {
     assert.ok(fs.existsSync(path.join(project, ".agents", "skills", skill, "SKILL.md")));
   }
+  assert.doesNotMatch(agent, /olko-dotnet-testing/);
+  assert.match(agent, /NEVER write new tests/);
+  assert.match(agent, /Blocked:/);
   assert.ok(!fs.existsSync(path.join(project, ".opencode", "memory", "olko-dotnet-implementer.md")));
 });
 
@@ -120,6 +123,10 @@ test("installs the implementation orchestrator with delegation-only permissions"
   assert.match(agent, /olko-worktree-lifecycle-manager: allow/);
   assert.match(agent, /olko-git-delivery-manager: allow/);
   assert.match(agent, /Do not load or follow `olko-implement-new`/);
+  for (const skill of ["olko-implementation-closure", "olko-implementation-journal", "olko-worktree-compose-isolation", "olko-implementation-pr-gates", "olko-task-scope-gates"]) {
+    assert.match(agent, new RegExp(`${skill}: allow`));
+    assert.ok(fs.existsSync(path.join(project, ".agents", "skills", skill, "SKILL.md")));
+  }
   assert.match(agent, /maintain one shared, persistent `?<mainRepoPath>\/plans\/features\/<feature-id>\/feature-tracker\.md/);
   assert.match(agent, /## Implementation/);
   assert.match(agent, /Never assign two editing agents the same file/);
@@ -161,6 +168,10 @@ test("installs the plan documentation orchestrator with review-only stack delega
   assert.match(agent, /write:\r?\n\s+"\*": deny\r?\n\s+"plans\/\*\*": allow/);
   assert.match(agent, /bash:\s+"\*": deny/);
   assert.match(agent, /"code \*": allow/);
+  for (const skill of ["olko-plan-backlog-discovery", "olko-plan-change-triage", "olko-plan-finalization"]) {
+    assert.match(agent, new RegExp(`${skill}: allow`));
+    assert.ok(fs.existsSync(path.join(project, ".agents", "skills", skill, "SKILL.md")));
+  }
   assert.match(agent, /olko-dotnet-auditor: allow/);
   assert.match(agent, /olko-mobile-auditor: allow/);
   assert.match(agent, /olko-react-native-auditor: allow/);
@@ -212,7 +223,7 @@ test("installs the visible marketplace skill sync manager and its comparator", (
     JSON.parse(fs.readFileSync(path.join(marketplaceRoot, "agents", "opencode", "index.json"), "utf8")).agents.find(
       (agent) => agent.name === "olko-marketplace-skill-sync-manager",
     ).version,
-    "2.3.0",
+    "2.4.0",
   );
   assert.match(manager, /bash: allow/);
   assert.match(manager, /Never pass `--force` to `olko-commit`/);
@@ -293,10 +304,11 @@ test("installs the hidden marketplace skill bootstrapper", () => {
 });
 
 for (const [agentName, skills] of [
-  ["olko-mobile-implementer", ["olko-kotlin-architecture", "olko-kotlin-style", "olko-kotlin-testing", "olko-test"]],
-  ["olko-react-native-implementer", ["olko-react-native-architecture", "olko-react-native-style", "olko-react-native-testing", "olko-test"]],
+  ["olko-mobile-implementer", ["olko-kotlin-architecture", "olko-kotlin-style", "olko-test"]],
+  ["olko-react-native-implementer", ["olko-react-native-architecture", "olko-react-native-style", "olko-test"]],
   ["olko-react-native-test-runner", ["olko-react-native-testing", "olko-test"]],
-  ["olko-army-python-implementer", ["olko-python-architecture", "olko-python-style", "olko-python-testing", "olko-test"]],
+  ["olko-army-python-implementer", ["olko-python-architecture", "olko-python-style", "olko-test"]],
+  ["olko-test-first-author", ["olko-dotnet-testing", "olko-react-testing", "olko-react-native-testing", "olko-kotlin-testing", "olko-python-testing", "olko-test"]],
 ]) {
   test(`installs ${agentName} with its declared skills`, () => {
     const project = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-opencode-agent-"));
@@ -315,7 +327,7 @@ test("installs the review orchestrator with read-only stack lenses", () => {
 
   assert.equal(result.status, 0, result.stderr);
   const agent = fs.readFileSync(path.join(project, ".opencode", "agents", "olko-review-orchestrator.md"), "utf8");
-  assert.match(agent, /mode: primary/);
+  assert.match(agent, /mode: all/);
   assert.match(agent, /edit: deny/);
   assert.match(agent, /"gh pr comment \*": ask/);
   for (const [agentName, skills] of [
@@ -325,6 +337,8 @@ test("installs the review orchestrator with read-only stack lenses", () => {
     ["olko-review-mobile-lens", ["olko-kotlin-architecture", "olko-kotlin-style", "olko-kotlin-testing", "olko-kotlin-security"]],
     ["olko-review-python-lens", ["olko-python-architecture", "olko-python-style", "olko-python-testing"]],
     ["olko-review-verifier", ["olko-design-rules"]],
+    ["olko-review-requirements-lens", ["olko-design-rules"]],
+    ["olko-project-rules-check", ["caveman"]],
     ["olko-review-feedback-handler", ["olko-pr-check", "olko-test", "olko-commit"]],
   ]) {
     assert.match(agent, new RegExp(`${agentName}: allow`));
@@ -338,6 +352,8 @@ test("installs the review orchestrator with read-only stack lenses", () => {
 test("review lenses and verifier deny edit and bash", () => {
   for (const agentName of [
     "olko-review-bugs-lens",
+    "olko-review-requirements-lens",
+    "olko-project-rules-check",
     "olko-review-dotnet-lens",
     "olko-review-react-lens",
     "olko-review-mobile-lens",
@@ -415,4 +431,33 @@ test("an aborted install leaves no orphan memory stub", () => {
   const memoryDir = path.join(project, ".opencode", "memory");
   const stubs = fs.existsSync(memoryDir) ? fs.readdirSync(memoryDir) : [];
   assert.deepEqual(stubs, [], `orphan memory stubs created: ${stubs.join(", ")}`);
+});
+
+test("sets experimental.subagent_depth for agents whose delegates delegate again", () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-opencode-agent-"));
+  const result = run(project, "--agent", "olko-implementation-orchestrator");
+
+  assert.equal(result.status, 0, result.stderr);
+  const config = JSON.parse(fs.readFileSync(path.join(project, "opencode.json"), "utf8"));
+  assert.ok(config.experimental.subagent_depth >= 2);
+});
+
+test("keeps a higher existing experimental.subagent_depth", () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-opencode-agent-"));
+  fs.writeFileSync(path.join(project, "opencode.json"), JSON.stringify({ experimental: { subagent_depth: 5 } }));
+  const result = run(project, "--agent", "olko-implementation-orchestrator");
+
+  assert.equal(result.status, 0, result.stderr);
+  const config = JSON.parse(fs.readFileSync(path.join(project, "opencode.json"), "utf8"));
+  assert.equal(config.experimental.subagent_depth, 5);
+});
+
+test("does not set experimental.subagent_depth for a single-level agent", () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-opencode-agent-"));
+  const result = run(project, "--agent", "olko-dotnet-implementer");
+
+  assert.equal(result.status, 0, result.stderr);
+  const configPath = path.join(project, "opencode.json");
+  const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, "utf8")) : {};
+  assert.equal(config.experimental?.subagent_depth, undefined);
 });

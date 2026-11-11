@@ -2,7 +2,7 @@
 description: Runs affected React Native tests using olko-test and React Native testing conventions, then reports actionable failures.
 mode: subagent
 hidden: true
-model: ollama-cloud/deepseek-v4.1-flash:cloud
+model: ollama-cloud/deepseek-v4.1-flash
 permission:
   edit: deny
   bash:

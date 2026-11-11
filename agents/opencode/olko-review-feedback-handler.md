@@ -2,7 +2,7 @@
 description: Works through CI status and review comments on the user's own PR. Agrees a plan per comment before any change, then fixes, verifies, and drafts replies.
 mode: subagent
 hidden: true
-model: ollama-cloud/deepseek-v4.1-flash:cloud
+model: ollama-cloud/deepseek-v4.1-flash
 permission:
   edit: allow
   bash:

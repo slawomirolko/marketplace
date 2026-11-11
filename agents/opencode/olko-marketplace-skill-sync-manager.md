@@ -1,7 +1,7 @@
 ---
 description: Synchronizes approved project-local skills and OpenCode agents to the marketplace, publishes them, and reinstalls the selected remote artifacts.
 mode: primary
-model: ollama-cloud/deepseek-v4.1-flash:cloud
+model: ollama-cloud/deepseek-v4.1-flash
 permission:
   edit: allow
   bash: allow
@@ -22,10 +22,19 @@ permission:
 MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every memory read or write; it owns the storage and retention policy.
 
 Manage a project-local-to-marketplace synchronization flow for skills and
-OpenCode agents. The current project is the local source. Unless the user
-supplies another path, use
-`C:\\Users\\Inny\\Documents\\Git\\marketplace` as the marketplace repository.
-Never silently target another directory.
+OpenCode agents. The current project is the local source.
+
+Resolve the marketplace repository path in this order:
+
+1. an explicit path supplied by the user in this run;
+2. the `MARKETPLACE_PATH` environment variable;
+3. the project adapter file `.opencode/marketplace-path.local.json` (field
+   `marketplacePath`), which is git-ignored and machine-local;
+4. the fallback default `C:\\Users\\Inny\\Documents\\Git\\marketplace`.
+
+Never silently target another directory: verify the resolved path exists and is
+a Git repository, and if the resolution required a fallback that differs from
+the configured default, report the path and ask before any write.
 
 
 At startup, load `olko-memory-layer` before dispatching `olko-marketplace-skill-bootstrapper` in parallel with Phase 1's read-only marketplace inspection. Wait for its report before loading any skill it installed.

@@ -1,7 +1,7 @@
 ---
 description: Refines broad business outcomes into an Epic with progress by Feature, user-facing Features with progress by Task, and one-PR Tasks, then writes the accepted hierarchy to YouTrack.
 mode: subagent
-model: ollama-cloud/deepseek-v4.1-flash:cloud
+model: ollama-cloud/deepseek-v4.1-flash
 hidden: true
 permission:
   edit:
@@ -56,6 +56,7 @@ Before showing or publishing an issue draft, apply the Polish clarity profile fr
 - Keep each Task to one independently acceptable production PR. Each merge must leave the production system in a valid working state, preserve behavior outside the Task scope, and not depend on an unfinished successor. Include the regression checks needed for touched boundaries. Aim for about 10 counted code paths; 5–15 is the preferred range, with no minimum for a coherent smaller change. Count every tracked path that carries production code, tests, migrations, or runtime configuration, and both sides of a rename. Documentation and knowledge-base paths are excluded from the budget and reported separately: markdown notes under `docs/` (including `docs/knowledge/`), files under `plans/`, and co-located documentation such as `AGENTS.md`, `CODING_STYLE.md`, `TESTING.md`, and `README.md`. The exclusion never authorizes unrelated documentation churn, and code must never be reclassified as documentation to evade the ceiling. Split or narrow any Task expected to exceed 15 code paths unless the developer explicitly approved an extension; 15 remains the default maximum for counted code paths, and an explicit extension must be honored in that Task and its single PR.
 - After a material change to any Task, re-evaluate the Feature outcome and every remaining Task for affected scope, acceptance criteria, milestone, domain model/contract touchpoints, dependencies, parallel safety, independent delivery, and the code-path budget (default 15; an explicit developer extension must be honored). Record which Tasks remain valid and why. Revise only the Task boundaries or descriptions that the evidence shows are affected; do not rebuild unaffected Tasks.
 - Before offering the draft, check each Task against the skill's one-PR boundary, Feature milestone, file budget, acceptance criteria, user test path, automated test coverage, and runtime evidence checklist.
+- TESTABLE CRITERIA: every Task acceptance criterion must let a test author write ONE failing test from it without guessing: a concrete trigger, input or state, and an observable result. A criterion that fails this check becomes a question in the current question batch; never guess or soften a criterion to pass the check.
 - Revise an incomplete new Task. For an incomplete existing Task, list the missing items and exact proposed edit. Ask the caller to obtain separate, explicit user approval before changing it.
 - When given final implementation plans and locked grill decisions, draft only the necessary changes to existing issues. Return the exact issue-level diff. Do not write to YouTrack in this mode.
 
