@@ -85,7 +85,7 @@
     {
       "name": "olko-feature-planner",
       "category": "workflow",
-      "version": "1.6.0",
+      "version": "1.7.0",
       "description": "Turn broad product outcomes into an Epic with business value and progress by Feature, then define user-facing Features and independently testable, one-PR Tasks. For implementation planning, return the complete accepted Feature/Task hierarchy to the orchestrator, which creates every Task plan in the same session.",
       "tags": [
         "workflow",
@@ -185,8 +185,8 @@
     {
       "name": "olko-implementation-closure",
       "category": "workflow",
-      "version": "1.0.0",
-      "description": "Post-merge steps 11, 11a, and 11b of olko-implementation-orchestrator: main-stack verification, Task plan removal, Feature completion audit, and Feature plan cleanup.",
+      "version": "1.1.0",
+      "description": "Post-merge steps 11, 12, 13, 12a, and 12b of olko-implementation-orchestrator: post-merge acceptance E2E, main-stack runtime verification, worktree cleanup, Task plan removal, Feature completion audit, and Feature plan cleanup.",
       "tags": [
         "workflow",
         "implementation"
@@ -203,7 +203,7 @@
     {
       "name": "olko-implementation-journal",
       "category": "workflow",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Implementation journal template and resume procedure for olko-implementation-orchestrator; load when creating the journal or resuming a Task.",
       "tags": [
         "workflow",
@@ -308,7 +308,7 @@
     {
       "name": "olko-plan-editor",
       "category": "workflow",
-      "version": "1.9.0",
+      "version": "1.10.0",
       "description": "Plan an accepted Feature in one session: create its business and technical plan plus one implementation plan file for every child Task; later implementation remains per Task. Also supports Epic plans and scoped Task-plan revisions.",
       "tags": [
         "workflow",

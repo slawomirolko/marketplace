@@ -221,6 +221,10 @@ git -C <mainRepoPath> rev-parse HEAD
 git -C <mainRepoPath> log --oneline -1
 ```
 
+## Step 9a - Post-merge acceptance gate
+
+Post-merge acceptance E2E is owned by `olko-implementation-closure` step 11. When `postMergeE2E: required`, keep the Task worktree and its disposable checkout until that step reports `PASS` with uploaded evidence and verified cleanup. On `FAIL` or `NOT VERIFIED`, retain both and stop. When `postMergeE2E` is not configured, preserve the legacy merge flow.
+
 ## Step 10 - Rebuild affected main compose services
 
 Skip this step when `mainComposeProject` is not configured.
@@ -269,6 +273,8 @@ docker compose -p <mainComposeProject> logs --tail=30 <service>
 If a rebuilt service fails to start, report logs and ask whether to investigate or abort cleanup. Do not fix runtime bugs in this skill.
 
 ## Step 11 - Clean up worktree and local branch
+
+If `postMergeE2E: required`, run this step only after Step 9a's gate passed; remove the disposable checkout first, then the Task worktree.
 
 After the PR is confirmed merged and the main checkout is updated, remove the worktree from the main checkout:
 
