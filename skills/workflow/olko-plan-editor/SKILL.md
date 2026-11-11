@@ -1,6 +1,6 @@
 ---
 name: olko-plan-editor
-version: 1.9.0
+version: 1.10.0
 description: "Plan an accepted Feature in one session: create its business and technical plan plus one implementation plan file for every child Task; later implementation remains per Task. Also supports Epic plans and scoped Task-plan revisions."
 user_invocable: true
 ---

@@ -1,6 +1,6 @@
 ---
 name: olko-feature-planner
-version: 1.6.0
+version: 1.7.0
 description: Turn broad product outcomes into an Epic with business value and progress by Feature, then define user-facing Features and independently testable, one-PR Tasks. For implementation planning, return the complete accepted Feature/Task hierarchy to the orchestrator, which creates every Task plan in the same session.
 ---
 
