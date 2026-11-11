@@ -7883,6 +7883,13 @@ function parseEvents(stdout) {
 	}
 	return events;
 }
+function removeTempDir(dir) {
+	if (path.dirname(path.resolve(dir)) === path.resolve(os.tmpdir())) fs.rmSync(dir, {
+		recursive: true,
+		force: true,
+		maxRetries: 3
+	});
+}
 function claudeAgentArgs(agent, tools, dirs) {
 	const { allowed, disallowed } = claudeTools(tools);
 	const permission = tools.includes("edit") ? ["--permission-mode", "acceptEdits"] : [];
@@ -7907,7 +7914,7 @@ async function runClaude(model, prompt, { agent, cwd, tools = ["read"], dirs = [
 		ok: false,
 		error: `invalid agent name ${agent}`
 	};
-	const res = await spawnCli("claude", agent ? [
+	const args = agent ? [
 		"-p",
 		"--model",
 		model,
@@ -7925,7 +7932,11 @@ async function runClaude(model, prompt, { agent, cwd, tools = ["read"], dirs = [
 		"--strict-mcp-config",
 		"--disallowedTools",
 		CLAUDE_DISALLOWED
-	], prompt, { cwd: cwd ?? workDir });
+	];
+	const agentFile = args[args.indexOf("--agents") + 1];
+	const res = await spawnCli("claude", args, prompt, { cwd: cwd ?? workDir }).finally(() => {
+		if (agent && agentFile) removeTempDir(path.dirname(agentFile));
+	});
 	let out;
 	try {
 		out = JSON.parse(res.stdout);
@@ -7978,6 +7989,8 @@ async function runOpencode(model, prompt, { agent, cwd, configDir, tools = ["rea
 	const res = await spawnCli("opencode", args, prompt, {
 		cwd: cwd ?? workDir,
 		env: agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {}
+	}).finally(() => {
+		if (agentDir && !configDir) removeTempDir(agentDir);
 	});
 	const events = parseEvents(res.stdout);
 	const error = events.find((e) => e.type === "error");

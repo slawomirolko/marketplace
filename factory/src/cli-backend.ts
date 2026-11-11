@@ -107,6 +107,10 @@ interface AgentRunOptions {
   dirs?: string[] | undefined;
 }
 
+function removeTempDir(dir: string): void {
+  if (path.dirname(path.resolve(dir)) === path.resolve(os.tmpdir())) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+}
+
 function claudeAgentArgs(agent: string, tools: AgentTool[], dirs: string[]): string[] {
   const { allowed, disallowed } = claudeTools(tools);
   const permission = tools.includes("edit") ? ["--permission-mode", "acceptEdits"] : [];
@@ -118,7 +122,10 @@ async function runClaude(model: string, prompt: string, { agent, cwd, tools = ["
   const args = agent
     ? ["-p", "--model", model, "--output-format", "json", ...claudeAgentArgs(agent, tools, dirs)]
     : ["-p", "--model", model, "--output-format", "json", "--max-turns", "2", "--strict-mcp-config", "--disallowedTools", CLAUDE_DISALLOWED];
-  const res = await spawnCli("claude", args, prompt, { cwd: cwd ?? workDir });
+  const agentFile = args[args.indexOf("--agents") + 1];
+  const res = await spawnCli("claude", args, prompt, { cwd: cwd ?? workDir }).finally(() => {
+    if (agent && agentFile) removeTempDir(path.dirname(agentFile));
+  });
   let out: ClaudeOutput;
   try {
     out = JSON.parse(res.stdout) as ClaudeOutput;
@@ -145,7 +152,9 @@ async function runOpencode(model: string, prompt: string, { agent, cwd, configDi
   if (agent && !/^[a-z0-9-]+$/.test(agent)) return { ok: false, error: `invalid agent name ${agent}` };
   const args = ["run", "--standalone", "--archived", "--format", "json", "-m", id, ...(agent ? ["--agent", agent] : [])];
   const agentDir = configDir ?? (agent ? opencodeConfigDir(agent, tools) : undefined);
-  const res = await spawnCli("opencode", args, prompt, { cwd: cwd ?? workDir, env: agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {} });
+  const res = await spawnCli("opencode", args, prompt, { cwd: cwd ?? workDir, env: agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {} }).finally(() => {
+    if (agentDir && !configDir) removeTempDir(agentDir);
+  });
   const events = parseEvents(res.stdout);
   const error = events.find((e) => e.type === "error");
   const tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite5m: 0, cacheWrite1h: 0, reasoning: 0 };
