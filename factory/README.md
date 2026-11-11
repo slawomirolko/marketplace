@@ -91,7 +91,7 @@ Data comes read-only from the factory data directory. Without `FACTORY_DATA_DIR`
 
 ## Real workflow: olko-review
 
-`workflows/olko-review.yaml` runs the REVIEW ROUTE of `agents/opencode/olko-review-orchestrator.md`: `scope` (`github.prScope`: `gh pr view` + `gh pr diff`), `detect` (changed paths to lenses, configured in the YAML), `memory` (not loaded yet, stated in the report), `lenses` (one marketplace agent per detected stack), `merge`, `verify` (`olko-review-verifier`, only when there are findings), `rank`, then the question `q-post-comments` (post or skip) and `post` (one `gh pr comment` per confirmed finding, only after `post`). Generated lockfiles are not sent to the lenses.
+`workflows/olko-review.yaml` runs the REVIEW ROUTE of `agents/opencode/olko-review-orchestrator.md`: `route` (own PR goes to the FEEDBACK ROUTE, not in the factory yet, unless input `fresh: true` asks for a fresh review), `scope` (`gh pr view` + `gh pr diff`, stale working tree flagged), `detect` (bugs lens, one stack lens per detected stack, `olko-review-requirements-lens` when the PR description gives criteria), `memory` (agent memory block; missing block asks continue or stop), `lenses` in parallel, `merge`, `verify`, `confirm`, `rules-check` (`olko-project-rules-check`; `no-store` skips), store violations verified and decided one question each, `rank`, one question per confirmed finding (post or skip, one `gh pr comment` per post) and `memory-save` (`confirmed:`/`rejected:` lines). Generated lockfiles are not sent to the lenses.
 
 ```bash
 node factory/host/review-run.ts 74 opencode/deepseek-v4.1-flash-free
@@ -126,7 +126,9 @@ Every workflow is a YAML file in `workflows/` (`FACTORY_WORKFLOWS_DIR` changes t
 
 An edge has `from`, `to` (a node id or `END`) and an optional `when`: `<state path> <operator> <value>` with `==`, `!=`, `>`, `<`, `>=`, `<=`; a list compares by its length. The first edge whose condition holds is taken. A node that would run more often than `maxCycleIterations` fails the run.
 
-Code exists only for named operations (`src/ops.ts`: `github.prScope`, `github.postComments`, `review.detectLenses`, `review.mergeFindings`, `review.rankFindings`, `review.memoryNotLoaded`, `builtin.pass`) and parsers (`review.findings`, `review.verdicts`). `docs/yaml-migration-plan.md` lists the workflows still to move.
+Code exists only for named operations (`src/ops.ts`: `list.next`, `memory.load`, `memory.persist`, `github.prScope`, `github.postComment`, `review.*`, `builtin.pass`) and parsers (`review.findings`, `review.verdicts`, `review.rulesCheck`). An interrupt question `id` and `text` are Mustache templates, so a loop over a list (`list.next` plus an edge back) asks one question per item; `maxVisits` on a node allows the loop to run more often than `limits.maxCycleIterations`. Agents of one LLM node run in parallel (`parallel`, default 10); in delegate mode the client gets all of them at once in `pendingWorkItems`, each with `agentName` and `agentInstructions` from the marketplace agent file, so no harness needs the agent installed.
+
+Configuration: `config/factory.yaml` (`FACTORY_CONFIG` changes it), validated against `spec/factory-config.schema.json`: roles to tiers, backends and budget. It names no model; the proposal at run start shows the tier-to-model map and the user confirms or changes it. `docs/yaml-migration-plan.md` lists the workflows still to move.
 
 ## Layout
 

@@ -37,6 +37,14 @@ def wait_for_health(url: str, process: subprocess.Popen, timeout_s: float = 30) 
     raise AssertionError("factory server did not answer /health")
 
 
+def pr_body() -> str:
+    out = subprocess.run(
+        ["gh", "pr", "view", str(REVIEW_PR), "--repo", REVIEW_REPO, "--json", "body"],
+        check=True, capture_output=True, text=True,
+    ).stdout
+    return json.loads(out)["body"]
+
+
 def pr_comment_count() -> int:
     out = subprocess.run(
         ["gh", "pr", "view", str(REVIEW_PR), "--repo", REVIEW_REPO, "--json", "comments"],
@@ -78,9 +86,10 @@ async def review_run(factory_server) -> ReviewRun:
         token=factory_server["token"],
         workflow="olko-review",
         goal=f"Review PR #{REVIEW_PR} in {REVIEW_REPO}",
-        workflow_input={"repo": REVIEW_REPO, "pr": REVIEW_PR},
-        answers={"q-post-comments": "skip"},
+        workflow_input={"repo": REVIEW_REPO, "pr": REVIEW_PR, "fresh": True},
+        answer=lambda question: "continue" if question["id"] == "q-memory-missing" else "skip",
     )
+    run.pr_body = pr_body()
     run.comments_before = comments_before
     run.comments_after = pr_comment_count()
     print(json.dumps({"runId": run.run_id, "path": [e["node"] for e in run.events if e["type"] == "node_started"], "interrupts": [i["kind"] for i in run.interrupts], "costUsd": run.report["cost"]["costUsd"]}))

@@ -1,0 +1,21 @@
+# Factory configuration. It never names a model: the tier-to-model map is
+# proposed at run start from the backend and confirmed by the user.
+schemaVersion: 1
+tiers: [low, medium, high]
+backends:
+  - { id: claude-cli, kind: cli, cli: claude, discovery: ask_user }
+  - { id: opencode-cli, kind: cli, cli: opencode, discovery: list_models }
+  - { id: host-subagent, kind: delegate }
+roles:
+  planner: high
+  implementer: medium
+  reviewer: medium
+  accountant: low
+  lens: medium
+  verifier: medium
+  rules: medium
+budget:
+  maxCostUsd: 20
+  infoRatio: 0.5
+  pauseRatio: 0.8
+  onExceeded: ask_user

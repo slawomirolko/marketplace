@@ -1,4 +1,4 @@
-import { a as errorMessage, d as defaultDataDir, h as __toESM, i as Factory, l as FACTORY_DIR, m as require_ajv, o as parseBackend, p as require_dist, r as viewerUrlFor, s as parseCli, u as VIEWER_HEALTH } from "./viewer-routes.mjs";
+import { _ as __toESM, a as errorMessage, c as claudeAgentsFile, d as FACTORY_DIR, g as require_ajv, h as require_dist, i as Factory, l as opencodeConfigDir, o as parseBackend, p as defaultDataDir, r as viewerUrlFor, s as parseCli } from "./viewer-routes.mjs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7896,6 +7896,8 @@ async function runClaude(model, prompt, { agent, cwd } = {}) {
 		model,
 		"--output-format",
 		"json",
+		"--agents",
+		claudeAgentsFile(agent),
 		"--agent",
 		agent,
 		"--max-turns",
@@ -7955,7 +7957,7 @@ async function runOpencode(model, prompt, { agent, cwd, configDir } = {}) {
 		ok: false,
 		error: `invalid agent name ${agent}`
 	};
-	const res = await spawnCli("opencode", [
+	const args = [
 		"run",
 		"--standalone",
 		"--archived",
@@ -7964,9 +7966,11 @@ async function runOpencode(model, prompt, { agent, cwd, configDir } = {}) {
 		"-m",
 		id,
 		...agent ? ["--agent", agent] : []
-	], prompt, {
+	];
+	const agentDir = configDir ?? (agent ? opencodeConfigDir(agent) : void 0);
+	const res = await spawnCli("opencode", args, prompt, {
 		cwd: cwd ?? workDir,
-		env: configDir ? { OPENCODE_CONFIG_DIR: configDir } : {}
+		env: agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {}
 	});
 	const events = parseEvents(res.stdout);
 	const error = events.find((e) => e.type === "error");
@@ -15310,20 +15314,22 @@ function createFactoryTools(factory, publicUrl) {
 			version: "0.1.0"
 		});
 		server.registerTool("factory_start", {
-			description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name and pr number). The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
+			description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name, pr number, and fresh: true for a fresh review of your own PR). The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
 			inputSchema: {
 				goal: string().min(1),
 				workflow: string().regex(/^[a-z][a-z0-9-]*$/).optional(),
 				input: object$1({
 					repo: string().regex(/^[\w.-]+\/[\w.-]+$/).optional(),
-					pr: number().int().positive().optional()
+					pr: number().int().positive().optional(),
+					fresh: boolean().optional()
 				}).strict().optional(),
 				idempotencyKey: string().optional()
 			}
 		}, guarded(({ goal, workflow, input, idempotencyKey }) => {
 			const runInput = {
 				...input?.repo ? { repo: input.repo } : {},
-				...input?.pr ? { pr: input.pr } : {}
+				...input?.pr ? { pr: input.pr } : {},
+				...input?.fresh ? { fresh: true } : {}
 			};
 			const { run, reused } = factory.start(goal, idempotencyKey, {
 				...workflow ? { workflow } : {},
@@ -15465,18 +15471,18 @@ function createFactoryTools(factory, publicUrl) {
 	};
 }
 // src/stdio.ts
-var port = Number(process.env.FACTORY_VIEWER_PORT ?? 7340);
-var publicUrl = `http://127.0.0.1:${port}`;
+var firstPort = Number(process.env.FACTORY_VIEWER_PORT ?? 7340);
 var dataDir = defaultDataDir();
-async function viewerRunning() {
+var PORTS_TO_TRY = 10;
+async function viewerOn(port) {
 	try {
-		return await (await fetch(`${publicUrl}/health`, { signal: AbortSignal.timeout(1e3) })).text() === VIEWER_HEALTH;
-	} catch {
-		return false;
+		const body = await (await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(1e3) })).json();
+		return body.name === "skill-factory-viewer" && body.dataDir === path.resolve(dataDir) ? "ours" : "other";
+	} catch (error) {
+		return error.cause?.code === "ECONNREFUSED" ? "free" : "other";
 	}
 }
-async function ensureViewer() {
-	if (await viewerRunning()) return;
+function startViewer(port) {
 	const self = fileURLToPath(import.meta.url);
 	const script = path.join(path.dirname(self), `viewer-server${path.extname(self)}`);
 	const child = spawn(process.execPath, [script], {
@@ -15492,6 +15498,18 @@ async function ensureViewer() {
 	child.on("error", (error) => console.error(`run page did not start: ${error.message}`));
 	child.unref();
 }
+async function ensureViewer() {
+	for (let port = firstPort; port < firstPort + PORTS_TO_TRY; port += 1) {
+		const state = await viewerOn(port);
+		if (state === "ours") return port;
+		if (state === "free") {
+			startViewer(port);
+			return port;
+		}
+	}
+	console.error(`no free port for the run page in ${firstPort}-${firstPort + PORTS_TO_TRY - 1}`);
+	return firstPort;
+}
 var backend = parseBackend(process.env.FACTORY_BACKEND);
 var cli = backend === "cli" ? parseCli(process.env.FACTORY_CLI) : void 0;
 var server = createFactoryTools(new Factory(dataDir, {
@@ -15501,9 +15519,8 @@ var server = createFactoryTools(new Factory(dataDir, {
 		...cli ? { [cli]: cliExecutor(cli) } : {}
 	},
 	...cli ? { cli } : {}
-}), publicUrl).buildServer();
+}), `http://127.0.0.1:${await ensureViewer()}`).buildServer();
 var transport = new StdioServerTransport();
 transport.onclose = () => process.exit(0);
-await ensureViewer();
 await server.connect(transport);
 export {};

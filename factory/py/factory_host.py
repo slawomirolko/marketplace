@@ -1,6 +1,6 @@
 import json
 from dataclasses import dataclass, field
-from typing import Any, TypedDict
+from typing import Any, Callable, TypedDict
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.checkpoint.memory import InMemorySaver
@@ -18,6 +18,7 @@ class ReviewRun:
     interrupts: list[dict]
     viewer_url: str
     lens_findings_found: bool
+    pr_body: str = ""
     comments_before: int = 0
     comments_after: int = 0
 
@@ -89,7 +90,7 @@ def build_graph(tools: dict, workflow: str, goal: str, workflow_input: dict):
     return graph.compile(checkpointer=InMemorySaver())
 
 
-async def run_workflow(url: str, token: str, workflow: str, goal: str, workflow_input: dict, answers: dict[str, str]) -> ReviewRun:
+async def run_workflow(url: str, token: str, workflow: str, goal: str, workflow_input: dict, answer: Callable[[dict], str]) -> ReviewRun:
     client = MultiServerMCPClient({"factory": {"transport": "streamable_http", "url": url, "headers": {"Authorization": f"Bearer {token}"}}})
     tools = {tool.name: tool for tool in await client.get_tools()}
     app = build_graph(tools, workflow, goal, workflow_input)
@@ -99,11 +100,14 @@ async def run_workflow(url: str, token: str, workflow: str, goal: str, workflow_
     while "__interrupt__" in result:
         value = result["__interrupt__"][0].value
         interrupts.append(value)
-        resume = "yes" if value["kind"] == "confirm" else answers[value["question"]["id"]]
+        resume = "yes" if value["kind"] == "confirm" else answer(value["question"])
         result = await app.ainvoke(Command(resume=resume), config)
     run_id = result["run_id"]
     trace = payload(await tools["factory_trace"].ainvoke({"runId": run_id}))
     events = trace["events"]
+    failures = [e for e in events if e["type"] in ("run_failed", "node_failed", "agent_failed")]
+    if failures:
+        raise RuntimeError(f"factory run {run_id} failed: {failures}")
     merged = next(e for e in events if e["type"] == "node_completed" and e["node"].endswith("/merge"))
     return ReviewRun(
         run_id=run_id,

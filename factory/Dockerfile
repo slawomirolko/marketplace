@@ -23,6 +23,7 @@ RUN safe-chain pnpm install --frozen-lockfile --prod --filter skill-factory
 COPY src ./src
 COPY spec ./spec
 COPY workflows ./workflows
+COPY config ./config
 COPY app/csp.ts app/data.ts ./app/
 COPY app/dist ./app/dist
 COPY test ./test

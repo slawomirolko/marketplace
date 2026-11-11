@@ -75,6 +75,8 @@ function buildNode(workflow: WorkflowSpec, spec: WorkflowSpecNode): WorkflowNode
   if (spec.question) node.question = spec.question;
   if (spec.turns) node.turns = spec.turns;
   if (spec.askAfterTurn) node.askAfterTurn = spec.askAfterTurn;
+  if (spec.maxVisits) node.maxVisits = spec.maxVisits;
+  if (spec.parallel) node.parallel = spec.parallel;
   if (spec.prompt) node.prompt = render(spec.prompt);
   if (spec.agentsFrom) node.agentsFrom = agentsFromPath(spec.agentsFrom);
   if (spec.parse) {

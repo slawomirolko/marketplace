@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import type { CliExecutor, CliName, CliResult, ExecResult, TokenCounts } from "./types.ts";
+import { claudeAgentsFile, opencodeConfigDir } from "./marketplace-agents.ts";
 
 const TIMEOUT_MS = 900000;
 const OPENCODE_IDS: Record<string, string> = { haiku: "anthropic/claude-haiku-5-5", sonnet: "anthropic/claude-sonnet-5-5", opus: "anthropic/claude-opus-5-5" };
@@ -104,7 +105,7 @@ const CLAUDE_AGENT_DISALLOWED = "Bash,Edit,Write,WebFetch,WebSearch,Agent,Task,N
 async function runClaude(model: string, prompt: string, { agent, cwd }: { agent?: string | undefined; cwd?: string | undefined } = {}): Promise<CliResult> {
   if (agent && !/^[a-z0-9-]+$/.test(agent)) return { ok: false, error: `invalid agent name ${agent}` };
   const args = agent
-    ? ["-p", "--model", model, "--output-format", "json", "--agent", agent, "--max-turns", "40", "--strict-mcp-config", "--allowedTools", CLAUDE_AGENT_TOOLS, "--disallowedTools", CLAUDE_AGENT_DISALLOWED]
+    ? ["-p", "--model", model, "--output-format", "json", "--agents", claudeAgentsFile(agent), "--agent", agent, "--max-turns", "40", "--strict-mcp-config", "--allowedTools", CLAUDE_AGENT_TOOLS, "--disallowedTools", CLAUDE_AGENT_DISALLOWED]
     : ["-p", "--model", model, "--output-format", "json", "--max-turns", "2", "--strict-mcp-config", "--disallowedTools", CLAUDE_DISALLOWED];
   const res = await spawnCli("claude", args, prompt, { cwd: cwd ?? workDir });
   let out: ClaudeOutput;
@@ -132,7 +133,8 @@ async function runOpencode(model: string, prompt: string, { agent, cwd, configDi
   const id = OPENCODE_IDS[model] ?? model;
   if (agent && !/^[a-z0-9-]+$/.test(agent)) return { ok: false, error: `invalid agent name ${agent}` };
   const args = ["run", "--standalone", "--archived", "--format", "json", "-m", id, ...(agent ? ["--agent", agent] : [])];
-  const res = await spawnCli("opencode", args, prompt, { cwd: cwd ?? workDir, env: configDir ? { OPENCODE_CONFIG_DIR: configDir } : {} });
+  const agentDir = configDir ?? (agent ? opencodeConfigDir(agent) : undefined);
+  const res = await spawnCli("opencode", args, prompt, { cwd: cwd ?? workDir, env: agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {} });
   const events = parseEvents(res.stdout);
   const error = events.find((e) => e.type === "error");
   const tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite5m: 0, cacheWrite1h: 0, reasoning: 0 };

@@ -1,4 +1,4 @@
-import { d as defaultDataDir, f as viewerOptions, n as viewerHandler, t as allowedHostsFor, u as VIEWER_HEALTH } from "./viewer-routes.mjs";
+import { f as VIEWER_HEALTH, m as viewerOptions, n as viewerHandler, p as defaultDataDir, t as allowedHostsFor } from "./viewer-routes.mjs";
 import path from "node:path";
 import fs from "node:fs";
 import http from "node:http";
@@ -12,7 +12,10 @@ var viewer = viewerHandler({
 });
 http.createServer((req, res) => {
 	if (req.url === "/health") {
-		res.writeHead(200, { "content-type": "text/plain" }).end(VIEWER_HEALTH);
+		res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({
+			name: VIEWER_HEALTH,
+			dataDir: path.resolve(dataDir)
+		}));
 		return;
 	}
 	if (viewer(req, res)) return;

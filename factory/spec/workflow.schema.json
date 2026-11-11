@@ -87,7 +87,7 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^q-[a-z0-9-]+$"
+          "pattern": "^q-[a-z0-9{}.-]+$"
         },
         "text": {
           "type": "string",
@@ -193,6 +193,16 @@
         "askAfterTurn": {
           "type": "integer",
           "minimum": 1
+        },
+        "maxVisits": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How often this node may run in one run; overrides limits.maxCycleIterations (for loops over a list)."
+        },
+        "parallel": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many agents of this node run at the same time (default 10)."
         }
       },
       "allOf": [

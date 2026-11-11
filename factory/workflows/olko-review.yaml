@@ -1,11 +1,17 @@
 name: olko-review
-version: 0.2.0
+version: 0.3.0
 source: agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE)
 roles:
   lens: medium
   verifier: medium
-entry: scope
+  rules: medium
+entry: route
+limits:
+  maxCycleIterations: 3
 nodes:
+  - id: route
+    kind: script
+    op: review.route
   - id: scope
     kind: script
     op: github.prScope
@@ -19,6 +25,7 @@ nodes:
     op: review.detectLenses
     with:
       always: { id: bugs, agent: olko-review-bugs-lens }
+      requirements: { id: requirements, agent: olko-review-requirements-lens }
       stacks:
         - { id: dotnet, agent: olko-review-dotnet-lens, extensions: [".cs", ".csproj", ".props", ".targets"] }
         - { id: react, agent: olko-review-react-lens, extensions: [".ts", ".tsx"] }
@@ -26,7 +33,14 @@ nodes:
         - { id: python, agent: olko-review-python-lens, extensions: [".py"] }
   - id: memory
     kind: script
-    op: review.memoryNotLoaded
+    op: memory.load
+    with: { agent: olko-review-orchestrator }
+  - id: ask-memory
+    kind: interrupt
+    question:
+      id: q-memory-missing
+      text: "The review memory block {{state.memory.file}} does not exist. Fix: install the agent memory with `node scripts/install-opencode-agents.mjs --project <project> --agent olko-review-orchestrator`. Continue this review without memory, or stop?"
+      allowed: [continue, stop]
   - id: lenses
     kind: llm
     role: lens
@@ -34,6 +48,12 @@ nodes:
     parse: review.findings
     prompt: |
       PR #{{state.scope.pr}}: {{state.scope.title}}
+      {{#agent.criteria}}
+
+      Mode: {{agent.mode}}
+      Acceptance criteria (from the PR description):
+      {{agent.criteria}}
+      {{/agent.criteria}}
 
       PR description:
       {{state.scope.body}}
@@ -43,8 +63,13 @@ nodes:
       - {{path}}
       {{/agent.files}}
 
-      Suppress: none. Prioritize: none. The factory did not load the memory layer for this run.
+      Suppress: {{state.memory.suppressText}}. Prioritize: {{state.memory.prioritizeText}}.
+      {{#state.scope.stale}}
+      The current branch is not the PR head: the working-tree files are stale. Judge changed lines from the hunks only.
+      {{/state.scope.stale}}
+      {{^state.scope.stale}}
       The current branch is the PR head. The files in the working tree match the diff.
+      {{/state.scope.stale}}
 
       Diff hunks:
       {{#agent.files}}
@@ -60,34 +85,127 @@ nodes:
     parse: review.verdicts
     prompt: |
       PR #{{state.scope.pr}}: {{state.scope.title}}
-      The current branch is the PR head. The files in the working tree match the diff.
+      {{#state.scope.stale}}
+      The current branch is not the PR head: the working-tree files are stale. Judge changed lines from the hunks only.
+      {{/state.scope.stale}}
 
       Findings ({{state.merge.findings.length}}), one per line:
       {{#state.merge.findings}}
       {{line}}
       {{/state.merge.findings}}
+  - id: confirm
+    kind: script
+    op: review.confirmFindings
+  - id: rules-check
+    kind: llm
+    role: rules
+    agent: olko-project-rules-check
+    parse: review.rulesCheck
+    prompt: |
+      Mode: code
+      PR #{{state.scope.pr}}: {{state.scope.title}}
+
+      Changed paths:
+      {{#state.scope.files}}
+      - {{path}}
+      {{/state.scope.files}}
+
+      Confirmed findings ({{state.confirm.confirmed.length}}), one per line:
+      {{#state.confirm.confirmed}}
+      {{line}}
+      {{/state.confirm.confirmed}}
+
+      Diff hunks:
+      {{#state.scope.files}}
+      {{diff}}
+      {{/state.scope.files}}
+  - id: rules-merge
+    kind: script
+    op: review.mergeRules
+  - id: verify-violations
+    kind: llm
+    role: verifier
+    agent: olko-review-verifier
+    parse: review.verdicts
+    prompt: |
+      PR #{{state.scope.pr}}: {{state.scope.title}}
+
+      Findings ({{state.rules-merge.violations.length}}), one per line:
+      {{#state.rules-merge.violations}}
+      {{.}}
+      {{/state.rules-merge.violations}}
+  - id: rules-violations
+    kind: script
+    op: review.addViolations
+  - id: next-decision
+    kind: script
+    op: list.next
+    maxVisits: 100
+    with: { over: rules-violations.decide }
+  - id: next-decision-ask
+    kind: script
+    op: list.next
+    maxVisits: 100
+    with: { over: rules-merge.decide }
+  - id: ask-rule
+    kind: interrupt
+    maxVisits: 100
+    question:
+      id: "q-rule-{{state.next-decision.index}}{{state.next-decision-ask.index}}"
+      text: "The project store and a finding disagree. Which holds?\n{{state.next-decision.item.line}}{{state.next-decision-ask.item.line}}\nStore entry: {{state.next-decision.item.cite}}{{state.next-decision-ask.item.cite}}"
+      allowed: [finding, store]
   - id: rank
     kind: script
     op: review.rankFindings
+  - id: next-finding
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: rank.kept }
   - id: ask-post
     kind: interrupt
+    maxVisits: 200
     question:
-      id: q-post-comments
-      text: Post the confirmed findings on the PR, one comment per finding?
+      id: "q-post-{{state.next-finding.index}}"
+      text: "Finding {{state.next-finding.number}} of {{state.next-finding.total}} on PR #{{state.scope.pr}}. Post it as a PR comment?\n{{state.next-finding.item.line}}"
       allowed: [post, skip]
-  - id: post
+  - id: post-one
     kind: script
-    op: github.postComments
+    op: github.postComment
+    maxVisits: 200
+    with: { from: next-finding }
+  - id: memory-save
+    kind: script
+    op: memory.persist
+    with: { questionPrefix: q-post- }
 edges:
+  - { from: route, to: scope }
   - { from: scope, to: detect }
   - { from: detect, to: memory }
-  - { from: memory, to: lenses }
+  - { from: memory, to: lenses, when: "memory.loaded == true" }
+  - { from: memory, to: ask-memory, when: "memory.loaded == false" }
+  - { from: ask-memory, to: lenses, when: 'ask-memory.answer == "continue"' }
+  - { from: ask-memory, to: END, when: 'ask-memory.answer == "stop"' }
   - { from: lenses, to: merge }
   - { from: merge, to: verify, when: "merge.findings > 0" }
-  - { from: merge, to: rank, when: "merge.findings == 0" }
-  - { from: verify, to: rank }
-  - { from: rank, to: ask-post, when: "rank.count > 0" }
-  - { from: rank, to: END, when: "rank.count == 0" }
-  - { from: ask-post, to: post, when: 'ask-post.answer == "post"' }
-  - { from: ask-post, to: END, when: 'ask-post.answer == "skip"' }
-  - { from: post, to: END }
+  - { from: merge, to: confirm, when: "merge.findings == 0" }
+  - { from: verify, to: confirm }
+  - { from: confirm, to: rules-check }
+  - { from: rules-check, to: rules-merge }
+  - { from: rules-merge, to: verify-violations, when: "rules-merge.violations > 0" }
+  - { from: rules-merge, to: next-decision-ask, when: "rules-merge.violations == 0" }
+  - { from: verify-violations, to: rules-violations }
+  - { from: rules-violations, to: next-decision }
+  - { from: next-decision, to: ask-rule, when: "next-decision.done == false" }
+  - { from: next-decision, to: rank, when: "next-decision.done == true" }
+  - { from: next-decision-ask, to: ask-rule, when: "next-decision-ask.done == false" }
+  - { from: next-decision-ask, to: rank, when: "next-decision-ask.done == true" }
+  - { from: ask-rule, to: next-decision, when: "rules-merge.violations > 0" }
+  - { from: ask-rule, to: next-decision-ask, when: "rules-merge.violations == 0" }
+  - { from: rank, to: next-finding }
+  - { from: next-finding, to: ask-post, when: "next-finding.done == false" }
+  - { from: next-finding, to: memory-save, when: "next-finding.done == true" }
+  - { from: ask-post, to: post-one, when: 'ask-post.answer == "post"' }
+  - { from: ask-post, to: next-finding, when: 'ask-post.answer == "skip"' }
+  - { from: post-one, to: next-finding }
+  - { from: memory-save, to: END }

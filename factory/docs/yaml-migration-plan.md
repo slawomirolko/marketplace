@@ -1,6 +1,6 @@
 # Plan: move the five Olko workflows to factory YAML
 
-Status: plan. Only `olko-review` (REVIEW ROUTE, without memory, requirements lens and rules check) runs from YAML today. Line references point to the agent files in this repository.
+Status: in progress. `olko-review` REVIEW ROUTE runs from YAML in full (route, memory, lenses with requirements lens, verifier, project rules check, decisions, ranking, one question per comment, memory update). Its FEEDBACK and PLAN routes and workflows 2–5 are still to do. Line references point to the agent files in this repository.
 
 ## Requirements every migrated workflow keeps
 
@@ -22,17 +22,18 @@ Status: plan. Only `olko-review` (REVIEW ROUTE, without memory, requirements len
 | E1 | Conditional edges, `END`, loop limit (`maxCycleIterations`) | done | all |
 | E2 | `interrupt` node with a fixed question | done | all |
 | E3 | Subgraph inlined from another YAML file | done | implementation, plan |
-| E4 | Question built from state: text and options from a template, for example a child `Blocked:` item with its 2–3 options, an `ask` verdict, or a per-row sync decision | to do | all except review REVIEW route |
-| E5 | `map` node: run a subgraph or an interrupt once per list item from state (one comment per finding, one decision per artifact, one apply per row) | to do | review, both syncs, implementation |
-| E6 | Parallel fan-out: agents of one node run at the same time (cli backend) or are offered together (delegate), with a wave limit | to do (agents run one after another today) | all |
+| E4 | Question built from state: text and options from a template, for example a child `Blocked:` item with its 2–3 options, an `ask` verdict, or a per-row sync decision | text and id from a template: done; options from state: to do | all except review REVIEW route |
+| E5 | One step per list item (one comment per finding, one decision per artifact, one apply per row) | done as the `list.next` operation plus a loop edge and `maxVisits`; a `map` node over a subgraph: to do | review, both syncs, implementation |
+| E6 | Parallel fan-out: agents of one node run at the same time (cli backend) or are offered together (delegate, `pendingWorkItems`), with a wave limit (`parallel`, default 10) | done | all |
 | E7 | Approval gate on an operation (`approval: required`): the engine asks before it runs the op and records the answer | to do | all with side effects |
 | E8 | Run workspace: an op sets `state.workspace.cwd` (worktree, marketplace checkout); every later agent and op runs there | to do | implementation, both syncs |
 | E9 | Write access per node (`tools: [read, edit]`): the cli backend passes the matching allowed tools; delegate passes it in `pendingWork` | to do (agents are read-only today) | implementation, plan, syncs |
 | E10 | `skill` nodes: an LLM node that loads a named skill instead of a marketplace agent | schema field exists, engine to do | plan, implementation, sync |
 | E11 | Structured agent output: `parse` per agent format plus a check op that rejects a result and loops back (child-result rules) | parsers exist for review; checks to do | implementation, plan |
-| E12 | Memory layer ops (`memory.load`, `memory.persist`) over the `olko-memory-layer` store | to do | review, sync, plan |
+| E12 | Memory layer ops (`memory.load`, `memory.persist`) over the agent memory block `.opencode/memory/<agent>.md` | done | review, sync, plan |
 | E13 | Workflow call with input mapping (`kind: workflow`, `input:`), not only inline subgraph, so implementation can call the review PLAN/REVIEW route | to do | implementation, plan |
-| E14 | Configuration file in YAML: tiers to models, backends, budget, read at start and shown in the proposal | to do (config is in code) | all |
+| E14 | Configuration file in YAML (`config/factory.yaml`): roles to tiers, backends, budget, read at start and shown in the proposal; models are proposed per backend and confirmed by the user | done |
+| E15 | Marketplace agents without installation: the cli backend gives the CLI the agent definition from `agents/opencode/<name>.md`; delegate `pendingWork` carries `agentInstructions` for any harness | done | all |
 
 ## Workflows
 

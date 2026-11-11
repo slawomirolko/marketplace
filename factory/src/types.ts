@@ -46,6 +46,8 @@ export interface PendingWork {
   model: string;
   prompt: string;
   agentName?: string;
+  agentDescription?: string;
+  agentInstructions?: string;
 }
 
 export interface Agent {
@@ -54,6 +56,8 @@ export interface Agent {
   agentName?: string;
   paths?: string[];
   files?: { path: string; diff: string }[];
+  criteria?: string;
+  mode?: string;
 }
 
 export type WorkflowState = Record<string, unknown>;
@@ -63,6 +67,7 @@ export interface RunInput {
   agentConfigDir?: string;
   repo?: string;
   pr?: number;
+  fresh?: boolean;
 }
 
 export interface ExecResult {
@@ -121,6 +126,9 @@ export interface ScriptContext {
   state: WorkflowState;
   exec: HostExec | undefined;
   goal?: string;
+  answers?: Record<string, string>;
+  cwd?: string;
+  nodeId?: string;
 }
 
 export interface ScriptResult {
@@ -156,6 +164,8 @@ export interface WorkflowNode {
   parse?: (text: string) => unknown;
   skipIf?: (state: WorkflowState | undefined) => boolean;
   skipReason?: string;
+  maxVisits?: number;
+  parallel?: number;
 }
 
 export interface Workflow {
@@ -231,6 +241,7 @@ export interface Run {
   steps: number;
   pendingQuestion: PendingQuestion | null;
   pendingWork: PendingWork | null;
+  pendingWorkItems?: PendingWork[];
   answers: Record<string, string>;
   ledger: LedgerRecord[];
   events: RunEvent[];
@@ -309,6 +320,7 @@ export interface RunStatusView {
   currentNode: string | null;
   pendingQuestion: PendingQuestion | null;
   pendingWork?: PendingWork | null;
+  pendingWorkItems?: PendingWork[] | undefined;
   retryAfterMs: number | null;
   next: string;
   proposal?: RunConfig;
@@ -334,6 +346,8 @@ export interface WorkflowSpecNode {
   parse?: string;
   turns?: number;
   askAfterTurn?: number;
+  maxVisits?: number;
+  parallel?: number;
   workflow?: string;
   over?: string;
   question?: Question;

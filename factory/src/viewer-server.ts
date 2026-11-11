@@ -12,7 +12,7 @@ const viewer = viewerHandler({ ...viewerOptions(dataDir), allowedHosts: allowedH
 http
   .createServer((req, res) => {
     if (req.url === "/health") {
-      res.writeHead(200, { "content-type": "text/plain" }).end(VIEWER_HEALTH);
+      res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ name: VIEWER_HEALTH, dataDir: path.resolve(dataDir) }));
       return;
     }
     if (viewer(req, res)) return;
