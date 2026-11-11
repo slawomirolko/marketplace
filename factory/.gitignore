@@ -1,2 +1,5 @@
 !dist/
 !app/dist/
+py/.venv/
+py/.pytest_cache/
+**/__pycache__/

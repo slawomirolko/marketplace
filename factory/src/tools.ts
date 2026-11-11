@@ -70,11 +70,17 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
     server.registerTool(
       "factory_start",
       {
-        description: "Create a factory run for a goal. The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
-        inputSchema: { goal: z.string().min(1), idempotencyKey: z.string().optional() },
+        description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name and pr number). The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
+        inputSchema: {
+          goal: z.string().min(1),
+          workflow: z.string().regex(/^[a-z][a-z0-9-]*$/).optional(),
+          input: z.object({ repo: z.string().regex(/^[\w.-]+\/[\w.-]+$/).optional(), pr: z.number().int().positive().optional() }).strict().optional(),
+          idempotencyKey: z.string().optional(),
+        },
       },
-      guarded(({ goal, idempotencyKey }) => {
-        const { run, reused } = factory.start(goal, idempotencyKey);
+      guarded(({ goal, workflow, input, idempotencyKey }) => {
+        const runInput = { ...(input?.repo ? { repo: input.repo } : {}), ...(input?.pr ? { pr: input.pr } : {}) };
+        const { run, reused } = factory.start(goal, idempotencyKey, { ...(workflow ? { workflow } : {}), input: runInput });
         return { ...factory.status(run), reused, next: "Show the proposal to the user. After the user replies, call factory_confirm." };
       }),
     );
@@ -187,7 +193,7 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
       { description: "Get the trace tree of a factory run: nodes, turns, tokens, factory run cost and events.", inputSchema: { runId: z.string() } },
       guarded(({ runId }) => {
         const run = factory.get(runId);
-        return { trace: factory.trace(run), cost: factory.footer(run) };
+        return { trace: factory.trace(run), events: run.events, cost: factory.footer(run) };
       }),
     );
 

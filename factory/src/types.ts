@@ -45,6 +45,7 @@ export interface PendingWork {
   tier: Tier;
   model: string;
   prompt: string;
+  agentName?: string;
 }
 
 export interface Agent {
@@ -52,6 +53,7 @@ export interface Agent {
   role?: string;
   agentName?: string;
   paths?: string[];
+  files?: { path: string; diff: string }[];
 }
 
 export type WorkflowState = Record<string, unknown>;
@@ -118,30 +120,36 @@ export interface ScriptContext {
   input: RunInput;
   state: WorkflowState;
   exec: HostExec | undefined;
+  goal?: string;
 }
 
 export interface ScriptResult {
   state: unknown;
   output?: string | null;
+  metrics?: Record<string, number>;
 }
+
+export type Operation = (context: ScriptContext & { args: Record<string, unknown> }) => Promise<ScriptResult>;
 
 export interface PromptContext {
   goal: string;
   input: RunInput | undefined;
   state: WorkflowState | undefined;
   agent: Agent;
+  answer?: string;
+  steps?: number;
 }
 
 export interface WorkflowNode {
   id: string;
   path: string;
-  kind: "llm" | "script";
+  kind: "llm" | "script" | "interrupt";
   role?: string;
   agent?: string;
   turns?: number;
   askAfterTurn?: number;
   question?: Question;
-  prompt?: string | ((context: PromptContext) => string);
+  prompt?: (context: PromptContext) => string;
   agents?: Agent[];
   agentsFrom?: (state: WorkflowState | undefined) => Agent[];
   script?: (context: ScriptContext) => Promise<ScriptResult>;
@@ -155,7 +163,10 @@ export interface Workflow {
   version: string;
   source?: string;
   roles?: Record<string, Tier>;
+  entry: string;
   nodes: WorkflowNode[];
+  edges: WorkflowSpecEdge[];
+  maxCycleIterations: number;
 }
 
 export interface LedgerRecord {
@@ -214,6 +225,7 @@ export interface Run {
   proposal: RunConfig;
   config: RunConfig | null;
   cursor: number;
+  visits?: Record<string, number>;
   nodeTurn: number;
   agentIndex?: number;
   steps: number;
@@ -303,10 +315,25 @@ export interface RunStatusView {
   cost: CostFooter;
 }
 
+export interface WorkflowSpecAgent {
+  id: string;
+  role?: string;
+  agent?: string;
+}
+
 export interface WorkflowSpecNode {
   id: string;
   kind: string;
   role?: string;
+  agent?: string;
+  agents?: WorkflowSpecAgent[];
+  agentsFrom?: string;
+  op?: string;
+  with?: Record<string, unknown>;
+  prompt?: string;
+  parse?: string;
+  turns?: number;
+  askAfterTurn?: number;
   workflow?: string;
   over?: string;
   question?: Question;
@@ -321,9 +348,12 @@ export interface WorkflowSpecEdge {
 export interface WorkflowSpec {
   name: string;
   version: string;
+  source?: string;
+  roles?: Record<string, string>;
   entry: string;
   nodes: WorkflowSpecNode[];
   edges: WorkflowSpecEdge[];
+  limits?: { maxCycleIterations?: number; maxTurnsPerNode?: number };
 }
 
 export interface FactoryConfigFile {

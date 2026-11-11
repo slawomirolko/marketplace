@@ -91,7 +91,7 @@ Data comes read-only from the factory data directory. Without `FACTORY_DATA_DIR`
 
 ## Real workflow: olko-review
 
-`src/workflows/olko-review.ts` runs the REVIEW ROUTE of `agents/opencode/olko-review-orchestrator.md` through the factory: `scope` (`gh pr view` + `gh pr diff`), `detect` (changed paths to lenses), `memory` (not loaded in the PoC, stated in the report), `lenses` (one OpenCode agent per detected stack, chosen at run time), `merge`, `verify` (`olko-review-verifier`, skipped without findings) and `rank` (tiers and report). Each LLM node runs the real marketplace agent with `opencode run --agent <name>`; the agent files are copied to a temporary `OPENCODE_CONFIG_DIR`, so nothing is installed globally. Generated lockfiles are not sent to the lenses.
+`workflows/olko-review.yaml` runs the REVIEW ROUTE of `agents/opencode/olko-review-orchestrator.md`: `scope` (`github.prScope`: `gh pr view` + `gh pr diff`), `detect` (changed paths to lenses, configured in the YAML), `memory` (not loaded yet, stated in the report), `lenses` (one marketplace agent per detected stack), `merge`, `verify` (`olko-review-verifier`, only when there are findings), `rank`, then the question `q-post-comments` (post or skip) and `post` (one `gh pr comment` per confirmed finding, only after `post`). Generated lockfiles are not sent to the lenses.
 
 ```bash
 node factory/host/review-run.ts 74 opencode/deepseek-v4.1-flash-free
@@ -113,7 +113,20 @@ node factory/viewer/render.ts --root feature --workflows factory/spec/examples/v
 
 Each call writes `<out>.mmd`, `<out>.md` (a Mermaid block that GitHub renders) and `<out>.html` (zoom with the mouse wheel or buttons, drag to pan). `--report` takes the JSON of `factory_report`. The HTML page loads `mermaid@12.3.0` (MIT) and `@panzoom/panzoom@4.6.2` (MIT) from jsDelivr; there is no build step and no server.
 
-`workflows/hello.json` and `workflows/hello-build.json` describe the graph the engine runs in the workflow schema format. The engine still keeps its prompts and turn counts in code; `test/viewer.test.ts` checks that both have the same node paths.
+## Workflows in YAML
+
+Every workflow is a YAML file in `workflows/` (`FACTORY_WORKFLOWS_DIR` changes the folder), validated against `spec/workflow.schema.json` when the factory starts. No workflow is defined in code. A file has `name`, `version`, `source`, `roles` (role to tier), `entry`, `nodes`, `edges` and optional `limits.maxCycleIterations` (default 3).
+
+| Node kind | Fields | What the engine does |
+|---|---|---|
+| `llm` | `role`, `prompt` (Mustache: `goal`, `input`, `state`, `agent`, `answer`, `steps`), `agent` or `agents` or `agentsFrom: state.<path>`, optional `parse` | runs each agent through the backend (`cli`, `delegate`), prices its tokens, stores the parsed output in `state.<node id>.<agent id>` |
+| `script` | `op` (a named operation), `with` (its arguments) | runs the operation, stores its result in `state.<node id>` |
+| `interrupt` | `question` (`id`, `text`, `allowed`) | stops the run and asks the user; the answer goes to `state.<node id>.answer` |
+| `subgraph` | `workflow` | inlines that workflow; its node paths are `<workflow>/<node>/<sub-node>` |
+
+An edge has `from`, `to` (a node id or `END`) and an optional `when`: `<state path> <operator> <value>` with `==`, `!=`, `>`, `<`, `>=`, `<=`; a list compares by its length. The first edge whose condition holds is taken. A node that would run more often than `maxCycleIterations` fails the run.
+
+Code exists only for named operations (`src/ops.ts`: `github.prScope`, `github.postComments`, `review.detectLenses`, `review.mergeFindings`, `review.rankFindings`, `review.memoryNotLoaded`, `builtin.pass`) and parsers (`review.findings`, `review.verdicts`). `docs/yaml-migration-plan.md` lists the workflows still to move.
 
 ## Layout
 
@@ -123,7 +136,7 @@ factory/
   src/server.ts        MCP server, auth, wait and throttle
   src/spec.ts          schema validation for config, workflow, ledger, footer
   spec/                 JSON Schemas and examples
-  workflows/            sample workflow in the workflow schema format
+  workflows/            workflows in YAML (olko-review, hello sample)
   app/                  viewer app (Vite + React Flow), read-only data API in app/data.ts
   viewer/               Mermaid diagram of a workflow, with per-node cost from a run report
   test/spec.test.ts    schema tests

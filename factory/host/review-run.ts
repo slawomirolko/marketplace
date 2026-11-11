@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Factory } from "../src/engine.ts";
 import type { CliName } from "../src/types.ts";
-import { cliExecutor, hostExec } from "./cli-backend.ts";
+import { cliExecutor, hostExec } from "../src/cli-backend.ts";
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const pr = Number(process.argv[2]);

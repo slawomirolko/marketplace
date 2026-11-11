@@ -2,9 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { priceUsage } from "./prices.ts";
-import { REVIEW_WORKFLOW } from "./workflows/olko-review.ts";
+import { evaluateWhen, loadWorkflowDir } from "./workflow-yaml.ts";
+import { FACTORY_DIR } from "./paths.ts";
 import type {
   Agent,
+  CliName,
   ConfirmOverrides,
   CostFooter,
   CostSource,
@@ -66,64 +68,36 @@ function ownedByOtherProcess(run: Run): boolean {
 
 export function parseBackend(value: string | undefined): DefaultBackend {
   const backend = value ?? "delegate";
-  if (backend !== "fake" && backend !== "delegate") throw new Error("FACTORY_BACKEND must be fake or delegate");
+  if (backend !== "fake" && backend !== "delegate" && backend !== "cli") throw new Error("FACTORY_BACKEND must be fake, delegate or cli");
   return backend;
 }
 
-export type DefaultBackend = "fake" | "delegate";
+export function parseCli(value: string | undefined): CliName {
+  if (value !== "claude" && value !== "opencode") throw new Error("FACTORY_CLI must be claude or opencode");
+  return value;
+}
+
+export type DefaultBackend = "fake" | "delegate" | "cli";
 
 export interface FactoryOptions {
   executors?: Executors;
   backend?: DefaultBackend;
+  cli?: CliName;
 }
 
-export const WORKFLOW: Workflow = {
-  name: "hello",
-  version: "0.1.0",
-  nodes: [
-    {
-      id: "plan",
-      path: "hello/plan",
-      kind: "llm",
-      role: "planner",
-      turns: 3,
-      prompt: "You are the planner node of a test workflow. Goal: {goal}. Reply with a 3-step plan in at most 50 words. Do not use any tools.",
-    },
-    {
-      id: "implement",
-      path: "hello/build/implement",
-      kind: "llm",
-      role: "implementer",
-      turns: 4,
-      askAfterTurn: 2,
-      question: { id: "q-endpoint", text: "New endpoint or extend the existing one?", allowed: ["new", "extend"] },
-      prompt: "You are the implementer node of a test workflow. Goal: {goal}. The user chose: {answer}. Reply with a JavaScript function of at most 8 lines that returns a greeting. Do not use any tools.",
-    },
-    { id: "verify", path: "hello/build/verify", kind: "script" },
-    {
-      id: "review",
-      path: "hello/review",
-      kind: "llm",
-      role: "reviewer",
-      turns: 1,
-      agents: [{ id: "security" }, { id: "style" }, { id: "tests" }, { id: "docs", role: "accountant" }],
-      prompt: "You are the {agent} reviewer of a test workflow. Goal: {goal}. In one sentence, name one {agent} risk of a greeting function. Do not use any tools.",
-    },
-    {
-      id: "accountant",
-      path: "hello/accountant",
-      kind: "llm",
-      role: "accountant",
-      turns: 1,
-      prompt: "You are the accountant node of a test workflow. In one sentence, report that the run has used {steps} steps so far. Do not use any tools.",
-    },
-  ],
-};
+let workflows: Map<string, Workflow> | undefined;
 
-const WORKFLOWS: Record<string, Workflow> = { hello: WORKFLOW, [REVIEW_WORKFLOW.name]: REVIEW_WORKFLOW };
+export function workflowsDir(): string {
+  return process.env.FACTORY_WORKFLOWS_DIR ?? path.join(FACTORY_DIR, "workflows");
+}
+
+export function loadedWorkflows(): Map<string, Workflow> {
+  workflows ??= loadWorkflowDir(workflowsDir());
+  return workflows;
+}
 
 export function workflowOf(run: Pick<Run, "workflow">): Workflow {
-  const workflow = WORKFLOWS[run.workflow ?? "hello"];
+  const workflow = loadedWorkflows().get(run.workflow ?? "hello");
   if (!workflow) throw new Error(`unknown workflow ${run.workflow}`);
   return workflow;
 }
@@ -165,10 +139,11 @@ export class Factory {
   busy = new Set<string>();
   waiters = new Map<string, Set<(run: Run) => void>>();
 
-  constructor(dataDir: string, { executors = {}, backend = "delegate" }: FactoryOptions = {}) {
+  constructor(dataDir: string, { executors = {}, backend = "delegate", cli }: FactoryOptions = {}) {
     this.dataDir = dataDir;
     this.executors = executors;
-    this.defaultConfig = backend === "fake" ? FAKE_CONFIG : DEFAULT_CONFIG;
+    if (backend === "cli" && !(cli && executors[cli])) throw new Error("the cli backend needs a cli name and its executor");
+    this.defaultConfig = backend === "fake" ? FAKE_CONFIG : backend === "cli" ? { ...DEFAULT_CONFIG, backend: { kind: "cli", cli: cli as CliName } } : DEFAULT_CONFIG;
     fs.mkdirSync(path.join(dataDir, "runs"), { recursive: true });
     this.restore();
   }
@@ -234,7 +209,7 @@ export class Factory {
   }
 
   start(goal: string, idempotencyKey?: string, { workflow = "hello", input = {} }: { workflow?: string; input?: RunInput } = {}): { run: Run; reused: boolean } {
-    const definition = WORKFLOWS[workflow];
+    const definition = loadedWorkflows().get(workflow);
     if (!definition) throw new Error(`unknown workflow ${workflow}`);
     const existing = idempotencyKey ? this.idempotency.get(idempotencyKey) : undefined;
     if (existing) return { run: this.get(existing), reused: true };
@@ -250,7 +225,8 @@ export class Factory {
       status: "needs_confirmation",
       proposal: { ...defaults, roles: { ...defaults.roles, ...(definition.roles ?? {}) } },
       config: null,
-      cursor: 0,
+      cursor: definition.nodes.findIndex((n) => n.id === definition.entry),
+      visits: { [definition.entry]: 1 },
       nodeTurn: 0,
       steps: 0,
       pendingQuestion: null,
@@ -300,7 +276,7 @@ export class Factory {
     run.answers[questionId] = answer;
     run.pendingQuestion = null;
     run.status = "running";
-    this.event(run, "run_resumed", { questionId });
+    this.event(run, "run_resumed", { questionId, answer });
     this.checkpoint(run);
     this.schedule(run);
     return { run, duplicate: false };
@@ -349,7 +325,9 @@ export class Factory {
       costUsd: priced.costUsd,
       costSource: hasSplit ? "reported" : "unknown",
       outputPreview: String(output ?? "").slice(0, 200),
+      agentName: work.agentName ?? null,
     });
+    this.storeParsed(run, nodeAt(run), work.agentId, output);
     run.pendingWork = null;
     run.status = "running";
     this.finishAgent(run, nodeAt(run), { backend: "delegate" });
@@ -435,13 +413,42 @@ export class Factory {
   }
 
   prompt(run: Run, node: WorkflowNode): string {
-    if (typeof node.prompt === "function") return node.prompt({ goal: run.goal, input: run.input, state: run.state, agent: currentAgent(run, node) });
-    if (node.prompt === undefined) throw new Error(`node ${node.path} has no prompt`);
-    return node.prompt
-      .replace("{goal}", run.goal)
-      .replace("{answer}", (node.question && run.answers[node.question.id]) ?? "")
-      .replace("{steps}", String(run.steps))
-      .replaceAll("{agent}", currentAgent(run, node).id);
+    if (!node.prompt) throw new Error(`node ${node.path} has no prompt`);
+    return node.prompt({
+      goal: run.goal,
+      input: run.input,
+      state: run.state,
+      agent: currentAgent(run, node),
+      answer: (node.question && run.answers[node.question.id]) ?? "",
+      steps: run.steps,
+    });
+  }
+
+  storeParsed(run: Run, node: WorkflowNode, agentId: string, output: string): void {
+    if (!node.parse || !run.state) return;
+    const previous = run.state[node.id];
+    const byAgent = typeof previous === "object" && previous !== null ? previous : {};
+    run.state[node.id] = { ...byAgent, [agentId]: node.parse(output ?? "") };
+  }
+
+  advance(run: Run, node: WorkflowNode): void {
+    const workflow = workflowOf(run);
+    const context = { ...(run.state ?? {}), answers: run.answers };
+    const edge = workflow.edges.filter((e) => e.from === node.id).find((e) => e.when === undefined || evaluateWhen(e.when, context));
+    if (!edge) throw new Error(`no edge from ${node.id} matches the run state`);
+    run.nodeTurn = 0;
+    run.agentIndex = 0;
+    this.event(run, "edge_taken", { from: node.id, to: edge.to, ...(edge.when ? { when: edge.when } : {}) });
+    if (edge.to === "END") {
+      run.cursor = -1;
+      return;
+    }
+    run.visits ??= {};
+    const visits = (run.visits[edge.to] ?? 0) + 1;
+    if (visits > workflow.maxCycleIterations) throw new Error(`node ${edge.to} would run ${visits} times; the workflow allows ${workflow.maxCycleIterations}`);
+    run.visits[edge.to] = visits;
+    if (run.nodeAgents) delete run.nodeAgents[edge.to];
+    run.cursor = workflow.nodes.findIndex((n) => n.id === edge.to);
   }
 
   async step(run: Run): Promise<void> {
@@ -450,25 +457,41 @@ export class Factory {
       return;
     }
     if (!this.checkBudget(run)) return;
-    const node = workflowOf(run).nodes[run.cursor];
+    const node = run.cursor < 0 ? undefined : workflowOf(run).nodes[run.cursor];
     if (!node) {
       run.status = "done";
       this.event(run, "run_completed", this.totals(run));
       return;
     }
-    if (run.nodeTurn === 0 && !run.events.some((e) => e.type === "node_started" && e.node === node.path && e.cursor === run.cursor)) {
-      this.event(run, "node_started", { node: node.path, cursor: run.cursor });
+    const visit = run.visits?.[node.id] ?? 1;
+    if (run.nodeTurn === 0 && !run.events.some((e) => e.type === "node_started" && e.node === node.path && e.visit === visit)) {
+      this.event(run, "node_started", { node: node.path, visit });
+    }
+
+    if (node.kind === "interrupt") {
+      if (!node.question) throw new Error(`interrupt node ${node.path} has no question`);
+      const answer = run.answers[node.question.id];
+      if (answer === undefined) {
+        run.status = "waiting_for_user";
+        run.pendingQuestion = { ...node.question, node: node.path };
+        this.event(run, "needs_input", { node: node.path, questionId: node.question.id });
+        return;
+      }
+      if (run.state) run.state[node.id] = { answer };
+      this.event(run, "node_completed", { node: node.path, answer });
+      this.advance(run, node);
+      return;
     }
 
     if (node.kind === "script") {
       run.steps += 1;
       const started = Date.now();
-      const result = node.script ? await node.script({ input: run.input ?? {}, state: run.state ?? {}, exec: this.executors.exec }) : { state: { passed: true }, output: "verify passed" };
+      if (!node.script) throw new Error(`script node ${node.path} has no operation`);
+      const result = await node.script({ input: run.input ?? {}, state: run.state ?? {}, exec: this.executors.exec, goal: run.goal });
       if (run.state) run.state[node.id] = result.state;
       this.appendLedger(run, { nodePath: node.path, agentId: node.id, kind: "script", tier: null, model: null, backend: "script", turn: 1, inputTokens: 0, outputTokens: 0, costUsd: 0, costSource: "measured", durationMs: Date.now() - started, output: result.output ?? null });
-      this.event(run, "node_completed", { node: node.path, result: (String(result.output ?? "").split(/\r?\n/)[0] ?? "").slice(0, 200) });
-      run.cursor += 1;
-      run.nodeTurn = 0;
+      this.event(run, "node_completed", { node: node.path, result: (String(result.output ?? "").split(/\r?\n/)[0] ?? "").slice(0, 200), ...(result.metrics ? { metrics: result.metrics } : {}) });
+      this.advance(run, node);
       return;
     }
 
@@ -490,16 +513,14 @@ export class Factory {
     }
     if (agentsOf(run, node)?.length === 0 || node.skipIf?.(run.state)) {
       this.event(run, "node_skipped", { node: node.path, reason: node.skipReason ?? "no work" });
-      run.cursor += 1;
-      run.nodeTurn = 0;
-      run.agentIndex = 0;
+      this.advance(run, node);
       return;
     }
     const agent = currentAgent(run, node);
     const tier = tierOf(config, agent);
     if (backend === "cli") return this.runCliNode(run, node, tier);
     if (backend === "delegate") {
-      run.pendingWork = { nodePath: node.path, agentId: agent.id, tier, model: config.tiers[tier], prompt: this.prompt(run, node) };
+      run.pendingWork = { nodePath: node.path, agentId: agent.id, tier, model: config.tiers[tier], prompt: this.prompt(run, node), ...(agent.agentName ? { agentName: agent.agentName } : {}) };
       run.status = "waiting_for_client";
       this.event(run, "work_offered", { node: node.path, agentId: agent.id, tier });
       return;
@@ -522,9 +543,8 @@ export class Factory {
       run.agentIndex = (run.agentIndex ?? 0) + 1;
       return;
     }
-    run.agentIndex = 0;
-    run.cursor += 1;
     this.event(run, "node_completed", { node: node.path, ...details });
+    this.advance(run, node);
   }
 
   async runCliNode(run: Run, node: WorkflowNode, tier: Tier): Promise<void> {
@@ -568,11 +588,7 @@ export class Factory {
         agentName: agent.agentName ?? null,
       });
     }
-    if (node.parse && run.state) {
-      const previous = run.state[node.id];
-      const byAgent = typeof previous === "object" && previous !== null ? previous : {};
-      run.state[node.id] = { ...byAgent, [agentId]: node.parse(result.text ?? "") };
-    }
+    this.storeParsed(run, node, agentId, result.text ?? "");
     this.finishAgent(run, node, { backend: `cli:${cli}` });
   }
 
@@ -594,7 +610,7 @@ export class Factory {
   }
 
   status(run: Run): RunStatusView {
-    const node = workflowOf(run).nodes[run.cursor];
+    const node = run.cursor < 0 ? undefined : workflowOf(run).nodes[run.cursor];
     return {
       runId: run.runId,
       status: run.status,
@@ -708,7 +724,7 @@ function configOf(run: Run): RunConfig {
 }
 
 function nodeAt(run: Run): WorkflowNode {
-  const node = workflowOf(run).nodes[run.cursor];
+  const node = run.cursor < 0 ? undefined : workflowOf(run).nodes[run.cursor];
   if (!node) throw new Error(`run ${run.runId} has no node at cursor ${run.cursor}`);
   return node;
 }
@@ -751,7 +767,7 @@ function nextHint(run: Run): string {
     case "waiting_for_user":
       return "Ask the user pendingQuestion.text. Then send the user's answer with factory_answer.";
     case "waiting_for_client":
-      return "Run pendingWork.prompt in a subagent. Use the model in pendingWork.model. Then call factory_submit with the subagent output. If pendingWork has an agentId, pass the same agentId. If the subagent result shows a session id (for example <subagent sessionID=\"ses_...\">), pass it as usage.childSessionId.";
+      return "Run pendingWork.prompt in a subagent. If pendingWork has an agentName, use the subagent with that name. Use the model in pendingWork.model. Then call factory_submit with the subagent output. If pendingWork has an agentId, pass the same agentId. If the subagent result shows a session id (for example <subagent sessionID=\"ses_...\">), pass it as usage.childSessionId.";
     default:
       return "The run has ended (done, stopped, cancelled or failed). Call factory_report. Show the user viewerUrl: it shows the whole flow and the cost of each agent. Do not call factory_wait or factory_status again.";
   }

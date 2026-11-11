@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "workflow.schema.json",
   "title": "Factory workflow",
-  "description": "A graph owned by the factory. Clients never send it; they name it at most.",
+  "description": "A graph owned by the factory, written in YAML (workflows/*.yaml). Clients never send it; they name it at most.",
   "type": "object",
   "required": [
     "name",
@@ -51,6 +51,25 @@
           "default": 20
         }
       }
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The marketplace agent or document this workflow implements."
+    },
+    "roles": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/id"
+      },
+      "additionalProperties": {
+        "enum": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "description": "Role-to-tier defaults of this workflow; the user can change them at confirmation."
     }
   },
   "$defs": {
@@ -111,10 +130,6 @@
           "type": "string",
           "minLength": 1
         },
-        "run": {
-          "type": "string",
-          "minLength": 1
-        },
         "workflow": {
           "$ref": "#/$defs/id"
         },
@@ -150,6 +165,34 @@
           "type": "string",
           "pattern": "^state.[a-zA-Z0-9_.]+$",
           "description": "Agents chosen at run time from state; each one is priced on its own."
+        },
+        "op": {
+          "type": "string",
+          "pattern": "^[a-z][a-zA-Z0-9]*.[a-z][a-zA-Z0-9]*$",
+          "description": "Named factory operation that a script node runs."
+        },
+        "with": {
+          "type": "object",
+          "description": "Arguments for the operation."
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Mustache template. Context: goal, input, state, agent, answer, steps."
+        },
+        "parse": {
+          "type": "string",
+          "pattern": "^[a-z][a-zA-Z0-9]*.[a-z][a-zA-Z0-9]*$",
+          "description": "Named parser that turns the agent output into state."
+        },
+        "turns": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Model turns of the node for the fake test model."
+        },
+        "askAfterTurn": {
+          "type": "integer",
+          "minimum": 1
         }
       },
       "allOf": [
@@ -163,7 +206,8 @@
           },
           "then": {
             "required": [
-              "role"
+              "role",
+              "prompt"
             ]
           }
         },
@@ -177,7 +221,7 @@
           },
           "then": {
             "required": [
-              "run"
+              "op"
             ]
           }
         },

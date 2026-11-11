@@ -1,0 +1,93 @@
+name: olko-review
+version: 0.2.0
+source: agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE)
+roles:
+  lens: medium
+  verifier: medium
+entry: scope
+nodes:
+  - id: scope
+    kind: script
+    op: github.prScope
+    with:
+      exclude:
+        - '(^|/)pnpm-lock\.yaml$'
+        - '(^|/)package-lock\.json$'
+        - '(^|/)yarn\.lock$'
+  - id: detect
+    kind: script
+    op: review.detectLenses
+    with:
+      always: { id: bugs, agent: olko-review-bugs-lens }
+      stacks:
+        - { id: dotnet, agent: olko-review-dotnet-lens, extensions: [".cs", ".csproj", ".props", ".targets"] }
+        - { id: react, agent: olko-review-react-lens, extensions: [".ts", ".tsx"] }
+        - { id: mobile, agent: olko-review-mobile-lens, extensions: [".kt", ".kts"] }
+        - { id: python, agent: olko-review-python-lens, extensions: [".py"] }
+  - id: memory
+    kind: script
+    op: review.memoryNotLoaded
+  - id: lenses
+    kind: llm
+    role: lens
+    agentsFrom: state.detect.lenses
+    parse: review.findings
+    prompt: |
+      PR #{{state.scope.pr}}: {{state.scope.title}}
+
+      PR description:
+      {{state.scope.body}}
+
+      Files for this lens ({{agent.files.length}}):
+      {{#agent.files}}
+      - {{path}}
+      {{/agent.files}}
+
+      Suppress: none. Prioritize: none. The factory did not load the memory layer for this run.
+      The current branch is the PR head. The files in the working tree match the diff.
+
+      Diff hunks:
+      {{#agent.files}}
+      {{diff}}
+      {{/agent.files}}
+  - id: merge
+    kind: script
+    op: review.mergeFindings
+  - id: verify
+    kind: llm
+    role: verifier
+    agent: olko-review-verifier
+    parse: review.verdicts
+    prompt: |
+      PR #{{state.scope.pr}}: {{state.scope.title}}
+      The current branch is the PR head. The files in the working tree match the diff.
+
+      Findings ({{state.merge.findings.length}}), one per line:
+      {{#state.merge.findings}}
+      {{line}}
+      {{/state.merge.findings}}
+  - id: rank
+    kind: script
+    op: review.rankFindings
+  - id: ask-post
+    kind: interrupt
+    question:
+      id: q-post-comments
+      text: Post the confirmed findings on the PR, one comment per finding?
+      allowed: [post, skip]
+  - id: post
+    kind: script
+    op: github.postComments
+edges:
+  - { from: scope, to: detect }
+  - { from: detect, to: memory }
+  - { from: memory, to: lenses }
+  - { from: lenses, to: merge }
+  - { from: merge, to: verify, when: "merge.findings > 0" }
+  - { from: merge, to: rank, when: "merge.findings == 0" }
+  - { from: verify, to: rank }
+  - { from: rank, to: ask-post, when: "rank.count > 0" }
+  - { from: rank, to: END, when: "rank.count == 0" }
+  - { from: ask-post, to: post, when: 'ask-post.answer == "post"' }
+  - { from: ask-post, to: END, when: 'ask-post.answer == "skip"' }
+  - { from: post, to: END }

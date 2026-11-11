@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { Factory } from "../src/engine.ts";
 import type { CliName, Run } from "../src/types.ts";
-import { cliExecutor } from "./cli-backend.ts";
+import { cliExecutor } from "../src/cli-backend.ts";
 
 const clis = (process.argv[2] ?? "claude,opencode").split(",") as CliName[];
 const repeats = Number(process.argv[3] ?? 3);

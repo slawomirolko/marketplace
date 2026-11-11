@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { validate } from "../src/spec.ts";
-import { WORKFLOW } from "../src/engine.ts";
+import { loadedWorkflows } from "../src/engine.ts";
 import type { WorkflowSpec } from "../src/types.ts";
 import { toMermaid, escapeLabel } from "../viewer/mermaid.ts";
 import type { DiagramConfig } from "../viewer/mermaid.ts";
@@ -26,7 +26,7 @@ test("workflow files are valid against the workflow schema", () => {
 });
 
 test("hello workflow file matches the node paths the engine runs", () => {
-  assert.deepEqual(leafPaths("hello"), WORKFLOW.nodes.map((n) => n.path));
+  assert.deepEqual(leafPaths("hello"), loadedWorkflows().get("hello")?.nodes.map((n) => n.path));
 });
 
 test("node costs in the report add up to the run cost", async () => {

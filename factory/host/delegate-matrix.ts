@@ -4,7 +4,7 @@ import { spawn, execFileSync } from "node:child_process";
 import { priceUsage } from "../src/prices.ts";
 import type { PricedUsage } from "../src/prices.ts";
 import type { Run, TokenCounts } from "../src/types.ts";
-import { opencodeSessionUsage } from "./cli-backend.ts";
+import { opencodeSessionUsage } from "../src/cli-backend.ts";
 
 interface PilotSpawn {
   code: number | null;

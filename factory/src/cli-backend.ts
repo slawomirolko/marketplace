@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import type { CliExecutor, CliName, CliResult, ExecResult, TokenCounts } from "../src/types.ts";
+import type { CliExecutor, CliName, CliResult, ExecResult, TokenCounts } from "./types.ts";
 
 const TIMEOUT_MS = 900000;
 const OPENCODE_IDS: Record<string, string> = { haiku: "anthropic/claude-haiku-5-5", sonnet: "anthropic/claude-sonnet-5-5", opus: "anthropic/claude-opus-5-5" };

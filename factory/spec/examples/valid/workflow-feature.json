@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "entry": "plan",
   "nodes": [
-    { "id": "plan", "kind": "llm", "role": "planner", "skill": "olko-plan-editor", "outputSchema": "schemas/plan.json" },
+    { "id": "plan", "kind": "llm", "role": "planner", "skill": "olko-plan-editor", "prompt": "Plan {{goal}}", "outputSchema": "schemas/plan.json" },
     { "id": "approve-plan", "kind": "interrupt", "question": { "id": "q-approve-plan", "text": "Approve the plan?", "allowed": ["yes", "no"] } },
     { "id": "build", "kind": "subgraph", "workflow": "test-fix-loop" },
-    { "id": "review", "kind": "llm", "role": "reviewer", "maxTurns": 10 },
-    { "id": "accountant", "kind": "llm", "role": "accountant" }
+    { "id": "review", "kind": "llm", "role": "reviewer", "prompt": "Review the build of {{goal}}", "maxTurns": 10 },
+    { "id": "accountant", "kind": "llm", "role": "accountant", "prompt": "Report the cost of {{goal}}" }
   ],
   "edges": [
     { "from": "plan", "to": "approve-plan" },

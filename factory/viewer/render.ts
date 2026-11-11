@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { parse as parseYaml } from "yaml";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { toMermaid } from "./mermaid.ts";
@@ -44,8 +45,9 @@ function readJson(file: string): unknown {
 export function loadWorkflows(dir: string): WorkflowSpec[] {
   return fs
     .readdirSync(dir)
-    .filter((f) => f.endsWith(".json"))
-    .map((f) => readJson(path.join(dir, f)) as WorkflowSpec);
+    .filter((f) => /.(json|ya?ml)$/.test(f))
+    .sort()
+    .map((f) => (f.endsWith(".json") ? readJson(path.join(dir, f)) : parseYaml(fs.readFileSync(path.join(dir, f), "utf8"))) as WorkflowSpec);
 }
 
 function escapeHtml(text: unknown): string {

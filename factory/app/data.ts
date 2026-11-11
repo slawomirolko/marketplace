@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { loadWorkflowSpecs } from "../src/workflow-yaml.ts";
 import path from "node:path";
 import { Factory, errorMessage, runReport } from "../src/engine.ts";
 import type { Coverage, FactoryConfigFile, Report, Run, WorkflowSpec } from "../src/types.ts";
@@ -95,7 +96,7 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo }: DataApi
 
     workflows() {
       const dir = path.join(factoryDir, "workflows");
-      return fs.readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => readJson(path.join(dir, f)) as WorkflowSpec);
+      return loadWorkflowSpecs(dir);
     },
 
     config() {

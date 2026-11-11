@@ -1,0 +1,38 @@
+name: hello
+version: 0.2.0
+source: sample workflow of the factory (offline checks)
+roles:
+  planner: high
+  implementer: medium
+  reviewer: medium
+  accountant: low
+entry: plan
+nodes:
+  - id: plan
+    kind: llm
+    role: planner
+    turns: 3
+    prompt: "You are the planner node of a test workflow. Goal: {{goal}}. Reply with a 3-step plan in at most 50 words. Do not use any tools."
+  - id: build
+    kind: subgraph
+    workflow: hello-build
+  - id: review
+    kind: llm
+    role: reviewer
+    turns: 1
+    agents:
+      - { id: security }
+      - { id: style }
+      - { id: tests }
+      - { id: docs, role: accountant }
+    prompt: "You are the {{agent.id}} reviewer of a test workflow. Goal: {{goal}}. In one sentence, name one {{agent.id}} risk of a greeting function. Do not use any tools."
+  - id: accountant
+    kind: llm
+    role: accountant
+    turns: 1
+    prompt: "You are the accountant node of a test workflow. In one sentence, report that the run has used {{steps}} steps so far. Do not use any tools."
+edges:
+  - { from: plan, to: build }
+  - { from: build, to: review }
+  - { from: review, to: accountant }
+  - { from: accountant, to: END }

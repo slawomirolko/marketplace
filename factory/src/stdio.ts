@@ -2,7 +2,8 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { Factory, parseBackend } from "./engine.ts";
+import { Factory, parseBackend, parseCli } from "./engine.ts";
+import { cliExecutor, hostExec } from "./cli-backend.ts";
 import { createFactoryTools } from "./tools.ts";
 import { DEFAULT_VIEWER_PORT, VIEWER_HEALTH, defaultDataDir } from "./paths.ts";
 
@@ -33,7 +34,9 @@ async function ensureViewer(): Promise<void> {
   child.unref();
 }
 
-const factory = new Factory(dataDir, { backend: parseBackend(process.env.FACTORY_BACKEND) });
+const backend = parseBackend(process.env.FACTORY_BACKEND);
+const cli = backend === "cli" ? parseCli(process.env.FACTORY_CLI) : undefined;
+const factory = new Factory(dataDir, { backend, executors: { exec: hostExec, ...(cli ? { [cli]: cliExecutor(cli) } : {}) }, ...(cli ? { cli } : {}) });
 const server = createFactoryTools(factory, publicUrl).buildServer();
 const transport = new StdioServerTransport();
 transport.onclose = () => process.exit(0);

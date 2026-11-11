@@ -3,7 +3,9 @@ import type { IncomingMessage } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Factory, errorMessage, parseBackend } from "./engine.ts";
+import { Factory, errorMessage, parseBackend, parseCli } from "./engine.ts";
+import { cliExecutor, hostExec } from "./cli-backend.ts";
+import type { CliName, Executors } from "./types.ts";
 import type { DefaultBackend } from "./engine.ts";
 import { allowedHostsFor, viewerHandler } from "./viewer-routes.ts";
 import { createFactoryTools } from "./tools.ts";
@@ -28,14 +30,17 @@ if (!TOKEN) {
 }
 
 let DEFAULT_BACKEND: DefaultBackend;
+let CLI: CliName | undefined;
 try {
   DEFAULT_BACKEND = parseBackend(process.env.FACTORY_BACKEND);
+  if (DEFAULT_BACKEND === "cli") CLI = parseCli(process.env.FACTORY_CLI);
 } catch (error) {
   console.error(errorMessage(error));
   process.exit(1);
 }
 
-const factory = new Factory(DATA_DIR, { backend: DEFAULT_BACKEND });
+const executors: Executors = { exec: hostExec, ...(CLI ? { [CLI]: cliExecutor(CLI) } : {}) };
+const factory = new Factory(DATA_DIR, { backend: DEFAULT_BACKEND, executors, ...(CLI ? { cli: CLI } : {}) });
 const tools = createFactoryTools(factory, PUBLIC_URL);
 
 function readBody(req: IncomingMessage): Promise<unknown> {

@@ -9,3 +9,6 @@ host
 viewer
 docs
 *.md
+py/.venv
+py/.pytest_cache
+**/__pycache__
