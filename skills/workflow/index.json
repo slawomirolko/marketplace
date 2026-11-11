@@ -272,7 +272,7 @@
     {
       "name": "olko-plan-backlog-discovery",
       "category": "workflow",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Epic/Feature/Task discovery path of olko-plan-documentation-orchestrator: draft, one content review, approval-gated publish to YouTrack, and read-back.",
       "tags": [
         "workflow",
