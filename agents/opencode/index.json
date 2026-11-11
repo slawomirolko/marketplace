@@ -85,7 +85,7 @@
     },
     {
       "name": "olko-obsidian-knowledge-manager",
-      "version": "1.4.1",
+      "version": "2.0.0",
       "file": "olko-obsidian-knowledge-manager.md",
       "stack": "cross-stack",
       "role": "writer",
