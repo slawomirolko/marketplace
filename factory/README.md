@@ -93,6 +93,8 @@ Data comes read-only from the factory data directory. Without `FACTORY_DATA_DIR`
 
 `workflows/olko-review.yaml` runs the REVIEW ROUTE of `agents/opencode/olko-review-orchestrator.md`: `route` (input `plan` → PLAN ROUTE; own PR → FEEDBACK ROUTE unless input `fresh: true` asks for a fresh review; else REVIEW), `scope` (`gh pr view` + `gh pr diff`, stale working tree flagged), `detect` (bugs lens, one stack lens per detected stack, `olko-review-requirements-lens` when the PR description gives criteria), `memory` (agent memory block; missing block asks continue or stop), `lenses` in parallel, `merge`, `verify`, `confirm`, `rules-check` (`olko-project-rules-check`; `no-store` skips), store violations verified and decided one question each, `rank`, one question per confirmed finding (post or skip, one `gh pr comment` per post) and `memory-save` (`confirmed:`/`rejected:` lines). Generated lockfiles are not sent to the lenses. PLAN ROUTE: `plan-read` (a file in the workspace, optional `criteria`), `olko-review-requirements-lens` in plan mode, verifier, project rules check with store decisions, report with `plan:` lines; no memory. FEEDBACK ROUTE: CI state and unresolved comments (`gh pr checks`, review threads), one `olko-review-feedback-handler` assessment and one decision per item, the implement question, then one reply draft and one post question per wont-fix or question item. Fixing code is not available yet (it needs write-capable agents). The report text is in `factory_report.result`.
 
+`workflows/olko-marketplace-skill-sync.yaml` runs phases 1–3 of `agents/opencode/olko-marketplace-skill-sync-manager.md` for the project in input `project`: `resolve-path` (input `marketplace`, `MARKETPLACE_PATH`, project adapter, fallback with a question), `memory`, `olko-marketplace-skill-bootstrapper` (read and bash), `safe-source` (clean worktree, `main` with a question to switch, `fetch`, `pull --ff-only`; anything else stops the run), `discover` (`.agents/skills`, `.opencode/agents`, optional input `artifacts`), the skill `olko-adapt-to-marketplace --local-only` per local skill (read and edit), a SemVer check, one `olko-marketplace-skill-sync-comparator` per artifact in parallel with the marketplace checkout in `dirs`, and one decision per non-identical artifact with options from its classification. Applying accepted decisions, publishing and installing are not in the factory yet: the run stops with an error before any change.
+
 ```bash
 node factory/host/review-run.ts 74 opencode/deepseek-v4.1-flash-free
 ```
@@ -119,14 +121,14 @@ Every workflow is a YAML file in `workflows/` (`FACTORY_WORKFLOWS_DIR` changes t
 
 | Node kind | Fields | What the engine does |
 |---|---|---|
-| `llm` | `role`, `prompt` (Mustache: `goal`, `input`, `state`, `agent`, `answer`, `steps`), `agent` or `agents` or `agentsFrom: state.<path>`, optional `parse` | runs each agent through the backend (`cli`, `delegate`), prices its tokens, stores the parsed output in `state.<node id>.<agent id>` |
+| `llm` | `role`, `prompt` (Mustache: `goal`, `input`, `state`, `agent`, `answer`, `steps`), `agent` or `skill` or `agents` or `agentsFrom: state.<path>`, optional `parse`, `tools` (`read`, `edit`, `bash`; default `read`), `dirs` (Mustache paths the agent may use besides the workspace) | runs each agent through the backend (`cli`, `delegate`), prices its tokens, stores the parsed output in `state.<node id>.<agent id>` |
 | `script` | `op` (a named operation), `with` (its arguments) | runs the operation, stores its result in `state.<node id>` |
-| `interrupt` | `question` (`id`, `text`, `allowed`) | stops the run and asks the user; the answer goes to `state.<node id>.answer` |
+| `interrupt` | `question` (`id`, `text`, `allowed` or `allowedFrom: state.<path>`) | stops the run and asks the user; the answer goes to `state.<node id>.answer` |
 | `subgraph` | `workflow` | inlines that workflow; its node paths are `<workflow>/<node>/<sub-node>` |
 
 An edge has `from`, `to` (a node id or `END`) and an optional `when`: `<state path> <operator> <value>` with `==`, `!=`, `>`, `<`, `>=`, `<=`; a list compares by its length. The first edge whose condition holds is taken. A node that would run more often than `maxCycleIterations` fails the run.
 
-Code exists only for named operations (`src/ops.ts`: `list.next`, `memory.load`, `memory.persist`, `github.prScope`, `github.postComment`, `review.*`, `builtin.pass`) and parsers (`review.findings`, `review.verdicts`, `review.rulesCheck`). An interrupt question `id` and `text` are Mustache templates, so a loop over a list (`list.next` plus an edge back) asks one question per item; `maxVisits` on a node allows the loop to run more often than `limits.maxCycleIterations`. Agents of one LLM node run in parallel (`parallel`, default 10); in delegate mode the client gets all of them at once in `pendingWorkItems`, each with `agentName` and `agentInstructions` from the marketplace agent file, so no harness needs the agent installed.
+Code exists only for named operations (`src/ops.ts`: `list.next`, `memory.load`, `memory.persist`, `github.prScope`, `github.postComment`, `review.*`, `sync.*`, `builtin.pass`) and parsers (`review.findings`, `review.verdicts`, `review.rulesCheck`, `sync.comparison`). An interrupt question `id` and `text` are Mustache templates, so a loop over a list (`list.next` plus an edge back) asks one question per item; `maxVisits` on a node allows the loop to run more often than `limits.maxCycleIterations`. Agents of one LLM node run in parallel (`parallel`, default 10); in delegate mode the client gets all of them at once in `pendingWorkItems`, each with `agentName` and `agentInstructions` from the marketplace agent file (or, for a `skill` node, from the skill's `SKILL.md`), `tools` and `dirs`, so no harness needs the agent installed. The run workspace is input `project`, else `FACTORY_WORKSPACE`, else the factory's working directory.
 
 Configuration: `config/factory.yaml` (`FACTORY_CONFIG` changes it), validated against `spec/factory-config.schema.json`: roles to tiers, backends and budget. It names no model; the proposal at run start shows the tier-to-model map and the user confirms or changes it. `docs/yaml-migration-plan.md` lists the workflows still to move.
 
@@ -138,7 +140,7 @@ factory/
   src/server.ts        MCP server, auth, wait and throttle
   src/spec.ts          schema validation for config, workflow, ledger, footer
   spec/                 JSON Schemas and examples
-  workflows/            workflows in YAML (olko-review, hello sample)
+  workflows/            workflows in YAML (olko-review, olko-marketplace-skill-sync, hello sample)
   app/                  viewer app (Vite + React Flow), read-only data API in app/data.ts
   viewer/               Mermaid diagram of a workflow, with per-node cost from a run report
   test/spec.test.ts    schema tests

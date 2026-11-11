@@ -1,6 +1,6 @@
 # Plan: move the five Olko workflows to factory YAML
 
-Status: in progress. `olko-review` runs from YAML with all three routes: REVIEW in full; PLAN in full (requirements lens in plan mode, verifier, project rules check, store decisions, report); FEEDBACK up to the decisions and replies (CI state, unresolved comments, one assessment and one decision per item, implement question, one reply draft and one post question per reply). Fixing code from comments stops with an error until write-capable agents exist (E9). The per-comment path is covered by unit tests only, because no PR of this repository has review comments. Workflows 2–5 are still to do.
+Status: in progress. `olko-review` runs from YAML with all three routes: REVIEW in full; PLAN in full (requirements lens in plan mode, verifier, project rules check, store decisions, report); FEEDBACK up to the decisions and replies (CI state, unresolved comments, one assessment and one decision per item, implement question, one reply draft and one post question per reply). Fixing code from comments stops with an error until write-capable agents exist (E9). The per-comment path is covered by unit tests only, because no PR of this repository has review comments. `olko-marketplace-skill-sync` runs from YAML through phases 1–3 (path, bootstrap, safe source, local-only adaptation, comparison, one decision per artifact); applying accepted decisions, publishing and installing stop with an error. Workflows 3–5 are still to do.
 
 ## Requirements every migrated workflow keeps
 
@@ -22,13 +22,13 @@ Status: in progress. `olko-review` runs from YAML with all three routes: REVIEW 
 | E1 | Conditional edges, `END`, loop limit (`maxCycleIterations`) | done | all |
 | E2 | `interrupt` node with a fixed question | done | all |
 | E3 | Subgraph inlined from another YAML file | done | implementation, plan |
-| E4 | Question built from state: text and options from a template, for example a child `Blocked:` item with its 2–3 options, an `ask` verdict, or a per-row sync decision | text and id from a template: done; options from state: to do | all except review REVIEW route |
+| E4 | Question built from state: text and options from a template, for example a child `Blocked:` item with its 2–3 options, an `ask` verdict, or a per-row sync decision | text and id from a template: done; options from state (`question.allowedFrom`): done | all except review REVIEW route |
 | E5 | One step per list item (one comment per finding, one decision per artifact, one apply per row) | done as the `list.next` operation plus a loop edge and `maxVisits`; a `map` node over a subgraph: to do | review, both syncs, implementation |
 | E6 | Parallel fan-out: agents of one node run at the same time (cli backend) or are offered together (delegate, `pendingWorkItems`), with a wave limit (`parallel`, default 10) | done | all |
 | E7 | Approval gate on an operation (`approval: required`): the engine asks before it runs the op and records the answer | to do | all with side effects |
-| E8 | Run workspace: an op sets `state.workspace.cwd` (worktree, marketplace checkout); every later agent and op runs there | to do | implementation, both syncs |
-| E9 | Write access per node (`tools: [read, edit]`): the cli backend passes the matching allowed tools; delegate passes it in `pendingWork` | to do (agents are read-only today) | implementation, plan, syncs |
-| E10 | `skill` nodes: an LLM node that loads a named skill instead of a marketplace agent | schema field exists, engine to do | plan, implementation, sync |
+| E8 | Run workspace: an op sets `state.workspace.cwd` (worktree, marketplace checkout); every later agent and op runs there | partly: input `project` is the run workspace, node `dirs` give an agent extra directories (marketplace checkout); an op that changes the workspace mid-run (worktree): to do | implementation, both syncs |
+| E9 | Write access per node (`tools: [read, edit]`): the cli backend passes the matching allowed tools; delegate passes it in `pendingWork` | done (`tools: [read, edit, bash]`, default read) | implementation, plan, syncs |
+| E10 | `skill` nodes: an LLM node that loads a named skill instead of a marketplace agent | done: the skill text from `skills/*/<name>/SKILL.md` becomes the agent instructions; its directory is added to `dirs` | plan, implementation, sync |
 | E11 | Structured agent output: `parse` per agent format plus a check op that rejects a result and loops back (child-result rules) | parsers exist for review; checks to do | implementation, plan |
 | E12 | Memory layer ops (`memory.load`, `memory.persist`) over the agent memory block `.opencode/memory/<agent>.md` | done | review, sync, plan |
 | E13 | Workflow call with input mapping (`kind: workflow`, `input:`), not only inline subgraph, so implementation can call the review PLAN/REVIEW route | to do | implementation, plan |

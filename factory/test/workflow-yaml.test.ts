@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { evaluateWhen, loadWorkflowFile } from "../src/workflow-yaml.ts";
+import { claudeTools, readMarketplaceAgent } from "../src/marketplace-agents.ts";
+import { parseComparison, syncOptions } from "../src/ops.ts";
 
 function writeYaml(text: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-yaml-"));
@@ -71,4 +73,73 @@ for (const [when, state, expected] of CONDITIONS) {
 
 test("an edge condition on a missing state path is rejected", () => {
   assert.throws(() => evaluateWhen("merge.findings > 0", {}), /merge\.findings is not set/);
+});
+
+test("the comparator result line becomes a classification with versions and action", () => {
+  const parsed = parseComparison("Report text\nresult | portable-local-change | 1.0.0 | minor | 1.1.0 | adopt minor\n");
+  assert.deepEqual({ ...parsed, report: undefined }, { classification: "portable-local-change", marketplaceVersion: "1.0.0", bump: "minor", nextVersion: "1.1.0", action: "adopt minor", report: undefined });
+  assert.equal(parseComparison("`result | identical | 2.0.0 | none | none | none`").classification, "identical");
+});
+
+test("a comparator report without a result line or with an unknown classification is rejected", () => {
+  assert.throws(() => parseComparison("no result here"), /no 'result \|' line/);
+  assert.throws(() => parseComparison("result | maybe | 1.0.0 | none | none | leave"), /unknown classification 'maybe'/);
+});
+
+test("decision options follow the classification as the source agent lists them", () => {
+  assert.deepEqual(syncOptions("local-only"), ["create", "reject", "leave"]);
+  assert.deepEqual(syncOptions("adapter-candidate"), ["move-to-adapter", "adopt-patch", "adopt-minor", "adopt-major", "revert-local", "leave"]);
+  assert.deepEqual(syncOptions("conflict"), ["adopt-patch", "adopt-minor", "adopt-major", "revert-local", "leave"]);
+});
+
+test("node tools map to Claude Code tools; everything else is disallowed", () => {
+  assert.deepEqual(claudeTools(["read"]).allowed, ["Read", "Grep", "Glob", "Skill"]);
+  const write = claudeTools(["read", "edit"]);
+  assert.ok(write.allowed.includes("Edit") && write.disallowed.includes("Bash"));
+  assert.ok(claudeTools(["read", "bash"]).allowed.includes("Bash"));
+});
+
+test("a marketplace skill becomes agent instructions that name the skill directory", () => {
+  const skill = readMarketplaceAgent("olko-adapt-to-marketplace");
+  assert.ok(skill.skillDir && fs.existsSync(path.join(skill.skillDir, "SKILL.md")));
+  assert.match(skill.prompt, /^Follow the skill olko-adapt-to-marketplace/);
+  assert.equal(readMarketplaceAgent("olko-review-verifier").skillDir, undefined);
+});
+
+test("a YAML node with skill, tools, dirs and a question with allowedFrom loads", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-yaml-"));
+  const file = path.join(dir, "flow.yaml");
+  fs.writeFileSync(file, `
+name: skill-node
+version: 1.0.0
+entry: adapt
+roles: { adapter: medium }
+nodes:
+  - id: adapt
+    kind: llm
+    role: adapter
+    skill: olko-adapt-to-marketplace
+    tools: [read, edit]
+    dirs: ["{{input.marketplace}}"]
+    prompt: "go"
+  - id: ask
+    kind: interrupt
+    question: { id: q-pick, text: "Pick", allowedFrom: state.adapt.options }
+edges:
+  - { from: adapt, to: ask }
+  - { from: ask, to: END }
+`);
+  const workflow = loadWorkflowFile(file);
+  const adapt = workflow.nodes[0]!;
+  assert.equal(adapt.agent, "olko-adapt-to-marketplace");
+  assert.deepEqual(adapt.tools, ["read", "edit"]);
+  assert.deepEqual(adapt.dirs?.({ goal: "", input: { marketplace: "C:/m" }, state: {}, agent: { id: "adapt" } }), ["C:/m"]);
+  assert.equal(workflow.nodes[1]!.question?.allowedFrom, "state.adapt.options");
+});
+
+test("the marketplace skill sync workflow loads from YAML", () => {
+  const workflow = loadWorkflowFile(path.join(import.meta.dirname, "..", "workflows", "olko-marketplace-skill-sync.yaml"));
+  assert.equal(workflow.name, "olko-marketplace-skill-sync");
+  assert.equal(workflow.nodes.find((n) => n.id === "adapt")?.agent, "olko-adapt-to-marketplace");
+  assert.deepEqual(workflow.nodes.find((n) => n.id === "compare")?.tools, undefined);
 });

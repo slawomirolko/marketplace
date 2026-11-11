@@ -15,6 +15,9 @@ roles:
   verifier: medium
   rules: medium
   feedback: medium
+  bootstrap: low
+  adapter: medium
+  comparator: medium
 budget:
   maxCostUsd: 20
   infoRatio: 0.5

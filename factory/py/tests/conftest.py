@@ -130,3 +130,46 @@ async def feedback_run(factory_server) -> ReviewRun:
     run.comments_before = comments_before
     run.comments_after = len(gh_json(["pr", "view", str(FEEDBACK_PR), "--repo", REVIEW_REPO, "--json", "comments"])["comments"])
     return run
+
+
+SYNC_PROJECT = os.environ.get("FACTORY_SYNC_PROJECT")
+SYNC_ARTIFACTS = os.environ.get("FACTORY_SYNC_ARTIFACTS", "olko-design-rules,olko-review-verifier,olko-e2e-acceptance-runner").split(",")
+MARKETPLACE_REMOTE = os.environ.get("FACTORY_SYNC_MARKETPLACE", "slawomirolko/marketplace")
+
+
+def git(cwd: Path, *args: str) -> str:
+    return subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True, text=True).stdout.strip()
+
+
+def marketplace_snapshot(path: Path) -> dict:
+    return {
+        "branch": git(path, "branch", "--show-current"),
+        "head": git(path, "rev-parse", "HEAD"),
+        "status": git(path, "status", "--porcelain"),
+        "branches": git(path, "branch", "--list", "--format=%(refname:short)"),
+    }
+
+
+@pytest.fixture(scope="session")
+async def sync_run(factory_server) -> ReviewRun:
+    assert SYNC_PROJECT, "set FACTORY_SYNC_PROJECT to the owner/name of a real project with .agents/skills and .opencode/agents"
+    root = Path(tempfile.mkdtemp(prefix="factory-sync-"))
+    project, marketplace = root / "project", root / "marketplace"
+    subprocess.run(["gh", "repo", "clone", SYNC_PROJECT, str(project), "--", "--depth", "1"], check=True, capture_output=True)
+    subprocess.run(["gh", "repo", "clone", MARKETPLACE_REMOTE, str(marketplace), "--", "--depth", "50"], check=True, capture_output=True)
+    before = marketplace_snapshot(marketplace)
+    run = await run_workflow(
+        url=f"{factory_server['url']}/mcp",
+        token=factory_server["token"],
+        workflow="olko-marketplace-skill-sync",
+        goal="Sync project-local skills and agents to the marketplace",
+        workflow_input={"project": str(project), "marketplace": str(marketplace), "artifacts": SYNC_ARTIFACTS},
+        answer=lambda question: "leave" if "leave" in (question.get("allowed") or []) else "stop",
+    )
+    run.marketplace = marketplace
+    run.marketplace_before = before
+    run.marketplace_after = marketplace_snapshot(marketplace)
+    run.artifacts = SYNC_ARTIFACTS
+    run.skill_files = [project / ".agents" / "skills" / name / "SKILL.md" for name in SYNC_ARTIFACTS if (project / ".agents" / "skills" / name / "SKILL.md").exists()]
+    print(json.dumps({"runId": run.run_id, "path": [e["node"] for e in run.events if e["type"] == "node_started"], "costUsd": run.report["cost"]["costUsd"], "viewerUrl": run.viewer_url}))
+    return run

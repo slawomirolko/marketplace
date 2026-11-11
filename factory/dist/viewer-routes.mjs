@@ -8013,6 +8013,297 @@ var feedbackReport = async ({ state, answers }) => {
 		].join("\n")
 	};
 };
+var MARKETPLACE_FALLBACK = "C:\\Users\\Inny\\Documents\\Git\\marketplace";
+var SEMVER_LINE = /^version:\s*["']?(\d+\.\d+\.\d+)["']?\s*$/m;
+var CLASSIFICATIONS = [
+	"identical",
+	"local-only",
+	"marketplace-only",
+	"project-adapter-only",
+	"adapter-candidate",
+	"portable-local-change",
+	"conflict"
+];
+var ADOPT = [
+	"adopt-patch",
+	"adopt-minor",
+	"adopt-major"
+];
+function readJson$1(file) {
+	return JSON.parse(fs.readFileSync(file, "utf8"));
+}
+function marketplaceRoot(state) {
+	return stateOf(state, "resolve-path").path;
+}
+var resolveMarketplacePath = async ({ input, exec, cwd }) => {
+	if (!exec) throw new Error("sync.resolvePath needs the host exec tool");
+	const adapterFile = path.join(cwd ?? ".", ".opencode", "marketplace-path.local.json");
+	const adapter = fs.existsSync(adapterFile) ? readJson$1(adapterFile).marketplacePath : void 0;
+	const [source, target] = input.marketplace ? ["input", input.marketplace] : process.env.MARKETPLACE_PATH ? ["MARKETPLACE_PATH", process.env.MARKETPLACE_PATH] : adapter ? ["project adapter", adapter] : ["fallback", MARKETPLACE_FALLBACK];
+	const resolved = path.resolve(target);
+	if (!fs.existsSync(resolved)) throw new Error(`marketplace path ${resolved} (${source}) does not exist`);
+	const repo = await exec("git", [
+		"-C",
+		resolved,
+		"rev-parse",
+		"--is-inside-work-tree"
+	]);
+	if (repo.code !== 0 || repo.stdout.trim() !== "true") throw new Error(`marketplace path ${resolved} (${source}) is not a Git repository`);
+	return {
+		state: {
+			path: resolved,
+			source,
+			fallback: source === "fallback"
+		},
+		metrics: { fallback: source === "fallback" ? 1 : 0 },
+		output: `Marketplace (${source}): ${resolved}`
+	};
+};
+var safeSource = async ({ state, exec, answers }) => {
+	if (!exec) throw new Error("sync.safeSource needs the host exec tool");
+	const root = marketplaceRoot(state);
+	const git = (...args) => exec("git", [
+		"-C",
+		root,
+		...args
+	]);
+	const stop = (reason, detail, clean) => ({
+		state: {
+			ok: false,
+			reason,
+			detail
+		},
+		metrics: {
+			clean,
+			ok: 0
+		},
+		output: `Marketplace not safe: ${detail}`
+	});
+	const status = await git("status", "--porcelain");
+	if (status.code !== 0) return stop("status", status.stderr.trim(), 0);
+	if (status.stdout.trim()) return stop("dirty", `the worktree of ${root} has local changes`, 0);
+	let branch = (await git("branch", "--show-current")).stdout.trim();
+	if (branch !== "main") {
+		if (answers?.["q-marketplace-main"] !== "switch") return {
+			state: {
+				ok: false,
+				reason: "not-main",
+				detail: branch || "detached HEAD",
+				branch
+			},
+			metrics: {
+				clean: 1,
+				ok: 0
+			},
+			output: `Marketplace is on ${branch || "a detached HEAD"}, not main.`
+		};
+		const checkout = await git("checkout", "main");
+		if (checkout.code !== 0) return stop("checkout", checkout.stderr.trim(), 1);
+		branch = "main";
+	}
+	if ((await git("remote", "get-url", "origin")).code !== 0) return stop("no-remote", `${root} has no origin remote`, 1);
+	const fetch = await git("fetch", "origin", "main");
+	if (fetch.code !== 0) return stop("fetch", fetch.stderr.trim(), 1);
+	const pull = await git("pull", "--ff-only", "origin", "main");
+	if (pull.code !== 0) return stop("pull", pull.stderr.trim(), 1);
+	const head = (await git("rev-parse", "HEAD")).stdout.trim();
+	return {
+		state: {
+			ok: true,
+			reason: "ok",
+			branch,
+			head
+		},
+		metrics: {
+			clean: 1,
+			ok: 1
+		},
+		output: `Marketplace ${root} is clean on main at ${head.slice(0, 12)}, fast-forwarded to origin/main.`
+	};
+};
+function frontmatterVersion(file) {
+	return fs.existsSync(file) ? fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n").match(SEMVER_LINE)?.[1] ?? "none" : "none";
+}
+function skillDirIn(root, name) {
+	const skills = path.join(root, "skills");
+	if (!fs.existsSync(skills)) return void 0;
+	return fs.readdirSync(skills).map((c) => path.join(skills, c, name)).find((d) => fs.existsSync(path.join(d, "SKILL.md")));
+}
+function manifestVersion(file, key, name) {
+	if (!fs.existsSync(file)) return "none";
+	return (readJson$1(file)[key]?.find((e) => e.name === name))?.version ?? "none";
+}
+var discoverArtifacts = async ({ input, state, cwd }) => {
+	const project = path.resolve(cwd ?? ".");
+	const root = marketplaceRoot(state);
+	const skillsDir = path.join(project, ".agents", "skills");
+	const agentsDir = path.join(project, ".opencode", "agents");
+	const localSkills = fs.existsSync(skillsDir) ? fs.readdirSync(skillsDir).filter((n) => fs.existsSync(path.join(skillsDir, n, "SKILL.md"))) : [];
+	const localAgents = fs.existsSync(agentsDir) ? fs.readdirSync(agentsDir).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)) : [];
+	const wanted = input.artifacts;
+	if (wanted) {
+		const missing = wanted.filter((n) => !localSkills.includes(n) && !localAgents.includes(n));
+		if (missing.length) throw new Error(`input.artifacts not found in ${project}: ${missing.join(", ")}`);
+	}
+	const pick = (names) => wanted ? names.filter((n) => wanted.includes(n)) : names;
+	const skills = pick(localSkills).map((name) => {
+		const dir = skillDirIn(root, name);
+		return {
+			id: name,
+			type: "skill",
+			name,
+			localPath: path.join(skillsDir, name),
+			marketplacePath: dir ?? "none",
+			manifestPath: path.join(root, "registry.json"),
+			marketplaceVersion: manifestVersion(path.join(root, "registry.json"), "skills", name),
+			localVersion: frontmatterVersion(path.join(skillsDir, name, "SKILL.md"))
+		};
+	});
+	const agents = pick(localAgents).map((name) => {
+		const file = path.join(root, "agents", "opencode", `${name}.md`);
+		return {
+			id: name,
+			type: "agent",
+			name,
+			localPath: path.join(agentsDir, `${name}.md`),
+			marketplacePath: fs.existsSync(file) ? file : "none",
+			manifestPath: path.join(root, "agents", "opencode", "index.json"),
+			marketplaceVersion: manifestVersion(path.join(root, "agents", "opencode", "index.json"), "agents", name),
+			localVersion: manifestVersion(path.join(agentsDir, "index.json"), "agents", name)
+		};
+	});
+	const compare = [...skills, ...agents];
+	return {
+		state: {
+			project,
+			skills,
+			agents,
+			compare
+		},
+		metrics: {
+			artifacts: compare.length,
+			skills: skills.length,
+			agents: agents.length
+		},
+		output: `Discovered ${skills.length} local skills and ${agents.length} local agents to compare in ${project}.`
+	};
+};
+var checkSkillVersions = async ({ state }) => {
+	const skills = stateOf(state, "discover").skills;
+	const missing = skills.filter((s) => frontmatterVersion(path.join(s.localPath, "SKILL.md")) === "none").map((s) => s.name);
+	if (missing.length) throw new Error(`olko-adapt-to-marketplace --local-only left no SemVer version in SKILL.md of: ${missing.join(", ")}. The sync stops here; check these skills and run again.`);
+	const versions = skills.map((s) => `${s.name} ${frontmatterVersion(path.join(s.localPath, "SKILL.md"))}`);
+	return {
+		state: { versions },
+		metrics: { skills: skills.length },
+		output: versions.length ? `Local skill versions: ${versions.join(", ")}.` : "No local skills to version."
+	};
+};
+function parseComparison(text) {
+	const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.startsWith("result |"));
+	if (!line) throw new Error("comparator report has no 'result |' line");
+	const [, classification = "", marketplaceVersion = "none", bump = "none", nextVersion = "none", action = ""] = line.split("|").map((p) => p.trim());
+	if (!CLASSIFICATIONS.includes(classification)) throw new Error(`comparator returned unknown classification '${classification}'`);
+	return {
+		classification,
+		marketplaceVersion,
+		bump,
+		nextVersion,
+		action,
+		report: String(text).trim()
+	};
+}
+function syncOptions(classification) {
+	if (classification === "local-only") return [
+		"create",
+		"reject",
+		"leave"
+	];
+	if (classification === "adapter-candidate") return [
+		"move-to-adapter",
+		...ADOPT,
+		"revert-local",
+		"leave"
+	];
+	return [
+		...ADOPT,
+		"revert-local",
+		"leave"
+	];
+}
+var syncRows = async ({ state }) => {
+	const discovered = stateOf(state, "discover").compare;
+	const compared = stateOf(state, "compare");
+	const rows = discovered.map((a) => {
+		const c = compared[a.id];
+		if (!c) throw new Error(`no comparison for ${a.type} ${a.name}`);
+		const candidate = c.classification === "local-only" ? a.localVersion !== "none" ? a.localVersion : "1.0.0" : c.nextVersion;
+		const line = `${a.type} ${a.name}: ${c.classification}; marketplace ${c.marketplaceVersion}; bump ${c.bump}; proposed ${candidate}; recommended ${c.action || "none"}`;
+		return {
+			type: a.type,
+			name: a.name,
+			classification: c.classification,
+			marketplaceVersion: c.marketplaceVersion,
+			bump: c.bump,
+			nextVersion: candidate,
+			action: c.action,
+			line,
+			options: syncOptions(c.classification)
+		};
+	});
+	const decide = rows.filter((r) => r.classification !== "identical");
+	return {
+		state: {
+			rows,
+			decide,
+			table: rows.map((r) => r.line).join("\n")
+		},
+		metrics: {
+			rows: rows.length,
+			decide: decide.length
+		},
+		output: `${rows.length} artifacts compared, ${decide.length} need a decision.`
+	};
+};
+var syncPlan = async ({ state, answers }) => {
+	const { rows, decide } = stateOf(state, "rows");
+	const decision = (name) => {
+		const index = decide.findIndex((d) => d.name === name);
+		return index < 0 ? "none" : answers?.[`q-sync-${index}`] ?? "unanswered";
+	};
+	const decided = rows.map((r) => ({
+		...r,
+		decision: decision(r.name)
+	}));
+	const accepted = decided.filter((r) => ![
+		"none",
+		"leave",
+		"reject",
+		"unanswered"
+	].includes(r.decision));
+	return {
+		state: {
+			decided,
+			accepted
+		},
+		metrics: { accepted: accepted.length },
+		output: accepted.length ? `${accepted.length} accepted decisions to apply.` : "No accepted decisions: nothing to apply, publish or install."
+	};
+};
+var syncReport = async ({ state }) => {
+	const plan = stateOf(state, "plan");
+	const source = stateOf(state, "safe-source");
+	const lines = plan.decided.map((r) => `${r.type} ${r.name}: ${r.classification} -> ${r.decision}`);
+	return {
+		state: { lines },
+		metrics: { rows: lines.length },
+		output: [
+			`Marketplace sync report (marketplace ${marketplaceRoot(state)} at ${source.head?.slice(0, 12) ?? "unknown"})`,
+			...lines,
+			"Marketplace, branches and installs: unchanged."
+		].join("\n")
+	};
+};
 var OPERATIONS = {
 	"builtin.pass": pass,
 	"github.prScope": prScope,
@@ -8035,13 +8326,28 @@ var OPERATIONS = {
 	"review.confirmFindings": confirmFindings,
 	"review.mergeRules": mergeRules,
 	"review.addViolations": addViolations,
-	"review.rankFindings": rankFindings
+	"review.rankFindings": rankFindings,
+	"sync.resolvePath": resolveMarketplacePath,
+	"sync.safeSource": safeSource,
+	"sync.discover": discoverArtifacts,
+	"sync.checkVersions": checkSkillVersions,
+	"sync.rows": syncRows,
+	"sync.plan": syncPlan,
+	"sync.report": syncReport,
+	"sync.stopUnsafe": async ({ state }) => {
+		const source = stateOf(state, "safe-source");
+		throw new Error(`Marketplace sync stopped before any comparison: ${source.detail ?? "the marketplace checkout is not safe"}.`);
+	},
+	"sync.applyNotAvailable": async () => {
+		throw new Error("Applying accepted sync decisions (marketplace edits, publish, install) is not in the factory yet. The run stops before any change.");
+	}
 };
 var PARSERS = {
 	"text.raw": (text) => String(text).trim(),
 	"review.findings": parseFindings,
 	"review.verdicts": parseVerdicts,
-	"review.rulesCheck": parseRulesCheck
+	"review.rulesCheck": parseRulesCheck,
+	"sync.comparison": parseComparison
 };
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/code.js
 var require_code$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
@@ -15643,6 +15949,12 @@ function buildNode(workflow, spec) {
 	};
 	if (spec.role) node.role = spec.role;
 	if (spec.agent) node.agent = spec.agent;
+	if (spec.skill) node.agent = spec.skill;
+	if (spec.tools) node.tools = spec.tools;
+	if (spec.dirs) {
+		const dirs = spec.dirs.map(render);
+		node.dirs = (context) => dirs.map((dir) => dir(context)).filter(Boolean);
+	}
 	if (spec.agents) node.agents = spec.agents.map((a) => ({
 		id: a.id,
 		...a.role ? { role: a.role } : {},
@@ -15807,47 +16119,116 @@ function loadFactoryConfig(file = configFile()) {
 }
 // src/marketplace-agents.ts
 var AGENT_NAME = /^[a-z0-9-]+$/;
-var READ_ONLY_TOOLS = [
+var CLAUDE_TOOLS = {
+	read: [
+		"Read",
+		"Grep",
+		"Glob",
+		"Skill"
+	],
+	edit: ["Edit", "Write"],
+	bash: ["Bash"]
+};
+var CLAUDE_ALL_TOOLS = [
 	"Read",
 	"Grep",
 	"Glob",
-	"Skill"
+	"Skill",
+	"Edit",
+	"Write",
+	"Bash",
+	"WebFetch",
+	"WebSearch",
+	"Agent",
+	"Task",
+	"NotebookEdit"
 ];
 function marketplaceDir() {
 	return process.env.FACTORY_MARKETPLACE_DIR ?? path.join(FACTORY_DIR, "..");
 }
-function readMarketplaceAgent(name) {
-	if (!AGENT_NAME.test(name)) throw new Error(`invalid agent name ${name}`);
-	const file = path.join(marketplaceDir(), "agents", "opencode", `${name}.md`);
-	if (!fs.existsSync(file)) throw new Error(`agent ${name} is not in the marketplace (${file})`);
+function readFrontmatter(file) {
 	const match = fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n").match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
 	if (!match?.[1] || match[2] === void 0) throw new Error(`${file}: no frontmatter`);
 	return {
+		front: (0, import_dist.parse)(match[1]),
+		body: match[2].trim()
+	};
+}
+function findSkill(name) {
+	const root = path.join(marketplaceDir(), "skills");
+	if (!fs.existsSync(root)) return void 0;
+	for (const category of fs.readdirSync(root)) {
+		const file = path.join(root, category, name, "SKILL.md");
+		if (fs.existsSync(file)) return file;
+	}
+}
+function readMarketplaceAgent(name) {
+	if (!AGENT_NAME.test(name)) throw new Error(`invalid agent name ${name}`);
+	const file = path.join(marketplaceDir(), "agents", "opencode", `${name}.md`);
+	if (fs.existsSync(file)) {
+		const { front, body } = readFrontmatter(file);
+		return {
+			name,
+			description: front.description ?? name,
+			prompt: body,
+			file
+		};
+	}
+	const skillFile = findSkill(name);
+	if (!skillFile) throw new Error(`agent or skill ${name} is not in the marketplace (${file})`);
+	const skillDir = path.dirname(skillFile);
+	const { front, body } = readFrontmatter(skillFile);
+	const prompt = `Follow the skill ${name} below for the task in the user message. The skill directory is ${skillDir}; read the files it names from there.\n\n${body}`;
+	return {
 		name,
-		description: (0, import_dist.parse)(match[1]).description ?? name,
-		prompt: match[2].trim(),
-		file
+		description: front.description ?? name,
+		prompt,
+		file: skillFile,
+		skillDir
+	};
+}
+function claudeTools(tools) {
+	const allowed = [...new Set(tools.flatMap((t) => CLAUDE_TOOLS[t]))];
+	return {
+		allowed,
+		disallowed: CLAUDE_ALL_TOOLS.filter((t) => !allowed.includes(t))
 	};
 }
 var scratch = fs.mkdtempSync(path.join(os.tmpdir(), "factory-agents-"));
-function claudeAgentsFile(name) {
-	const file = path.join(scratch, `claude-${name}.json`);
+function claudeAgentsFile(name, tools = ["read"]) {
+	const file = path.join(scratch, `claude-${name}-${[...tools].sort().join("-")}.json`);
 	if (!fs.existsSync(file)) {
 		const agent = readMarketplaceAgent(name);
 		fs.writeFileSync(file, JSON.stringify({ [name]: {
 			description: agent.description,
 			prompt: agent.prompt,
-			tools: READ_ONLY_TOOLS
+			tools: claudeTools(tools).allowed
 		} }));
 	}
 	return file;
 }
-function opencodeConfigDir(name) {
+function opencodeConfigDir(name, tools = ["read"]) {
 	const dir = path.join(scratch, "opencode");
 	const target = path.join(dir, "agents", `${name}.md`);
 	if (!fs.existsSync(target)) {
 		fs.mkdirSync(path.dirname(target), { recursive: true });
-		fs.copyFileSync(readMarketplaceAgent(name).file, target);
+		const agent = readMarketplaceAgent(name);
+		if (agent.skillDir) {
+			const allow = (tool) => tools.includes(tool) ? "allow" : "deny";
+			const front = {
+				description: agent.description,
+				mode: "subagent",
+				permission: {
+					edit: allow("edit"),
+					bash: allow("bash"),
+					task: "deny",
+					webfetch: "deny",
+					websearch: "deny",
+					external_directory: "allow"
+				}
+			};
+			fs.writeFileSync(target, `---\n${JSON.stringify(front)}\n---\n\n${agent.prompt}\n`);
+		} else fs.copyFileSync(agent.file, target);
 	}
 	return dir;
 }
@@ -15868,7 +16249,7 @@ var FAKE_PRICE_PER_MTOK = {
 };
 var PARALLEL_AGENTS = 10;
 function workspace(run) {
-	return run.input?.cwd ?? process.env.FACTORY_WORKSPACE ?? process.cwd();
+	return run.input?.project ?? run.input?.cwd ?? process.env.FACTORY_WORKSPACE ?? process.cwd();
 }
 function defaultConfig(kind, cli) {
 	const file = loadFactoryConfig();
@@ -16317,6 +16698,16 @@ var Factory = class {
 			steps: run.steps
 		});
 	}
+	dirs(run, node, agent) {
+		const skillDir = agent.agentName ? readMarketplaceAgent(agent.agentName).skillDir : void 0;
+		const listed = node.dirs?.({
+			goal: run.goal,
+			input: run.input,
+			state: run.state,
+			agent
+		}) ?? [];
+		return [.../* @__PURE__ */ new Set([...listed, ...skillDir ? [skillDir] : []])];
+	}
 	storeParsed(run, node, agentId, output) {
 		if (!node.parse || !run.state) return;
 		const previous = run.state[node.id];
@@ -16377,10 +16768,12 @@ var Factory = class {
 				input: run.input,
 				state: run.state
 			};
+			const { allowedFrom, ...fixed } = node.question;
 			const question = {
-				...node.question,
+				...fixed,
 				id: mustache.render(node.question.id, context),
-				text: mustache.render(node.question.text, context)
+				text: mustache.render(node.question.text, context),
+				...allowedFrom ? { allowed: allowedOf(run, allowedFrom) } : {}
 			};
 			const answer = run.answers[question.id];
 			if (answer === void 0) {
@@ -16487,7 +16880,9 @@ var Factory = class {
 						agentName: definition.name,
 						agentDescription: definition.description,
 						agentInstructions: definition.prompt
-					} : {}
+					} : {},
+					tools: node.tools ?? ["read"],
+					dirs: this.dirs(run, node, agent)
 				};
 			});
 			run.pendingWorkItems = items;
@@ -16559,7 +16954,9 @@ var Factory = class {
 				prompt: this.prompt(run, node, agent),
 				agent: agent.agentName,
 				cwd: workspace(run),
-				configDir: run.input?.agentConfigDir
+				configDir: run.input?.agentConfigDir,
+				tools: node.tools ?? ["read"],
+				dirs: this.dirs(run, node, agent)
 			});
 			run.steps += 1;
 			if (!result.ok) {
@@ -16795,6 +17192,11 @@ function tierOf(config, agent) {
 	const tier = agent.role === void 0 ? void 0 : config.roles[agent.role];
 	if (!tier) throw new Error(`no tier for role '${agent.role}'`);
 	return tier;
+}
+function allowedOf(run, dotted) {
+	const allowed = readPath(run.state ?? {}, dotted.replace(/^state\./, ""));
+	if (!Array.isArray(allowed) || allowed.length === 0 || !allowed.every((a) => typeof a === "string")) throw new Error(`allowedFrom ${dotted} is not a list of answers`);
+	return allowed;
 }
 function agentsOf(run, node) {
 	return run.nodeAgents?.[node.id] ?? node.agents ?? null;
@@ -17063,4 +17465,4 @@ function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHost
 		return true;
 	};
 }
-export { __toESM as _, errorMessage as a, claudeAgentsFile as c, FACTORY_DIR as d, VIEWER_HEALTH as f, require_ajv as g, require_dist as h, Factory as i, opencodeConfigDir as l, viewerOptions as m, viewerHandler as n, parseBackend as o, defaultDataDir as p, viewerUrlFor as r, parseCli as s, allowedHostsFor as t, DEFAULT_VIEWER_PORT as u };
+export { require_ajv as _, errorMessage as a, claudeAgentsFile as c, DEFAULT_VIEWER_PORT as d, FACTORY_DIR as f, require_dist as g, viewerOptions as h, Factory as i, claudeTools as l, defaultDataDir as m, viewerHandler as n, parseBackend as o, VIEWER_HEALTH as p, viewerUrlFor as r, parseCli as s, allowedHostsFor as t, opencodeConfigDir as u, __toESM as v };

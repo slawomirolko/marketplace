@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { priceUsage } from "./prices.ts";
-import { evaluateWhen, loadWorkflowDir } from "./workflow-yaml.ts";
+import { evaluateWhen, loadWorkflowDir, readPath } from "./workflow-yaml.ts";
 import { FACTORY_DIR } from "./paths.ts";
 import { loadFactoryConfig } from "./config.ts";
 import { readMarketplaceAgent } from "./marketplace-agents.ts";
@@ -42,7 +42,7 @@ const FAKE_PRICE_PER_MTOK: Record<Tier, { input: number; output: number }> = {
 const PARALLEL_AGENTS = 10;
 
 function workspace(run: Run): string {
-  return run.input?.cwd ?? process.env.FACTORY_WORKSPACE ?? process.cwd();
+  return run.input?.project ?? run.input?.cwd ?? process.env.FACTORY_WORKSPACE ?? process.cwd();
 }
 
 function defaultConfig(kind: "fake" | "delegate" | "cli", cli?: CliName): RunConfig {
@@ -437,6 +437,12 @@ export class Factory {
     });
   }
 
+  dirs(run: Run, node: WorkflowNode, agent: CurrentAgent): string[] {
+    const skillDir = agent.agentName ? readMarketplaceAgent(agent.agentName).skillDir : undefined;
+    const listed = node.dirs?.({ goal: run.goal, input: run.input, state: run.state, agent }) ?? [];
+    return [...new Set([...listed, ...(skillDir ? [skillDir] : [])])];
+  }
+
   storeParsed(run: Run, node: WorkflowNode, agentId: string, output: string): void {
     if (!node.parse || !run.state) return;
     const previous = run.state[node.id];
@@ -485,7 +491,8 @@ export class Factory {
     if (node.kind === "interrupt") {
       if (!node.question) throw new Error(`interrupt node ${node.path} has no question`);
       const context = { goal: run.goal, input: run.input, state: run.state };
-      const question = { ...node.question, id: Mustache.render(node.question.id, context), text: Mustache.render(node.question.text, context) };
+      const { allowedFrom, ...fixed } = node.question;
+      const question = { ...fixed, id: Mustache.render(node.question.id, context), text: Mustache.render(node.question.text, context), ...(allowedFrom ? { allowed: allowedOf(run, allowedFrom) } : {}) };
       const answer = run.answers[question.id];
       if (answer === undefined) {
         run.status = "waiting_for_user";
@@ -544,6 +551,8 @@ export class Factory {
           model: config.tiers[tier],
           prompt: this.prompt(run, node, agent),
           ...(definition ? { agentName: definition.name, agentDescription: definition.description, agentInstructions: definition.prompt } : {}),
+          tools: node.tools ?? ["read"],
+          dirs: this.dirs(run, node, agent),
         };
       });
       run.pendingWorkItems = items;
@@ -589,7 +598,7 @@ export class Factory {
         const tier = tierOf(config, agent);
         const model = config.tiers[tier];
         this.event(run, "agent_started", { node: node.path, agentId: agent.id, tier });
-        const result = await executor({ model, prompt: this.prompt(run, node, agent), agent: agent.agentName, cwd: workspace(run), configDir: run.input?.agentConfigDir });
+        const result = await executor({ model, prompt: this.prompt(run, node, agent), agent: agent.agentName, cwd: workspace(run), configDir: run.input?.agentConfigDir, tools: node.tools ?? ["read"], dirs: this.dirs(run, node, agent) });
         run.steps += 1;
         if (!result.ok) {
           failures.push(`${agent.id}: ${result.error}`);
@@ -778,6 +787,12 @@ function tierOf(config: RunConfig, agent: CurrentAgent): Tier {
   const tier = agent.role === undefined ? undefined : config.roles[agent.role];
   if (!tier) throw new Error(`no tier for role '${agent.role}'`);
   return tier;
+}
+
+function allowedOf(run: Run, dotted: string): string[] {
+  const allowed = readPath(run.state ?? {}, dotted.replace(/^state\./, ""));
+  if (!Array.isArray(allowed) || allowed.length === 0 || !allowed.every((a) => typeof a === "string")) throw new Error(`allowedFrom ${dotted} is not a list of answers`);
+  return allowed;
 }
 
 function agentsOf(run: Run, node: WorkflowNode): Agent[] | null {

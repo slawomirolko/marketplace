@@ -10,7 +10,7 @@ Mustache.escape = (text: string) => text;
 
 const CONDITION = /^([a-zA-Z0-9_./-]+)\s*(==|!=|>=|<=|>|<)\s*(.+)$/;
 
-function readPath(state: Record<string, unknown>, dotted: string): unknown {
+export function readPath(state: Record<string, unknown>, dotted: string): unknown {
   let value: unknown = state;
   for (const key of dotted.split(".")) {
     if (value === null || typeof value !== "object" || !(key in value)) return undefined;
@@ -71,6 +71,12 @@ function buildNode(workflow: WorkflowSpec, spec: WorkflowSpecNode): WorkflowNode
   const node: WorkflowNode = { id: spec.id, path: `${workflow.name}/${spec.id}`, kind: spec.kind as WorkflowNode["kind"] };
   if (spec.role) node.role = spec.role;
   if (spec.agent) node.agent = spec.agent;
+  if (spec.skill) node.agent = spec.skill;
+  if (spec.tools) node.tools = spec.tools;
+  if (spec.dirs) {
+    const dirs = spec.dirs.map(render);
+    node.dirs = (context) => dirs.map((dir) => dir(context)).filter(Boolean);
+  }
   if (spec.agents) node.agents = spec.agents.map((a) => ({ id: a.id, ...(a.role ? { role: a.role } : {}), ...(a.agent ? { agentName: a.agent } : {}) }));
   if (spec.question) node.question = spec.question;
   if (spec.turns) node.turns = spec.turns;

@@ -518,6 +518,175 @@ const feedbackReport: Operation = async ({ state, answers }) => {
   return { state: { done: true }, output: lines.join("\n") };
 };
 
+const MARKETPLACE_FALLBACK = "C:\\Users\\Inny\\Documents\\Git\\marketplace";
+const SEMVER_LINE = /^version:\s*["']?(\d+\.\d+\.\d+)["']?\s*$/m;
+const CLASSIFICATIONS = ["identical", "local-only", "marketplace-only", "project-adapter-only", "adapter-candidate", "portable-local-change", "conflict"];
+const ADOPT = ["adopt-patch", "adopt-minor", "adopt-major"];
+
+interface SyncArtifact {
+  id: string;
+  type: "skill" | "agent";
+  name: string;
+  localPath: string;
+  marketplacePath: string;
+  manifestPath: string;
+  marketplaceVersion: string;
+  localVersion: string;
+}
+
+interface Comparison {
+  classification: string;
+  marketplaceVersion: string;
+  bump: string;
+  nextVersion: string;
+  action: string;
+  report: string;
+}
+
+function readJson(file: string): any {
+  return JSON.parse(fs.readFileSync(file, "utf8"));
+}
+
+function marketplaceRoot(state: WorkflowState): string {
+  return stateOf<{ path: string }>(state, "resolve-path").path;
+}
+
+const resolveMarketplacePath: Operation = async ({ input, exec, cwd }) => {
+  if (!exec) throw new Error("sync.resolvePath needs the host exec tool");
+  const adapterFile = path.join(cwd ?? ".", ".opencode", "marketplace-path.local.json");
+  const adapter = fs.existsSync(adapterFile) ? (readJson(adapterFile).marketplacePath as string | undefined) : undefined;
+  const [source, target] = input.marketplace ? ["input", input.marketplace] : process.env.MARKETPLACE_PATH ? ["MARKETPLACE_PATH", process.env.MARKETPLACE_PATH] : adapter ? ["project adapter", adapter] : ["fallback", MARKETPLACE_FALLBACK];
+  const resolved = path.resolve(target);
+  if (!fs.existsSync(resolved)) throw new Error(`marketplace path ${resolved} (${source}) does not exist`);
+  const repo = await exec("git", ["-C", resolved, "rev-parse", "--is-inside-work-tree"]);
+  if (repo.code !== 0 || repo.stdout.trim() !== "true") throw new Error(`marketplace path ${resolved} (${source}) is not a Git repository`);
+  return { state: { path: resolved, source, fallback: source === "fallback" }, metrics: { fallback: source === "fallback" ? 1 : 0 }, output: `Marketplace (${source}): ${resolved}` };
+};
+
+const safeSource: Operation = async ({ state, exec, answers }) => {
+  if (!exec) throw new Error("sync.safeSource needs the host exec tool");
+  const root = marketplaceRoot(state);
+  const git = (...args: string[]) => exec("git", ["-C", root, ...args]);
+  const stop = (reason: string, detail: string, clean: number) => ({ state: { ok: false, reason, detail }, metrics: { clean, ok: 0 }, output: `Marketplace not safe: ${detail}` });
+  const status = await git("status", "--porcelain");
+  if (status.code !== 0) return stop("status", status.stderr.trim(), 0);
+  if (status.stdout.trim()) return stop("dirty", `the worktree of ${root} has local changes`, 0);
+  let branch = (await git("branch", "--show-current")).stdout.trim();
+  if (branch !== "main") {
+    if (answers?.["q-marketplace-main"] !== "switch") return { state: { ok: false, reason: "not-main", detail: branch || "detached HEAD", branch }, metrics: { clean: 1, ok: 0 }, output: `Marketplace is on ${branch || "a detached HEAD"}, not main.` };
+    const checkout = await git("checkout", "main");
+    if (checkout.code !== 0) return stop("checkout", checkout.stderr.trim(), 1);
+    branch = "main";
+  }
+  const remote = await git("remote", "get-url", "origin");
+  if (remote.code !== 0) return stop("no-remote", `${root} has no origin remote`, 1);
+  const fetch = await git("fetch", "origin", "main");
+  if (fetch.code !== 0) return stop("fetch", fetch.stderr.trim(), 1);
+  const pull = await git("pull", "--ff-only", "origin", "main");
+  if (pull.code !== 0) return stop("pull", pull.stderr.trim(), 1);
+  const head = (await git("rev-parse", "HEAD")).stdout.trim();
+  return { state: { ok: true, reason: "ok", branch, head }, metrics: { clean: 1, ok: 1 }, output: `Marketplace ${root} is clean on main at ${head.slice(0, 12)}, fast-forwarded to origin/main.` };
+};
+
+function frontmatterVersion(file: string): string {
+  return fs.existsSync(file) ? (fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n").match(SEMVER_LINE)?.[1] ?? "none") : "none";
+}
+
+function skillDirIn(root: string, name: string): string | undefined {
+  const skills = path.join(root, "skills");
+  if (!fs.existsSync(skills)) return undefined;
+  return fs.readdirSync(skills).map((c) => path.join(skills, c, name)).find((d) => fs.existsSync(path.join(d, "SKILL.md")));
+}
+
+function manifestVersion(file: string, key: "skills" | "agents", name: string): string {
+  if (!fs.existsSync(file)) return "none";
+  const entry = (readJson(file)[key] as { name: string; version?: string }[] | undefined)?.find((e) => e.name === name);
+  return entry?.version ?? "none";
+}
+
+const discoverArtifacts: Operation = async ({ input, state, cwd }) => {
+  const project = path.resolve(cwd ?? ".");
+  const root = marketplaceRoot(state);
+  const skillsDir = path.join(project, ".agents", "skills");
+  const agentsDir = path.join(project, ".opencode", "agents");
+  const localSkills = fs.existsSync(skillsDir) ? fs.readdirSync(skillsDir).filter((n) => fs.existsSync(path.join(skillsDir, n, "SKILL.md"))) : [];
+  const localAgents = fs.existsSync(agentsDir) ? fs.readdirSync(agentsDir).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)) : [];
+  const wanted = input.artifacts;
+  if (wanted) {
+    const missing = wanted.filter((n) => !localSkills.includes(n) && !localAgents.includes(n));
+    if (missing.length) throw new Error(`input.artifacts not found in ${project}: ${missing.join(", ")}`);
+  }
+  const pick = (names: string[]) => (wanted ? names.filter((n) => wanted.includes(n)) : names);
+  const skills: SyncArtifact[] = pick(localSkills).map((name) => {
+    const dir = skillDirIn(root, name);
+    return { id: name, type: "skill", name, localPath: path.join(skillsDir, name), marketplacePath: dir ?? "none", manifestPath: path.join(root, "registry.json"), marketplaceVersion: manifestVersion(path.join(root, "registry.json"), "skills", name), localVersion: frontmatterVersion(path.join(skillsDir, name, "SKILL.md")) };
+  });
+  const agents: SyncArtifact[] = pick(localAgents).map((name) => {
+    const file = path.join(root, "agents", "opencode", `${name}.md`);
+    return { id: name, type: "agent", name, localPath: path.join(agentsDir, `${name}.md`), marketplacePath: fs.existsSync(file) ? file : "none", manifestPath: path.join(root, "agents", "opencode", "index.json"), marketplaceVersion: manifestVersion(path.join(root, "agents", "opencode", "index.json"), "agents", name), localVersion: manifestVersion(path.join(agentsDir, "index.json"), "agents", name) };
+  });
+  const compare = [...skills, ...agents];
+  return {
+    state: { project, skills, agents, compare },
+    metrics: { artifacts: compare.length, skills: skills.length, agents: agents.length },
+    output: `Discovered ${skills.length} local skills and ${agents.length} local agents to compare in ${project}.`,
+  };
+};
+
+const checkSkillVersions: Operation = async ({ state }) => {
+  const skills = stateOf<{ skills: SyncArtifact[] }>(state, "discover").skills;
+  const missing = skills.filter((s) => frontmatterVersion(path.join(s.localPath, "SKILL.md")) === "none").map((s) => s.name);
+  if (missing.length) throw new Error(`olko-adapt-to-marketplace --local-only left no SemVer version in SKILL.md of: ${missing.join(", ")}. The sync stops here; check these skills and run again.`);
+  const versions = skills.map((s) => `${s.name} ${frontmatterVersion(path.join(s.localPath, "SKILL.md"))}`);
+  return { state: { versions }, metrics: { skills: skills.length }, output: versions.length ? `Local skill versions: ${versions.join(", ")}.` : "No local skills to version." };
+};
+
+export function parseComparison(text: string): Comparison {
+  const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.startsWith("result |"));
+  if (!line) throw new Error("comparator report has no 'result |' line");
+  const [, classification = "", marketplaceVersion = "none", bump = "none", nextVersion = "none", action = ""] = line.split("|").map((p) => p.trim());
+  if (!CLASSIFICATIONS.includes(classification)) throw new Error(`comparator returned unknown classification '${classification}'`);
+  return { classification, marketplaceVersion, bump, nextVersion, action, report: String(text).trim() };
+}
+
+export function syncOptions(classification: string): string[] {
+  if (classification === "local-only") return ["create", "reject", "leave"];
+  if (classification === "adapter-candidate") return ["move-to-adapter", ...ADOPT, "revert-local", "leave"];
+  return [...ADOPT, "revert-local", "leave"];
+}
+
+const syncRows: Operation = async ({ state }) => {
+  const discovered = stateOf<{ compare: SyncArtifact[] }>(state, "discover").compare;
+  const compared = stateOf<Record<string, Comparison>>(state, "compare");
+  const rows = discovered.map((a) => {
+    const c = compared[a.id];
+    if (!c) throw new Error(`no comparison for ${a.type} ${a.name}`);
+    const candidate = c.classification === "local-only" ? (a.localVersion !== "none" ? a.localVersion : "1.0.0") : c.nextVersion;
+    const line = `${a.type} ${a.name}: ${c.classification}; marketplace ${c.marketplaceVersion}; bump ${c.bump}; proposed ${candidate}; recommended ${c.action || "none"}`;
+    return { type: a.type, name: a.name, classification: c.classification, marketplaceVersion: c.marketplaceVersion, bump: c.bump, nextVersion: candidate, action: c.action, line, options: syncOptions(c.classification) };
+  });
+  const decide = rows.filter((r) => r.classification !== "identical");
+  return { state: { rows, decide, table: rows.map((r) => r.line).join("\n") }, metrics: { rows: rows.length, decide: decide.length }, output: `${rows.length} artifacts compared, ${decide.length} need a decision.` };
+};
+
+const syncPlan: Operation = async ({ state, answers }) => {
+  const { rows, decide } = stateOf<{ rows: { type: string; name: string; classification: string }[]; decide: { name: string }[] }>(state, "rows");
+  const decision = (name: string) => {
+    const index = decide.findIndex((d) => d.name === name);
+    return index < 0 ? "none" : answers?.[`q-sync-${index}`] ?? "unanswered";
+  };
+  const decided = rows.map((r) => ({ ...r, decision: decision(r.name) }));
+  const accepted = decided.filter((r) => !["none", "leave", "reject", "unanswered"].includes(r.decision));
+  return { state: { decided, accepted }, metrics: { accepted: accepted.length }, output: accepted.length ? `${accepted.length} accepted decisions to apply.` : "No accepted decisions: nothing to apply, publish or install." };
+};
+
+const syncReport: Operation = async ({ state }) => {
+  const plan = stateOf<{ decided: { type: string; name: string; classification: string; decision: string }[] }>(state, "plan");
+  const source = stateOf<{ head?: string }>(state, "safe-source");
+  const lines = plan.decided.map((r) => `${r.type} ${r.name}: ${r.classification} -> ${r.decision}`);
+  return { state: { lines }, metrics: { rows: lines.length }, output: [`Marketplace sync report (marketplace ${marketplaceRoot(state)} at ${source.head?.slice(0, 12) ?? "unknown"})`, ...lines, "Marketplace, branches and installs: unchanged."].join("\n") };
+};
+
 export const OPERATIONS: Record<string, Operation> = {
   "builtin.pass": pass,
   "github.prScope": prScope,
@@ -541,6 +710,20 @@ export const OPERATIONS: Record<string, Operation> = {
   "review.mergeRules": mergeRules,
   "review.addViolations": addViolations,
   "review.rankFindings": rankFindings,
+  "sync.resolvePath": resolveMarketplacePath,
+  "sync.safeSource": safeSource,
+  "sync.discover": discoverArtifacts,
+  "sync.checkVersions": checkSkillVersions,
+  "sync.rows": syncRows,
+  "sync.plan": syncPlan,
+  "sync.report": syncReport,
+  "sync.stopUnsafe": async ({ state }) => {
+    const source = stateOf<{ detail?: string }>(state, "safe-source");
+    throw new Error(`Marketplace sync stopped before any comparison: ${source.detail ?? "the marketplace checkout is not safe"}.`);
+  },
+  "sync.applyNotAvailable": async () => {
+    throw new Error("Applying accepted sync decisions (marketplace edits, publish, install) is not in the factory yet. The run stops before any change.");
+  },
 };
 
 export const PARSERS: Record<string, (text: string) => unknown> = {
@@ -548,4 +731,5 @@ export const PARSERS: Record<string, (text: string) => unknown> = {
   "review.findings": parseFindings,
   "review.verdicts": parseVerdicts,
   "review.rulesCheck": parseRulesCheck,
+  "sync.comparison": parseComparison,
 };

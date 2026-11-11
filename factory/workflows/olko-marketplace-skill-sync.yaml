@@ -1,0 +1,141 @@
+name: olko-marketplace-skill-sync
+version: 0.1.0
+source: agents/opencode/olko-marketplace-skill-sync-manager.md (phases 1-3; applying, publishing and installing accepted decisions stops with an error)
+roles:
+  bootstrap: low
+  adapter: medium
+  comparator: medium
+entry: resolve-path
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: resolve-path
+    kind: script
+    op: sync.resolvePath
+  - id: ask-fallback
+    kind: interrupt
+    question:
+      id: q-marketplace-fallback
+      text: "The marketplace path comes from the built-in fallback: {{state.resolve-path.path}}. Use it?"
+      allowed: [continue, stop]
+  - id: memory
+    kind: script
+    op: memory.load
+    with: { agent: olko-marketplace-skill-sync-manager }
+  - id: bootstrap
+    kind: llm
+    role: bootstrap
+    agent: olko-marketplace-skill-bootstrapper
+    tools: [read, bash]
+    parse: text.raw
+    prompt: |
+      Project: {{input.project}}
+      Install the registry skills that are missing from .agents/skills/ of this project, as your instructions say. Report the present, installed and failed skill lists.
+  - id: safe-source
+    kind: script
+    op: sync.safeSource
+    maxVisits: 2
+  - id: ask-main
+    kind: interrupt
+    question:
+      id: q-marketplace-main
+      text: "The marketplace {{state.resolve-path.path}} is on {{state.safe-source.detail}}, not main. Switch it to main?"
+      allowed: [switch, stop]
+  - id: stop-unsafe
+    kind: script
+    op: sync.stopUnsafe
+  - id: discover
+    kind: script
+    op: sync.discover
+  - id: adapt-next
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: discover.skills }
+  - id: adapt
+    kind: llm
+    role: adapter
+    skill: olko-adapt-to-marketplace
+    tools: [read, edit]
+    maxVisits: 200
+    parse: text.raw
+    prompt: |
+      olko-adapt-to-marketplace --local-only {{state.adapt-next.item.name}}
+
+      Local skill: {{state.adapt-next.item.localPath}}
+      Do not touch the marketplace ({{state.resolve-path.path}}) and do not publish. The hard deliverable: SKILL.md frontmatter of this skill carries a valid SemVer `version` (1.0.0 for a new skill; for an existing skill keep or bump it and say which). Reply with one line: `version | <x.y.z> | <kept|bumped|new> | <what changed>`.
+  - id: versions
+    kind: script
+    op: sync.checkVersions
+  - id: compare
+    kind: llm
+    role: comparator
+    agent: olko-marketplace-skill-sync-comparator
+    agentsFrom: state.discover.compare
+    dirs: ["{{state.resolve-path.path}}"]
+    parse: sync.comparison
+    prompt: |
+      Compare exactly one artifact. Use only read tools.
+      Artifact type: {{agent.type}}
+      Artifact name: {{agent.name}}
+      Local project: {{state.discover.project}}
+      Local path: {{agent.localPath}}
+      Local version: {{agent.localVersion}}
+      Marketplace: {{state.resolve-path.path}}
+      Marketplace path: {{agent.marketplacePath}}
+      Marketplace registry or agent manifest: {{agent.manifestPath}}
+      Current marketplace manifest version: {{agent.marketplaceVersion}}
+
+      Return your structured report. End it with exactly one line:
+      result | <identical|local-only|marketplace-only|project-adapter-only|adapter-candidate|portable-local-change|conflict> | <current marketplace version or none> | <none|patch|minor|major> | <exact proposed next version or none> | <recommended action>
+  - id: rows
+    kind: script
+    op: sync.rows
+  - id: decide-next
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: rows.decide }
+  - id: decide
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-sync-{{state.decide-next.index}}"
+      text: "Artifact {{state.decide-next.number}} of {{state.decide-next.total}} needs a decision.\n{{state.decide-next.item.line}}\n\nAll artifacts:\n{{state.rows.table}}\n\nNothing changes until you decide. revert-local overwrites the local copy."
+      allowedFrom: state.decide-next.item.options
+  - id: plan
+    kind: script
+    op: sync.plan
+  - id: apply
+    kind: script
+    op: sync.applyNotAvailable
+  - id: report
+    kind: script
+    op: sync.report
+edges:
+  - { from: resolve-path, to: ask-fallback, when: "resolve-path.fallback == true" }
+  - { from: resolve-path, to: memory, when: "resolve-path.fallback == false" }
+  - { from: ask-fallback, to: memory, when: 'ask-fallback.answer == "continue"' }
+  - { from: ask-fallback, to: END, when: 'ask-fallback.answer == "stop"' }
+  - { from: memory, to: bootstrap }
+  - { from: bootstrap, to: safe-source }
+  - { from: safe-source, to: discover, when: "safe-source.ok == true" }
+  - { from: safe-source, to: ask-main, when: 'safe-source.reason == "not-main"' }
+  - { from: safe-source, to: stop-unsafe }
+  - { from: ask-main, to: safe-source, when: 'ask-main.answer == "switch"' }
+  - { from: ask-main, to: stop-unsafe, when: 'ask-main.answer == "stop"' }
+  - { from: stop-unsafe, to: END }
+  - { from: discover, to: adapt-next }
+  - { from: adapt-next, to: adapt, when: "adapt-next.done == false" }
+  - { from: adapt-next, to: versions, when: "adapt-next.done == true" }
+  - { from: adapt, to: adapt-next }
+  - { from: versions, to: compare }
+  - { from: compare, to: rows }
+  - { from: rows, to: decide-next }
+  - { from: decide-next, to: decide, when: "decide-next.done == false" }
+  - { from: decide-next, to: plan, when: "decide-next.done == true" }
+  - { from: decide, to: decide-next }
+  - { from: plan, to: apply, when: "plan.accepted > 0" }
+  - { from: plan, to: report, when: "plan.accepted == 0" }
+  - { from: apply, to: END }
+  - { from: report, to: END }

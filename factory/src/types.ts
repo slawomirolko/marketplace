@@ -33,7 +33,10 @@ export interface Question {
   id: string;
   text: string;
   allowed?: string[];
+  allowedFrom?: string;
 }
+
+export type AgentTool = "read" | "edit" | "bash";
 
 export interface PendingQuestion extends Question {
   node?: string;
@@ -48,6 +51,8 @@ export interface PendingWork {
   agentName?: string;
   agentDescription?: string;
   agentInstructions?: string;
+  tools: AgentTool[];
+  dirs: string[];
 }
 
 export interface Agent {
@@ -70,6 +75,9 @@ export interface RunInput {
   fresh?: boolean;
   plan?: string;
   criteria?: string;
+  project?: string;
+  marketplace?: string;
+  artifacts?: string[];
 }
 
 export interface ExecResult {
@@ -102,6 +110,8 @@ export interface CliRequest {
   agent?: string | undefined;
   cwd?: string | undefined;
   configDir?: string | undefined;
+  tools?: AgentTool[] | undefined;
+  dirs?: string[] | undefined;
 }
 
 export interface CliResult {
@@ -168,6 +178,8 @@ export interface WorkflowNode {
   skipReason?: string;
   maxVisits?: number;
   parallel?: number;
+  tools?: AgentTool[];
+  dirs?: (context: PromptContext) => string[];
 }
 
 export interface Workflow {
@@ -354,6 +366,9 @@ export interface WorkflowSpecNode {
   workflow?: string;
   over?: string;
   question?: Question;
+  skill?: string;
+  tools?: AgentTool[];
+  dirs?: string[];
 }
 
 export interface WorkflowSpecEdge {

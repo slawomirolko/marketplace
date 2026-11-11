@@ -2,8 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import type { CliExecutor, CliName, CliResult, ExecResult, TokenCounts } from "./types.ts";
-import { claudeAgentsFile, opencodeConfigDir } from "./marketplace-agents.ts";
+import type { AgentTool, CliExecutor, CliName, CliResult, ExecResult, TokenCounts } from "./types.ts";
+import { claudeAgentsFile, claudeTools, opencodeConfigDir } from "./marketplace-agents.ts";
 
 const TIMEOUT_MS = 900000;
 const OPENCODE_IDS: Record<string, string> = { haiku: "anthropic/claude-haiku-5-5", sonnet: "anthropic/claude-sonnet-5-5", opus: "anthropic/claude-opus-5-5" };
@@ -99,13 +99,23 @@ function parseEvents(stdout: string): OpencodeEvent[] {
   return events;
 }
 
-const CLAUDE_AGENT_TOOLS = "Read,Grep,Glob,Skill";
-const CLAUDE_AGENT_DISALLOWED = "Bash,Edit,Write,WebFetch,WebSearch,Agent,Task,NotebookEdit";
+interface AgentRunOptions {
+  agent?: string | undefined;
+  cwd?: string | undefined;
+  configDir?: string | undefined;
+  tools?: AgentTool[] | undefined;
+  dirs?: string[] | undefined;
+}
 
-async function runClaude(model: string, prompt: string, { agent, cwd }: { agent?: string | undefined; cwd?: string | undefined } = {}): Promise<CliResult> {
+function claudeAgentArgs(agent: string, tools: AgentTool[], dirs: string[]): string[] {
+  const { allowed, disallowed } = claudeTools(tools);
+  return ["--agents", claudeAgentsFile(agent, tools), "--agent", agent, "--max-turns", "40", "--strict-mcp-config", "--allowedTools", allowed.join(","), "--disallowedTools", disallowed.join(","), ...dirs.flatMap((d) => ["--add-dir", d])];
+}
+
+async function runClaude(model: string, prompt: string, { agent, cwd, tools = ["read"], dirs = [] }: AgentRunOptions = {}): Promise<CliResult> {
   if (agent && !/^[a-z0-9-]+$/.test(agent)) return { ok: false, error: `invalid agent name ${agent}` };
   const args = agent
-    ? ["-p", "--model", model, "--output-format", "json", "--agents", claudeAgentsFile(agent), "--agent", agent, "--max-turns", "40", "--strict-mcp-config", "--allowedTools", CLAUDE_AGENT_TOOLS, "--disallowedTools", CLAUDE_AGENT_DISALLOWED]
+    ? ["-p", "--model", model, "--output-format", "json", ...claudeAgentArgs(agent, tools, dirs)]
     : ["-p", "--model", model, "--output-format", "json", "--max-turns", "2", "--strict-mcp-config", "--disallowedTools", CLAUDE_DISALLOWED];
   const res = await spawnCli("claude", args, prompt, { cwd: cwd ?? workDir });
   let out: ClaudeOutput;
@@ -129,11 +139,11 @@ async function runClaude(model: string, prompt: string, { agent, cwd }: { agent?
   return { ok: !out.is_error, error: out.is_error ? String(out.result).slice(0, 300) : undefined, text: out.result, turns: out.num_turns, harnessCostUsd: out.total_cost_usd ?? null, usageByModel, durationMs: res.durationMs };
 }
 
-async function runOpencode(model: string, prompt: string, { agent, cwd, configDir }: { agent?: string | undefined; cwd?: string | undefined; configDir?: string | undefined } = {}): Promise<CliResult> {
+async function runOpencode(model: string, prompt: string, { agent, cwd, configDir, tools = ["read"] }: AgentRunOptions = {}): Promise<CliResult> {
   const id = OPENCODE_IDS[model] ?? model;
   if (agent && !/^[a-z0-9-]+$/.test(agent)) return { ok: false, error: `invalid agent name ${agent}` };
   const args = ["run", "--standalone", "--archived", "--format", "json", "-m", id, ...(agent ? ["--agent", agent] : [])];
-  const agentDir = configDir ?? (agent ? opencodeConfigDir(agent) : undefined);
+  const agentDir = configDir ?? (agent ? opencodeConfigDir(agent, tools) : undefined);
   const res = await spawnCli("opencode", args, prompt, { cwd: cwd ?? workDir, env: agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {} });
   const events = parseEvents(res.stdout);
   const error = events.find((e) => e.type === "error");
@@ -179,8 +189,8 @@ export async function opencodeSessionUsage(sessionId: string): Promise<SessionUs
 }
 
 export function cliExecutor(cli: CliName): CliExecutor {
-  if (cli === "claude") return ({ model, prompt, agent, cwd }) => runClaude(model, prompt, { agent, cwd });
-  if (cli === "opencode") return ({ model, prompt, agent, cwd, configDir }) => runOpencode(model, prompt, { agent, cwd, configDir });
+  if (cli === "claude") return ({ model, prompt, ...options }) => runClaude(model, prompt, options);
+  if (cli === "opencode") return ({ model, prompt, ...options }) => runOpencode(model, prompt, options);
   throw new Error(`unsupported cli ${cli}`);
 }
 

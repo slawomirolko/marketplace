@@ -1,3 +1,4 @@
+import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
@@ -70,16 +71,16 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
     server.registerTool(
       "factory_start",
       {
-        description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name and pr number, plus fresh: true for a fresh review of your own PR; or plan, a plan file path in the workspace, and optional criteria). The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
+        description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name and pr number, plus fresh: true for a fresh review of your own PR; or plan, a plan file path in the workspace, and optional criteria; for olko-marketplace-skill-sync: project, the absolute path of the local project, optional marketplace, the absolute path of the marketplace checkout, and optional artifacts, the skill and agent names to sync). The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
         inputSchema: {
           goal: z.string().min(1),
           workflow: z.string().regex(/^[a-z][a-z0-9-]*$/).optional(),
-          input: z.object({ repo: z.string().regex(/^[\w.-]+\/[\w.-]+$/).optional(), pr: z.number().int().positive().optional(), fresh: z.boolean().optional(), plan: z.string().regex(/^[\w./-]+$/).optional(), criteria: z.string().max(20000).optional() }).strict().optional(),
+          input: z.object({ repo: z.string().regex(/^[\w.-]+\/[\w.-]+$/).optional(), pr: z.number().int().positive().optional(), fresh: z.boolean().optional(), plan: z.string().regex(/^[\w./-]+$/).optional(), criteria: z.string().max(20000).optional(), project: z.string().min(1).optional(), marketplace: z.string().min(1).optional(), artifacts: z.array(z.string().regex(/^[a-z0-9-]+$/)).min(1).optional() }).strict().optional(),
           idempotencyKey: z.string().optional(),
         },
       },
       guarded(({ goal, workflow, input, idempotencyKey }) => {
-        const runInput = { ...(input?.repo ? { repo: input.repo } : {}), ...(input?.pr ? { pr: input.pr } : {}), ...(input?.fresh ? { fresh: true } : {}), ...(input?.plan ? { plan: input.plan } : {}), ...(input?.criteria ? { criteria: input.criteria } : {}) };
+        const runInput = { ...(input?.repo ? { repo: input.repo } : {}), ...(input?.pr ? { pr: input.pr } : {}), ...(input?.fresh ? { fresh: true } : {}), ...(input?.plan ? { plan: input.plan } : {}), ...(input?.criteria ? { criteria: input.criteria } : {}), ...(input?.project ? { project: path.resolve(input.project) } : {}), ...(input?.marketplace ? { marketplace: path.resolve(input.marketplace) } : {}), ...(input?.artifacts ? { artifacts: input.artifacts } : {}) };
         const { run, reused } = factory.start(goal, idempotencyKey, { ...(workflow ? { workflow } : {}), input: runInput });
         return { ...factory.status(run), reused, next: "Show the proposal to the user. After the user replies, call factory_confirm." };
       }),

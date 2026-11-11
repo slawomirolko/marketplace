@@ -21,6 +21,11 @@ class ReviewRun:
     pr_body: str = ""
     comments_before: int = 0
     comments_after: int = 0
+    marketplace: Any = None
+    marketplace_before: dict = field(default_factory=dict)
+    marketplace_after: dict = field(default_factory=dict)
+    artifacts: list = field(default_factory=list)
+    skill_files: list = field(default_factory=list)
 
 
 class HostState(TypedDict, total=False):

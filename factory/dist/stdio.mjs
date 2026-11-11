@@ -1,4 +1,4 @@
-import { _ as __toESM, a as errorMessage, c as claudeAgentsFile, d as FACTORY_DIR, g as require_ajv, h as require_dist, i as Factory, l as opencodeConfigDir, o as parseBackend, p as defaultDataDir, r as viewerUrlFor, s as parseCli } from "./viewer-routes.mjs";
+import { _ as require_ajv, a as errorMessage, c as claudeAgentsFile, f as FACTORY_DIR, g as require_dist, i as Factory, l as claudeTools, m as defaultDataDir, o as parseBackend, r as viewerUrlFor, s as parseCli, u as opencodeConfigDir, v as __toESM } from "./viewer-routes.mjs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7883,9 +7883,24 @@ function parseEvents(stdout) {
 	}
 	return events;
 }
-var CLAUDE_AGENT_TOOLS = "Read,Grep,Glob,Skill";
-var CLAUDE_AGENT_DISALLOWED = "Bash,Edit,Write,WebFetch,WebSearch,Agent,Task,NotebookEdit";
-async function runClaude(model, prompt, { agent, cwd } = {}) {
+function claudeAgentArgs(agent, tools, dirs) {
+	const { allowed, disallowed } = claudeTools(tools);
+	return [
+		"--agents",
+		claudeAgentsFile(agent, tools),
+		"--agent",
+		agent,
+		"--max-turns",
+		"40",
+		"--strict-mcp-config",
+		"--allowedTools",
+		allowed.join(","),
+		"--disallowedTools",
+		disallowed.join(","),
+		...dirs.flatMap((d) => ["--add-dir", d])
+	];
+}
+async function runClaude(model, prompt, { agent, cwd, tools = ["read"], dirs = [] } = {}) {
 	if (agent && !/^[a-z0-9-]+$/.test(agent)) return {
 		ok: false,
 		error: `invalid agent name ${agent}`
@@ -7896,17 +7911,7 @@ async function runClaude(model, prompt, { agent, cwd } = {}) {
 		model,
 		"--output-format",
 		"json",
-		"--agents",
-		claudeAgentsFile(agent),
-		"--agent",
-		agent,
-		"--max-turns",
-		"40",
-		"--strict-mcp-config",
-		"--allowedTools",
-		CLAUDE_AGENT_TOOLS,
-		"--disallowedTools",
-		CLAUDE_AGENT_DISALLOWED
+		...claudeAgentArgs(agent, tools, dirs)
 	] : [
 		"-p",
 		"--model",
@@ -7951,7 +7956,7 @@ async function runClaude(model, prompt, { agent, cwd } = {}) {
 		durationMs: res.durationMs
 	};
 }
-async function runOpencode(model, prompt, { agent, cwd, configDir } = {}) {
+async function runOpencode(model, prompt, { agent, cwd, configDir, tools = ["read"] } = {}) {
 	const id = OPENCODE_IDS[model] ?? model;
 	if (agent && !/^[a-z0-9-]+$/.test(agent)) return {
 		ok: false,
@@ -7967,7 +7972,7 @@ async function runOpencode(model, prompt, { agent, cwd, configDir } = {}) {
 		id,
 		...agent ? ["--agent", agent] : []
 	];
-	const agentDir = configDir ?? (agent ? opencodeConfigDir(agent) : void 0);
+	const agentDir = configDir ?? (agent ? opencodeConfigDir(agent, tools) : void 0);
 	const res = await spawnCli("opencode", args, prompt, {
 		cwd: cwd ?? workDir,
 		env: agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {}
@@ -8021,15 +8026,8 @@ async function runOpencode(model, prompt, { agent, cwd, configDir } = {}) {
 	};
 }
 function cliExecutor(cli) {
-	if (cli === "claude") return ({ model, prompt, agent, cwd }) => runClaude(model, prompt, {
-		agent,
-		cwd
-	});
-	if (cli === "opencode") return ({ model, prompt, agent, cwd, configDir }) => runOpencode(model, prompt, {
-		agent,
-		cwd,
-		configDir
-	});
+	if (cli === "claude") return ({ model, prompt, ...options }) => runClaude(model, prompt, options);
+	if (cli === "opencode") return ({ model, prompt, ...options }) => runOpencode(model, prompt, options);
 	throw new Error(`unsupported cli ${cli}`);
 }
 function hostExec(command, args) {
@@ -15314,7 +15312,7 @@ function createFactoryTools(factory, publicUrl) {
 			version: "0.1.0"
 		});
 		server.registerTool("factory_start", {
-			description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name and pr number, plus fresh: true for a fresh review of your own PR; or plan, a plan file path in the workspace, and optional criteria). The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
+			description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name and pr number, plus fresh: true for a fresh review of your own PR; or plan, a plan file path in the workspace, and optional criteria; for olko-marketplace-skill-sync: project, the absolute path of the local project, optional marketplace, the absolute path of the marketplace checkout, and optional artifacts, the skill and agent names to sync). The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
 			inputSchema: {
 				goal: string().min(1),
 				workflow: string().regex(/^[a-z][a-z0-9-]*$/).optional(),
@@ -15323,7 +15321,10 @@ function createFactoryTools(factory, publicUrl) {
 					pr: number().int().positive().optional(),
 					fresh: boolean().optional(),
 					plan: string().regex(/^[\w./-]+$/).optional(),
-					criteria: string().max(2e4).optional()
+					criteria: string().max(2e4).optional(),
+					project: string().min(1).optional(),
+					marketplace: string().min(1).optional(),
+					artifacts: array(string().regex(/^[a-z0-9-]+$/)).min(1).optional()
 				}).strict().optional(),
 				idempotencyKey: string().optional()
 			}
@@ -15333,7 +15334,10 @@ function createFactoryTools(factory, publicUrl) {
 				...input?.pr ? { pr: input.pr } : {},
 				...input?.fresh ? { fresh: true } : {},
 				...input?.plan ? { plan: input.plan } : {},
-				...input?.criteria ? { criteria: input.criteria } : {}
+				...input?.criteria ? { criteria: input.criteria } : {},
+				...input?.project ? { project: path.resolve(input.project) } : {},
+				...input?.marketplace ? { marketplace: path.resolve(input.marketplace) } : {},
+				...input?.artifacts ? { artifacts: input.artifacts } : {}
 			};
 			const { run, reused } = factory.start(goal, idempotencyKey, {
 				...workflow ? { workflow } : {},

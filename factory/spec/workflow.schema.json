@@ -100,6 +100,11 @@
           "items": {
             "type": "string"
           }
+        },
+        "allowedFrom": {
+          "type": "string",
+          "pattern": "^state\\.[a-zA-Z0-9_.-]+$",
+          "description": "State path of a list of allowed answers, read when the question is asked."
         }
       }
     },
@@ -128,7 +133,9 @@
         },
         "skill": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Skill the agent of this llm node follows instead of a marketplace agent; the skill text becomes the agent instructions.",
+          "pattern": "^[a-z0-9-]+$"
         },
         "workflow": {
           "$ref": "#/$defs/id"
@@ -203,6 +210,27 @@
           "type": "integer",
           "minimum": 1,
           "description": "How many agents of this node run at the same time (default 10)."
+        },
+        "tools": {
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "read",
+              "edit",
+              "bash"
+            ]
+          },
+          "description": "Tools the agent of this node may use (default read). The cli backend allows only these; delegate passes them in pendingWork."
+        },
+        "dirs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Mustache templates of extra directories the agent may read or write besides the run workspace."
         }
       },
       "allOf": [
