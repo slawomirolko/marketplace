@@ -69,7 +69,7 @@
     },
     {
       "name": "olko-marketplace-skill-sync-manager",
-      "version": "2.3.1",
+      "version": "2.4.0",
       "file": "olko-marketplace-skill-sync-manager.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -286,7 +286,7 @@
     },
     {
       "name": "olko-mobile-auditor",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "file": "olko-mobile-auditor.md",
       "stack": "mobile",
       "role": "auditor",
@@ -301,13 +301,16 @@
     },
     {
       "name": "olko-mobile-test-runner",
-      "version": "2.1.1",
+      "version": "2.2.0",
       "file": "olko-mobile-test-runner.md",
       "stack": "mobile",
       "role": "test-runner",
       "skills": [
         "olko-test",
-        "olko-memory-layer"
+        "olko-memory-layer",
+        "olko-kotlin-testing",
+        "olko-kotlin-style",
+        "olko-kotlin-architecture"
       ]
     },
     {
@@ -469,7 +472,7 @@
     },
     {
       "name": "olko-skill-optimizer",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "file": "olko-skill-optimizer.md",
       "stack": "cross-stack",
       "role": "writer",

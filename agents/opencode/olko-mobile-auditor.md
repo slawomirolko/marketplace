@@ -32,7 +32,7 @@ report — unit tests + compile checks alone never constitute complete mobile
 verification, and class-filtered subsets are forbidden. If changed androidTest
 suites were not executed in full on the emulator, flag this explicitly as a gap
 the caller MUST close via `olko-mobile-test-runner`
-(`invoke-instrumentation-watchdog.ps1` on the Docker emulator) before the work
+(the instrumentation runner documented in the Android project's AGENTS.md/TESTING.md, on the Docker emulator) before the work
 is considered verified.
 
 Send a progress update to the caller after architecture, style, and test-architecture review, after each agreed edit batch, and immediately on a finding or blocker. Each update must include `phase`, `status`, `findings`, `changed files` when applicable, `verification remaining`, and `next action`. Finish with the same information in the final result. If the runtime buffers child messages until completion, emit these updates in chronological order under `Progress updates` before the final summary.

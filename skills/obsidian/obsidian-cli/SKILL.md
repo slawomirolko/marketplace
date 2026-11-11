@@ -1,5 +1,6 @@
 ---
 name: obsidian-cli
+version: 1.1.0
 description: Interact with Obsidian vaults using the Obsidian CLI to read, create, search, and manage notes, tasks, properties, and more. Also supports plugin and theme development with commands to reload plugins, run JavaScript, capture errors, take screenshots, and inspect the DOM. Use when the user asks to interact with their Obsidian vault, manage notes, search vault content, perform vault operations from the command line, or develop and debug Obsidian plugins and themes.
 origin: vendored
 ---
@@ -70,6 +71,14 @@ obsidian tasks daily todo
 obsidian tags sort=count counts
 obsidian backlinks file="My Note"
 ```
+
+## Note content
+
+When you create or revise note text, follow the language and approval rules of
+the active vault and its knowledge-manager workflow. Before writing, apply the
+language review from `olko-ste100-skill-adapter`: use clear sentences,
+consistent terms, and specific headings; preserve verified facts and technical
+identifiers. Do not bypass an approval gate owned by another workflow.
 
 Use `--copy` on any command to copy output to clipboard. Use `silent` to prevent files from opening. Use `total` on list commands to get a count.
 

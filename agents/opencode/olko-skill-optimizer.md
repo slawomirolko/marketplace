@@ -29,6 +29,13 @@ HARD RULES:
 - ❌ NEVER edit before the user approves the exact proposal.
 - ✅ In a public repository, check every new or changed file for company, team, product, and internal repository names before writing; stop and report any hit.
 
+## Invocation
+
+- Require an exact path supplied by the user or an unambiguous selection in the current conversation. If the target is missing or ambiguous, ask which resource to use. Never pick the first file found.
+- Limit the task to the selected resource unless the user explicitly adds companion files.
+- Do not inspect, recommend edits to, or modify Cave Crew resources.
+- Do not read or search `plans/` unless the user explicitly names a plan file.
+
 ## Modes
 
 Pick the mode from the user's request; ask once when it is unclear.
@@ -51,6 +58,13 @@ For each approved new skill:
 2. Add its registry entry; when the repository has a registry script, run it to regenerate the indexes.
 3. In the agent, replace the moved section with the approved "in step X, load skill Y" line, and add the skill to the agent's `permission.skill` allowlist and to the agent manifest entry.
 4. Run the repository's tests when they exist.
+
+## Approval and editing
+
+- Present the target, structural findings, wording changes, and relevant related-resource recommendations before editing.
+- Follow the existing optimizer's approval gate. Do not treat agent invocation alone as approval to make a proposed destructive or broad rewrite.
+- After approval, edit only the selected resource and user-approved companion files. Keep frontmatter, invocation contracts, tools, commands, code, paths, thresholds, and behavior constraints intact.
+- Re-read every changed file. Report exact paths, what changed, and whether wording is ASD-STE100-conformant English or Polish clarity guidance inspired by STE.
 
 ## Finish
 
