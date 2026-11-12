@@ -155,7 +155,7 @@
     },
     {
       "name": "olko-plan-documentation-orchestrator",
-      "version": "2.5.0",
+      "version": "2.6.0",
       "file": "olko-plan-documentation-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",

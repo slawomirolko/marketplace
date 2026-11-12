@@ -5,7 +5,7 @@
       "name": "grill-me-base",
       "category": "workflow",
       "origin": "vendored",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "description": "Interview the user one question at a time to stress-test a plan, design, or decision tree until shared understanding is reached. Minimal domain-agnostic vendored variant; reads project adapters when available and does not auto-load documentation skills. Triggers: 'grill', 'grill me', 'stress-test plan', 'challenge this design', 'grill-me-base'.",
       "tags": [
         "workflow",
@@ -25,7 +25,7 @@
       "name": "grill-with-docs",
       "category": "workflow",
       "origin": "vendored",
-      "version": "1.4.0",
+      "version": "1.5.0",
       "description": "A grilling session that stress-tests a plan against the project's documented domain model — sharpens fuzzy terminology, challenges it against the existing glossary, cross-references it with the code, and updates documentation (CONTEXT.md, ADRs) inline as decisions crystallize. The domain-aware variant of grill-me — use this instead when the repo has (or should have) a CONTEXT.md glossary or docs/adr/ decision records. Triggers include \"grill with docs\", \"stress-test this against our domain model\", \"does this match our language\", \"check this against our glossary\", \"grill this and update the docs\", or any time a non-trivial plan needs to be reconciled with the project's documented decisions.",
       "tags": [
         "workflow",

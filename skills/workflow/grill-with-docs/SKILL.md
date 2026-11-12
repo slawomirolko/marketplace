@@ -1,6 +1,6 @@
 ---
 name: grill-with-docs
-version: 1.4.0
+version: 1.5.0
 description: A grilling session that stress-tests a plan against the project's documented domain model — sharpens fuzzy terminology, challenges it against the existing glossary, cross-references it with the code, and updates documentation (CONTEXT.md, ADRs) inline as decisions crystallize. The domain-aware variant of grill-me — use this instead when the repo has (or should have) a CONTEXT.md glossary or docs/adr/ decision records. Triggers include "grill with docs", "stress-test this against our domain model", "does this match our language", "check this against our glossary", "grill this and update the docs", or any time a non-trivial plan needs to be reconciled with the project's documented decisions.
 origin: vendored
 ---
@@ -86,12 +86,21 @@ This skill is the domain-aware sibling of `max:grill-me`. `grill-me` reports amb
 3. Apply rules in this order: Configuration, Project Adapter, AGENTS.md, then Marketplace Skill.
 4. Run with the defaults below when no higher-priority layer overrides them.
 
+## Language and decision recording
+
+- Read `userResponseLanguage` from `.agents/skill-config.md`. Use that language for every question, explanation, and user-facing response in the grill. If the user explicitly requests another language for the current conversation, that request overrides the configured default for that conversation.
+- When recording a user answer in a repository plan/tracker, use `userDecisionRecordLanguage` and `userDecisionRecordStyle`. Translate the decision into a concise, faithful statement in the configured language; preserve identifiers and any exact wording whose meaning or approval depends on the original. Do not add interpretation or change the decision while compressing it.
+- Defaults when unset: response language = detect from the user's current message; decision record language = repository documentation language; record style = concise translation.
+
 Recognized configuration keys:
 
 - `projectAdapter`: default `true`; controls loading the project adapter.
 - `conventionDiscovery`: default `false`; when `true`, inspect the repository to find context docs, ADRs, and code answers.
 - `grillQuestionMode`: default `one-per-turn`; ask exactly one question, record the answer, then ask the next.
 - `grillExploration`: default `code-and-docs-when-answerable`; inspect code/docs instead of asking when the answer is discoverable and allowed.
+- `userResponseLanguage`: language for questions and user-facing grill responses; default `auto-detect`.
+- `userDecisionRecordLanguage`: language for concise tracker records of user decisions; default repository documentation language.
+- `userDecisionRecordStyle`: how to record user decisions; default `concise-translation`.
 - `contextMapPath`: default `CONTEXT-MAP.md`; overrides the multi-context map path.
 - `contextFileName`: default `CONTEXT.md`; overrides context glossary file name.
 - `adrDirectory`: default `docs/adr`; overrides ADR directory.
