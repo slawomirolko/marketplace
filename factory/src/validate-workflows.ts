@@ -5,7 +5,6 @@ import { parse as parseYaml } from "yaml";
 import { validate } from "./spec.ts";
 import { loadWorkflowDir } from "./workflow-yaml.ts";
 import { describeAgent } from "./marketplace-agents.ts";
-import { OPERATIONS, PARSERS } from "./ops.ts";
 import type { WorkflowSpec } from "./types.ts";
 
 export interface WorkflowCheck {
@@ -27,8 +26,6 @@ export function checkWorkflows(dir: string, agentExists: (name: string) => boole
       if (!spec.description) errors.push(`${file}: workflow has no description`);
       for (const node of spec.nodes ?? []) {
         if (!node.description) errors.push(`${file}: node ${node.id} has no description`);
-        if (node.op && !OPERATIONS[node.op]) errors.push(`${file}: node ${node.id}: unknown op ${node.op} (needs engine op)`);
-        if (node.parse && !PARSERS[node.parse]) errors.push(`${file}: node ${node.id}: unknown parser ${node.parse} (needs engine parser)`);
         for (const name of [node.agent, node.skill, ...(node.agents ?? []).map((a) => a.agent)]) {
           if (typeof name === "string" && !agentExists(name)) errors.push(`${file}: node ${node.id}: agent or skill ${name} is not in the marketplace`);
         }
@@ -45,7 +42,7 @@ export function checkWorkflows(dir: string, agentExists: (name: string) => boole
   try {
     loadWorkflowDir(dir);
   } catch (error) {
-    errors.push(`load: ${error instanceof Error ? error.message : String(error)}`);
+    errors.push(`load (an unknown operation or parser needs engine work): ${error instanceof Error ? error.message : String(error)}`);
   }
   return { ok: errors.length === 0, errors, workflows: specs.length };
 }

@@ -95,6 +95,7 @@ export interface RunInput {
   base?: string;
   taskId?: string;
   adopt?: boolean;
+  workflowsDir?: string;
 }
 
 export interface ExecResult {

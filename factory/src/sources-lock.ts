@@ -161,7 +161,7 @@ export async function updateMarketplace(exec: HostExec, marketplace: string): Pr
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const marketplace = marketplaceDir();
-  const commit = process.argv[2] ?? execFileSync("git", ["-C", marketplace, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  const commit = process.argv[2] ?? execFileSync("git", ["-C", marketplace, "rev-parse", "HEAD"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   const lock = buildLock(loadWorkflowSpecs(path.join(FACTORY_DIR, "workflows")), marketplace, commit);
   writeLock(lock);
   console.log(`${Object.keys(lock).length} workflows locked against ${marketplace} at ${commit} in ${LOCK_FILE}`);

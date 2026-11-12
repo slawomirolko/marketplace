@@ -74,7 +74,8 @@ def factory_server():
         "TMPDIR": str(SERVER_TEMP),
     }
     node = os.environ.get("FACTORY_NODE", shutil.which("node") or "node")
-    process = subprocess.Popen([node, "src/server.ts"], cwd=FACTORY_DIR, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    server_log = open(Path(data_dir) / "server-stderr.log", "w", encoding="utf-8")
+    process = subprocess.Popen([node, "src/server.ts"], cwd=FACTORY_DIR, env=env, stdout=subprocess.DEVNULL, stderr=server_log)
     url = f"http://127.0.0.1:{port}"
     try:
         wait_for_health(url, process)
@@ -517,4 +518,48 @@ async def impl_run(factory_server) -> ReviewRun:
     porcelain = subprocess.run(["git", "-C", str(worktree), "status", "--porcelain", "--untracked-files=all"], check=True, capture_output=True, text=True).stdout if worktree.exists() else ""
     run.changed_files = [line[3:] for line in porcelain.splitlines() if line.strip()]
     print(json.dumps({"runId": run.run_id, "changed": run.changed_files, "costUsd": run.report["cost"]["costUsd"], "status": run.report["status"], "viewerUrl": run.viewer_url}))
+    return run
+
+
+def wfsync_answer(question: dict) -> str:
+    qid, allowed = question["id"], question.get("allowed") or []
+    if qid.startswith("q-wfsync-new-"):
+        return "skip"
+    if qid.startswith("q-wfsync-open-"):
+        return "continue"
+    if qid == "q-wfsync-apply":
+        return "approve"
+    if "continue" in allowed:
+        return "continue"
+    return allowed[0] if allowed else "continue"
+
+
+@pytest.fixture(scope="session")
+async def wfsync_run(factory_server) -> ReviewRun:
+    root = Path(os.path.realpath(tempfile.mkdtemp(prefix="factory-wfsync-")))
+    marketplace = root / "marketplace"
+    subprocess.run(["gh", "repo", "clone", MARKETPLACE_REMOTE, str(marketplace)], check=True, capture_output=True)
+    work = root / "wf"
+    shutil.copytree(FACTORY_DIR / "workflows", work / "workflows")
+    shutil.copy2(FACTORY_DIR / "workflows.lock.json", work / "workflows.lock.json")
+    before_lock = json.loads((work / "workflows.lock.json").read_text(encoding="utf-8"))
+    before_yaml = {p.name: p.read_text(encoding="utf-8") for p in (work / "workflows").glob("*.yaml")}
+    real_before = git(FACTORY_DIR, "status", "--porcelain", "--", "workflows", "workflows.lock.json")
+    run = await run_workflow(
+        url=f"{factory_server['url']}/mcp",
+        token=factory_server["token"],
+        workflow="olko-workflow-sync",
+        goal="Bring the factory workflows in step with the Olko marketplace",
+        workflow_input={"project": str(work), "workflowsDir": str(work / "workflows"), "marketplace": str(marketplace)},
+        answer=wfsync_answer,
+    )
+    run.stores = {"work": work, "marketplace": marketplace}
+    run.stores_before = {"lock": before_lock, "yaml": before_yaml, "real": real_before}
+    run.stores_after = {
+        "lock": json.loads((work / "workflows.lock.json").read_text(encoding="utf-8")),
+        "yaml": {p.name: p.read_text(encoding="utf-8") for p in (work / "workflows").glob("*.yaml")},
+        "real": git(FACTORY_DIR, "status", "--porcelain", "--", "workflows", "workflows.lock.json"),
+        "head": git(marketplace, "rev-parse", "HEAD"),
+    }
+    print(json.dumps({"runId": run.run_id, "costUsd": run.report["cost"]["costUsd"], "status": run.report["status"], "viewerUrl": run.viewer_url}))
     return run

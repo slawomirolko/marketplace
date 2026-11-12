@@ -39,4 +39,4 @@ Rules for writing and checking Software Factory workflow YAML (`factory/workflow
 5. Validate: `node factory/src/validate-workflows.ts [dir]` must print `workflows ok`.
 
 ## Verifying
-Compare the YAML with the CURRENT agent text, step by step: every hard rule, gate, question and loop of the text has a node or edge; nothing in the YAML contradicts the text; branch descriptions match their conditions. Report each gap with the agent line and the YAML node.
+Compare the YAML with the CURRENT agent text, step by step: every hard rule, gate, question and loop of the text has a node or edge; nothing in the YAML contradicts the text; branch descriptions match their conditions. Report each gap with the agent line and the YAML node, and mark it `yaml:` (fixable with what exists) or `engine:` (needs a new operation, parser or node kind). Only `yaml:` gaps fail the check; `engine:` gaps go to the user as engine work.

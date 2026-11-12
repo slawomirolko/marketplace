@@ -20,3 +20,10 @@ test("only the workflows whose steps started count as run", () => {
   assert.deepEqual(ran, ["olko-impl-checks", "olko-impl-entry", "olko-impl-preflight", "olko-review", "olko-review-findings"]);
   assert.equal(ran.includes("olko-plan-documentation"), false);
 });
+
+test("a source change reaches every file of the workflows that contain it", async () => {
+  const { workflowFamily } = await import("../src/wfsync-ops.ts");
+  const family = workflowFamily(loadWorkflowSpecs(workflows), ["olko-plan-tracker-publish"]);
+  for (const name of ["olko-plan-tracker-publish", "olko-plan-discovery", "olko-plan-documentation", "olko-implementation"]) assert.ok(family.includes(name), name);
+  assert.equal(family.includes("olko-claude-sync"), false);
+});

@@ -199,7 +199,7 @@ function scan(factoryDir: string): MarketplaceScan {
   const marketplace = marketplaceDir();
   let head = "";
   try {
-    head = execFileSync("git", ["-C", marketplace, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    head = execFileSync("git", ["-C", marketplace, "rev-parse", "HEAD"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   } catch {
     head = "";
   }

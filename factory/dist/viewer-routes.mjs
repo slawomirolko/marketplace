@@ -8267,7 +8267,14 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 		marketplace,
 		"rev-parse",
 		"HEAD"
-	], { encoding: "utf8" }).trim();
+	], {
+		encoding: "utf8",
+		stdio: [
+			"ignore",
+			"pipe",
+			"pipe"
+		]
+	}).trim();
 	const lock = buildLock(loadWorkflowSpecs(path.join(FACTORY_DIR$1, "workflows")), marketplace, commit);
 	writeLock(lock);
 	console.log(`${Object.keys(lock).length} workflows locked against ${marketplace} at ${commit} in ${LOCK_FILE}`);
@@ -15828,8 +15835,6 @@ function checkWorkflows(dir, agentExists = (name) => describeAgent(name) !== nul
 		if (!spec.description) errors.push(`${file}: workflow has no description`);
 		for (const node of spec.nodes ?? []) {
 			if (!node.description) errors.push(`${file}: node ${node.id} has no description`);
-			if (node.op && !OPERATIONS[node.op]) errors.push(`${file}: node ${node.id}: unknown op ${node.op} (needs engine op)`);
-			if (node.parse && !PARSERS[node.parse]) errors.push(`${file}: node ${node.id}: unknown parser ${node.parse} (needs engine parser)`);
 			for (const name of [
 				node.agent,
 				node.skill,
@@ -15844,7 +15849,7 @@ function checkWorkflows(dir, agentExists = (name) => describeAgent(name) !== nul
 	try {
 		loadWorkflowDir(dir);
 	} catch (error) {
-		errors.push(`load: ${error instanceof Error ? error.message : String(error)}`);
+		errors.push(`load (an unknown operation or parser needs engine work): ${error instanceof Error ? error.message : String(error)}`);
 	}
 	return {
 		ok: errors.length === 0,
@@ -15861,8 +15866,29 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 }
 // src/wfsync-ops.ts
 var FACTORY_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+function workflowFamily(specs, names) {
+	const children = new Map(specs.map((s) => [s.name, s.nodes.map((n) => n.workflow).filter((w) => typeof w === "string")]));
+	const below = (root) => {
+		const seen = /* @__PURE__ */ new Set();
+		const visit = (name) => {
+			if (seen.has(name)) return;
+			seen.add(name);
+			for (const child of children.get(name) ?? []) visit(child);
+		};
+		visit(root);
+		return seen;
+	};
+	const referenced = new Set([...children.values()].flat());
+	const roots = specs.map((s) => s.name).filter((n) => !referenced.has(n));
+	const family = new Set(names);
+	for (const root of roots) {
+		const members = below(root);
+		if (names.some((n) => members.has(n))) for (const m of members) family.add(m);
+	}
+	return [...family].sort();
+}
 function dirs(input) {
-	const workflows = path.resolve(input.path ?? path.join(FACTORY_DIR, "workflows"));
+	const workflows = path.resolve(input.workflowsDir ?? path.join(FACTORY_DIR, "workflows"));
 	return {
 		workflows,
 		lock: path.join(path.dirname(workflows), "workflows.lock.json"),
@@ -15876,7 +15902,12 @@ function git(cwd, ...args) {
 		...args
 	], {
 		encoding: "utf8",
-		maxBuffer: 33554432
+		maxBuffer: 33554432,
+		stdio: [
+			"ignore",
+			"pipe",
+			"pipe"
+		]
 	}).trim();
 }
 function diffOf(marketplace, commit, file) {
@@ -15904,6 +15935,7 @@ var wfsyncScan = async ({ input }) => {
 			diff: kind === "missing" ? `${source} was removed from the marketplace` : diffOf(marketplace, stale.commit, source),
 			workflows: [],
 			yamlFiles: [],
+			family: [],
 			ask: false
 		};
 		item.workflows.push(stale.workflow);
@@ -15911,6 +15943,7 @@ var wfsyncScan = async ({ input }) => {
 		bySource.set(source, item);
 	}
 	const items = [...bySource.values()];
+	for (const item of items) item.family = workflowFamily(specs, item.workflows).map((w) => path.join(workflows, `${w}.yaml`));
 	for (const agent of scan.unmapped) items.push({
 		kind: "new",
 		source: agent.file,
@@ -15918,6 +15951,7 @@ var wfsyncScan = async ({ input }) => {
 		diff: fs.readFileSync(path.join(marketplace, agent.file), "utf8"),
 		workflows: [],
 		yamlFiles: [],
+		family: [],
 		ask: true
 	});
 	const snapshot = fs.mkdtempSync(path.join(os.tmpdir(), "factory-wfsync-"));
@@ -15959,7 +15993,8 @@ var wfsyncItem = async ({ state }) => {
 		state: {
 			...item,
 			ask: item.ask,
-			yamlList: item.yamlFiles.join("\n") || "(none yet: write a new root workflow and its group files)"
+			yamlList: item.yamlFiles.join("\n") || "(none yet: write a new root workflow and its group files)",
+			familyList: item.family.join("\n") || "(none)"
 		},
 		metrics: { workflows: item.workflows.length },
 		output: `${item.kind} ${item.source}: ${item.workflows.join(", ") || "new main agent"}.`
@@ -15987,9 +16022,16 @@ var wfsyncCheck = async ({ state, nodeId }) => {
 	const validation = state.validate;
 	const mapping = lastOf(state, "map");
 	const verify = lastOf(state, "verify");
-	const pass = validation.ok && verify?.verdict === "pass";
-	const needsOp = (mapping?.text ?? "").split(/\r?\n/).filter((l) => /needs engine (op|parser)/i.test(l)).map((l) => l.trim());
-	const findings = [validation.ok ? "" : `Validation:\n${validation.errors}`, verify?.verdict === "pass" ? "" : `Verifier:\n${verify?.text ?? "no result"}`].filter(Boolean).join("\n\n");
+	const yamlGaps = Number(verify?.fields?.[1]);
+	const verified = verify !== void 0 && verify.verdict !== "missing" && (verify.verdict === "pass" || yamlGaps === 0);
+	const pass = validation.ok && mapping?.verdict !== "missing" && verified;
+	const lines = (text, pattern) => (text ?? "").split(/\r?\n/).filter((l) => pattern.test(l)).map((l) => l.trim());
+	const needsOp = [.../* @__PURE__ */ new Set([...lines(mapping?.text, /needs engine (op|parser)/i), ...lines(verify?.text, /^engine:/i)])];
+	const findings = [
+		validation.ok ? "" : `Validation:\n${validation.errors}`,
+		mapping?.verdict === "missing" ? "Your last report had no final `mapping | ...` line." : "",
+		verified ? "" : `Verifier (fix the yaml: lines; engine: lines need engine work and stay as they are):\n${verify?.text ?? "no result"}`
+	].filter(Boolean).join("\n\n");
 	const next = pass ? "pass" : round < 3 ? "retry" : "ask";
 	const result = {
 		source: item.source,
@@ -16020,25 +16062,41 @@ var wfsyncDiff = async ({ state }) => {
 	let diff = "";
 	try {
 		execFileSync("git", [
+			"-c",
+			"core.autocrlf=false",
 			"diff",
 			"--no-index",
 			"--stat",
 			scan.snapshot,
 			scan.workflows
-		], { encoding: "utf8" });
+		], {
+			encoding: "utf8",
+			stdio: [
+				"ignore",
+				"pipe",
+				"pipe"
+			]
+		});
 	} catch (error) {
 		diff = String(error.stdout ?? "");
 	}
 	let full = "";
 	try {
 		execFileSync("git", [
+			"-c",
+			"core.autocrlf=false",
 			"diff",
 			"--no-index",
 			scan.snapshot,
 			scan.workflows
 		], {
 			encoding: "utf8",
-			maxBuffer: 33554432
+			maxBuffer: 33554432,
+			stdio: [
+				"ignore",
+				"pipe",
+				"pipe"
+			]
 		});
 	} catch (error) {
 		full = String(error.stdout ?? "");
@@ -16102,6 +16160,28 @@ var wfsyncReport = async ({ state }) => {
 		metrics: { results: results.length },
 		output: lines.join("\n")
 	};
+};
+function lineOrMissing(prefix) {
+	return (text) => {
+		const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.toLowerCase().startsWith(`${prefix} |`));
+		if (!line) return {
+			verdict: "missing",
+			detail: `no '${prefix} |' line`,
+			fields: ["missing"],
+			text: String(text).slice(-6e3)
+		};
+		const fields = line.split("|").map((p) => p.trim()).slice(1);
+		return {
+			verdict: (fields[0] ?? "").toLowerCase(),
+			detail: fields.slice(1).join(" | "),
+			fields,
+			text: String(text).slice(-6e3)
+		};
+	};
+}
+var WFSYNC_PARSERS = {
+	"wfsync.mapping": lineOrMissing("mapping"),
+	"wfsync.verify": lineOrMissing("verify")
 };
 var WFSYNC_OPERATIONS = {
 	"wfsync.scan": wfsyncScan,
@@ -18849,7 +18929,6 @@ var planFeatureReport = async ({ state, cwd }) => {
 };
 var OPERATIONS = {
 	...IMPL_OPERATIONS,
-	...WFSYNC_OPERATIONS,
 	"builtin.pass": pass,
 	"builtin.count": async ({ state, nodeId }) => {
 		const count = ((nodeId ? state[nodeId]?.count : 0) ?? 0) + 1;
@@ -18960,8 +19039,6 @@ var OPERATIONS = {
 };
 var PARSERS = {
 	...IMPL_PARSERS,
-	"wfsync.mapping": parseLine("mapping"),
-	"wfsync.verify": parseLine("verify"),
 	"text.raw": (text) => String(text).trim(),
 	"review.findings": parseFindings,
 	"review.verdicts": parseVerdicts,
@@ -18979,6 +19056,12 @@ var PARSERS = {
 	"plan.findings": parseVerdictLine("findings"),
 	"csync.suggestions": parseSuggestions
 };
+function operationNamed(name) {
+	return OPERATIONS[name] ?? WFSYNC_OPERATIONS[name];
+}
+function parserNamed(name) {
+	return PARSERS[name] ?? WFSYNC_PARSERS[name];
+}
 // src/workflow-yaml.ts
 mustache.escape = (text) => text;
 var CONDITION = /^([a-zA-Z0-9_./-]+)\s*(==|!=|>=|<=|>|<)\s*(.+)$/;
@@ -19073,12 +19156,12 @@ function buildNode(workflow, spec) {
 	if (spec.prompt) node.prompt = render(spec.prompt);
 	if (spec.agentsFrom) node.agentsFrom = agentsFromPath(spec.agentsFrom);
 	if (spec.parse) {
-		const parser = PARSERS[spec.parse];
+		const parser = parserNamed(spec.parse);
 		if (!parser) throw new Error(`node ${spec.id}: unknown parser ${spec.parse}`);
 		node.parse = parser;
 	}
 	if (spec.op) {
-		const operation = OPERATIONS[spec.op];
+		const operation = operationNamed(spec.op);
 		if (!operation) throw new Error(`node ${spec.id}: unknown operation ${spec.op}`);
 		const args = spec.with ?? {};
 		node.script = (context) => operation({
@@ -20859,7 +20942,14 @@ function scan(factoryDir) {
 			marketplace,
 			"rev-parse",
 			"HEAD"
-		], { encoding: "utf8" }).trim();
+		], {
+			encoding: "utf8",
+			stdio: [
+				"ignore",
+				"pipe",
+				"pipe"
+			]
+		}).trim();
 	} catch {
 		head = "";
 	}

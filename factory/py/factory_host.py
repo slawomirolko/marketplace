@@ -51,7 +51,10 @@ def payload(result: Any) -> dict:
         text = "".join(part.get("text", "") if isinstance(part, dict) else str(part) for part in result)
     else:
         text = str(result)
-    data = json.loads(text)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        raise RuntimeError(f"factory tool did not return JSON: {text[:500]}") from None
     if "error" in data and "runId" not in data:
         raise RuntimeError(data["error"])
     return data

@@ -23,5 +23,7 @@ RULES:
 - Every workflow, node and branch edge has a plain-language description.
 - Run `node <factory>/src/validate-workflows.ts <workflows folder>` after the edits and fix every problem it reports in your files.
 
+When the findings contain `engine:` lines, do not try to fix them in YAML; keep them in your report as `needs engine op`.
+
 REPORT: changed files, one line per diff item (`covered by <file>#<node>` or `needs engine op: ...`), the validation result, and end with one line:
 `mapping | <changed|unchanged|needs-op> | <one-line summary>`

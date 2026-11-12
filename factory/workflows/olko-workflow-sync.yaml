@@ -46,6 +46,8 @@ nodes:
       Workflows folder (edit only YAML files here): {{state.scan.workflows}}
       YAML files that name this source:
       {{state.item.yamlList}}
+      Every file of the workflows that contain them (you may change any of these when the diff affects them):
+      {{state.item.familyList}}
       Validate with: node {{state.scan.factory}}/src/validate-workflows.ts {{state.scan.workflows}}
       Diff of the source since the YAML was written ({{state.item.kind}} == new means the full text of a new main agent):
       {{state.item.diff}}
@@ -68,6 +70,8 @@ nodes:
       Current source: {{state.scan.marketplace}}/{{state.item.source}} ({{state.item.kind}})
       YAML files in {{state.scan.workflows}} that implement it:
       {{state.item.yamlList}}
+      Every file of the workflows that contain them (read these before you call a step missing):
+      {{state.item.familyList}}
       Diff of the source:
       {{state.item.diff}}
       Mapper report:

@@ -15121,7 +15121,8 @@ function createFactoryTools(factory, publicUrl) {
 					featureId: string().regex(/^[a-z0-9-]+$/).optional(),
 					base: string().regex(/^[\w./-]+$/).optional(),
 					taskId: string().regex(/^[\w.-]+$/).optional(),
-					adopt: boolean().optional()
+					adopt: boolean().optional(),
+					workflowsDir: string().min(1).optional()
 				}).strict().optional(),
 				idempotencyKey: string().optional()
 			}
@@ -15146,7 +15147,8 @@ function createFactoryTools(factory, publicUrl) {
 				...input?.featureId ? { featureId: input.featureId } : {},
 				...input?.base ? { base: input.base } : {},
 				...input?.taskId ? { taskId: input.taskId } : {},
-				...input?.adopt ? { adopt: true } : {}
+				...input?.adopt ? { adopt: true } : {},
+				...input?.workflowsDir ? { workflowsDir: longPath(input.workflowsDir) } : {}
 			};
 			const { run, reused } = factory.start(goal, idempotencyKey, {
 				...workflow ? { workflow } : {},

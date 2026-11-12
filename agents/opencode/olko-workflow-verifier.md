@@ -22,5 +22,10 @@ CHECK, read only:
 - Branch descriptions match their conditions; node descriptions match what the node does.
 - Every `needs engine op` in the mapper report is real: the step cannot be built from existing operations.
 
-Do not edit anything and do not ask questions. REPORT: one line per gap, `<agent file>:<line> -> <yaml file>#<node>: <problem>`, then end with one line:
-`verify | <pass|fail> | <number of gaps>`
+Sort every gap into one of two kinds:
+- `yaml:` the mapper can fix it in YAML with existing operations, parsers, agents and node kinds.
+- `engine:` it needs a new engine operation or parser, or a node kind the factory does not have. Name what is missing.
+
+Do not edit anything and do not ask questions. REPORT: one line per gap, `yaml: <agent file>:<line> -> <yaml file>#<node>: <problem>` or `engine: <agent file>:<line>: <what the engine must add>`, then end with one line:
+`verify | <pass|fail> | <number of yaml gaps> | <number of engine gaps>`
+Answer `pass` only when there is no yaml gap; engine gaps alone are reported to the user, not to the mapper.
