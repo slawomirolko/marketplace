@@ -59,6 +59,7 @@ export interface Workflow {
   version: string;
   source?: string;
   description?: string;
+  standalone?: boolean;
   roles?: Record<string, string>;
   entry: string;
   nodes: WorkflowNode[];

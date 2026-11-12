@@ -4,7 +4,8 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { Factory, errorMessage, runReport } from "../src/engine.ts";
 import { homeDataDir, readSources } from "../src/paths.ts";
-import { describeAgent } from "../src/marketplace-agents.ts";
+import { describeAgent, marketplaceDir } from "../src/marketplace-agents.ts";
+import { standaloneNames } from "../src/standalone.ts";
 import type { AgentInfo } from "../src/marketplace-agents.ts";
 import type { Coverage, FactoryConfigFile, Report, Run, WorkflowSpec } from "../src/types.ts";
 
@@ -39,7 +40,7 @@ export interface RunDetail {
 export interface DataApi {
   dataDir: string;
   ensureDemo(): Promise<boolean>;
-  workflows(): WorkflowSpec[];
+  workflows(): (WorkflowSpec & { standalone: boolean })[];
   agents(): Record<string, AgentInfo>;
   config(): FactoryConfigFile;
   runs(): RunListItem[];
@@ -111,8 +112,9 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo }: DataApi
     },
 
     workflows() {
-      const dir = path.join(factoryDir, "workflows");
-      return loadWorkflowSpecs(dir);
+      const specs = loadWorkflowSpecs(path.join(factoryDir, "workflows"));
+      const standalone = standaloneNames(specs, marketplaceDir());
+      return specs.map((s) => ({ ...s, standalone: standalone.has(s.name) }));
     },
 
     agents() {

@@ -112,6 +112,7 @@ pre { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line
 .live-bar { display: inline-flex; gap: 8px; align-items: center; font-size: 0.9em; }
 .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); animation: live-pulse 1.6s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .card.live, .group.live, .live-dot { animation: none; } }
+select hr { border: none; border-top: 3px solid var(--fg); margin: 6px 0; }
 .not-run { opacity: 0.45; filter: grayscale(1); }
 .disabled { opacity: 0.45; filter: grayscale(1); border-style: dashed; }
 .disabled .card-title { text-decoration: line-through; }

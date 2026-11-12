@@ -190,11 +190,21 @@ function Viewer() {
             <label>
               Workflow{" "}
               <select value={workflowName} onChange={(e) => setWorkflowName(e.target.value)}>
-                {(workflows ?? []).map((w) => (
-                  <option key={w.name} value={w.name}>
-                    {w.name} · {w.version} · {w.nodes.length} nodes
-                  </option>
-                ))}
+                <optgroup label="Standalone (started by a primary agent)">
+                  {(workflows ?? []).filter((w) => w.standalone).map((w) => (
+                    <option key={w.name} value={w.name}>
+                      {w.name} · {w.version} · {w.nodes.length} nodes
+                    </option>
+                  ))}
+                </optgroup>
+                <hr />
+                <optgroup label="Parts (inlined or called by another workflow)">
+                  {(workflows ?? []).filter((w) => !w.standalone).map((w) => (
+                    <option key={w.name} value={w.name}>
+                      {w.name} · {w.version} · {w.nodes.length} nodes
+                    </option>
+                  ))}
+                </optgroup>
               </select>
             </label>
           )}

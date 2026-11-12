@@ -19982,6 +19982,27 @@ function cspMiddleware({ nonceFactory = createNonce } = {}) {
 		next();
 	};
 }
+// src/standalone.ts
+var AGENT_FILE = /(agents\/opencode\/[a-z0-9-]+\.md|plugins\/[a-z0-9-]+\/agents\/[a-z0-9-]+\.md)/;
+function sourceAgentFile(spec) {
+	return spec.source?.match(AGENT_FILE)?.[1] ?? null;
+}
+function invokable(agentFile, marketplace) {
+	if (agentFile.startsWith("plugins/")) return true;
+	const file = path.join(marketplace, agentFile);
+	if (!fs.existsSync(file)) return false;
+	const mode = fs.readFileSync(file, "utf8").match(/^---[\s\S]*?^mode:\s*([a-z]+)/m)?.[1] ?? "all";
+	return mode === "primary" || mode === "all";
+}
+function standaloneNames(specs, marketplace) {
+	const owner = new Map(specs.map((s) => [s.name, sourceAgentFile(s)]));
+	const inner = /* @__PURE__ */ new Set();
+	for (const spec of specs) for (const node of spec.nodes) if (node.workflow && owner.get(node.workflow) !== null && owner.get(node.workflow) === owner.get(spec.name)) inner.add(node.workflow);
+	return new Set(specs.filter((s) => {
+		const agent = owner.get(s.name);
+		return agent !== null && agent !== void 0 && !inner.has(s.name) && invokable(agent, marketplace);
+	}).map((s) => s.name));
+}
 // app/data.ts
 var RUN_ID = /^r-[a-f0-9]{8}$/;
 function readJson(file) {
@@ -20035,7 +20056,12 @@ function createDataApi({ factoryDir, dataDir, configFile, demo }) {
 			return true;
 		},
 		workflows() {
-			return loadWorkflowSpecs(path.join(factoryDir, "workflows"));
+			const specs = loadWorkflowSpecs(path.join(factoryDir, "workflows"));
+			const standalone = standaloneNames(specs, marketplaceDir());
+			return specs.map((s) => ({
+				...s,
+				standalone: standalone.has(s.name)
+			}));
 		},
 		agents() {
 			const names = /* @__PURE__ */ new Set();
