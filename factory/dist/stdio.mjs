@@ -15357,7 +15357,10 @@ function createFactoryTools(factory, publicUrl) {
 						"planning",
 						"both"
 					]).optional(),
-					featureId: string().regex(/^[a-z0-9-]+$/).optional()
+					featureId: string().regex(/^[a-z0-9-]+$/).optional(),
+					base: string().regex(/^[\w./-]+$/).optional(),
+					taskId: string().regex(/^[\w.-]+$/).optional(),
+					adopt: boolean().optional()
 				}).strict().optional(),
 				idempotencyKey: string().optional()
 			}
@@ -15379,7 +15382,10 @@ function createFactoryTools(factory, publicUrl) {
 				...input?.switches ? { switches: input.switches } : {},
 				...input?.idea ? { idea: input.idea } : {},
 				...input?.route ? { route: input.route } : {},
-				...input?.featureId ? { featureId: input.featureId } : {}
+				...input?.featureId ? { featureId: input.featureId } : {},
+				...input?.base ? { base: input.base } : {},
+				...input?.taskId ? { taskId: input.taskId } : {},
+				...input?.adopt ? { adopt: true } : {}
 			};
 			const { run, reused } = factory.start(goal, idempotencyKey, {
 				...workflow ? { workflow } : {},

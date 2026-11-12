@@ -26,6 +26,7 @@ roles:
   writer: medium
   plan-gate: medium
   auditor: medium
+  runner: low
 budget:
   maxCostUsd: 20
   infoRatio: 0.5
@@ -34,3 +35,6 @@ budget:
 switches:
   tracker: true
   editor: true
+  docker: true
+  obsidian: true
+  adopt: false

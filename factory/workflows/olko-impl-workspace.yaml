@@ -1,0 +1,23 @@
+name: olko-impl-workspace
+version: 0.1.0
+description: "Step 1: creates or resumes the Task worktree (every later agent and operation runs there), adopts existing changes when switches.adopt is on, and starts the implementation journal and the shared Feature tracker."
+source: "agents/opencode/olko-implementation-orchestrator.md (step 1, CURRENT-CODE ADOPTION, journal and Feature tracker)"
+entry: worktree
+nodes:
+  - id: worktree
+    description: "Creates the worktree <project>-worktrees/<task> on feature/<task> from the current branch, or resumes it; the run workspace moves there."
+    kind: script
+    op: impl.worktree
+  - id: adopt
+    description: "Transfers changes that already exist into the worktree with olko-implement-current-code; skipped when switches.adopt is off."
+    kind: subgraph
+    workflow: olko-impl-adopt
+    enabledWhen: "switches.adopt == true"
+  - id: journal
+    description: "Adds the ## Implementation journal to the Task plan and creates or resumes feature-tracker.md."
+    kind: script
+    op: impl.journal
+edges:
+  - { from: worktree, to: adopt }
+  - { from: adopt, to: journal }
+  - { from: journal, to: END }

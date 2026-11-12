@@ -53,6 +53,7 @@ export interface PendingWork {
   agentInstructions?: string;
   tools: AgentTool[];
   dirs: string[];
+  cwd?: string;
 }
 
 export interface Agent {
@@ -87,6 +88,13 @@ export interface RunInput {
   idea?: string;
   route?: string;
   featureId?: string;
+  path?: string;
+  label?: string;
+  prUrl?: string;
+  prBranch?: string;
+  base?: string;
+  taskId?: string;
+  adopt?: boolean;
 }
 
 export interface ExecResult {
@@ -156,6 +164,7 @@ export interface ScriptResult {
   state: unknown;
   output?: string | null;
   metrics?: Record<string, number>;
+  workspace?: string;
 }
 
 export type Operation = (context: ScriptContext & { args: Record<string, unknown> }) => Promise<ScriptResult>;
@@ -258,6 +267,7 @@ export interface Run {
   state?: WorkflowState;
   nodeAgents?: Record<string, Agent[]>;
   scopes?: Record<string, { iteration: number; input: RunInput }>;
+  workspace?: string;
   status: RunStatus;
   proposal: RunConfig;
   config: RunConfig | null;

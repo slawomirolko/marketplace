@@ -43,7 +43,7 @@ const FAKE_PRICE_PER_MTOK: Record<Tier, { input: number; output: number }> = {
 const PARALLEL_AGENTS = 10;
 
 function workspace(run: Run): string {
-  return run.input?.project ?? run.input?.cwd ?? process.env.FACTORY_WORKSPACE ?? process.cwd();
+  return run.workspace ?? run.input?.project ?? run.input?.cwd ?? process.env.FACTORY_WORKSPACE ?? process.cwd();
 }
 
 function defaultConfig(kind: "fake" | "delegate" | "cli", cli?: CliName): RunConfig {
@@ -551,6 +551,10 @@ export class Factory {
       const view = this.view(run, node);
       const result = await node.script({ input: view.input, state: view.state, exec: this.executors.exec, goal: run.goal, answers: view.answers, cwd: workspace(run), nodeId: view.key });
       view.state[view.key] = result.state;
+      if (result.workspace && result.workspace !== run.workspace) {
+        run.workspace = result.workspace;
+        this.event(run, "workspace_changed", { node: node.path, workspace: result.workspace });
+      }
       this.appendLedger(run, { nodePath: node.path, agentId: node.id, kind: "script", tier: null, model: null, backend: "script", turn: 1, inputTokens: 0, outputTokens: 0, costUsd: 0, costSource: "measured", durationMs: Date.now() - started, output: result.output ?? null });
       this.event(run, "node_completed", { node: node.path, result: (String(result.output ?? "").split(/\r?\n/)[0] ?? "").slice(0, 200), ...(result.metrics ? { metrics: result.metrics } : {}) });
       this.advance(run, node);
@@ -592,6 +596,7 @@ export class Factory {
           ...(definition ? { agentName: definition.name, agentDescription: definition.description, agentInstructions: definition.prompt } : {}),
           tools: node.tools ?? ["read"],
           dirs: this.dirs(run, node, agent),
+          cwd: workspace(run),
         };
       });
       run.pendingWorkItems = items;

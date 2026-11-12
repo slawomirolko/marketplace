@@ -1,0 +1,37 @@
+name: olko-impl-context
+version: 0.1.0
+description: "Step 7a: every AGENTS.md, CODING_STYLE.md, TESTING.md or CLAUDE.md of 20 lines or more that the Task changed is optimized with olko-agents-optimizer after your confirmation; nothing changed means the step is skipped."
+source: "agents/opencode/olko-implementation-orchestrator.md (step 7a, CONTEXT-FILE OPTIMIZATION GATE)"
+roles:
+  writer: medium
+entry: context-files
+nodes:
+  - id: context-files
+    description: "Lists the changed agent-context files of 20 lines or more."
+    kind: script
+    op: impl.contextFiles
+  - id: ask-context
+    description: "Asks before any edit of a context file."
+    kind: interrupt
+    question:
+      id: q-impl-context
+      text: "The Task changed these agent-context files:\n{{state.context-files.list}}\nOptimize them with olko-agents-optimizer (remove discoverable content, compress, add gotchas; never remove a non-inferable rule), or skip?"
+      allowed: [optimize, skip]
+  - id: optimize
+    description: "olko-agents-optimizer runs phases 0-4 on each file and records before and after line counts."
+    kind: llm
+    role: writer
+    skill: olko-agents-optimizer
+    tools: [read, edit]
+    dirs: ["{{state.task.featureDir}}"]
+    parse: text.raw
+    prompt: |
+      Optimize only these agent-context files in this worktree; the user already confirmed the edits:
+      {{state.context-files.list}}
+      Never remove a non-inferable rule or information an agent needs. Record before and after line counts and the changes in the journal of {{state.task.taskFile}}.
+edges:
+  - { from: context-files, to: END, when: "context-files.count == 0", description: "no context file changed" }
+  - { from: context-files, to: ask-context, description: "a context file changed" }
+  - { from: ask-context, to: optimize, when: 'ask-context.answer == "optimize"', description: "you chose optimize" }
+  - { from: ask-context, to: END, description: "you chose skip" }
+  - { from: optimize, to: END }

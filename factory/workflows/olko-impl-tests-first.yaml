@@ -1,0 +1,54 @@
+name: olko-impl-tests-first
+version: 0.1.0
+description: "Step 3a: the test-first author writes one failing test per acceptance criterion for every stack the Task touches; unclear criteria and blocked choices go to you, never guessed."
+source: "agents/opencode/olko-implementation-orchestrator.md (step 3a, FAILING TESTS FIRST)"
+roles:
+  implementer: medium
+entry: stacks
+limits:
+  maxCycleIterations: 2
+nodes:
+  - id: stacks
+    description: "Finds the stacks the Task plan names and picks the test author, implementer and test runner for each."
+    kind: script
+    op: impl.stacks
+  - id: write-tests
+    description: "olko-test-first-author (mode write), one call per stack: one failing test per criterion, run, failing for the reason the criterion describes."
+    kind: llm
+    role: implementer
+    agentsFrom: state.stacks.authors
+    tools: [read, edit, bash]
+    maxVisits: 2
+    dirs: ["{{state.task.featureDir}}"]
+    parse: impl.tests
+    prompt: |
+      Mode: write. Task {{state.task.taskName}}, stack {{agent.id}}. Approved Task plan: {{state.task.taskFile}}. Work only in this worktree.
+      Acceptance criteria:
+      {{state.task.criteria}}
+      Answers you already have for unclear criteria: {{state.tests-check.answered}}
+      Write one failing test per criterion, run them, and make each fail for the reason the criterion describes. No comments and no criterion or plan ids in test code. No CI/CD workflow files.
+      End with one line: `tests | <number of failing tests written> | unclear: <none or questions separated by ;> | blocked: <none or question with options>`
+  - id: tests-check
+    description: "Records criterion, test and failure in the journal, freezes the test files and lists open items."
+    kind: script
+    op: impl.testsFirst
+    maxVisits: 2
+  - id: ask-unclear
+    description: "Asks you to settle the unclear criteria and blocked choices (free text)."
+    kind: interrupt
+    maxVisits: 2
+    question:
+      id: "q-impl-unclear-{{state.tests-check.round}}"
+      text: "The test author could not write these tests without guessing:\n{{state.tests-check.questions}}\nYour answer (it goes back to the author):"
+  - id: stop-unclear
+    description: "Stops: implementation of a stack waits until its criteria are clear."
+    kind: script
+    op: impl.stop
+    with: { from: tests-check }
+edges:
+  - { from: stacks, to: write-tests }
+  - { from: write-tests, to: tests-check }
+  - { from: tests-check, to: END, when: 'tests-check.next == "done"', description: "every criterion has a failing test" }
+  - { from: tests-check, to: ask-unclear, when: 'tests-check.next == "ask"', description: "a criterion is unclear or a choice is blocked" }
+  - { from: tests-check, to: stop-unclear, description: "still unclear after your answer" }
+  - { from: ask-unclear, to: write-tests }

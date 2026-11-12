@@ -7525,6 +7525,604 @@ function opencodeConfigDir(name, tools = ["read"]) {
 	} else fs.writeFileSync(target, `---\n${agent.frontmatter}\n---\n\n${agent.prompt}\n`);
 	return dir;
 }
+// src/impl-ops.ts
+var STACKS = [
+	{
+		id: "dotnet",
+		pattern: /\.net\b|c#|csproj|asp\.net|\.cs\b/i,
+		extensions: [".cs", ".csproj"]
+	},
+	{
+		id: "mobile",
+		pattern: /kotlin|android|\.kt\b/i,
+		extensions: [".kt", ".kts"]
+	},
+	{
+		id: "react-native",
+		pattern: /react native|expo/i,
+		extensions: []
+	},
+	{
+		id: "react",
+		pattern: /\breact\b(?! native)|\.tsx\b/i,
+		extensions: [".ts", ".tsx"]
+	},
+	{
+		id: "army-python",
+		pattern: /\bpython\b|\.py\b/i,
+		extensions: [".py"]
+	}
+];
+var AGENT_PREFIX = {
+	dotnet: "olko-dotnet",
+	mobile: "olko-mobile",
+	"react-native": "olko-react-native",
+	react: "olko-react",
+	"army-python": "olko-army-python"
+};
+var CODE_EXTENSIONS = [
+	".cs",
+	".ts",
+	".tsx",
+	".js",
+	".jsx",
+	".kt",
+	".kts",
+	".py"
+];
+var CONTEXT_FILE = /(^|\/)(AGENTS|CODING_STYLE|TESTING|CLAUDE)\.md$/;
+var DOC_PATH = /(^|\/)(docs|plans)\/|\.md$/i;
+var TEST_PATH = /(^|\/)tests?\/|tests?\.(cs|ts|tsx|kt|py)$|test_[^/]+\.py$|\.(test|spec)\.(ts|tsx)$/i;
+function stateOf$1(state, key) {
+	const value = state[key];
+	if (value === void 0) throw new Error(`state.${key} is not set`);
+	return value;
+}
+function section(text, title) {
+	const lines = text.split(/\r?\n/);
+	const start = lines.findIndex((l) => /^#{2,4}\s/.test(l) && title.test(l));
+	if (start < 0) return "";
+	const level = lines[start].match(/^#+/)[0].length;
+	const end = lines.findIndex((l, i) => i > start && new RegExp(`^#{1,${level}}\\s`).test(l));
+	return lines.slice(start + 1, end < 0 ? void 0 : end).join("\n").trim();
+}
+function appendJournal(file, line) {
+	if (!fs.existsSync(file)) return;
+	const text = fs.readFileSync(file, "utf8");
+	const entry = `- ${(/* @__PURE__ */ new Date()).toISOString().replace(/\.\d+Z$/, "Z")} ${line.replace(/\r?\n/g, " ").slice(0, 600)}`;
+	if (/^## Implementation\s*$/m.test(text)) fs.writeFileSync(file, `${text.replace(/\s*$/, "")}\n${entry}\n`);
+	else fs.writeFileSync(file, `${text.replace(/\s*$/, "")}\n\n## Implementation\n\n${entry}\n`);
+}
+function taskOf(state, input) {
+	const task = state.task;
+	if (task) return task;
+	if (!input.plan) throw new Error("no Task in state and no input.plan");
+	return {
+		ok: true,
+		featureId: "",
+		featureDir: path.dirname(path.dirname(input.plan)),
+		featurePlan: path.join(path.dirname(path.dirname(input.plan)), "implementation.md"),
+		tracker: "",
+		taskFile: input.plan,
+		taskName: path.basename(input.plan).replace(/-implementation\.md$/, ""),
+		criteria: input.criteria ?? ""
+	};
+}
+function baseOf(state, input) {
+	const base = state.worktree?.base ?? input.base;
+	if (!base) throw new Error("no base branch: run the worktree step first or give input.base");
+	return base;
+}
+function lastLine(text, prefix) {
+	const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.toLowerCase().startsWith(`${prefix} |`));
+	return line ? line.split("|").map((p) => p.trim()) : null;
+}
+function parseLine(prefix) {
+	return (text) => {
+		const fields = lastLine(text, prefix);
+		if (!fields) throw new Error(`output has no '${prefix} |' line`);
+		return {
+			verdict: (fields[1] ?? "").toLowerCase(),
+			detail: fields.slice(2).join(" | "),
+			fields: fields.slice(1),
+			text: String(text).slice(-4e3)
+		};
+	};
+}
+function parseChunks(text) {
+	const block = [...String(text).matchAll(/```json\s*([\s\S]*?)```/g)].map((m) => m[1]).pop();
+	if (!block) throw new Error("chunker output has no ```json block");
+	const parsed = JSON.parse(block);
+	if (!Array.isArray(parsed.chunks) || parsed.chunks.length === 0) throw new Error("chunker returned no chunks");
+	return { chunks: parsed.chunks.map((c) => ({
+		stack: String(c.stack ?? ""),
+		title: String(c.title ?? ""),
+		files: (c.files ?? []).map(String),
+		brief: String(c.brief ?? "")
+	})) };
+}
+function results(state, node) {
+	return Object.entries(state[node] ?? {});
+}
+async function changed(exec, root, base) {
+	return (await localDiff(exec, root, base)).files;
+}
+function addedLines(file) {
+	return file.diff.split(/\r?\n/).filter((l) => l.startsWith("+") && !l.startsWith("+++")).map((l) => l.slice(1));
+}
+function hashFile(file) {
+	return fs.existsSync(file) ? crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex") : "missing";
+}
+var implTask = async ({ input, state, nodeId }) => {
+	const visits = ((nodeId ? state[nodeId] : void 0)?.visits ?? 0) + 1;
+	const root = path.resolve(input.project ?? ".");
+	const planned = state.plan?.feature?.featureId;
+	const featureId = input.featureId ?? planned ?? "";
+	const featureDir = path.join(root, "plans", "features", featureId);
+	const tasksDir = path.join(featureDir, "tasks");
+	const tasks = featureId && fs.existsSync(tasksDir) ? fs.readdirSync(tasksDir).filter((f) => f.endsWith("-implementation.md")).sort() : [];
+	const pick = input.taskId ? tasks.find((f) => f.startsWith(input.taskId)) : tasks[0];
+	const taskFile = pick ? path.join(tasksDir, pick) : "";
+	const text = taskFile ? fs.readFileSync(taskFile, "utf8") : "";
+	const criteria = section(text, /acceptance criteria/i);
+	const ready = /ready for implementation:\s*\**\s*yes/i.test(text);
+	const reason = !featureId ? "no featureId in the input" : !pick ? `no approved Task plan in ${path.relative(root, tasksDir)}` : !criteria ? `${pick} has no acceptance criteria` : !ready ? `${pick} does not say Ready for implementation: yes` : "";
+	const ok = reason === "";
+	const canPlan = !ok && visits === 1 && Boolean(input.idea);
+	const task = {
+		ok,
+		canPlan,
+		stop: !ok && !canPlan,
+		visits,
+		reason,
+		featureId,
+		featureDir,
+		featurePlan: path.join(featureDir, "implementation.md"),
+		tracker: path.join(featureDir, "feature-tracker.md"),
+		taskFile,
+		taskName: pick ? pick.replace(/-implementation\.md$/, "") : "",
+		criteria
+	};
+	return {
+		state: task,
+		metrics: {
+			ok: ok ? 1 : 0,
+			tasks: tasks.length
+		},
+		output: ok ? `Task ${task.taskName} of Feature ${featureId}: acceptance criteria present, plan ready.` : `Entry gate: ${reason}.${canPlan ? " Routing to plan documentation." : ""}`
+	};
+};
+var implWorktree = async ({ input, state, exec }) => {
+	if (!exec) throw new Error("impl.worktree needs the host exec tool");
+	const task = stateOf$1(state, "task");
+	const root = path.resolve(input.project ?? ".");
+	const current = await exec("git", [
+		"-C",
+		root,
+		"branch",
+		"--show-current"
+	]);
+	const base = current.stdout.trim();
+	if (current.code !== 0 || !base) throw new Error(`the main checkout ${root} is not on a branch`);
+	const slug = task.taskName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+	const branch = `feature/${slug}`;
+	const target = path.join(path.dirname(root), `${path.basename(root)}-worktrees`, slug);
+	let resumed = false;
+	if (fs.existsSync(path.join(target, ".git"))) resumed = true;
+	else {
+		fs.mkdirSync(path.dirname(target), { recursive: true });
+		const add = await exec("git", [
+			"-C",
+			root,
+			"worktree",
+			"add",
+			...(await exec("git", [
+				"-C",
+				root,
+				"rev-parse",
+				"--verify",
+				"--quiet",
+				`refs/heads/${branch}`
+			])).code === 0 ? [target, branch] : [
+				"-b",
+				branch,
+				target,
+				"HEAD"
+			]
+		]);
+		if (add.code !== 0) throw new Error(`git worktree add failed: ${add.stderr.slice(-300)}`);
+	}
+	const workspace = fs.realpathSync.native(target);
+	return {
+		state: {
+			path: workspace,
+			branch,
+			base,
+			resumed
+		},
+		workspace,
+		metrics: { resumed: resumed ? 1 : 0 },
+		output: `${resumed ? "Resumed" : "Created"} worktree ${workspace} on ${branch} (base ${base}). Every later agent and operation runs there.`
+	};
+};
+var implJournal = async ({ state, exec }) => {
+	const task = stateOf$1(state, "task");
+	const worktree = stateOf$1(state, "worktree");
+	const text = fs.readFileSync(task.taskFile, "utf8");
+	if (!/^## Implementation\s*$/m.test(text)) fs.writeFileSync(task.taskFile, `${text.replace(/\s*$/, "")}\n\n## Implementation\n\n- Session status: in progress\n- Current step: preflight\n- Worktree: ${worktree.path}\n- Branch: ${worktree.branch} (base ${worktree.base})\n\n### Log\n`);
+	appendJournal(task.taskFile, worktree.resumed ? "resumed by the factory run" : "started by the factory run");
+	if (!fs.existsSync(task.tracker)) {
+		const head = exec ? (await exec("git", [
+			"-C",
+			worktree.path,
+			"rev-parse",
+			"HEAD"
+		])).stdout.trim() : "";
+		fs.writeFileSync(task.tracker, `# Feature tracker: ${task.featureId}\n\n- Base commit: ${head}\n\n## Tasks\n\n- ${task.taskName}: in progress on ${worktree.branch}\n\n## Pending\n\n## Final Feature audit\n\nnot run\n`);
+	}
+	return {
+		state: {
+			journal: task.taskFile,
+			tracker: task.tracker
+		},
+		metrics: {},
+		output: `Journal in ${task.taskFile}; Feature tracker ${task.tracker}.`
+	};
+};
+var implPreflight = async ({ state, nodeId }) => {
+	const task = stateOf$1(state, "task");
+	const round = ((nodeId ? state[nodeId] : void 0)?.round ?? 0) + 1;
+	const verdicts = results(state, "workers");
+	const lines = [
+		"flow",
+		"runtime",
+		"test",
+		"readiness"
+	].map((id) => {
+		const v = verdicts.find(([k]) => k === id)?.[1];
+		return {
+			id,
+			verdict: v ? v.verdict.toUpperCase() : "MISSING",
+			detail: v?.detail ?? "no result"
+		};
+	});
+	const pass = lines.every((l) => l.verdict === "PASS");
+	const text = lines.map((l) => `${l.id}: ${l.verdict} | ${l.detail}`).join("\n");
+	appendJournal(task.taskFile, `preflight round ${round}: ${lines.map((l) => `${l.id}=${l.verdict}`).join(", ")}`);
+	return {
+		state: {
+			round,
+			pass,
+			next: pass ? "pass" : round < 3 ? "ask" : "stop",
+			text,
+			reason: `preflight did not pass after ${round} rounds:\n${text}`
+		},
+		metrics: {
+			pass: pass ? 1 : 0,
+			round
+		},
+		output: pass ? "Preflight: four PASS results; implementation may start." : `Preflight round ${round}: not all PASS.\n${text}`
+	};
+};
+var implStacks = async ({ state, input }) => {
+	const task = taskOf(state, input);
+	const text = [task.taskFile, task.featurePlan].filter((f) => f && fs.existsSync(f)).map((f) => fs.readFileSync(f, "utf8")).join("\n");
+	const stacks = STACKS.filter((s) => s.pattern.test(text)).map((s) => s.id);
+	if (stacks.length === 0) throw new Error(`no known stack named in ${task.taskFile}`);
+	const prefix = (s) => AGENT_PREFIX[s];
+	const as = (role) => stacks.map((s) => ({
+		id: s,
+		agentName: role === "author" ? "olko-test-first-author" : `${prefix(s)}-${role}`,
+		role: role === "author" ? "implementer" : role === "test-runner" ? "runner" : "implementer"
+	}));
+	return {
+		state: {
+			stacks,
+			authors: as("author"),
+			implementers: as("implementer"),
+			runners: as("test-runner")
+		},
+		metrics: { stacks: stacks.length },
+		output: `Stacks of this Task: ${stacks.join(", ")}.`
+	};
+};
+var implTestsFirst = async ({ state, input, answers, nodeId, exec, cwd }) => {
+	const task = taskOf(state, input);
+	const previous = nodeId ? state[nodeId] : void 0;
+	const round = (previous?.round ?? 0) + 1;
+	const answer = previous ? answers?.[`q-impl-unclear-${previous.round}`] : void 0;
+	const answered = [previous?.answered, answer].filter(Boolean).join("\n");
+	const written = results(state, "write-tests");
+	const open = written.flatMap(([stack, r]) => r.fields.slice(1).filter((f) => !/^(unclear|blocked):\s*none\s*$/i.test(f) && /^(unclear|blocked):/i.test(f)).map((f) => `${stack}: ${f}`));
+	const count = written.reduce((sum, [, r]) => sum + (Number(r.verdict) || 0), 0);
+	const testFiles = {};
+	if (exec && cwd) {
+		for (const file of await changed(exec, cwd, baseOf(state, input))) if (TEST_PATH.test(file.path)) testFiles[file.path] = hashFile(path.join(cwd, file.path));
+	}
+	appendJournal(task.taskFile, `failing tests first, round ${round}: ${count} tests written (${Object.keys(testFiles).join(", ") || "no test file changed"}); open items: ${open.length}`);
+	const next = open.length === 0 ? "done" : round < 2 ? "ask" : "stop";
+	return {
+		state: {
+			round,
+			count,
+			open: open.length,
+			questions: open.join("\n"),
+			answered: answered || "none",
+			testFiles,
+			testList: Object.keys(testFiles).join(", ") || "none",
+			next,
+			reason: `criteria still unclear after ${round} rounds:\n${open.join("\n")}`
+		},
+		metrics: {
+			tests: count,
+			open: open.length,
+			files: Object.keys(testFiles).length
+		},
+		output: `${count} failing tests written; ${Object.keys(testFiles).length} test files; ${open.length} open items.`
+	};
+};
+var implChunkPlan = async ({ state }) => {
+	const stacks = stateOf$1(state, "stacks");
+	const parsed = Object.values(stateOf$1(state, "chunker"))[0];
+	const owner = /* @__PURE__ */ new Map();
+	const chunks = parsed.chunks.map((c, index) => {
+		const agent = stacks.implementers.find((a) => a.id === c.stack) ?? stacks.implementers[0];
+		const files = c.files.filter((f) => {
+			if (owner.has(f)) return false;
+			owner.set(f, index);
+			return true;
+		});
+		return {
+			index,
+			title: c.title,
+			stack: agent.id,
+			files,
+			brief: c.brief,
+			agents: [agent]
+		};
+	});
+	return {
+		state: { chunks },
+		metrics: { chunks: chunks.length },
+		output: `${chunks.length} chunks: ${chunks.map((c) => `${c.index + 1}. ${c.stack} ${c.title}`).join("; ")}.`
+	};
+};
+var implChildCheck = async ({ state, input, exec, cwd, nodeId }) => {
+	if (!exec || !cwd) throw new Error("impl.childCheck needs the host exec tool");
+	const task = taskOf(state, input);
+	const chunk = stateOf$1(state, "chunk-next").item;
+	const previous = nodeId ? state[nodeId] : void 0;
+	const attempts = previous?.chunk === chunk.index ? (previous.attempts ?? 0) + 1 : 1;
+	const edgeRuns = previous?.edgeRuns ?? 0;
+	const result = Object.values(state.implement ?? {})[0];
+	const verdict = result?.verdict ?? "missing";
+	const frozen = state["tests-check"]?.testFiles ?? {};
+	const violations = [];
+	for (const file of await changed(exec, cwd, baseOf(state, input))) {
+		if (/^\.github\/workflows\/|azure-pipelines|\.gitlab-ci/.test(file.path)) violations.push(`${file.path}: CI/CD workflow file changed without explicit permission`);
+		if (frozen[file.path] !== void 0) {
+			if (hashFile(path.join(cwd, file.path)) !== frozen[file.path]) violations.push(`${file.path}: a failing-test-first file was changed`);
+			continue;
+		}
+		if (!CODE_EXTENSIONS.some((e) => file.path.endsWith(e))) continue;
+		const python = file.path.endsWith(".py");
+		for (const line of addedLines(file)) {
+			if (python ? /^\s*#(?!!)/.test(line) : /^\s*(\/\/(?!\/)|\/\*)/.test(line)) violations.push(`${file.path}: explanatory comment added: ${line.trim().slice(0, 120)}`);
+			if (/\b(AC|D)\d+\b|\bMAIN-\d+\b/.test(line)) violations.push(`${file.path}: plan or criterion id inside code: ${line.trim().slice(0, 120)}`);
+		}
+	}
+	const next = violations.length ? attempts < 3 ? "fix" : "stop" : verdict === "blocked" ? "blocked" : verdict === "dispute" ? "dispute" : verdict === "edge-cases" && edgeRuns === 0 ? "edge" : "done";
+	appendJournal(task.taskFile, `chunk ${chunk.index + 1} (${chunk.stack} ${chunk.title}) attempt ${attempts}: ${verdict}; ${violations.length} rule violations`);
+	return {
+		state: {
+			chunk: chunk.index,
+			attempts,
+			edgeRuns: next === "edge" ? edgeRuns + 1 : edgeRuns,
+			verdict,
+			next,
+			violations: violations.join("\n"),
+			detail: result?.detail ?? "",
+			report: result?.text ?? "",
+			reason: `chunk ${chunk.index + 1} still breaks the child-result rules after ${attempts} attempts:\n${violations.join("\n")}`
+		},
+		metrics: {
+			violations: violations.length,
+			attempts
+		},
+		output: violations.length ? `Chunk ${chunk.index + 1}: ${violations.length} violations.\n${violations.join("\n")}` : `Chunk ${chunk.index + 1}: ${verdict}.`
+	};
+};
+var implDispute = async ({ state }) => {
+	const result = Object.values(state.dispute ?? {})[0];
+	const justified = result?.verdict === "justified";
+	return {
+		state: {
+			justified,
+			next: justified ? "ask" : "implement",
+			detail: result?.detail ?? ""
+		},
+		metrics: { justified: justified ? 1 : 0 },
+		output: justified ? `The test author keeps the test: ${result?.detail}` : `The test author changed the test: ${result?.detail ?? "no detail"}`
+	};
+};
+var implChecks = async ({ state, input, nodeId }) => {
+	const task = taskOf(state, input);
+	const round = ((nodeId ? state[nodeId] : void 0)?.round ?? 0) + 1;
+	const style = results(state, "style");
+	const tests = results(state, "runners");
+	const failures = [...style.map(([id, r]) => ({
+		kind: "style",
+		id,
+		...r
+	})), ...tests.map(([id, r]) => ({
+		kind: "tests",
+		id,
+		...r
+	}))].filter((r) => r.verdict !== "pass");
+	const pass = failures.length === 0 && style.length > 0 && tests.length > 0;
+	const text = failures.map((f) => `${f.kind} ${f.id}: ${f.verdict} | ${f.detail}`).join("\n");
+	appendJournal(task.taskFile, `checks round ${round}: ${pass ? "style and tests pass" : text}`);
+	return {
+		state: {
+			round,
+			pass,
+			next: pass ? "pass" : round < 3 ? "fix" : "stop",
+			failures: text || "none",
+			reason: `style or tests still fail after ${round} rounds:\n${text}`
+		},
+		metrics: {
+			failures: failures.length,
+			round
+		},
+		output: pass ? "Style and affected tests pass." : `Round ${round}: ${failures.length} failing checks.\n${text}`
+	};
+};
+var implDocker = async ({ state, input }) => {
+	const task = taskOf(state, input);
+	const docker = Object.values(state["docker-rebuild"] ?? {})[0];
+	const runtime = results(state, "runtime");
+	const verified = docker?.verdict === "pass" && runtime.length > 0 && runtime.every(([, r]) => r.verdict === "verified");
+	const text = [`docker: ${docker?.verdict ?? "missing"} | ${docker?.detail ?? ""}`, ...runtime.map(([id, r]) => `runtime ${id}: ${r.verdict} | ${r.detail}`)].join("\n");
+	appendJournal(task.taskFile, `isolated Docker and runtime verification: ${verified ? "VERIFIED" : "NOT VERIFIED"}`);
+	if (task.tracker && fs.existsSync(task.tracker)) fs.appendFileSync(task.tracker, `\n### Runtime evidence ${task.taskName}\n\n${text}\n`);
+	return {
+		state: {
+			verified,
+			next: verified ? "pass" : "stop",
+			text,
+			reason: `runtime verification failed:\n${text}`
+		},
+		metrics: { verified: verified ? 1 : 0 },
+		output: verified ? "Isolated Docker rebuild and runtime evidence: VERIFIED." : `NOT VERIFIED:\n${text}`
+	};
+};
+var implContextFiles = async ({ state, input, exec, cwd }) => {
+	if (!exec || !cwd) throw new Error("impl.contextFiles needs the host exec tool");
+	const files = (await changed(exec, cwd, baseOf(state, input))).map((f) => f.path).filter((p) => CONTEXT_FILE.test(p) && fs.existsSync(path.join(cwd, p)) && fs.readFileSync(path.join(cwd, p), "utf8").split(/\r?\n/).length >= 20);
+	return {
+		state: {
+			files,
+			count: files.length,
+			list: files.join("\n") || "none"
+		},
+		metrics: { files: files.length },
+		output: files.length ? `Context files to optimize: ${files.join(", ")}.` : "No agent-context file of 20 lines or more changed."
+	};
+};
+var implScopeGate = async ({ state, input, exec, cwd }) => {
+	if (!exec || !cwd) throw new Error("impl.scopeGate needs the host exec tool");
+	const files = (await changed(exec, cwd, baseOf(state, input))).map((f) => f.path);
+	const code = files.filter((p) => !DOC_PATH.test(p));
+	const docs = files.filter((p) => DOC_PATH.test(p));
+	const over = code.length > 15;
+	return {
+		state: {
+			count: code.length,
+			docs: docs.length,
+			over,
+			paths: code.join("\n")
+		},
+		metrics: {
+			code: code.length,
+			docs: docs.length
+		},
+		output: `${code.length} code paths${over ? " (more than 15: needs an explicit extension)" : ""}, ${docs.length} documentation paths.`
+	};
+};
+var implReviewGate = async ({ state, input, nodeId }) => {
+	const task = taskOf(state, input);
+	const round = ((nodeId ? state[nodeId] : void 0)?.round ?? 0) + 1;
+	const review = state.review ?? {};
+	const kept = (review["local-rank"] ?? review.rank)?.kept ?? [];
+	const blocking = kept.filter((f) => ["bug", "security"].includes(tierOf$1(f)) || /^req\.(missing|partial)/.test(f.ruleId) || /merge/i.test(f.ruleId));
+	const other = kept.filter((f) => !blocking.includes(f));
+	appendJournal(task.taskFile, `Task review round ${round}: ${blocking.length} blocking, ${other.length} non-blocking findings`);
+	if (task.tracker && fs.existsSync(task.tracker)) fs.appendFileSync(task.tracker, `\n### Task review ${task.taskName} round ${round}\n\n${kept.map((f) => `- ${f.line}`).join("\n") || "- no findings"}\n`);
+	const next = blocking.length === 0 ? "pass" : round < 3 ? "fix" : "stop";
+	return {
+		state: {
+			round,
+			blocking: blocking.length,
+			next,
+			text: blocking.map((f) => f.line).join("\n") || "none",
+			nonBlocking: other.map((f) => f.line).join("\n") || "none",
+			reason: `blocking review findings remain after ${round} rounds:\n${blocking.map((f) => f.line).join("\n")}`
+		},
+		metrics: {
+			blocking: blocking.length,
+			nonBlocking: other.length
+		},
+		output: blocking.length ? `${blocking.length} blocking findings:\n${blocking.map((f) => f.line).join("\n")}` : `No blocking finding (${other.length} non-blocking recorded).`
+	};
+};
+var implStop = async ({ state, args }) => {
+	const reason = state[String(args.from ?? "")]?.reason ?? String(args.reason ?? "stopped");
+	throw new Error(`Implementation stopped: ${reason}`);
+};
+var implOpenEditor = async ({ exec, cwd }) => {
+	if (!exec || !cwd) throw new Error("impl.openEditor needs the host exec tool");
+	const result = await exec("code", ["--new-window", cwd]);
+	return {
+		state: { opened: result.code === 0 },
+		metrics: { opened: result.code === 0 ? 1 : 0 },
+		output: result.code === 0 ? `Opened ${cwd} in a new VS Code window.` : `Could not open VS Code; run: code --new-window "${cwd}"`
+	};
+};
+var implReport = async ({ state, input }) => {
+	const task = taskOf(state, input);
+	const worktree = state.worktree;
+	const get = (key) => state[key];
+	const chunks = get("chunk-plan")?.chunks.length ?? 0;
+	const commit = get("ask-commit");
+	const delivery = Object.values(get("commit") ?? {})[0];
+	const lines = [
+		`Task ${task.taskName} (Feature ${task.featureId})`,
+		`Worktree: ${worktree?.path ?? "none"} on ${worktree?.branch ?? "none"}`,
+		`Preflight: ${get("preflight")?.pass ? "four PASS" : "not passed"}`,
+		`Failing tests first: ${get("tests-check")?.count ?? 0}`,
+		`Chunks implemented: ${chunks}`,
+		`Checks: ${get("checks")?.check?.pass ?? get("recheck")?.check?.pass ? "style and tests pass" : "see the journal"}`,
+		`Code paths: ${get("scope-gate")?.count ?? "?"}`,
+		`Task review: ${get("review-gate")?.blocking === 0 ? "no blocking finding" : "blocking findings left"}`,
+		`Delivery: ${delivery ? `committed, PR ${delivery.fields[1] ?? "?"}` : commit?.answer === "no" ? "not committed (you answered no)" : "not reached"}`
+	];
+	appendJournal(task.taskFile, `run report: ${lines.slice(1).join("; ")}`);
+	return {
+		state: { text: lines.join("\n") },
+		metrics: { chunks },
+		output: lines.join("\n")
+	};
+};
+var IMPL_OPERATIONS = {
+	"impl.task": implTask,
+	"impl.worktree": implWorktree,
+	"impl.journal": implJournal,
+	"impl.preflight": implPreflight,
+	"impl.stacks": implStacks,
+	"impl.testsFirst": implTestsFirst,
+	"impl.chunkPlan": implChunkPlan,
+	"impl.childCheck": implChildCheck,
+	"impl.dispute": implDispute,
+	"impl.checks": implChecks,
+	"impl.docker": implDocker,
+	"impl.contextFiles": implContextFiles,
+	"impl.scopeGate": implScopeGate,
+	"impl.reviewGate": implReviewGate,
+	"impl.stop": implStop,
+	"impl.openEditor": implOpenEditor,
+	"impl.report": implReport
+};
+var IMPL_PARSERS = {
+	"impl.preflight": parseLine("preflight"),
+	"impl.tests": parseLine("tests"),
+	"impl.chunks": parseChunks,
+	"impl.chunk": parseLine("chunk"),
+	"impl.dispute": parseLine("dispute"),
+	"impl.style": parseLine("style"),
+	"impl.docker": parseLine("docker"),
+	"impl.runtime": parseLine("runtime"),
+	"impl.delivery": parseLine("delivery")
+};
 // src/ops.ts
 var TIERS = [
 	"bug",
@@ -7598,8 +8196,18 @@ var pass = async () => ({
 });
 var reviewRoute = async ({ input, exec }) => {
 	if (input.plan) return {
-		state: { route: "PLAN" },
+		state: {
+			route: "PLAN",
+			review: false
+		},
 		output: `PLAN (${input.plan})`
+	};
+	if (input.base) return {
+		state: {
+			route: "LOCAL",
+			review: true
+		},
+		output: `LOCAL (working tree against ${input.base})`
 	};
 	if (!exec) throw new Error("review.route needs the host exec tool");
 	if (input.pr === void 0 || !input.repo) throw new Error("review.route needs repo and pr, or plan, in the input");
@@ -7624,6 +8232,7 @@ var reviewRoute = async ({ input, exec }) => {
 	if (own && !input.fresh) return {
 		state: {
 			route: "FEEDBACK",
+			review: false,
 			own
 		},
 		output: "FEEDBACK (the PR author is the signed-in user)"
@@ -7632,12 +8241,78 @@ var reviewRoute = async ({ input, exec }) => {
 	return {
 		state: {
 			route: "REVIEW",
+			review: true,
 			own
 		},
 		output: `REVIEW (${reason})`
 	};
 };
+function untrackedDiff(file, text) {
+	const lines = text.replace(/\r\n/g, "\n").replace(/\n$/, "").split("\n");
+	return `diff --git a/${file} b/${file}\nnew file mode 100644\n--- /dev/null\n+++ b/${file}\n@@ -0,0 +1,${lines.length} @@\n${lines.map((l) => `+${l}`).join("\n")}\n`;
+}
+async function localDiff(exec, root, base) {
+	if (!/^[\w./-]+$/.test(base)) throw new Error(`base ${base} is not a git ref`);
+	const mergeBase = await exec("git", [
+		"-C",
+		root,
+		"merge-base",
+		base,
+		"HEAD"
+	]);
+	if (mergeBase.code !== 0) throw new Error(`git merge-base ${base} HEAD failed: ${mergeBase.stderr.slice(-300)}`);
+	const tracked = await exec("git", [
+		"-C",
+		root,
+		"diff",
+		mergeBase.stdout.trim()
+	]);
+	const untracked = await exec("git", [
+		"-C",
+		root,
+		"ls-files",
+		"--others",
+		"--exclude-standard"
+	]);
+	if (tracked.code !== 0 || untracked.code !== 0) throw new Error(`git diff failed: ${(tracked.stderr || untracked.stderr).slice(-300)}`);
+	const added = untracked.stdout.split(/\r?\n/).filter(Boolean).map((f) => untrackedDiff(f, fs.readFileSync(path.join(root, f), "utf8")));
+	return {
+		files: splitDiff(tracked.stdout + added.join("")),
+		added: added.length,
+		mergeBase: mergeBase.stdout.trim()
+	};
+}
+async function localScope(input, exec, exclude, root) {
+	const base = String(input.base);
+	const diff = await localDiff(exec, root, base);
+	const isExcluded = (p) => exclude.some((re) => re.test(p));
+	const files = diff.files.filter((f) => !isExcluded(f.path));
+	const excluded = diff.files.filter((f) => isExcluded(f.path)).map((f) => f.path);
+	if (files.length === 0) throw new Error(`no local change against ${base} to review`);
+	return {
+		state: {
+			base,
+			repo: "",
+			title: `local changes against ${base}`,
+			body: (input.criteria ?? "").trim(),
+			head: "working tree",
+			files,
+			excluded,
+			stale: false
+		},
+		metrics: {
+			files: files.length,
+			excluded: excluded.length,
+			stale: 0
+		},
+		output: `Local diff against ${base}: ${files.length} files (${diff.added} new). Not sent to lenses: ${excluded.join(", ") || "none"}.`
+	};
+}
 var prScope = async ({ input, exec, args, cwd }) => {
+	if (input.base) {
+		if (!exec) throw new Error("github.prScope needs the host exec tool");
+		return localScope(input, exec, stringList(args.exclude ?? [], "with.exclude").map((p) => new RegExp(p)), path.resolve(cwd ?? "."));
+	}
 	const pr = input.pr;
 	const repo = input.repo ?? "";
 	if (pr === void 0 || !Number.isInteger(pr) || !/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error("input needs repo owner/name and an integer pr");
@@ -7983,7 +8658,7 @@ var rankFindings = async ({ state, answers }) => {
 	kept.sort((a, b) => TIERS.indexOf(tierOf$1(a)) - TIERS.indexOf(tierOf$1(b)));
 	const totals = TIERS.map((t) => `${t}: ${kept.filter((f) => tierOf$1(f) === t).length}`).join(", ");
 	const lines = [
-		`Review of PR #${scope.pr}: ${scope.title}`,
+		scope.pr === void 0 ? `Review of ${scope.title}` : `Review of PR #${scope.pr}: ${scope.title}`,
 		"",
 		...kept.length ? kept.map((f) => `${f.line}${f.unchecked ? " (rule unchecked)" : ""}`) : ["No confirmed findings."],
 		"",
@@ -8311,9 +8986,9 @@ var resolveMarketplacePath = async ({ input, exec, cwd }) => {
 		output: `Marketplace (${source}): ${resolved}`
 	};
 };
-var safeSource = async ({ state, exec, answers, args }) => {
+var safeSource = async ({ state, exec, answers, args, input }) => {
 	if (!exec) throw new Error("sync.safeSource needs the host exec tool");
-	const root = typeof args.path === "string" ? String(args.path.split(".").reduce((v, k) => v && typeof v === "object" ? v[k] : void 0, state) ?? "") : marketplaceRoot(state);
+	const root = typeof args.path === "string" ? String(args.path.split(".").reduce((v, k) => v && typeof v === "object" ? v[k] : void 0, state) ?? "") : input.path ?? marketplaceRoot(state);
 	if (!root) throw new Error(`with.path ${String(args.path)} is not set in state`);
 	const switchQuestion = typeof args.question === "string" ? args.question : "q-marketplace-main";
 	const git = (...args) => exec("git", [
@@ -8321,6 +8996,7 @@ var safeSource = async ({ state, exec, answers, args }) => {
 		root,
 		...args
 	]);
+	const label = input.label ?? "Marketplace";
 	const stop = (reason, detail, clean) => ({
 		state: {
 			ok: false,
@@ -8331,7 +9007,7 @@ var safeSource = async ({ state, exec, answers, args }) => {
 			clean,
 			ok: 0
 		},
-		output: `Marketplace not safe: ${detail}`
+		output: `${label} not safe: ${detail}`
 	});
 	const status = await git("status", "--porcelain");
 	if (status.code !== 0) return stop("status", status.stderr.trim(), 0);
@@ -8686,13 +9362,12 @@ function parsePrLine(text) {
 		commit
 	};
 }
-var waitForChecks = async ({ state, exec, nodeId }) => {
+var waitForChecks = async ({ state, exec, nodeId, input }) => {
 	if (!exec) throw new Error("sync.waitChecks needs the host exec tool");
-	const pr = stateOf(state, "publish-pr").publish;
 	const res = await exec("gh", [
 		"pr",
 		"checks",
-		pr.url,
+		(input.prUrl ? { url: input.prUrl } : stateOf(state, "publish-pr").publish).url,
 		"--watch",
 		"--fail-fast"
 	]);
@@ -8719,10 +9394,13 @@ var prOf = async ({ state }) => {
 		output: `PR ${pr.url} on branch ${pr.branch}.`
 	};
 };
-var squashMerge = async ({ state, exec, args }) => {
+var squashMerge = async ({ state, exec, args, input }) => {
 	if (!exec) throw new Error("sync.merge needs the host exec tool");
-	const root = typeof args.path === "string" ? String(args.path.split(".").reduce((v, k) => v && typeof v === "object" ? v[k] : void 0, state) ?? "") : marketplaceRoot(state);
-	const pr = stateOf(state, "publish-pr").publish;
+	const root = typeof args.path === "string" ? String(args.path.split(".").reduce((v, k) => v && typeof v === "object" ? v[k] : void 0, state) ?? "") : input.path ?? marketplaceRoot(state);
+	const pr = input.prUrl ? {
+		url: input.prUrl,
+		branch: input.prBranch ?? ""
+	} : stateOf(state, "publish-pr").publish;
 	if (JSON.parse((await exec("gh", [
 		"pr",
 		"view",
@@ -8900,11 +9578,11 @@ var syncMemorySave = async ({ state }) => {
 };
 var syncReport = async ({ state }) => {
 	const plan = stateOf(state, "plan");
-	const source = stateOf(state, "safe-source");
+	const source = state.safe?.["safe-source"] ?? state["safe-source"] ?? {};
 	const lines = plan.decided.map((r) => `${r.type} ${r.name}: ${r.classification} -> ${r.decision}`);
 	const validate = state.validate;
 	const pr = state["publish-pr"]?.publish;
-	const merged = state.merge;
+	const merged = state.merge ?? state.pr?.merge;
 	const install = state.install;
 	const outcome = !validate ? "Marketplace, branches and installs: unchanged." : !validate.changed ? "Marketplace unchanged; local reverts only. Nothing to publish." : !pr ? `Marketplace changes applied in the working tree of ${marketplaceRoot(state)} and not published. Validation: ${validate.summary}.` : !merged ? `Published as ${pr.url}; not merged, nothing installed.` : `Published as ${pr.url}, squash merged as ${merged.commit?.slice(0, 12)}. Install: ${install?.lines?.join("; ") ?? "not run"}.`;
 	return {
@@ -9385,7 +10063,7 @@ var claudeSyncReport = async ({ state }) => {
 	].includes(r.decision)).length;
 	const applied = state["apply-record"]?.applied ?? [];
 	const pr = state["publish-pr"]?.publish;
-	const merged = state.merge;
+	const merged = state.merge ?? state.pr?.merge;
 	const olkoChanged = state["apply-record"]?.olkoChanged;
 	const published = pr ? merged ? `Published as ${pr.url}, squash merged as ${merged.commit?.slice(0, 12)}.` : `Published as draft ${pr.url}, not merged.` : olkoChanged ? "Olko changes are in the working tree and not published." : "No Olko change to publish.";
 	const outcome = changes ? `Applied ${applied.length} of ${changes} rows: ${applied.join(", ") || "none"}. ${published}` : "Olko, the target and the user scope: unchanged.";
@@ -10180,6 +10858,7 @@ var planFeatureReport = async ({ state, cwd }) => {
 	};
 };
 var OPERATIONS = {
+	...IMPL_OPERATIONS,
 	"builtin.pass": pass,
 	"builtin.count": async ({ state, nodeId }) => {
 		const count = ((nodeId ? state[nodeId]?.count : 0) ?? 0) + 1;
@@ -10283,12 +10962,13 @@ var OPERATIONS = {
 	"csync.publish": claudeSyncPublish,
 	"csync.consolidationRecord": claudeSyncConsolidationRecord,
 	"sync.report": syncReport,
-	"sync.stopUnsafe": async ({ state, args }) => {
+	"sync.stopUnsafe": async ({ state, args, input }) => {
 		const source = stateOf(state, typeof args.from === "string" ? args.from : "safe-source");
-		throw new Error(`Marketplace sync stopped before any comparison: ${source.detail ?? "the marketplace checkout is not safe"}.`);
+		throw new Error(`Sync stopped before any comparison: ${input.label ?? "the marketplace"} checkout is not safe: ${source.detail ?? "unknown reason"}.`);
 	}
 };
 var PARSERS = {
+	...IMPL_PARSERS,
 	"text.raw": (text) => String(text).trim(),
 	"review.findings": parseFindings,
 	"review.verdicts": parseVerdicts,
@@ -18180,7 +18860,7 @@ var FAKE_PRICE_PER_MTOK = {
 };
 var PARALLEL_AGENTS = 10;
 function workspace(run) {
-	return run.input?.project ?? run.input?.cwd ?? process.env.FACTORY_WORKSPACE ?? process.cwd();
+	return run.workspace ?? run.input?.project ?? run.input?.cwd ?? process.env.FACTORY_WORKSPACE ?? process.cwd();
 }
 function defaultConfig(kind, cli) {
 	const file = loadFactoryConfig();
@@ -18812,6 +19492,13 @@ var Factory = class {
 				nodeId: view.key
 			});
 			view.state[view.key] = result.state;
+			if (result.workspace && result.workspace !== run.workspace) {
+				run.workspace = result.workspace;
+				this.event(run, "workspace_changed", {
+					node: node.path,
+					workspace: result.workspace
+				});
+			}
 			this.appendLedger(run, {
 				nodePath: node.path,
 				agentId: node.id,
@@ -18884,7 +19571,8 @@ var Factory = class {
 						agentInstructions: definition.prompt
 					} : {},
 					tools: node.tools ?? ["read"],
-					dirs: this.dirs(run, node, agent)
+					dirs: this.dirs(run, node, agent),
+					cwd: workspace(run)
 				};
 			});
 			run.pendingWorkItems = items;

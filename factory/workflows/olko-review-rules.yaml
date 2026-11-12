@@ -17,7 +17,7 @@ nodes:
     parse: review.rulesCheck
     prompt: |
       Mode: code
-      PR #{{state.scope.pr}}: {{state.scope.title}}
+      {{#state.scope.pr}}PR #{{state.scope.pr}}: {{/state.scope.pr}}{{state.scope.title}}
 
       Changed paths:
       {{#state.scope.files}}
@@ -44,7 +44,7 @@ nodes:
     agent: olko-review-verifier
     parse: review.verdicts
     prompt: |
-      PR #{{state.scope.pr}}: {{state.scope.title}}
+      {{#state.scope.pr}}PR #{{state.scope.pr}}: {{/state.scope.pr}}{{state.scope.title}}
 
       Findings ({{state.rules-merge.violations.length}}), one per line:
       {{#state.rules-merge.violations}}

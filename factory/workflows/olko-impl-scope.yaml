@@ -1,0 +1,27 @@
+name: olko-impl-scope
+version: 0.1.0
+description: "Step 7b: counts the code paths of the Task diff (docs, plans and markdown excluded). More than 15 stops commit, push and PR unless you extend the budget for this Task."
+source: "agents/opencode/olko-implementation-orchestrator.md (step 7b, TASK-TO-PR SCOPE GATE) and skills/*/olko-task-scope-gates (PATH BUDGET)"
+entry: scope-gate
+nodes:
+  - id: scope-gate
+    description: "Counts code paths and documentation paths against the base branch."
+    kind: script
+    op: impl.scopeGate
+  - id: ask-scope
+    description: "More than 15 code paths: extend the budget for this Task, or stop and re-scope."
+    kind: interrupt
+    question:
+      id: q-impl-scope
+      text: "The Task diff has {{state.scope-gate.count}} code paths (budget 15):\n{{state.scope-gate.paths}}\nExtend the budget for this Task and PR, or stop and re-scope?"
+      allowed: [extend, stop]
+  - id: stop-scope
+    description: "Stops before commit: the Task must be re-scoped."
+    kind: script
+    op: impl.stop
+    with: { reason: "more than 15 code paths and no extension" }
+edges:
+  - { from: scope-gate, to: END, when: "scope-gate.over == false", description: "15 code paths or fewer" }
+  - { from: scope-gate, to: ask-scope, description: "more than 15 code paths" }
+  - { from: ask-scope, to: END, when: 'ask-scope.answer == "extend"', description: "you extended the budget" }
+  - { from: ask-scope, to: stop-scope, description: "you chose stop" }

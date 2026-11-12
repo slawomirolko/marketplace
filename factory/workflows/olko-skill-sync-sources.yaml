@@ -15,9 +15,10 @@ nodes:
     kind: group
     workflow: olko-skill-sync-prepare
   - id: safe
-    description: "Phase 1: requires a clean marketplace worktree on main, fast-forwarded to origin/main; asks before switching branch and stops otherwise."
-    kind: group
-    workflow: olko-skill-sync-safe-source
+    description: "Phase 1: calls the shared safe-source step for the marketplace checkout."
+    kind: call
+    workflow: olko-safe-source
+    input: { path: "{{state.resolve-path.path}}", label: "marketplace" }
 edges:
   - { from: path, to: prepare }
   - { from: prepare, to: safe }

@@ -25,33 +25,16 @@ nodes:
     description: "Creates the feature branch, commits only the changed files, pushes and opens a draft PR."
     kind: script
     op: csync.publish
-  - id: ask-pr
-    description: "Asks: leave the PR open, wait for CI, or mark it ready and squash merge."
-    kind: interrupt
-    maxVisits: 20
-    question:
-      id: "q-claude-sync-pr-{{state.wait-ci.round}}"
-      text: "Draft PR: {{state.publish-pr.publish.url}}{{#state.wait-ci}}\nCI checks passed: {{state.wait-ci.passed}}{{/state.wait-ci}}\nLeave it open, wait for CI, or mark it ready and squash merge?"
-      allowed: [leave, wait, merge]
-  - id: wait-ci
-    description: "Waits for the PR checks."
-    kind: script
-    op: sync.waitChecks
-    maxVisits: 20
-  - id: merge
-    description: "Marks the draft ready, squash merges and updates Olko main."
-    kind: script
-    op: sync.merge
-    with: { path: state.olko }
+  - id: pr
+    description: "Calls the shared PR step: leave, wait for CI or mark ready and squash merge."
+    kind: call
+    workflow: olko-pr-merge
+    input: { path: "{{state.state.olko}}", prUrl: "{{state.publish-pr.publish.url}}", prBranch: "{{state.publish-pr.publish.branch}}", label: "Olko" }
 edges:
   - { from: olko-tests, to: leak-check, when: "apply-record.olkoChanged == true", description: "Olko changed" }
   - { from: olko-tests, to: END, description: "Olko unchanged, nothing to publish" }
   - { from: leak-check, to: ask-publish }
   - { from: ask-publish, to: publish-pr, when: 'ask-publish.answer == "publish"', description: "you chose publish" }
   - { from: ask-publish, to: END, when: 'ask-publish.answer == "stop"', description: "you chose stop: changes stay unpublished" }
-  - { from: publish-pr, to: ask-pr }
-  - { from: ask-pr, to: merge, when: 'ask-pr.answer == "merge"', description: "you chose merge" }
-  - { from: ask-pr, to: wait-ci, when: 'ask-pr.answer == "wait"', description: "you chose wait" }
-  - { from: ask-pr, to: END, when: 'ask-pr.answer == "leave"', description: "you chose leave" }
-  - { from: wait-ci, to: ask-pr }
-  - { from: merge, to: END }
+  - { from: publish-pr, to: pr }
+  - { from: pr, to: END }

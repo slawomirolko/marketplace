@@ -1,0 +1,21 @@
+name: olko-impl-adopt
+version: 0.1.0
+description: "Current-code adoption: intake, Task-scope check and safe transfer of changes that already exist; never commits, opens a PR, deletes plans or marks a Task done."
+source: "agents/opencode/olko-implementation-orchestrator.md (CURRENT-CODE ADOPTION)"
+roles:
+  implementer: medium
+entry: adopt-code
+nodes:
+  - id: adopt-code
+    description: "Runs olko-implement-current-code: intake, the path budget and the transfer into the worktree."
+    kind: llm
+    role: implementer
+    skill: olko-implement-current-code
+    tools: [read, edit, bash]
+    dirs: ["{{input.project}}", "{{state.task.featureDir}}"]
+    parse: text.raw
+    prompt: |
+      Adopt the changes that already exist in {{input.project}} for Task {{state.task.taskName}} into the worktree {{state.worktree.path}}. Approved Task plan: {{state.task.taskFile}}; Feature plan: {{state.task.featurePlan}}.
+      Do intake, the Task-scope checks and the safe transfer only. Do not commit, push, open or merge a PR, delete plans, or mark a Task or Feature complete.
+edges:
+  - { from: adopt-code, to: END }

@@ -29,8 +29,8 @@ async def test_marketplace_is_safe_before_anything_is_compared(sync_run: ReviewR
     path = visited(sync_run)
     assert path[0] == "resolve-path"
     assert completed(sync_run, "resolve-path")["result"].endswith(str(sync_run.marketplace))
-    assert path.index("safe-source") < path.index("discover") < path.index("compare")
-    assert completed(sync_run, "safe-source")["metrics"]["clean"] == 1
+    assert path.index("safe/safe-source") < path.index("discover") < path.index("compare")
+    assert completed(sync_run, "safe/safe-source")["metrics"]["clean"] == 1
 
 
 async def test_discovery_finds_exactly_the_requested_artifacts(sync_run: ReviewRun):
@@ -99,7 +99,7 @@ async def test_marketplace_changes_stay_inside_the_accepted_artifact_and_derived
     name = accepted_name(sync_apply_run)
     assert sync_apply_run.changed_files
     for changed in sync_apply_run.changed_files:
-        assert name in changed or changed in DERIVED, changed
+        assert name in changed or changed in DERIVED or re.fullmatch(r"skills/[^/]+/index\.json", changed), changed
 
 
 async def test_publish_question_shows_the_diff_and_versions(sync_apply_run: ReviewRun):
@@ -110,7 +110,7 @@ async def test_publish_question_shows_the_diff_and_versions(sync_apply_run: Revi
 
 
 async def test_declined_publish_commits_pushes_and_installs_nothing(sync_apply_run: ReviewRun):
-    assert not {"publish", "merge", "install"} & set(visited(sync_apply_run))
+    assert not {"publish", "pr/merge", "install"} & set(visited(sync_apply_run))
     assert sync_apply_run.marketplace_after == sync_apply_run.marketplace_before
     assert "not published" in sync_apply_run.report["result"]
 

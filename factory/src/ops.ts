@@ -3,7 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { marketplaceDir } from "./marketplace-agents.ts";
 import { evaluateWhen } from "./workflow-yaml.ts";
-import type { Agent, Operation, ScriptContext, WorkflowState } from "./types.ts";
+import { IMPL_OPERATIONS, IMPL_PARSERS } from "./impl-ops.ts";
+import type { Agent, Operation, RunInput, ScriptContext, ScriptResult, WorkflowState } from "./types.ts";
 
 export interface DiffFile {
   path: string;
@@ -26,7 +27,8 @@ export interface Verdict {
 }
 
 interface ScopeState {
-  pr: number;
+  pr?: number;
+  base?: string;
   repo: string;
   title: string;
   body: string;
@@ -113,7 +115,8 @@ export function tierOf(finding: Pick<Finding, "ruleId" | "sev">): string {
 const pass: Operation = async () => ({ state: { passed: true }, output: "verify passed" });
 
 const reviewRoute: Operation = async ({ input, exec }) => {
-  if (input.plan) return { state: { route: "PLAN" }, output: `PLAN (${input.plan})` };
+  if (input.plan) return { state: { route: "PLAN", review: false }, output: `PLAN (${input.plan})` };
+  if (input.base) return { state: { route: "LOCAL", review: true }, output: `LOCAL (working tree against ${input.base})` };
   if (!exec) throw new Error("review.route needs the host exec tool");
   if (input.pr === undefined || !input.repo) throw new Error("review.route needs repo and pr, or plan, in the input");
   const view = await exec("gh", ["pr", "view", String(input.pr), "--repo", input.repo, "--json", "author"]);
@@ -121,12 +124,43 @@ const reviewRoute: Operation = async ({ input, exec }) => {
   if (view.code !== 0 || user.code !== 0) throw new Error(`gh failed: ${(view.stderr || user.stderr).slice(-300)}`);
   const author = (JSON.parse(view.stdout) as { author: { login: string } }).author.login;
   const own = author === user.stdout.trim();
-  if (own && !input.fresh) return { state: { route: "FEEDBACK", own }, output: "FEEDBACK (the PR author is the signed-in user)" };
+  if (own && !input.fresh) return { state: { route: "FEEDBACK", review: false, own }, output: "FEEDBACK (the PR author is the signed-in user)" };
   const reason = own ? "fresh review of own PR" : `PR by ${author}`;
-  return { state: { route: "REVIEW", own }, output: `REVIEW (${reason})` };
+  return { state: { route: "REVIEW", review: true, own }, output: `REVIEW (${reason})` };
 };
 
+function untrackedDiff(file: string, text: string): string {
+  const lines = text.replace(/\r\n/g, "\n").replace(/\n$/, "").split("\n");
+  return `diff --git a/${file} b/${file}\nnew file mode 100644\n--- /dev/null\n+++ b/${file}\n@@ -0,0 +1,${lines.length} @@\n${lines.map((l) => `+${l}`).join("\n")}\n`;
+}
+
+export async function localDiff(exec: NonNullable<ScriptContext["exec"]>, root: string, base: string): Promise<{ files: DiffFile[]; added: number; mergeBase: string }> {
+  if (!/^[\w./-]+$/.test(base)) throw new Error(`base ${base} is not a git ref`);
+  const mergeBase = await exec("git", ["-C", root, "merge-base", base, "HEAD"]);
+  if (mergeBase.code !== 0) throw new Error(`git merge-base ${base} HEAD failed: ${mergeBase.stderr.slice(-300)}`);
+  const tracked = await exec("git", ["-C", root, "diff", mergeBase.stdout.trim()]);
+  const untracked = await exec("git", ["-C", root, "ls-files", "--others", "--exclude-standard"]);
+  if (tracked.code !== 0 || untracked.code !== 0) throw new Error(`git diff failed: ${(tracked.stderr || untracked.stderr).slice(-300)}`);
+  const added = untracked.stdout.split(/\r?\n/).filter(Boolean).map((f) => untrackedDiff(f, fs.readFileSync(path.join(root, f), "utf8")));
+  return { files: splitDiff(tracked.stdout + added.join("")), added: added.length, mergeBase: mergeBase.stdout.trim() };
+}
+
+async function localScope(input: RunInput, exec: NonNullable<ScriptContext["exec"]>, exclude: RegExp[], root: string): Promise<ScriptResult> {
+  const base = String(input.base);
+  const diff = await localDiff(exec, root, base);
+  const isExcluded = (p: string) => exclude.some((re) => re.test(p));
+  const files = diff.files.filter((f) => !isExcluded(f.path));
+  const excluded = diff.files.filter((f) => isExcluded(f.path)).map((f) => f.path);
+  if (files.length === 0) throw new Error(`no local change against ${base} to review`);
+  const scope: ScopeState = { base, repo: "", title: `local changes against ${base}`, body: (input.criteria ?? "").trim(), head: "working tree", files, excluded, stale: false };
+  return { state: scope, metrics: { files: files.length, excluded: excluded.length, stale: 0 }, output: `Local diff against ${base}: ${files.length} files (${diff.added} new). Not sent to lenses: ${excluded.join(", ") || "none"}.` };
+}
+
 const prScope: Operation = async ({ input, exec, args, cwd }) => {
+  if (input.base) {
+    if (!exec) throw new Error("github.prScope needs the host exec tool");
+    return localScope(input, exec, stringList(args.exclude ?? [], "with.exclude").map((p) => new RegExp(p)), path.resolve(cwd ?? "."));
+  }
   const pr = input.pr;
   const repo = input.repo ?? "";
   if (pr === undefined || !Number.isInteger(pr) || !/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error("input needs repo owner/name and an integer pr");
@@ -323,7 +357,7 @@ const rankFindings: Operation = async ({ state, answers }) => {
   kept.sort((a, b) => TIERS.indexOf(tierOf(a)) - TIERS.indexOf(tierOf(b)));
   const totals = TIERS.map((t) => `${t}: ${kept.filter((f) => tierOf(f) === t).length}`).join(", ");
   const lines = [
-    `Review of PR #${scope.pr}: ${scope.title}`,
+    scope.pr === undefined ? `Review of ${scope.title}` : `Review of PR #${scope.pr}: ${scope.title}`,
     "",
     ...(kept.length ? kept.map((f) => `${f.line}${f.unchecked ? " (rule unchecked)" : ""}`) : ["No confirmed findings."]),
     "",
@@ -566,13 +600,14 @@ const resolveMarketplacePath: Operation = async ({ input, exec, cwd }) => {
   return { state: { path: resolved, source, fallback: source === "fallback" }, metrics: { fallback: source === "fallback" ? 1 : 0 }, output: `Marketplace (${source}): ${resolved}` };
 };
 
-const safeSource: Operation = async ({ state, exec, answers, args }) => {
+const safeSource: Operation = async ({ state, exec, answers, args, input }) => {
   if (!exec) throw new Error("sync.safeSource needs the host exec tool");
-  const root = typeof args.path === "string" ? String(args.path.split(".").reduce<unknown>((v, k) => (v && typeof v === "object" ? (v as Record<string, unknown>)[k] : undefined), state) ?? "") : marketplaceRoot(state);
+  const root = typeof args.path === "string" ? String(args.path.split(".").reduce<unknown>((v, k) => (v && typeof v === "object" ? (v as Record<string, unknown>)[k] : undefined), state) ?? "") : input.path ?? marketplaceRoot(state);
   if (!root) throw new Error(`with.path ${String(args.path)} is not set in state`);
   const switchQuestion = typeof args.question === "string" ? args.question : "q-marketplace-main";
   const git = (...args: string[]) => exec("git", ["-C", root, ...args]);
-  const stop = (reason: string, detail: string, clean: number) => ({ state: { ok: false, reason, detail }, metrics: { clean, ok: 0 }, output: `Marketplace not safe: ${detail}` });
+  const label = input.label ?? "Marketplace";
+  const stop = (reason: string, detail: string, clean: number) => ({ state: { ok: false, reason, detail }, metrics: { clean, ok: 0 }, output: `${label} not safe: ${detail}` });
   const status = await git("status", "--porcelain");
   if (status.code !== 0) return stop("status", status.stderr.trim(), 0);
   if (status.stdout.trim()) return stop("dirty", `the worktree of ${root} has local changes`, 0);
@@ -796,9 +831,9 @@ export function parsePrLine(text: string): { url: string; branch: string; commit
   return { url, branch, commit };
 }
 
-const waitForChecks: Operation = async ({ state, exec, nodeId }) => {
+const waitForChecks: Operation = async ({ state, exec, nodeId, input }) => {
   if (!exec) throw new Error("sync.waitChecks needs the host exec tool");
-  const pr = stateOf<{ "publish": { url: string } }>(state, "publish-pr").publish;
+  const pr = input.prUrl ? { url: input.prUrl } : stateOf<{ "publish": { url: string } }>(state, "publish-pr").publish;
   const res = await exec("gh", ["pr", "checks", pr.url, "--watch", "--fail-fast"]);
   const round = ((nodeId ? (state[nodeId] as { round?: number } | undefined)?.round : 0) ?? 0) + 1;
   return { state: { round, passed: res.code === 0 }, metrics: { round, passed: res.code === 0 ? 1 : 0 }, output: `CI checks ${res.code === 0 ? "passed" : "did not pass"}: ${(res.stdout || res.stderr).trim().split(/\r?\n/).slice(-3).join(" ")}` };
@@ -811,10 +846,10 @@ const prOf: Operation = async ({ state }) => {
   return { state: { publish: pr }, metrics: { prs: 1 }, output: `PR ${pr.url} on branch ${pr.branch}.` };
 };
 
-const squashMerge: Operation = async ({ state, exec, args }) => {
+const squashMerge: Operation = async ({ state, exec, args, input }) => {
   if (!exec) throw new Error("sync.merge needs the host exec tool");
-  const root = typeof args.path === "string" ? String(args.path.split(".").reduce<unknown>((v, k) => (v && typeof v === "object" ? (v as Record<string, unknown>)[k] : undefined), state) ?? "") : marketplaceRoot(state);
-  const pr = stateOf<{ publish: { url: string; branch: string } }>(state, "publish-pr").publish;
+  const root = typeof args.path === "string" ? String(args.path.split(".").reduce<unknown>((v, k) => (v && typeof v === "object" ? (v as Record<string, unknown>)[k] : undefined), state) ?? "") : input.path ?? marketplaceRoot(state);
+  const pr = input.prUrl ? { url: input.prUrl, branch: input.prBranch ?? "" } : stateOf<{ publish: { url: string; branch: string } }>(state, "publish-pr").publish;
   const draft = JSON.parse((await exec("gh", ["pr", "view", pr.url, "--json", "isDraft"])).stdout || "{}") as { isDraft?: boolean };
   if (draft.isDraft) {
     const ready = await exec("gh", ["pr", "ready", pr.url]);
@@ -895,11 +930,11 @@ const syncMemorySave: Operation = async ({ state }) => {
 
 const syncReport: Operation = async ({ state }) => {
   const plan = stateOf<{ decided: { type: string; name: string; classification: string; decision: string }[] }>(state, "plan");
-  const source = stateOf<{ head?: string }>(state, "safe-source");
+  const source = ((state.safe as Record<string, unknown> | undefined)?.["safe-source"] ?? state["safe-source"] ?? {}) as { head?: string };
   const lines = plan.decided.map((r) => `${r.type} ${r.name}: ${r.classification} -> ${r.decision}`);
   const validate = state.validate as { changed?: number; summary?: string; diffStat?: string } | undefined;
   const pr = (state["publish-pr"] as { publish?: { url: string } } | undefined)?.publish;
-  const merged = state.merge as { commit?: string } | undefined;
+  const merged = (state.merge ?? (state.pr as Record<string, unknown> | undefined)?.merge) as { commit?: string } | undefined;
   const install = state.install as { lines?: string[] } | undefined;
   const outcome = !validate
     ? "Marketplace, branches and installs: unchanged."
@@ -1176,7 +1211,7 @@ const claudeSyncReport: Operation = async ({ state }) => {
   const changes = plan.decided.filter((r) => !["none", "leave", "exclude", "reject", "unanswered"].includes(r.decision)).length;
   const applied = (state["apply-record"] as { applied?: string[] } | undefined)?.applied ?? [];
   const pr = (state["publish-pr"] as { publish?: { url: string } } | undefined)?.publish;
-  const merged = state.merge as { commit?: string } | undefined;
+  const merged = (state.merge ?? (state.pr as Record<string, unknown> | undefined)?.merge) as { commit?: string } | undefined;
   const olkoChanged = (state["apply-record"] as { olkoChanged?: boolean } | undefined)?.olkoChanged;
   const published = pr ? (merged ? `Published as ${pr.url}, squash merged as ${merged.commit?.slice(0, 12)}.` : `Published as draft ${pr.url}, not merged.`) : olkoChanged ? "Olko changes are in the working tree and not published." : "No Olko change to publish.";
   const outcome = changes ? `Applied ${applied.length} of ${changes} rows: ${applied.join(", ") || "none"}. ${published}` : "Olko, the target and the user scope: unchanged.";
@@ -1638,6 +1673,7 @@ const planFeatureReport: Operation = async ({ state, cwd }) => {
 };
 
 export const OPERATIONS: Record<string, Operation> = {
+  ...IMPL_OPERATIONS,
   "builtin.pass": pass,
   "builtin.count": async ({ state, nodeId }) => {
     const count = ((nodeId ? (state[nodeId] as { count?: number } | undefined)?.count : 0) ?? 0) + 1;
@@ -1725,13 +1761,14 @@ export const OPERATIONS: Record<string, Operation> = {
   "csync.publish": claudeSyncPublish,
   "csync.consolidationRecord": claudeSyncConsolidationRecord,
   "sync.report": syncReport,
-  "sync.stopUnsafe": async ({ state, args }) => {
+  "sync.stopUnsafe": async ({ state, args, input }) => {
     const source = stateOf<{ detail?: string }>(state, typeof args.from === "string" ? args.from : "safe-source");
-    throw new Error(`Marketplace sync stopped before any comparison: ${source.detail ?? "the marketplace checkout is not safe"}.`);
+    throw new Error(`Sync stopped before any comparison: ${input.label ?? "the marketplace"} checkout is not safe: ${source.detail ?? "unknown reason"}.`);
   },
 };
 
 export const PARSERS: Record<string, (text: string) => unknown> = {
+  ...IMPL_PARSERS,
   "text.raw": (text) => String(text).trim(),
   "review.findings": parseFindings,
   "review.verdicts": parseVerdicts,

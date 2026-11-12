@@ -1,0 +1,66 @@
+name: olko-impl-preflight
+version: 0.1.0
+description: "Step 2: the flow, runtime, test and readiness workers check the approved Task plan against current code; only four PASS results allow implementation. Otherwise the plan is updated and all four run again."
+source: "agents/opencode/olko-implementation-orchestrator.md (step 2, TASK COMPATIBILITY PREFLIGHT)"
+roles:
+  plan-worker: medium
+  planner: high
+entry: workers
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: workers
+    description: "Four read-only investigation workers, each in its own remit, return PASS, PLAN_UPDATE_REQUIRED or BLOCKED with file:line evidence."
+    kind: llm
+    role: plan-worker
+    maxVisits: 3
+    dirs: ["{{state.task.featureDir}}"]
+    parse: impl.preflight
+    agents:
+      - { id: flow, agent: olko-investigation-flow-worker }
+      - { id: runtime, agent: olko-investigation-runtime-worker }
+      - { id: test, agent: olko-investigation-test-worker }
+      - { id: readiness, agent: olko-investigation-readiness-worker }
+    prompt: |
+      Task compatibility preflight for Task {{state.task.taskName}}, read only. Approved Task plan: {{state.task.taskFile}}. Feature plan: {{state.task.featurePlan}}. Current code: this worktree ({{state.worktree.path}}, branch base {{state.worktree.base}}).
+      Check only your remit: flow = entry points, boundaries, state and contracts; runtime = dependencies, configuration, resilience and compatibility risks; test = existing test contracts and reusable coverage; readiness = domain models, ownership boundaries, dependencies and whether the plan is implementable against current code.
+      Keep it brief with file:line evidence. Do not edit anything and do not ask questions.
+      End with one line: `preflight | <PASS|PLAN_UPDATE_REQUIRED|BLOCKED> | <one-line evidence>`
+  - id: preflight
+    description: "Collects the four verdicts, records them in the journal and decides."
+    kind: script
+    op: impl.preflight
+    maxVisits: 3
+  - id: ask-preflight
+    description: "Shows the verdicts and asks whether the plan should be updated and checked again, or the run stops."
+    kind: interrupt
+    maxVisits: 3
+    question:
+      id: "q-impl-preflight-{{state.preflight.round}}"
+      text: "Preflight round {{state.preflight.round}} did not give four PASS results:\n{{state.preflight.text}}\nUpdate the Task plan from this evidence and run all four checks again, or stop?"
+      allowed: [update-plan, stop]
+  - id: update-plan
+    description: "Plan editor folds the preflight evidence into the Task plan."
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    maxVisits: 3
+    dirs: ["{{state.task.featureDir}}"]
+    parse: text.raw
+    prompt: |
+      Update the approved Task plan {{state.task.taskFile}} (and the Feature plan {{state.task.featurePlan}} only when it is affected) so that it fits current code, from this preflight evidence. Edit only the folder {{state.task.featureDir}}.
+      {{state.preflight.text}}
+  - id: stop-preflight
+    description: "Stops: no implementer runs without four PASS results."
+    kind: script
+    op: impl.stop
+    with: { from: preflight }
+edges:
+  - { from: workers, to: preflight }
+  - { from: preflight, to: END, when: 'preflight.next == "pass"', description: "four PASS results" }
+  - { from: preflight, to: ask-preflight, when: 'preflight.next == "ask"', description: "a worker did not pass" }
+  - { from: preflight, to: stop-preflight, description: "still not four PASS after three rounds" }
+  - { from: ask-preflight, to: update-plan, when: 'ask-preflight.answer == "update-plan"', description: "you chose to update the plan" }
+  - { from: ask-preflight, to: stop-preflight, description: "you chose stop" }
+  - { from: update-plan, to: workers }

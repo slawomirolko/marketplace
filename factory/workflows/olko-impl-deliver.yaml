@@ -1,0 +1,121 @@
+name: olko-impl-deliver
+version: 0.1.0
+description: "Steps 8-11: commit, push and a draft PR only after your explicit yes; PR check where you choose which findings to fix; Obsidian and editor gates; merge only after your yes; worktree cleanup and post-merge closure. Answering no ends the run with the work left in the worktree."
+source: "agents/opencode/olko-implementation-orchestrator.md (steps 8-11) and skills/*/olko-implementation-pr-gates, olko-implementation-closure"
+roles:
+  publisher: medium
+  implementer: medium
+  reviewer: medium
+entry: ask-commit
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: ask-commit
+    description: "Asks for explicit approval of commit, push and a draft PR."
+    kind: interrupt
+    question:
+      id: q-impl-commit
+      text: "Task {{state.task.taskName}} is implemented in {{state.worktree.path}} ({{state.scope-gate.count}} code paths, review: {{state.review-gate.blocking}} blocking findings). Commit, push and open a draft PR now?"
+      allowed: [commit, "no"]
+  - id: commit
+    description: "Git delivery manager runs the style and Docker checks again, commits, pushes and opens a draft PR."
+    kind: llm
+    role: publisher
+    agent: olko-git-delivery-manager
+    tools: [read, bash]
+    parse: impl.delivery
+    prompt: |
+      The user explicitly approved commit, push and a DRAFT pull request for Task {{state.task.taskName}} of Feature {{state.task.featureId}} (milestone: the Feature), estimated file budget 15, plan {{state.task.taskFile}}, worktree {{state.worktree.path}}, branch {{state.worktree.branch}} into {{state.worktree.base}}.
+      Changed code paths:
+      {{state.scope-gate.paths}}
+      Open the PR as a draft; never mark it ready and never request reviewers. Do not merge. Do not add CI/CD workflow files.
+      End with one line: `delivery | <commit hash> | <PR url> | <code-path count>`
+  - id: pr-check
+    description: "olko-pr-check reads CI and the newest review comments and classifies each finding (read only)."
+    kind: llm
+    role: reviewer
+    skill: olko-pr-check
+    tools: [read, bash]
+    maxVisits: 3
+    parse: text.raw
+    prompt: |
+      Read only: check the PR of branch {{state.worktree.branch}} (worktree {{state.worktree.path}}): CI state, the required review bot, the newest inline and issue comments, reviews and thread status. Classify each finding as actionable, question, nit or info. Do not fix, resolve threads or merge.
+  - id: ask-fix
+    description: "Asks which PR findings to fix; nothing is fixed automatically."
+    kind: interrupt
+    maxVisits: 3
+    question:
+      id: "q-impl-pr-fix-{{state.ask-fix-round.count}}"
+      text: "PR check:\n{{state.pr-check.pr-check}}\nFix which findings? Answer none, or list them."
+  - id: ask-fix-round
+    description: "Counts PR check rounds."
+    kind: script
+    op: builtin.count
+    maxVisits: 3
+  - id: pr-fix
+    description: "The stack implementers fix the findings you selected; the checks run again and the delivery manager pushes a follow-up commit."
+    kind: llm
+    role: implementer
+    agentsFrom: state.stacks.implementers
+    tools: [read, edit, bash]
+    maxVisits: 2
+    parse: text.raw
+    prompt: |
+      Fix only these PR findings the user selected, for the {{agent.id}} stack in this worktree (Task plan {{state.task.taskFile}}). No comments or plan ids in code, no test-first test changes, no CI/CD workflow files.
+      {{state.ask-fix.answer}}
+  - id: pr-recheck
+    description: "Calls the shared checks step after the PR fixes."
+    kind: call
+    workflow: olko-impl-checks
+    maxVisits: 2
+    input: { plan: "{{state.task.taskFile}}", base: "{{state.worktree.base}}" }
+  - id: pr-push
+    description: "Git delivery manager commits and pushes the follow-up."
+    kind: llm
+    role: publisher
+    agent: olko-git-delivery-manager
+    tools: [read, bash]
+    maxVisits: 2
+    parse: text.raw
+    prompt: |
+      The user approved this follow-up: commit and push the PR fixes in worktree {{state.worktree.path}} on branch {{state.worktree.branch}}. Do not merge, mark the PR ready or request reviewers.
+  - id: obsidian
+    description: "Obsidian knowledge-base gate; skipped when switches.obsidian is off."
+    kind: subgraph
+    workflow: olko-impl-obsidian
+    enabledWhen: "switches.obsidian == true"
+  - id: editor
+    description: "Editor syntax and structure verification in a new VS Code window; skipped when switches.editor is off."
+    kind: subgraph
+    workflow: olko-impl-editor
+    enabledWhen: "switches.editor == true"
+  - id: pr
+    description: "Calls the shared PR step: leave, wait for CI or squash merge after your yes."
+    kind: call
+    workflow: olko-pr-merge
+    input: { path: "{{state.worktree.path}}", prUrl: "{{state.commit.commit.fields.1}}", prBranch: "{{state.worktree.branch}}", label: "Task" }
+  - id: pr-outcome
+    description: "Branches on the PR answer: cleanup and closure only after a merge."
+    kind: script
+    op: builtin.pass
+  - id: closure
+    description: "Worktree cleanup and post-merge closure in the main checkout."
+    kind: group
+    workflow: olko-impl-closure
+edges:
+  - { from: ask-commit, to: commit, when: 'ask-commit.answer == "commit"', description: "you approved commit and draft PR" }
+  - { from: ask-commit, to: END, description: "you answered no: the work stays in the worktree" }
+  - { from: commit, to: pr-check }
+  - { from: pr-check, to: ask-fix-round }
+  - { from: ask-fix-round, to: ask-fix }
+  - { from: ask-fix, to: obsidian, when: 'ask-fix.answer == "none"', description: "no finding to fix" }
+  - { from: ask-fix, to: pr-fix, description: "you selected findings" }
+  - { from: pr-fix, to: pr-recheck }
+  - { from: pr-recheck, to: pr-push }
+  - { from: pr-push, to: pr-check }
+  - { from: obsidian, to: editor }
+  - { from: editor, to: pr }
+  - { from: pr, to: pr-outcome }
+  - { from: pr-outcome, to: closure, when: 'pr.ask-pr.answer == "merge"', description: "the PR was merged" }
+  - { from: pr-outcome, to: END, description: "PR left open: no cleanup" }
+  - { from: closure, to: END }

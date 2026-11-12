@@ -1,0 +1,66 @@
+name: olko-impl-checks
+version: 0.1.0
+description: "Steps 4-5 as a callable step: style check of the changed files and the affected tests of every stack, with up to three fix rounds by the stack implementers. Input: plan (the Task plan file) and base (the branch the worktree started from)."
+source: "agents/opencode/olko-implementation-orchestrator.md (steps 4 and 5, report every failure, never waive it)"
+roles:
+  implementer: medium
+  runner: low
+entry: stacks
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: stacks
+    description: "Finds the stacks of the Task plan and their implementers and test runners."
+    kind: script
+    op: impl.stacks
+  - id: style
+    description: "olko-commit-style checks the changed files of the worktree (read only)."
+    kind: llm
+    role: runner
+    skill: olko-commit-style
+    tools: [read, bash]
+    maxVisits: 3
+    parse: impl.style
+    prompt: |
+      Check coding style of the files changed in this worktree against branch {{input.base}} (git diff {{input.base}}... and new files). Report only; do not change files, commit or push.
+      End with one line: `style | <pass|fail> | <violations with file:line, or none>`
+  - id: runners
+    description: "The stack test runners run the affected tests in parallel (read only)."
+    kind: llm
+    role: runner
+    agentsFrom: state.stacks.runners
+    tools: [read, bash]
+    maxVisits: 3
+    parse: impl.tests
+    prompt: |
+      Run the affected {{agent.id}} test scope for the changes in this worktree against branch {{input.base}}. Task plan: {{input.plan}}. Do not change any file.
+      End with one line: `tests | <pass|fail> | <command and first actionable failure, or none>`
+  - id: check
+    description: "Collects style and test results and decides: pass, fix, or stop after three rounds."
+    kind: script
+    op: impl.checks
+    maxVisits: 3
+  - id: fix
+    description: "The stack implementers fix the reported failures without touching the failing-test-first files."
+    kind: llm
+    role: implementer
+    agentsFrom: state.stacks.implementers
+    tools: [read, edit, bash]
+    maxVisits: 2
+    parse: text.raw
+    prompt: |
+      Fix only these {{agent.id}} style or test failures in this worktree (Task plan {{input.plan}}). Do not change the failing-test-first tests, do not add comments or plan ids to code, do not touch CI/CD workflow files. When a failing test looks wrong, report `Test dispute:` instead of changing it.
+      {{state.check.failures}}
+  - id: stop-checks
+    description: "Stops: failures are reported, never waived."
+    kind: script
+    op: impl.stop
+    with: { from: check }
+edges:
+  - { from: stacks, to: style }
+  - { from: style, to: runners }
+  - { from: runners, to: check }
+  - { from: check, to: END, when: 'check.next == "pass"', description: "style and tests pass" }
+  - { from: check, to: fix, when: 'check.next == "fix"', description: "a check failed and fix rounds are left" }
+  - { from: check, to: stop-checks, description: "still failing after three rounds" }
+  - { from: fix, to: style }

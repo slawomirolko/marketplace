@@ -1,0 +1,51 @@
+name: olko-impl-review
+version: 0.1.0
+description: "Step 7c: olko-review on the local Task diff with the acceptance criteria. Bug, security, missing or partial requirement and merge-safety findings block delivery: the implementers fix them, checks run again and the review repeats. Non-blocking findings are recorded."
+source: "agents/opencode/olko-implementation-orchestrator.md (step 7c, TASK REVIEW)"
+roles:
+  implementer: medium
+entry: review
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: review
+    description: "Calls olko-review on the LOCAL route: the worktree against the base branch, with the Task's acceptance criteria."
+    kind: call
+    workflow: olko-review
+    maxVisits: 3
+    input: { base: "{{state.worktree.base}}", criteria: "{{state.task.criteria}}" }
+  - id: review-gate
+    description: "Splits blocking from non-blocking findings and records the review in the journal and the Feature tracker."
+    kind: script
+    op: impl.reviewGate
+    maxVisits: 3
+  - id: review-fix
+    description: "The stack implementers fix the blocking findings."
+    kind: llm
+    role: implementer
+    agentsFrom: state.stacks.implementers
+    tools: [read, edit, bash]
+    maxVisits: 2
+    dirs: ["{{state.task.featureDir}}"]
+    parse: text.raw
+    prompt: |
+      Fix only these blocking review findings for the {{agent.id}} stack in this worktree (Task plan {{state.task.taskFile}}). Do not change the failing-test-first tests, add comments or plan ids to code, or touch CI/CD workflow files.
+      {{state.review-gate.text}}
+  - id: recheck
+    description: "Calls the shared checks step again after the fixes."
+    kind: call
+    workflow: olko-impl-checks
+    maxVisits: 2
+    input: { plan: "{{state.task.taskFile}}", base: "{{state.worktree.base}}" }
+  - id: stop-review
+    description: "Stops: blocking findings are never waived."
+    kind: script
+    op: impl.stop
+    with: { from: review-gate }
+edges:
+  - { from: review, to: review-gate }
+  - { from: review-gate, to: END, when: 'review-gate.next == "pass"', description: "no blocking finding" }
+  - { from: review-gate, to: review-fix, when: 'review-gate.next == "fix"', description: "blocking findings and fix rounds left" }
+  - { from: review-gate, to: stop-review, description: "blocking findings after three reviews" }
+  - { from: review-fix, to: recheck }
+  - { from: recheck, to: review }

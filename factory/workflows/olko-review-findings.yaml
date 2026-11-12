@@ -16,7 +16,7 @@ nodes:
     agentsFrom: state.detect.lenses
     parse: review.findings
     prompt: |
-      PR #{{state.scope.pr}}: {{state.scope.title}}
+      {{#state.scope.pr}}PR #{{state.scope.pr}}: {{/state.scope.pr}}{{state.scope.title}}
       {{#agent.criteria}}
 
       Mode: {{agent.mode}}
@@ -55,7 +55,7 @@ nodes:
     agent: olko-review-verifier
     parse: review.verdicts
     prompt: |
-      PR #{{state.scope.pr}}: {{state.scope.title}}
+      {{#state.scope.pr}}PR #{{state.scope.pr}}: {{/state.scope.pr}}{{state.scope.title}}
       {{#state.scope.stale}}
       The current branch is not the PR head: the working-tree files are stale. Judge changed lines from the hunks only.
       {{/state.scope.stale}}

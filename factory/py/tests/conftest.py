@@ -54,6 +54,9 @@ def pr_comment_count() -> int:
     return len(json.loads(out)["comments"])
 
 
+SERVER_TEMP = Path(os.path.realpath(tempfile.mkdtemp(prefix="factory-server-tmp-")))
+
+
 @pytest.fixture(scope="session")
 def factory_server():
     port = free_port()
@@ -66,6 +69,9 @@ def factory_server():
         "FACTORY_DATA_DIR": data_dir,
         "FACTORY_BACKEND": "cli",
         "FACTORY_CLI": os.environ.get("FACTORY_CLI", "claude"),
+        "TEMP": str(SERVER_TEMP),
+        "TMP": str(SERVER_TEMP),
+        "TMPDIR": str(SERVER_TEMP),
     }
     node = os.environ.get("FACTORY_NODE", shutil.which("node") or "node")
     process = subprocess.Popen([node, "src/server.ts"], cwd=FACTORY_DIR, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
@@ -258,7 +264,7 @@ def copy_user_store(destination: Path, terms: list[str]) -> list[str]:
 
 
 def agent_temp_dirs() -> set[str]:
-    return {p.name for p in Path(tempfile.gettempdir()).iterdir() if p.name.startswith(("factory-agent-", "factory-opencode-"))}
+    return {p.name for p in SERVER_TEMP.iterdir() if p.name.startswith(("factory-agent-", "factory-opencode-"))}
 
 
 @pytest.fixture(scope="session")

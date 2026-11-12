@@ -39,8 +39,8 @@ async def test_both_marketplaces_are_safe_before_the_inventory(claude_sync_run: 
     path = visited(claude_sync_run)
     assert path.index("safe-olko") < path.index("inventory")
     assert path.index("safe-target") < path.index("inventory")
-    assert completed(claude_sync_run, "safe-olko")["metrics"]["ok"] == 1
-    assert completed(claude_sync_run, "safe-target")["metrics"]["ok"] == 1
+    assert completed(claude_sync_run, "safe-olko/safe-source")["metrics"]["ok"] == 1
+    assert completed(claude_sync_run, "safe-target/safe-source")["metrics"]["ok"] == 1
 
 
 async def test_one_inventory_worker_per_store_then_one_matcher(claude_sync_run: ReviewRun):
@@ -147,7 +147,7 @@ async def test_lineage_is_recorded_for_every_applied_row(claude_sync_apply_run: 
 
 
 async def test_declined_publish_leaves_branches_commits_and_the_target_unchanged(claude_sync_apply_run: ReviewRun):
-    assert not {"publish-pr", "merge"} & set(visited(claude_sync_apply_run))
+    assert not {"publish-pr", "pr/merge"} & set(visited(claude_sync_apply_run))
     assert claude_sync_apply_run.stores_after == claude_sync_apply_run.stores_before
     assert "consolidat" in claude_sync_apply_run.report["result"].lower()
 

@@ -1,0 +1,31 @@
+name: olko-pr-merge
+version: 0.1.0
+description: "Shared step after a PR was opened, called with input path, prUrl and prBranch: asks leave, wait for CI or merge; merge marks a draft ready, squash merges, updates local main and checks the commit is on origin/main. The caller reads ask-pr.answer to know whether it merged."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 5) and plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 5)"
+entry: ask-pr
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: ask-pr
+    description: "Asks: leave the PR open, wait for CI, or squash merge (a draft is marked ready first)."
+    kind: interrupt
+    maxVisits: 20
+    question:
+      id: "q-pr-merge-{{state.wait-ci.round}}"
+      text: "PR: {{input.prUrl}}{{#state.wait-ci}}\nCI checks passed: {{state.wait-ci.passed}}{{/state.wait-ci}}\nLeave it open, wait for CI, or squash merge? Anything that needs the merge (installing) runs only after merge."
+      allowed: [leave, wait, merge]
+  - id: wait-ci
+    description: "Waits for the PR checks."
+    kind: script
+    op: sync.waitChecks
+    maxVisits: 20
+  - id: merge
+    description: "Marks a draft ready, squash merges with branch deletion, updates local main and verifies the merge commit on origin/main."
+    kind: script
+    op: sync.merge
+edges:
+  - { from: ask-pr, to: merge, when: 'ask-pr.answer == "merge"', description: "you chose merge" }
+  - { from: ask-pr, to: wait-ci, when: 'ask-pr.answer == "wait"', description: "you chose wait" }
+  - { from: ask-pr, to: END, when: 'ask-pr.answer == "leave"', description: "you chose leave" }
+  - { from: wait-ci, to: ask-pr }
+  - { from: merge, to: END }
