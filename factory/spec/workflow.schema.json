@@ -70,6 +70,11 @@
         ]
       },
       "description": "Role-to-tier defaults of this workflow; the user can change them at confirmation."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What this workflow or phase group does, in one or two sentences."
     }
   },
   "$defs": {
@@ -246,6 +251,11 @@
             "type": "string"
           },
           "description": "Call only: input of the called workflow, as Mustache templates over the caller's goal, input and state."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What this step does, in one sentence."
         }
       },
       "allOf": [
@@ -376,6 +386,11 @@
           "type": "string",
           "minLength": 1,
           "description": "Condition over validated state fields only, never over prose."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why the run takes this edge, in plain words (shown with the condition in the viewer)."
         }
       }
     },

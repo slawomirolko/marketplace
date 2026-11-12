@@ -1,3 +1,4 @@
+import { MarkerType } from "@xyflow/react";
 import dagre from "@dagrejs/dagre";
 import { isGroup } from "./tree.ts";
 import type { Bounds, FlowEdge, FlowNode, Item, Level } from "./types.ts";
@@ -77,7 +78,7 @@ function layoutLevel(level: Level, expanded: Set<string>, parentKey: string | nu
     }
   }
   const edges: FlowEdge[] = [
-    ...level.edges.map((edge) => ({ id: `${edge.from}->${edge.to}`, source: edge.from, target: edge.to, label: edge.label ?? undefined, type: "smoothstep" })),
+    ...level.edges.map((edge) => ({ id: `${edge.from}->${edge.to}`, source: edge.from, target: edge.to, label: edge.label ?? undefined, type: "smoothstep", markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 } })),
     ...placed.flatMap((box) => box.inner?.edges ?? []),
   ];
   return {

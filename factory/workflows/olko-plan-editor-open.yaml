@@ -1,9 +1,11 @@
 name: olko-plan-editor-open
 version: 0.1.0
+description: "Step 11: opens the plan folder in VS Code."
 source: skills/workflow/olko-plan-finalization/SKILL.md (step 11, open the plan folder in VS Code)
 entry: open
 nodes:
   - id: open
+    description: "Runs code -n on the plan folder; prints the command when it fails."
     kind: script
     op: plan.openEditor
 edges:

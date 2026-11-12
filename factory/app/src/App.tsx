@@ -9,7 +9,7 @@ import { Details } from "./Details.tsx";
 import { layoutGraph } from "./layout.ts";
 import { nodeAriaLabel, nodeTypes } from "./nodes.tsx";
 import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost, disabledKeys, configDisabledKeys } from "./tree.ts";
-import type { Bounds, FactoryConfig, FlowEdge, FlowNode, Item, Level, RunDetail, RunIndex, RunListItem, Workflow } from "./types.ts";
+import type { AgentInfo, Bounds, FactoryConfig, FlowEdge, FlowNode, Item, Level, RunDetail, RunIndex, RunListItem, Workflow } from "./types.ts";
 
 const API = `${import.meta.env.BASE_URL}api`;
 
@@ -39,6 +39,7 @@ function FitToBounds({ bounds }: { bounds: Bounds | null }) {
 function Viewer() {
   const [workflows, setWorkflows] = useState<Workflow[] | null>(null);
   const [config, setConfig] = useState<FactoryConfig | null>(null);
+  const [agents, setAgents] = useState<Record<string, AgentInfo>>({});
   const [runs, setRuns] = useState<RunListItem[]>([]);
   const [runId, setRunId] = useState("");
   const params = new URLSearchParams(window.location.search);
@@ -57,6 +58,7 @@ function Viewer() {
         setConfig(factoryConfig);
       })
       .catch((loadError: unknown) => setError(messageOf(loadError)));
+    getJson<Record<string, AgentInfo>>("/agents").then(setAgents).catch(() => setAgents({}));
   }, []);
 
   const [runsLoaded, setRunsLoaded] = useState(false);
@@ -135,7 +137,7 @@ function Viewer() {
   const shown = mode === "workflows" ? null : detail;
   const disabled = useMemo(() => (mode === "workflows" ? configDisabledKeys(level, config) : disabledKeys(detail?.run ?? null)), [mode, level, config, detail]);
   const workflow = useMemo(() => workflows?.find((w) => w.name === rootName) ?? null, [workflows, rootName]);
-  const context = useMemo((): ViewerState => ({ config, report: shown?.report ?? null, run: shown?.run ?? null, toggle, focusKey, index: runIndex, disabled, mode, workflow, workflows: workflows ?? [] }), [config, shown, toggle, focusKey, runIndex, disabled, mode, workflow, workflows]);
+  const context = useMemo((): ViewerState => ({ config, report: shown?.report ?? null, run: shown?.run ?? null, toggle, focusKey, index: runIndex, disabled, mode, workflow, workflows: workflows ?? [], agents }), [config, shown, toggle, focusKey, runIndex, disabled, mode, workflow, workflows, agents]);
   const total = detail?.report.cost;
 
   if (error) return <p className="error" role="alert">Could not load factory data: {error}</p>;

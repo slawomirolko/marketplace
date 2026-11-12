@@ -1,11 +1,13 @@
 name: olko-plan-tracker-triage
 version: 0.1.0
+description: "Step 8c: drafts the tracker change when decisions changed Task scope; never publishes."
 source: skills/workflow/olko-plan-change-triage/SKILL.md (step 8c, only when tracker issues exist)
 roles:
   planner: high
 entry: triage
 nodes:
   - id: triage
+    description: "Plan change triage decides whether the tracker needs a change and drafts it."
     kind: llm
     role: planner
     skill: olko-plan-change-triage

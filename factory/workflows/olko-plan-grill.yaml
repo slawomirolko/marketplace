@@ -1,5 +1,6 @@
 name: olko-plan-grill
 version: 0.1.0
+description: "Step 7: grill-with-docs asks the whole batch of questions (three options, recommendation first), the answers are applied together, the investigation workers re-validate the plan and the consistency gate runs; repeated for follow-up questions, at most three rounds."
 source: "agents/opencode/olko-plan-documentation-orchestrator.md (Step 7: grill-with-docs question batches, answers applied together, re-validation by the workers, consistency gate)"
 roles:
   plan-worker: medium
@@ -9,6 +10,7 @@ limits:
   maxCycleIterations: 4
 nodes:
   - id: grill
+    description: "Grill-with-docs reads the plan package and returns the batch of open questions."
     kind: llm
     role: planner
     skill: grill-with-docs
@@ -20,15 +22,18 @@ nodes:
       Gather every currently answerable question (business scope, mechanism, delivery, risks, non-goals, acceptance criteria, assumptions) as ONE batch; on a later round return only follow-up questions the answers raised, or none. Do not ask the user yourself.
       End with one ```json block: {"questions": [{"problem": "", "why": "", "options": [{"label": "<recommended>", "business": "", "scope": ""}, {"label": "", "business": "", "scope": ""}, {"label": "", "business": "", "scope": ""}], "glossary": ""}]}
   - id: grill-questions
+    description: "Formats the batch; stops after three rounds."
     kind: script
     op: plan.grillQuestions
     maxVisits: 4
   - id: grill-next
+    description: "Takes the next grill question of the batch."
     kind: script
     op: list.next
     maxVisits: 100
     with: { over: grill-questions.questions }
   - id: ask-grill
+    description: "Asks one grill question with three options, the recommended one first."
     kind: interrupt
     maxVisits: 100
     question:
@@ -36,11 +41,13 @@ nodes:
       text: "Grill question {{state.grill-next.number}} of {{state.grill-next.total}} (the whole batch is answered before anything changes):\n{{state.grill-next.item.text}}"
       allowed: ["1", "2", "3"]
   - id: grill-answers
+    description: "Collects the whole batch of answers."
     kind: script
     op: plan.answers
     maxVisits: 4
     with: { from: grill-questions, prefix: q-plan-grill- }
   - id: grill-apply
+    description: "Plan editor applies all answers together and records the batch in tracker.md."
     kind: llm
     role: planner
     skill: olko-plan-editor
@@ -51,6 +58,7 @@ nodes:
       Apply ALL these grill answers together to the plan package {{state.feature.featureDir}} (project {{input.project}}) and record the batch, its answers and its closure in tracker.md. Edit only that folder.
       {{state.grill-answers.text}}
   - id: revalidate
+    description: "Four investigation workers verify every new or changed claim against the code."
     kind: llm
     role: plan-worker
     maxVisits: 4
@@ -64,11 +72,13 @@ nodes:
       Re-validation after decisions: verify every new or changed claim in {{state.feature.featureDir}} (project {{input.project}}) against the codebase with file:line evidence. Read only.
       End with one line: `findings | <none|found> | <count> | <unverified or false claims, semicolon separated>`.
   - id: reval-findings
+    description: "Counts the claims the workers could not verify."
     kind: script
     op: plan.findings
     maxVisits: 4
     with: { from: revalidate }
   - id: fold-reval
+    description: "Plan editor folds the re-validation findings into the plan."
     kind: llm
     role: planner
     skill: olko-plan-editor
@@ -79,21 +89,22 @@ nodes:
       Fold only these verified re-validation findings into {{state.feature.featureDir}} (project {{input.project}}); edit only that folder.
       {{state.reval-findings.text}}
   - id: gate-grill
+    description: "Consistency gate after the grill round."
     kind: call
     workflow: olko-plan-gate
     maxVisits: 4
     input: { featureDir: "{{state.feature.featureDir}}" }
 edges:
   - { from: grill, to: grill-questions }
-  - { from: grill-questions, to: grill-next, when: "grill-questions.count > 0" }
-  - { from: grill-questions, to: END }
-  - { from: grill-next, to: ask-grill, when: "grill-next.done == false" }
+  - { from: grill-questions, to: grill-next, when: "grill-questions.count > 0", description: "the batch has questions" }
+  - { from: grill-questions, to: END, description: "no open question or round limit reached" }
+  - { from: grill-next, to: ask-grill, when: "grill-next.done == false", description: "a question of the batch is left" }
   - { from: grill-next, to: grill-answers }
   - { from: ask-grill, to: grill-next }
   - { from: grill-answers, to: grill-apply }
   - { from: grill-apply, to: revalidate }
   - { from: revalidate, to: reval-findings }
-  - { from: reval-findings, to: fold-reval, when: "reval-findings.total > 0" }
+  - { from: reval-findings, to: fold-reval, when: "reval-findings.total > 0", description: "unverified claims found" }
   - { from: reval-findings, to: gate-grill }
   - { from: fold-reval, to: gate-grill }
   - { from: gate-grill, to: grill }

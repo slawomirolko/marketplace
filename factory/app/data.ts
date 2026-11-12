@@ -4,6 +4,8 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { Factory, errorMessage, runReport } from "../src/engine.ts";
 import { homeDataDir, readSources } from "../src/paths.ts";
+import { describeAgent } from "../src/marketplace-agents.ts";
+import type { AgentInfo } from "../src/marketplace-agents.ts";
 import type { Coverage, FactoryConfigFile, Report, Run, WorkflowSpec } from "../src/types.ts";
 
 const RUN_ID = /^r-[a-f0-9]{8}$/;
@@ -38,6 +40,7 @@ export interface DataApi {
   dataDir: string;
   ensureDemo(): Promise<boolean>;
   workflows(): WorkflowSpec[];
+  agents(): Record<string, AgentInfo>;
   config(): FactoryConfigFile;
   runs(): RunListItem[];
   run(runId: string): RunDetail | null;
@@ -112,6 +115,21 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo }: DataApi
       return loadWorkflowSpecs(dir);
     },
 
+    agents() {
+      const names = new Set<string>();
+      for (const w of loadWorkflowSpecs(path.join(factoryDir, "workflows"))) {
+        for (const n of w.nodes) {
+          if (n.agent) names.add(n.agent);
+          if (n.skill) names.add(n.skill);
+          for (const a of n.agents ?? []) if (a.agent) names.add(a.agent);
+        }
+      }
+      return Object.fromEntries([...names].sort().flatMap((name) => {
+        const info = describeAgent(name);
+        return info ? [[name, info]] : [];
+      }));
+    },
+
     config() {
       const text = fs.readFileSync(configFile, "utf8");
       return (/\.ya?ml$/i.test(configFile) ? parseYaml(text) : JSON.parse(text)) as FactoryConfigFile;
@@ -161,6 +179,7 @@ export function apiMiddleware(api: DataApi) {
     const send = (status: number, body: unknown) => res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(body));
     try {
       if (url.pathname === "/api/workflows") return send(200, api.workflows());
+      if (url.pathname === "/api/agents") return send(200, api.agents());
       if (url.pathname === "/api/config") return send(200, api.config());
       if (url.pathname === "/api/runs") {
         await api.ensureDemo();

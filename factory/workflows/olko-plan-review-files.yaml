@@ -1,5 +1,6 @@
 name: olko-plan-review-files
 version: 0.1.0
+description: "Step 6a: every plan file (the Feature technical plan and each Task plan) goes through the olko-review PLAN route; confirmed findings are folded in and the consistency gate runs again."
 source: "agents/opencode/olko-plan-documentation-orchestrator.md (Step 6a: olko-review PLAN route once per plan file, confirmed findings folded, consistency gate)"
 roles:
   planner: high
@@ -8,23 +9,28 @@ limits:
   maxCycleIterations: 4
 nodes:
   - id: plan-files
+    description: "Lists the Feature technical plan and every Task plan file."
     kind: script
     op: plan.files
   - id: plan-next
+    description: "Takes the next plan file to review."
     kind: script
     op: list.next
     maxVisits: 50
     with: { over: plan-files.files }
   - id: plan-review
+    description: "Calls olko-review in PLAN mode for this one file, with the acceptance criteria."
     kind: call
     workflow: olko-review
     maxVisits: 50
     input: { plan: "{{state.plan-next.item.path}}", criteria: "{{state.plan-next.item.criteria}}" }
   - id: plan-collect
+    description: "Collects the confirmed review findings of the file."
     kind: script
     op: plan.reviewCollect
     maxVisits: 50
   - id: fold-review
+    description: "Plan editor folds every confirmed review finding into the plan files."
     kind: llm
     role: planner
     skill: olko-plan-editor
@@ -34,14 +40,15 @@ nodes:
       Fold every confirmed plan review finding below into the plan files it names (project {{input.project}}, folder {{state.feature.featureDir}}), and record the review result in tracker.md. Edit only that folder.
       {{state.plan-collect.text}}
   - id: gate-review
+    description: "Consistency gate after the review fixes."
     kind: call
     workflow: olko-plan-gate
     input: { featureDir: "{{state.feature.featureDir}}" }
 edges:
   - { from: plan-files, to: plan-next }
-  - { from: plan-next, to: plan-review, when: "plan-next.done == false" }
-  - { from: plan-next, to: fold-review, when: "plan-collect.confirmed > 0" }
-  - { from: plan-next, to: END }
+  - { from: plan-next, to: plan-review, when: "plan-next.done == false", description: "a plan file is left to review" }
+  - { from: plan-next, to: fold-review, when: "plan-collect.confirmed > 0", description: "all files reviewed and there are confirmed findings" }
+  - { from: plan-next, to: END, description: "all files reviewed, nothing to fold" }
   - { from: plan-review, to: plan-collect }
   - { from: plan-collect, to: plan-next }
   - { from: fold-review, to: gate-review }

@@ -106,6 +106,41 @@ function group<T>(entries: [string, T][], format: (value: T, key: string) => Rea
   return entries.map(([k, v]) => <Row key={k} label={k} value={format(v, k)} />);
 }
 
+function AgentSection({ names }: { names: string[] }) {
+  const { agents } = useViewer();
+  const known = names.map((n) => agents[n]).filter((a): a is NonNullable<typeof a> => Boolean(a));
+  if (!known.length) return null;
+  return (
+    <>
+      {known.map((a) => (
+        <section key={a.name}>
+          <h3>{a.kind === "skill" ? "Skill" : "Agent"}: {a.name}</h3>
+          <p>{a.description}</p>
+          <Row label="Definition" value={a.file} />
+          {a.kind !== "skill" && (
+            <>
+              <h3>Skills this agent may use</h3>
+              {a.skills.length ? (
+                <ul className="skills">
+                  {a.skills.map((sk) => (
+                    <li key={sk.name}>
+                      <strong>{sk.name}</strong>
+                      <span className="muted">{sk.description || "no description"} · {sk.file}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted">None declared.</p>
+              )}
+              {a.missing.length > 0 && <p className="cost-unknown">Declared but not in the marketplace: {a.missing.join(", ")}</p>}
+            </>
+          )}
+        </section>
+      ))}
+    </>
+  );
+}
+
 function allNodes(workflow: Workflow, workflows: Workflow[], prefix = "", seen: string[] = []): (Workflow["nodes"][number] & { at: string })[] {
   return workflow.nodes.flatMap((n) => {
     const here = { ...n, at: `${prefix}${n.id}` };
@@ -129,6 +164,7 @@ function WorkflowSummary() {
   return (
     <section>
       <h2>{workflow.name}</h2>
+      {workflow.description && <p>{workflow.description}</p>}
       <p className="muted">Configuration only: no run, no cost.</p>
       <Row label="Version" value={workflow.version} />
       {workflow.source && <Row label="Source" value={workflow.source} />}
@@ -201,12 +237,17 @@ export function Details({ item }: { item: Item | null }) {
   const harnessAgent = records.find((r) => r.agentName)?.agentName ?? item.node.agent;
   const role = item.kind === "agent" ? (item.agent.role ?? item.node.role) : item.node.role;
   const failure = failureOf(item, run);
+  const { workflows } = useViewer();
+  const groupDescription = item.kind === "subgraph" && item.node.workflow ? (workflows.find((w) => w.name === item.node.workflow)?.description ?? null) : null;
+  const agentNames = item.kind === "agent" ? [item.agent.agentName ?? item.node.agent].filter((n): n is string => Boolean(n)) : [item.node.agent, item.node.skill, ...(item.node.agents ?? []).map((a) => a.agent)].filter((n): n is string => Boolean(n));
   const switchedOff = run?.events.find((e) => e.type === "node_completed" && typeof e.result === "string" && e.result.includes("skipped: switch off") && (item.key === e.node || item.key.startsWith(`${e.node}/`)))?.result ?? null;
   return (
     <section>
       <h2>{item.kind === "agent" ? `${item.agent.id} (agent of ${item.node.id})` : item.node.id}</h2>
       <Row label="Path" value={item.kind === "agent" ? `${item.nodePath} / ${item.agent.id}` : item.key} />
       <Row label="Kind" value={kindLabel(item)} />
+      {item.kind !== "agent" && item.node.description && <p>{item.node.description}</p>}
+      {groupDescription && <p className="muted">{groupDescription}</p>}
       {item.node.enabledWhen && <Row label="Enabled when" value={item.node.enabledWhen} />}
       {switchedOff && <Row label="Status" value={`switched off in this run: ${switchedOff}`} />}
       {item.node.run && <Row label="Runs" value={item.node.run} />}
@@ -238,6 +279,7 @@ export function Details({ item }: { item: Item | null }) {
         </section>
       )}
       {item.kind === "team" && <AgentTable item={item} />}
+      <AgentSection names={[...new Set(agentNames)]} />
       {run && (
         <section>
           <h3>Ledger records</h3>

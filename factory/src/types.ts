@@ -384,6 +384,7 @@ export interface WorkflowSpecNode {
   dirs?: string[];
   enabledWhen?: string;
   input?: Record<string, string>;
+  description?: string;
   scope?: string;
   localId?: string;
 }
@@ -392,10 +393,12 @@ export interface WorkflowSpecEdge {
   from: string;
   to: string;
   when?: string;
+  description?: string;
 }
 
 export interface WorkflowSpec {
   name: string;
+  description?: string;
   version: string;
   source?: string;
   roles?: Record<string, string>;

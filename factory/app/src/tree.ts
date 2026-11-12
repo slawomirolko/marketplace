@@ -21,14 +21,19 @@ export function buildLevel(workflows: Workflow[], name: string, prefix = name, s
     }
     const declared: WorkflowAgent[] = node.agents ?? (node.agentsFrom ? Object.keys(report?.byNode?.[key]?.byAgent ?? {}).map((id) => ({ id })) : []);
     if (declared.length > 1 || (node.agentsFrom && declared.length > 0)) {
-      const agents = declared.map((a) => ({ key: `${key}#${a.id}`, kind: "agent" as const, node, agent: { id: a.id, role: a.role ?? node.role }, nodePath: key }));
+      const agents = declared.map((a) => ({ key: `${key}#${a.id}`, kind: "agent" as const, node, agent: { id: a.id, role: a.role ?? node.role, ...(a.agent ? { agentName: a.agent } : {}) }, nodePath: key }));
       return { key, kind: "team", node, inner: { items: agents, edges: [] } };
     }
     return { key, kind: "step", node };
   });
   const edges: LevelEdge[] = workflow.edges
     .filter((e) => e.to !== "END" || isRoot)
-    .map((e) => ({ from: `${prefix}/${e.from}`, to: e.to === "END" ? END_KEY : `${prefix}/${e.to}`, label: e.when ?? null }));
+    .map((e) => {
+      const branching = workflow.edges.filter((o) => o.from === e.from).length > 1;
+      const condition = e.when ?? (branching ? "otherwise" : null);
+      const label = e.description ? (condition ? `${e.description} (${condition})` : e.description) : condition;
+      return { from: `${prefix}/${e.from}`, to: e.to === "END" ? END_KEY : `${prefix}/${e.to}`, label };
+    });
   if (isRoot) {
     items.unshift({ key: START_KEY, kind: "terminal", label: "start" });
     items.push({ key: END_KEY, kind: "terminal", label: "END" });

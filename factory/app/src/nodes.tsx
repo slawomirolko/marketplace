@@ -95,6 +95,7 @@ export function CardNode({ data, selected }: NodeProps<CardFlowNode>) {
       <div className="card-title">{title(item)}</div>
       {off && <div className="card-sub off-label">switched off</div>}
       <div className="card-sub">{subtitle(item)}</div>
+      {item.kind !== "terminal" && item.kind !== "agent" && item.node.description && <div className="card-desc">{item.node.description}</div>}
       {tier && <div className="card-sub">{tier}{model ? ` · ${model}` : ""}</div>}
       <CostLine item={item} />
       <Toggle item={item} expanded={false} />
@@ -112,6 +113,7 @@ export function GroupNode({ data, selected }: NodeProps<ClusterFlowNode>) {
         <span className="card-title">{title(item)}</span>
         {off && <span className="card-sub off-label"> switched off</span>}
         <span className="card-sub"> {subtitle(item)}</span>
+        {item.kind !== "terminal" && item.kind !== "agent" && item.node.description && <div className="card-desc">{item.node.description}</div>}
         <CostLine item={item} />
         <Toggle item={item} expanded />
       </div>

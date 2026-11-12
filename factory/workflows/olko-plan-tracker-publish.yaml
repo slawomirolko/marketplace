@@ -1,17 +1,20 @@
 name: olko-plan-tracker-publish
 version: 0.1.0
+description: "Publishes the approved draft to the tracker after an explicit approval and reads every issue back."
 source: skills/workflow/olko-plan-backlog-discovery/SKILL.md (approval-gated publish to the tracker and read-back)
 roles:
   backlog: medium
 entry: ask-publish
 nodes:
   - id: ask-publish
+    description: "Asks for the explicit approval to publish."
     kind: interrupt
     question:
       id: q-plan-publish
       text: "Publish the approved Epic/Feature/Task draft to the tracker now?"
       allowed: [publish, skip]
   - id: publish
+    description: "Backlog writer publishes the draft and returns the verified issue links."
     kind: llm
     role: backlog
     agent: olko-feature-backlog-writer

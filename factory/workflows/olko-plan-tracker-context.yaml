@@ -1,11 +1,13 @@
 name: olko-plan-tracker-context
 version: 0.1.0
+description: "Reads the Feature with its Epic and child Tasks from the tracker, read only."
 source: agents/opencode/olko-plan-documentation-orchestrator.md (entry gate, read-only Feature context from the tracker)
 roles:
   backlog: medium
 entry: context
 nodes:
   - id: context
+    description: "Backlog writer reads the Feature and every child Task with their acceptance criteria."
     kind: llm
     role: backlog
     agent: olko-feature-backlog-writer

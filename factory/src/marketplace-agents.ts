@@ -121,6 +121,45 @@ export function readMarketplaceAgent(name: string): MarketplaceAgent {
   return { name, description: front.description ?? name, prompt, file: skillFile, frontmatter: "", skills: [], dirs: pluginRoot ? [pluginRoot, skillDir] : [skillDir], skillDir, ...(pluginRoot ? { pluginRoot } : {}) };
 }
 
+export interface AgentInfo {
+  name: string;
+  kind: "agent" | "plugin-agent" | "skill";
+  description: string;
+  file: string;
+  skills: { name: string; description: string; file: string }[];
+  missing: string[];
+}
+
+function skillDescription(file: string): string {
+  try {
+    return String(readFrontmatter(file).front.description ?? "").replace(/\s+/g, " ").trim();
+  } catch {
+    return "";
+  }
+}
+
+export function describeAgent(name: string): AgentInfo | null {
+  let agent: MarketplaceAgent;
+  try {
+    agent = readMarketplaceAgent(name);
+  } catch {
+    return null;
+  }
+  const root = marketplaceDir();
+  const rel = (f: string) => path.relative(root, f).split(path.sep).join("/");
+  const kind = agent.skillDir ? "skill" : agent.pluginRoot ? "plugin-agent" : "agent";
+  const declared = kind === "skill" ? [] : agent.skills;
+  const fromPrompt = agent.prompt.match(/Not in the marketplace, so not available in this run: ([^\n]+)\./)?.[1]?.split(", ") ?? [];
+  return {
+    name,
+    kind,
+    description: String(agent.description).replace(/\s+/g, " ").trim(),
+    file: rel(agent.file),
+    skills: declared.map((s) => ({ name: s.name, description: skillDescription(s.file), file: rel(s.file) })),
+    missing: fromPrompt,
+  };
+}
+
 export function claudeTools(tools: AgentTool[]): { allowed: string[]; disallowed: string[] } {
   const allowed = [...new Set(tools.flatMap((t) => CLAUDE_TOOLS[t]))];
   return { allowed, disallowed: CLAUDE_ALL_TOOLS.filter((t) => !allowed.includes(t)) };

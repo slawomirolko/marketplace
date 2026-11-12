@@ -1,5 +1,6 @@
 name: olko-plan-discovery
 version: 0.1.0
+description: "Discovery: the backlog writer drafts the Epic/Feature/Task hierarchy, asks open questions as one batch per round, the user reviews the draft once, and the approved draft is published to the tracker when the tracker switch is on."
 source: "agents/opencode/olko-plan-documentation-orchestrator.md (DISCOVERY: backlog writer draft with question batches, one draft review, approval-gated tracker publish)"
 roles:
   backlog: medium
@@ -8,6 +9,7 @@ limits:
   maxCycleIterations: 4
 nodes:
   - id: draft
+    description: "Backlog writer drafts the hierarchy from the idea and the answers so far, or returns the open questions."
     kind: llm
     role: backlog
     agent: olko-feature-backlog-writer
@@ -21,16 +23,19 @@ nodes:
       When decisions remain open, return all currently answerable questions together. When the draft is ready, return no questions.
       End with one ```json block: {"questions": ["<question>"], "feature": {"title": "", "goal": "", "criteria": [""]}, "tasks": [{"id": "T1", "title": "", "criteria": [""]}], "text": "<the Epic/Feature/Task hierarchy as markdown>"}
   - id: draft-check
+    description: "Decides whether another question round is needed (at most 3 rounds)."
     kind: script
     op: plan.draftCheck
     maxVisits: 4
   - id: ask-questions
+    description: "Asks the whole batch of open draft questions at once (free text)."
     kind: interrupt
     maxVisits: 3
     question:
       id: "q-plan-questions-{{state.draft-check.round}}"
       text: "The backlog writer needs these answers, as one batch:\n{{state.draft-check.questions}}"
   - id: ask-draft
+    description: "One content review of the draft: approve or revise."
     kind: interrupt
     maxVisits: 3
     question:
@@ -38,25 +43,28 @@ nodes:
       text: "Review the draft once:\n{{state.draft-check.draft.text}}"
       allowed: [approve, revise]
   - id: ask-revise
+    description: "Asks what to change in the draft."
     kind: interrupt
     maxVisits: 3
     question:
       id: "q-plan-revise-{{state.draft-check.round}}"
       text: "What should change in the draft?"
   - id: tracker-publish
+    description: "Publishes the approved draft to the tracker after one more approval; skipped when switches.tracker is off."
     kind: subgraph
     workflow: olko-plan-tracker-publish
     enabledWhen: "switches.tracker == true"
   - id: after-discovery
+    description: "Joins the published and the unpublished path."
     kind: script
     op: builtin.pass
 edges:
   - { from: draft, to: draft-check }
-  - { from: draft-check, to: ask-questions, when: "draft-check.ask == true" }
+  - { from: draft-check, to: ask-questions, when: "draft-check.ask == true", description: "the writer still has open questions" }
   - { from: draft-check, to: ask-draft }
   - { from: ask-questions, to: draft }
-  - { from: ask-draft, to: tracker-publish, when: 'ask-draft.answer == "approve"' }
-  - { from: ask-draft, to: ask-revise }
+  - { from: ask-draft, to: tracker-publish, when: 'ask-draft.answer == "approve"', description: "draft approved" }
+  - { from: ask-draft, to: ask-revise, description: "draft needs changes" }
   - { from: ask-revise, to: draft }
   - { from: tracker-publish, to: after-discovery }
   - { from: after-discovery, to: END }

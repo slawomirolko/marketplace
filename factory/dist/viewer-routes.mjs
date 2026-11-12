@@ -7450,6 +7450,38 @@ function readMarketplaceAgent(name) {
 		...pluginRoot ? { pluginRoot } : {}
 	};
 }
+function skillDescription(file) {
+	try {
+		return String(readFrontmatter(file).front.description ?? "").replace(/\s+/g, " ").trim();
+	} catch {
+		return "";
+	}
+}
+function describeAgent(name) {
+	let agent;
+	try {
+		agent = readMarketplaceAgent(name);
+	} catch {
+		return null;
+	}
+	const root = marketplaceDir();
+	const rel = (f) => path.relative(root, f).split(path.sep).join("/");
+	const kind = agent.skillDir ? "skill" : agent.pluginRoot ? "plugin-agent" : "agent";
+	const declared = kind === "skill" ? [] : agent.skills;
+	const fromPrompt = agent.prompt.match(/Not in the marketplace, so not available in this run: ([^\n]+)\./)?.[1]?.split(", ") ?? [];
+	return {
+		name,
+		kind,
+		description: String(agent.description).replace(/\s+/g, " ").trim(),
+		file: rel(agent.file),
+		skills: declared.map((s) => ({
+			name: s.name,
+			description: skillDescription(s.file),
+			file: rel(s.file)
+		})),
+		missing: fromPrompt
+	};
+}
 function claudeTools(tools) {
 	const allowed = [...new Set(tools.flatMap((t) => CLAUDE_TOOLS[t]))];
 	return {
@@ -19299,6 +19331,18 @@ function createDataApi({ factoryDir, dataDir, configFile, demo }) {
 		workflows() {
 			return loadWorkflowSpecs(path.join(factoryDir, "workflows"));
 		},
+		agents() {
+			const names = /* @__PURE__ */ new Set();
+			for (const w of loadWorkflowSpecs(path.join(factoryDir, "workflows"))) for (const n of w.nodes) {
+				if (n.agent) names.add(n.agent);
+				if (n.skill) names.add(n.skill);
+				for (const a of n.agents ?? []) if (a.agent) names.add(a.agent);
+			}
+			return Object.fromEntries([...names].sort().flatMap((name) => {
+				const info = describeAgent(name);
+				return info ? [[name, info]] : [];
+			}));
+		},
 		config() {
 			const text = fs.readFileSync(configFile, "utf8");
 			return /\.ya?ml$/i.test(configFile) ? (0, import_dist$1.parse)(text) : JSON.parse(text);
@@ -19360,6 +19404,7 @@ function apiMiddleware(api) {
 		const send = (status, body) => res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(body));
 		try {
 			if (url.pathname === "/api/workflows") return send(200, api.workflows());
+			if (url.pathname === "/api/agents") return send(200, api.agents());
 			if (url.pathname === "/api/config") return send(200, api.config());
 			if (url.pathname === "/api/runs") {
 				await api.ensureDemo();

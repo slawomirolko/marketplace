@@ -10,6 +10,16 @@ export interface WorkflowAgent {
   id: string;
   role?: string;
   agentName?: string;
+  agent?: string;
+}
+
+export interface AgentInfo {
+  name: string;
+  kind: "agent" | "plugin-agent" | "skill";
+  description: string;
+  file: string;
+  skills: { name: string; description: string; file: string }[];
+  missing: string[];
 }
 
 export interface WorkflowNode {
@@ -34,18 +44,21 @@ export interface WorkflowNode {
   parallel?: number;
   input?: Record<string, string>;
   prompt?: string;
+  description?: string;
 }
 
 export interface WorkflowEdge {
   from: string;
   to: string;
   when?: string;
+  description?: string;
 }
 
 export interface Workflow {
   name: string;
   version: string;
   source?: string;
+  description?: string;
   roles?: Record<string, string>;
   entry: string;
   nodes: WorkflowNode[];
@@ -236,7 +249,7 @@ export interface AgentItem {
   key: string;
   kind: "agent";
   node: WorkflowNode;
-  agent: { id: string; role: string | undefined };
+  agent: { id: string; role: string | undefined; agentName?: string };
   nodePath: string;
 }
 
