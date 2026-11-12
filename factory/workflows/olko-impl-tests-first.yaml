@@ -6,7 +6,7 @@ roles:
   implementer: medium
 entry: stacks
 limits:
-  maxCycleIterations: 2
+  maxCycleIterations: 3
 nodes:
   - id: stacks
     description: "Finds the stacks the Task plan names and picks the test author, implementer and test runner for each."
@@ -18,7 +18,7 @@ nodes:
     role: implementer
     agentsFrom: state.stacks.authors
     tools: [read, edit, bash]
-    maxVisits: 2
+    maxVisits: 3
     dirs: ["{{state.task.featureDir}}"]
     parse: impl.tests
     prompt: |
@@ -32,11 +32,11 @@ nodes:
     description: "Records criterion, test and failure in the journal, freezes the test files and lists open items."
     kind: script
     op: impl.testsFirst
-    maxVisits: 2
+    maxVisits: 3
   - id: ask-unclear
     description: "Asks you to settle the unclear criteria and blocked choices (free text)."
     kind: interrupt
-    maxVisits: 2
+    maxVisits: 3
     question:
       id: "q-impl-unclear-{{state.tests-check.round}}"
       text: "The test author could not write these tests without guessing:\n{{state.tests-check.questions}}\nYour answer (it goes back to the author):"

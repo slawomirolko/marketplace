@@ -438,7 +438,7 @@ IMPL_TASK_PLAN = """# Task T1: liveness endpoint
 
 ## Acceptance
 
-- AC1: `GET /health/live` returns 200 with the body `Healthy` without running any registered health check.
+- AC1: `GET /health/live` returns 200 with the body `Healthy`. The existing integration test setup is enough; proving that no check runs is not required (the mapping uses `Predicate = _ => false`).
 - AC2: `GET /health` still returns 200 with the body `Healthy` and still runs the `AppDbContext` check.
 
 ## Tests
@@ -474,7 +474,7 @@ def impl_answer(question: dict) -> str:
     if qid == "q-impl-commit":
         return "no"
     if qid.startswith("q-impl-unclear-"):
-        return "Follow the Task plan literally; keep the existing /health test unchanged."
+        return "Take the first option you listed for each question (option a). Keep the existing /health test unchanged."
     if qid.startswith("q-impl-dispute-"):
         return "test-holds"
     if qid == "q-impl-context":

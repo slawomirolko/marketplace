@@ -24,6 +24,7 @@ nodes:
     prompt: |
       Task compatibility preflight for Task {{state.task.taskName}}, read only. Approved Task plan: {{state.task.taskFile}}. Feature plan: {{state.task.featurePlan}}. Current code: this worktree ({{state.worktree.path}}, branch base {{state.worktree.base}}).
       Check only your remit: flow = entry points, boundaries, state and contracts; runtime = dependencies, configuration, resilience and compatibility risks; test = existing test contracts and reusable coverage; readiness = domain models, ownership boundaries, dependencies and whether the plan is implementable against current code.
+      Open items marked VERIFY-DURING-WORK or ACCEPTED-GAP do not block: return PASS when the plan is implementable against current code and every remaining item can only be confirmed by running the change. Use PLAN_UPDATE_REQUIRED or BLOCKED only for a wrong code claim, a missing decision, or a conflict with current code.
       Keep it brief with file:line evidence. Do not edit anything and do not ask questions.
       End with one line: `preflight | <PASS|PLAN_UPDATE_REQUIRED|BLOCKED> | <one-line evidence>`
   - id: preflight
@@ -48,7 +49,7 @@ nodes:
     dirs: ["{{state.task.featureDir}}"]
     parse: text.raw
     prompt: |
-      Update the approved Task plan {{state.task.taskFile}} (and the Feature plan {{state.task.featurePlan}} only when it is affected) so that it fits current code, from this preflight evidence. Record the user's decision below as a locked decision and close the open items it settles; do not open new items the decision already answers. Edit only the folder {{state.task.featureDir}}.
+      Update the approved Task plan {{state.task.taskFile}} (and the Feature plan {{state.task.featurePlan}} only when it is affected) so that it fits current code, from this preflight evidence. Record the user's decision below as a locked decision and close the open items it settles; do not open new items the decision already answers. Classify every open item as BLOCKING (a missing decision or a wrong code claim), VERIFY-DURING-WORK (can only be confirmed by running the change) or ACCEPTED-GAP; only BLOCKING items may set `Ready for implementation: no`. Edit only the folder {{state.task.featureDir}}.
       Preflight evidence:
       {{state.preflight.text}}
       User decision:

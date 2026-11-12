@@ -209,7 +209,7 @@ const implTestsFirst: Operation = async ({ state, input, answers, nodeId, exec, 
     for (const file of await changed(exec, cwd, baseOf(state, input))) if (TEST_PATH.test(file.path)) testFiles[file.path] = hashFile(path.join(cwd, file.path));
   }
   appendJournal(task.taskFile, `failing tests first, round ${round}: ${count} tests written (${Object.keys(testFiles).join(", ") || "no test file changed"}); open items: ${open.length}`);
-  const next = open.length === 0 ? "done" : round < 2 ? "ask" : "stop";
+  const next = open.length === 0 ? "done" : round < 3 ? "ask" : "stop";
   return { state: { round, count, open: open.length, questions: open.join("\n"), answered: answered || "none", testFiles, testList: Object.keys(testFiles).join(", ") || "none", next, reason: `criteria still unclear after ${round} rounds:\n${open.join("\n")}` }, metrics: { tests: count, open: open.length, files: Object.keys(testFiles).length }, output: `${count} failing tests written; ${Object.keys(testFiles).length} test files; ${open.length} open items.` };
 };
 
