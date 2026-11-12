@@ -67,8 +67,14 @@ function render(template: string): (context: PromptContext) => string {
 }
 
 function buildNode(workflow: WorkflowSpec, spec: WorkflowSpecNode): WorkflowNode {
+  if (spec.kind === "call") {
+    const inputs = Object.fromEntries(Object.entries(spec.input ?? {}).map(([k, v]) => { Mustache.parse(v); return [k, v]; }));
+    return { id: spec.id, path: `${workflow.name}/${spec.id}`, kind: "script", enterScope: { workflow: spec.workflow ?? "", input: inputs }, ...(spec.maxVisits ? { maxVisits: spec.maxVisits } : {}) };
+  }
   if (spec.kind === "subgraph" || spec.kind === "map") throw new Error(`node ${spec.id}: ${spec.kind} ${spec.workflow ?? ""} is not expanded; load it with its workflow directory`);
   const node: WorkflowNode = { id: spec.id, path: `${workflow.name}/${spec.id}`, kind: spec.kind as WorkflowNode["kind"] };
+  if (spec.scope) node.scope = spec.scope;
+  if (spec.localId) node.localId = spec.localId;
   if (spec.role) node.role = spec.role;
   if (spec.agent) node.agent = spec.agent;
   if (spec.skill) node.agent = spec.skill;
@@ -118,6 +124,12 @@ function readSpec(file: string): WorkflowSpec {
   return spec;
 }
 
+export function negateWhen(when: string): string {
+  const match = when.match(/^(\S+)\s*(==|!=)\s*(.+)$/);
+  if (!match) throw new Error(`enabledWhen '${when}' must use == or !=`);
+  return `${match[1]} ${match[2] === "==" ? "!=" : "=="} ${match[3]}`;
+}
+
 function expandSubgraphs(spec: WorkflowSpec, specs: Map<string, WorkflowSpec>, seen: string[] = []): WorkflowSpec {
   if (seen.includes(spec.name)) throw new Error(`subgraph cycle: ${[...seen, spec.name].join(" -> ")}`);
   let nodes: WorkflowSpecNode[] = [];
@@ -125,7 +137,7 @@ function expandSubgraphs(spec: WorkflowSpec, specs: Map<string, WorkflowSpec>, s
   let entry = spec.entry;
   const roles = { ...(spec.roles ?? {}) };
   for (const node of spec.nodes) {
-    if (node.kind !== "subgraph") {
+    if (node.kind !== "subgraph" && node.kind !== "call") {
       nodes.push(node);
       continue;
     }
@@ -133,9 +145,14 @@ function expandSubgraphs(spec: WorkflowSpec, specs: Map<string, WorkflowSpec>, s
     if (!subSpec) throw new Error(`node ${node.id}: unknown subgraph workflow ${node.workflow}`);
     const sub = expandSubgraphs(subSpec, specs, [...seen, spec.name]);
     const prefix = (id: string) => `${node.id}/${id}`;
-    nodes = nodes.concat(sub.nodes.map((n) => ({ ...n, id: prefix(n.id) })));
+    const scoped = node.kind === "call";
+    nodes = nodes.concat(sub.nodes.map((n) => ({ ...n, id: prefix(n.id), ...(scoped ? { scope: n.scope ? prefix(n.scope) : node.id, localId: n.localId ?? n.id } : {}) })));
     for (const [role, tier] of Object.entries(sub.roles ?? {})) roles[role] ??= tier;
     const exits = edges.filter((e) => e.from === node.id);
+    if (node.enabledWhen) {
+      if (exits.some((x) => x.when)) throw new Error(`subgraph ${node.id}: a switched subgraph (enabledWhen) needs exits without conditions`);
+      nodes.push({ id: node.id, kind: "script", op: "builtin.gate", with: { subgraph: node.workflow, when: node.enabledWhen } });
+    }
     const inner = sub.edges.flatMap((e) => {
       if (e.to !== "END") return [{ ...e, from: prefix(e.from), to: prefix(e.to) }];
       return exits.map((x) => {
@@ -144,6 +161,17 @@ function expandSubgraphs(spec: WorkflowSpec, specs: Map<string, WorkflowSpec>, s
         return { from: prefix(e.from), to: x.to, ...(when ? { when } : {}) };
       });
     });
+    if (scoped) {
+      if (exits.some((x) => x.when)) throw new Error(`call ${node.id}: its exits need no condition`);
+      nodes.push({ id: node.id, kind: "call", workflow: node.workflow!, input: node.input ?? {}, ...(node.maxVisits ? { maxVisits: node.maxVisits } : {}) });
+      edges = edges.filter((e) => e.from !== node.id).concat([{ from: node.id, to: prefix(sub.entry) }], inner);
+      continue;
+    }
+    if (node.enabledWhen) {
+      const gate = [{ from: node.id, to: prefix(sub.entry), when: node.enabledWhen }, ...exits.map((x) => ({ from: node.id, to: x.to, when: negateWhen(node.enabledWhen!) }))];
+      edges = edges.filter((e) => e.from !== node.id).concat(gate, inner);
+      continue;
+    }
     edges = edges.filter((e) => e.from !== node.id).map((e) => (e.to === node.id ? { ...e, to: prefix(sub.entry) } : e)).concat(inner);
     if (entry === node.id) entry = prefix(sub.entry);
   }

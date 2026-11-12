@@ -8,6 +8,7 @@ import { loadFactoryConfig } from "./config.ts";
 import { readMarketplaceAgent } from "./marketplace-agents.ts";
 import Mustache from "mustache";
 import type {
+  WorkflowState,
   Agent,
   CliName,
   ConfirmOverrides,
@@ -47,7 +48,7 @@ function workspace(run: Run): string {
 
 function defaultConfig(kind: "fake" | "delegate" | "cli", cli?: CliName): RunConfig {
   const file = loadFactoryConfig();
-  const tiers = kind === "fake" ? { low: "fake-low", medium: "fake-medium", high: "fake-high" } : { low: "claude-haiku-5-5", medium: "claude-sonnet-5-5", high: "claude-opus-5-5" };
+  const tiers = kind === "fake" ? { low: "fake-low", medium: "fake-medium", high: "fake-high" } : { low: "claude-haiku-5-5", medium: "claude-haiku-5-5", high: "claude-haiku-5-5" };
   const backend = kind === "cli" ? { kind: "cli" as const, cli: cli as CliName } : { kind };
   return { roles: file.roles, tiers, backend, budget: file.budget };
 }
@@ -218,7 +219,7 @@ export class Factory {
       idempotencyKey: idempotencyKey ?? null,
       goal,
       workflow,
-      input,
+      input: { ...input, switches: { ...loadFactoryConfig().switches, ...(input.switches ?? {}) } },
       state: {},
       nodeAgents: {},
       status: "needs_confirmation",
@@ -421,38 +422,69 @@ export class Factory {
 
   nodeAgents(run: Run, node: WorkflowNode): CurrentAgent[] {
     const agents = agentsOf(run, node);
-    if (!agents) return [{ id: node.id, role: node.role, agentName: node.agent }];
+    if (!agents) return [{ id: node.localId ?? node.id, role: node.role, agentName: node.agent }];
     return agents.map((a) => ({ ...a, role: a.role ?? node.role, agentName: a.agentName ?? node.agent }));
+  }
+
+  view(run: Run, node: WorkflowNode): { state: WorkflowState; input: RunInput; answers: Record<string, string>; prefix: string; key: string } {
+    if (!node.scope) return { state: (run.state ??= {}), input: run.input ?? {}, answers: run.answers, prefix: "", key: node.id };
+    const scope = run.scopes?.[node.scope];
+    if (!scope) throw new Error(`node ${node.path} runs before its call ${node.scope} entered`);
+    const prefix = `${node.scope}#${scope.iteration}:`;
+    const answers = Object.fromEntries(Object.entries(run.answers).filter(([k]) => k.startsWith(prefix)).map(([k, v]) => [k.slice(prefix.length), v]));
+    run.state ??= {};
+    const state = ((run.state[node.scope] as WorkflowState | undefined) ?? (run.state[node.scope] = {})) as WorkflowState;
+    return { state, input: scope.input, answers, prefix, key: node.localId ?? node.id };
+  }
+
+  enterScope(run: Run, node: WorkflowNode): void {
+    const spec = node.enterScope!;
+    const parent = this.view(run, { ...node, scope: undefined } as WorkflowNode);
+    const context = { goal: run.goal, input: run.input, state: parent.state };
+    const input = { ...(run.input ?? {}), ...Object.fromEntries(Object.entries(spec.input).map(([k, v]) => [k, Mustache.render(v, context)])) } as RunInput;
+    run.scopes ??= {};
+    const iteration = (run.scopes[node.id]?.iteration ?? 0) + 1;
+    run.scopes[node.id] = { iteration, input };
+    run.state ??= {};
+    run.state[node.id] = {};
+    const inner = `${node.id}/`;
+    for (const k of Object.keys(run.visits ?? {})) if (k.startsWith(inner)) delete run.visits![k];
+    for (const k of Object.keys(run.nodeAgents ?? {})) if (k.startsWith(inner)) delete run.nodeAgents![k];
+    this.event(run, "node_completed", { node: node.path, result: `call ${spec.workflow} #${iteration}`, input: Object.keys(spec.input) });
   }
 
   prompt(run: Run, node: WorkflowNode, agent: CurrentAgent = currentAgent(run, node)): string {
     if (!node.prompt) throw new Error(`node ${node.path} has no prompt`);
+    const view = this.view(run, node);
     return node.prompt({
       goal: run.goal,
-      input: run.input,
-      state: run.state,
+      input: view.input,
+      state: view.state,
       agent,
-      answer: (node.question && run.answers[node.question.id]) ?? "",
+      answer: (node.question && view.answers[node.question.id]) ?? "",
       steps: run.steps,
     });
   }
 
   dirs(run: Run, node: WorkflowNode, agent: CurrentAgent): string[] {
     const marketplace = agent.agentName ? readMarketplaceAgent(agent.agentName).dirs : [];
-    const listed = node.dirs?.({ goal: run.goal, input: run.input, state: run.state, agent }) ?? [];
+    const view = this.view(run, node);
+    const listed = node.dirs?.({ goal: run.goal, input: view.input, state: view.state, agent }) ?? [];
     return [...new Set([...listed, ...marketplace])];
   }
 
   storeParsed(run: Run, node: WorkflowNode, agentId: string, output: string): void {
-    if (!node.parse || !run.state) return;
-    const previous = run.state[node.id];
+    if (!node.parse) return;
+    const { state, key } = this.view(run, node);
+    const previous = state[key];
     const byAgent = typeof previous === "object" && previous !== null ? previous : {};
-    run.state[node.id] = { ...byAgent, [agentId]: node.parse(output ?? "") };
+    state[key] = { ...byAgent, [agentId]: node.parse(output ?? "") };
   }
 
   advance(run: Run, node: WorkflowNode): void {
     const workflow = workflowOf(run);
-    const context = { ...(run.state ?? {}), answers: run.answers };
+    const view = this.view(run, node);
+    const context = { ...view.state, answers: view.answers, input: view.input, switches: run.input?.switches ?? {} };
     const edge = workflow.edges.filter((e) => e.from === node.id).find((e) => e.when === undefined || evaluateWhen(e.when, context));
     if (!edge) throw new Error(`no edge from ${node.id} matches the run state`);
     run.nodeTurn = 0;
@@ -490,9 +522,10 @@ export class Factory {
 
     if (node.kind === "interrupt") {
       if (!node.question) throw new Error(`interrupt node ${node.path} has no question`);
-      const context = { goal: run.goal, input: run.input, state: run.state };
+      const view = this.view(run, node);
+      const context = { goal: run.goal, input: view.input, state: view.state };
       const { allowedFrom, ...fixed } = node.question;
-      const question = { ...fixed, id: Mustache.render(node.question.id, context), text: Mustache.render(node.question.text, context), ...(allowedFrom ? { allowed: allowedOf(run, allowedFrom) } : {}) };
+      const question = { ...fixed, id: view.prefix + Mustache.render(node.question.id, context), text: Mustache.render(node.question.text, context), ...(allowedFrom ? { allowed: allowedOf(view.state, allowedFrom) } : {}) };
       const answer = run.answers[question.id];
       if (answer === undefined) {
         run.status = "waiting_for_user";
@@ -500,7 +533,7 @@ export class Factory {
         this.event(run, "needs_input", { node: node.path, questionId: question.id });
         return;
       }
-      if (run.state) run.state[node.id] = { answer };
+      view.state[view.key] = { answer };
       this.event(run, "node_completed", { node: node.path, answer });
       this.advance(run, node);
       return;
@@ -509,9 +542,15 @@ export class Factory {
     if (node.kind === "script") {
       run.steps += 1;
       const started = Date.now();
+      if (node.enterScope) {
+        this.enterScope(run, node);
+        this.advance(run, node);
+        return;
+      }
       if (!node.script) throw new Error(`script node ${node.path} has no operation`);
-      const result = await node.script({ input: run.input ?? {}, state: run.state ?? {}, exec: this.executors.exec, goal: run.goal, answers: run.answers, cwd: workspace(run), nodeId: node.id });
-      if (run.state) run.state[node.id] = result.state;
+      const view = this.view(run, node);
+      const result = await node.script({ input: view.input, state: view.state, exec: this.executors.exec, goal: run.goal, answers: view.answers, cwd: workspace(run), nodeId: view.key });
+      view.state[view.key] = result.state;
       this.appendLedger(run, { nodePath: node.path, agentId: node.id, kind: "script", tier: null, model: null, backend: "script", turn: 1, inputTokens: 0, outputTokens: 0, costUsd: 0, costSource: "measured", durationMs: Date.now() - started, output: result.output ?? null });
       this.event(run, "node_completed", { node: node.path, result: (String(result.output ?? "").split(/\r?\n/)[0] ?? "").slice(0, 200), ...(result.metrics ? { metrics: result.metrics } : {}) });
       this.advance(run, node);
@@ -530,11 +569,11 @@ export class Factory {
 
     if (node.agentsFrom && run.nodeAgents?.[node.id] === undefined) {
       run.nodeAgents ??= {};
-      const selected = node.agentsFrom(run.state);
+      const selected = node.agentsFrom(this.view(run, node).state);
       run.nodeAgents[node.id] = selected;
       this.event(run, "agents_selected", { node: node.path, agents: selected.map((a) => a.id) });
     }
-    if (agentsOf(run, node)?.length === 0 || node.skipIf?.(run.state)) {
+    if (agentsOf(run, node)?.length === 0 || node.skipIf?.(this.view(run, node).state)) {
       this.event(run, "node_skipped", { node: node.path, reason: node.skipReason ?? "no work" });
       this.advance(run, node);
       return;
@@ -789,8 +828,8 @@ function tierOf(config: RunConfig, agent: CurrentAgent): Tier {
   return tier;
 }
 
-function allowedOf(run: Run, dotted: string): string[] {
-  const allowed = readPath(run.state ?? {}, dotted.replace(/^state\./, ""));
+function allowedOf(state: WorkflowState, dotted: string): string[] {
+  const allowed = readPath(state, dotted.replace(/^state\./, ""));
   if (!Array.isArray(allowed) || allowed.length === 0 || !allowed.every((a) => typeof a === "string")) throw new Error(`allowedFrom ${dotted} is not a list of answers`);
   return allowed;
 }
@@ -801,7 +840,7 @@ function agentsOf(run: Run, node: WorkflowNode): Agent[] | null {
 
 function currentAgent(run: Run, node: WorkflowNode): CurrentAgent {
   const agents = agentsOf(run, node);
-  if (!agents) return { id: node.id, role: node.role, agentName: node.agent };
+  if (!agents) return { id: node.localId ?? node.id, role: node.role, agentName: node.agent };
   const agent = agents[run.agentIndex ?? 0];
   if (!agent) throw new Error(`node ${node.path} has no agent ${run.agentIndex ?? 0}`);
   return { ...agent, role: agent.role ?? node.role, agentName: agent.agentName ?? node.agent };

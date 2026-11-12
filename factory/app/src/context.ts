@@ -8,9 +8,10 @@ export interface ViewerState {
   toggle: (key: string) => void;
   focusKey: string | null;
   index: RunIndex | null;
+  disabled: string[];
 }
 
-export const ViewerContext = createContext<ViewerState>({ config: null, report: null, run: null, toggle: () => {}, focusKey: null, index: null });
+export const ViewerContext = createContext<ViewerState>({ config: null, report: null, run: null, toggle: () => {}, focusKey: null, index: null, disabled: [] });
 
 export function useViewer(): ViewerState {
   return useContext(ViewerContext);

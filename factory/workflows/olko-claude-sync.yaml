@@ -1,8 +1,9 @@
 name: olko-claude-sync
-version: 0.1.0
-source: plugins/olko-sync/agents/olko-claude-sync-manager.md (phases 0-3 and exclusion records; applying rows, publishing and consolidation stop with an error)
+version: 0.2.0
+source: plugins/olko-sync/agents/olko-claude-sync-manager.md (phases 0-6)
 roles:
   sync-worker: low
+  sync: medium
 entry: state
 limits:
   maxCycleIterations: 3
@@ -55,12 +56,18 @@ nodes:
     agentsFrom: state.state.stores
     tools: [read, bash]
     dirs: ["{{state.state.target}}", "{{state.state.olko}}", "{{state.state.user}}", "{{state.state.stateDir}}"]
-    parse: text.raw
+    parse: csync.inventory
     prompt: |
       Store: {{agent.id}}
       Store path: {{agent.path}}
       Discover in: {{agent.layout}} (relative to the store path)
       Sync state directory: {{state.state.stateDir}} (pass --state-dir with it to sync-state.mjs)
+
+      Give your report as one ```json block and nothing else after it, one row per artifact, every artifact you found:
+      {"rows": [{"kind": "skill|agent", "name": "<name>", "path": "<path relative to the store path>", "version": "<version or —>", "description": "<first 200 characters>", "triggers": "<trigger phrases>", "hash": "<content hash>", "portedFrom": "<marker or —>"}], "unreadable": ["<path>"]}
+  - id: inventories
+    kind: script
+    op: csync.inventories
   - id: match
     kind: llm
     role: sync-worker
@@ -70,17 +77,17 @@ nodes:
     prompt: |
       Lineage file: {{state.state.stateDir}}/lineage.json
 
-      Inventory of store target:
-      {{state.inventory.target}}
+      Inventory of store target (JSON rows):
+      {{state.inventories.target}}
 
-      Inventory of store olko:
-      {{state.inventory.olko}}
+      Inventory of store olko (JSON rows):
+      {{state.inventories.olko}}
 
-      Inventory of store user:
-      {{state.inventory.user}}
+      Inventory of store user (JSON rows):
+      {{state.inventories.user}}
 
-      After your report, end with one ```json block in this exact shape (every copy you list, every capability including single-store ones):
-      {"capabilities": [{"id": "<capability id>", "basis": "lineage|marker|name|probable|single", "kind": "skill|agent", "copies": {"target": {"name": "", "path": "", "version": "", "hash": ""}, "olko": {...}, "user": {...}}}], "probable": [{"id": "<capability id>", "evidence": "<one line>"}]}
+      End with one ```json block that lists only the links: capabilities with copies in two or more stores, and your probable links. The factory adds every artifact you do not list as its own single-store capability.
+      {"capabilities": [{"id": "<capability id>", "basis": "lineage|marker|name|probable", "kind": "skill|agent", "copies": {"target": {"name": "<name as in the inventory>"}, "olko": {"name": "..."}, "user": {"name": "..."}}}], "probable": [{"id": "<capability id>", "evidence": "<one line>"}]}
       Leave out a store key when the capability has no copy there.
   - id: capabilities
     kind: script
@@ -158,9 +165,188 @@ nodes:
   - id: record
     kind: script
     op: csync.record
-  - id: apply
+  - id: stage-plan
     kind: script
-    op: csync.applyNotAvailable
+    op: csync.stagePlan
+    maxVisits: 2
+  - id: stage
+    kind: llm
+    role: sync-worker
+    agent: olko-claude-sync-porter
+    agentsFrom: state.stage-plan.wave
+    tools: [read, edit, bash]
+    dirs: ["{{state.state.target}}", "{{state.state.olko}}", "{{state.state.user}}", "{{state.state.stateDir}}", "{{agent.stageDir}}"]
+    maxVisits: 2
+    parse: csync.staged
+    prompt: |
+      Source path: {{agent.source}}
+      Direction: {{agent.direction}}
+      Existing copy: {{agent.existing}}
+      Stage directory: {{agent.stageDir}}
+      Approved version: {{agent.version}}
+      Sync state directory: {{state.state.stateDir}} (pass --state-dir with it to sync-state.mjs)
+      The Olko checkout is {{state.state.olko}}. Write only inside the stage directory.
+      Stage the files even when the sanitize gate has findings: the factory asks the user about each finding and has you apply the decisions before anything leaves the stage. Put every finding in `findings` and every missing dependency in `missing`, never in `blockers`. A blocker is only a failure that makes staging impossible (unreadable source, no stage written). The factory runs exclusion checks itself; skip them. The approved version for a to-user port is the Olko version; keep it.
+
+      After your report, end with one ```json block in this exact shape:
+      {"name": "<name of the staged artifact>", "stagedPath": "<absolute path of the staged skill directory or agent file>", "findings": [{"file": "<staged file>", "line": 1, "category": "<leak term #n or category>", "replacement": "<proposed generic replacement>"}], "missing": ["skill:<name>", "agent:<name>"], "entry": {<proposed registry.json or agents/opencode/index.json entry, or null>}, "category": "<proposed Olko skill category or null>", "blockers": []}
+  - id: findings
+    kind: script
+    op: csync.findings
+    maxVisits: 2
+  - id: finding-next
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: findings.findings }
+  - id: ask-finding
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-finding-{{state.findings.round}}-{{state.finding-next.index}}"
+      text: "Sanitize finding {{state.finding-next.number}} of {{state.finding-next.total}}:\n{{state.finding-next.item.line}}\n\nreplace uses the proposed generic text, delete removes the line, keep leaves it (it then reaches Olko), skip-row drops this row from the sync."
+      allowed: [replace, delete, keep, skip-row]
+  - id: fixes
+    kind: script
+    op: csync.fixes
+    maxVisits: 2
+  - id: fix
+    kind: llm
+    role: sync-worker
+    agent: olko-claude-sync-porter
+    agentsFrom: state.fixes.fixes
+    tools: [read, edit]
+    dirs: ["{{agent.stageDir}}"]
+    maxVisits: 2
+    parse: text.raw
+    prompt: |
+      Apply only these user decisions to the staged files in {{agent.stageDir}}; change nothing else and write nowhere else:
+      {{agent.decisions}}
+      Reply with one line: `fixed | <files changed>`.
+  - id: missing-next
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: findings.missing }
+  - id: ask-missing
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-missing-{{state.findings.round}}-{{state.missing-next.index}}"
+      text: "Missing dependency in the user scope: {{state.missing-next.item.line}}. Add it as an install-user row?"
+      allowed: [install-user, leave]
+  - id: more-deps
+    kind: script
+    op: csync.moreDeps
+    maxVisits: 2
+  - id: apply-plan
+    kind: script
+    op: csync.applyPlan
+  - id: apply-next
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: apply-plan.rows }
+  - id: ask-category
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-category-{{state.apply-next.index}}"
+      text: "New Olko skill {{state.apply-next.item.name}}: which category?"
+      allowedFrom: state.apply-next.item.categories
+  - id: ask-overwrite
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-overwrite-{{state.apply-next.index}}"
+      text: "Final confirmation: {{state.apply-next.item.decision}} overwrites {{state.apply-next.item.existing}}. Overwrite it?"
+      allowed: [overwrite, keep]
+  - id: apply-olko
+    kind: script
+    op: csync.applyOlko
+    maxVisits: 200
+  - id: ask-write
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-write-{{state.apply-next.index}}"
+      text: "Write {{state.apply-next.item.kind}} {{state.apply-next.item.name}} into the user scope?\n{{state.apply-next.item.diff}}"
+      allowed: [write, skip]
+  - id: apply-user
+    kind: script
+    op: csync.applyUser
+    maxVisits: 200
+  - id: apply-record
+    kind: script
+    op: csync.applyRecord
+    maxVisits: 200
+  - id: olko-tests
+    kind: script
+    op: csync.olkoTests
+  - id: leak-check
+    kind: script
+    op: csync.leakCheck
+  - id: ask-publish
+    kind: interrupt
+    question:
+      id: q-claude-sync-publish
+      text: "Olko changes:\n{{state.leak-check.files}}\n\nApplied: {{state.apply-record.applied}}\nValidation: {{state.olko-tests.summary}} (failed: {{state.apply-record.failed}})\n\nCommit on a new feature branch, push and open a draft PR?"
+      allowed: [publish, stop]
+  - id: publish-pr
+    kind: script
+    op: csync.publish
+  - id: ask-pr
+    kind: interrupt
+    maxVisits: 20
+    question:
+      id: "q-claude-sync-pr-{{state.wait-ci.round}}"
+      text: "Draft PR: {{state.publish-pr.publish.url}}{{#state.wait-ci}}\nCI checks passed: {{state.wait-ci.passed}}{{/state.wait-ci}}\nLeave it open, wait for CI, or mark it ready and squash merge?"
+      allowed: [leave, wait, merge]
+  - id: wait-ci
+    kind: script
+    op: sync.waitChecks
+    maxVisits: 20
+  - id: merge
+    kind: script
+    op: sync.merge
+    with: { path: state.olko }
+  - id: ask-consolidate
+    kind: interrupt
+    question:
+      id: q-claude-sync-consolidate
+      text: "Run the skill consolidator once over the stores (suggestions only, nothing is edited)?"
+      allowed: [run, skip]
+  - id: consolidate
+    kind: llm
+    role: sync
+    skill: olko-skill-consolidator
+    tools: [read, bash]
+    dirs: ["{{state.state.target}}", "{{state.state.olko}}", "{{state.state.user}}", "{{state.state.stateDir}}"]
+    parse: csync.suggestions
+    prompt: |
+      Run steps 1-6 of the skill for the stores user ({{state.state.user}}), olko ({{state.state.olko}}) and target ({{state.state.target}}), with --state-dir {{state.state.stateDir}} for sync-state.mjs. You have no Agent tool: evaluate each candidate yourself. Do not ask the user and do not record anything; the factory asks and records.
+      End with one ```json block: {"suggestions": [{"items": ["<store>:<skill|agent>:<name>", "..."], "verdict": "merge|remove|extend", "evidence": "<file:line pairs>", "loses": "<what would be lost>"}]}
+  - id: suggestion-next
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: consolidate.consolidate.suggestions }
+  - id: ask-suggestion
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-suggestion-{{state.suggestion-next.index}}"
+      text: "Consolidation suggestion {{state.suggestion-next.number}} of {{state.suggestion-next.total}}:\n{{state.suggestion-next.item.line}}"
+      allowed: [accept, reject, skip]
+  - id: ask-suggestion-reason
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-suggestion-reason-{{state.suggestion-next.index}}"
+      text: "Why reject it? One line."
+  - id: consolidation-record
+    kind: script
+    op: csync.consolidationRecord
   - id: report
     kind: script
     op: csync.report
@@ -180,7 +366,8 @@ edges:
   - { from: ask-main-target, to: safe-target, when: 'ask-main-target.answer == "switch"' }
   - { from: ask-main-target, to: stop-target, when: 'ask-main-target.answer == "stop"' }
   - { from: stop-target, to: END }
-  - { from: inventory, to: match }
+  - { from: inventory, to: inventories }
+  - { from: inventories, to: match }
   - { from: match, to: capabilities }
   - { from: capabilities, to: select }
   - { from: select, to: probable-next }
@@ -198,7 +385,52 @@ edges:
   - { from: record-next, to: record, when: "record-next.done == true" }
   - { from: ask-scope, to: ask-reason }
   - { from: ask-reason, to: record-next }
-  - { from: record, to: apply, when: "plan.changes > 0" }
-  - { from: record, to: report, when: "plan.changes == 0" }
-  - { from: apply, to: END }
+  - { from: record, to: stage-plan, when: "plan.changes > 0" }
+  - { from: record, to: ask-consolidate, when: "plan.changes == 0" }
+  - { from: stage-plan, to: stage }
+  - { from: stage, to: findings }
+  - { from: findings, to: finding-next }
+  - { from: finding-next, to: ask-finding, when: "finding-next.done == false" }
+  - { from: finding-next, to: fixes, when: "finding-next.done == true" }
+  - { from: ask-finding, to: finding-next }
+  - { from: fixes, to: fix }
+  - { from: fix, to: missing-next }
+  - { from: missing-next, to: ask-missing, when: "missing-next.done == false" }
+  - { from: missing-next, to: more-deps, when: "missing-next.done == true" }
+  - { from: ask-missing, to: missing-next }
+  - { from: more-deps, to: stage-plan, when: "more-deps.more > 0" }
+  - { from: more-deps, to: apply-plan, when: "more-deps.more == 0" }
+  - { from: apply-plan, to: apply-next }
+  - { from: apply-next, to: olko-tests, when: "apply-next.done == true" }
+  - { from: apply-next, to: ask-category, when: "apply-next.item.needsCategory == true" }
+  - { from: apply-next, to: ask-overwrite, when: "apply-next.item.overwrite == true" }
+  - { from: apply-next, to: apply-olko, when: 'apply-next.item.direction == "to-olko"' }
+  - { from: apply-next, to: ask-write }
+  - { from: ask-category, to: apply-olko }
+  - { from: ask-overwrite, to: apply-olko, when: 'apply-next.item.direction == "to-olko"' }
+  - { from: ask-overwrite, to: ask-write }
+  - { from: apply-olko, to: apply-record }
+  - { from: ask-write, to: apply-user }
+  - { from: apply-user, to: apply-record }
+  - { from: apply-record, to: apply-next }
+  - { from: olko-tests, to: leak-check, when: "apply-record.olkoChanged == true" }
+  - { from: olko-tests, to: ask-consolidate }
+  - { from: leak-check, to: ask-publish }
+  - { from: ask-publish, to: publish-pr, when: 'ask-publish.answer == "publish"' }
+  - { from: ask-publish, to: ask-consolidate, when: 'ask-publish.answer == "stop"' }
+  - { from: publish-pr, to: ask-pr }
+  - { from: ask-pr, to: merge, when: 'ask-pr.answer == "merge"' }
+  - { from: ask-pr, to: wait-ci, when: 'ask-pr.answer == "wait"' }
+  - { from: ask-pr, to: ask-consolidate, when: 'ask-pr.answer == "leave"' }
+  - { from: wait-ci, to: ask-pr }
+  - { from: merge, to: ask-consolidate }
+  - { from: ask-consolidate, to: consolidate, when: 'ask-consolidate.answer == "run"' }
+  - { from: ask-consolidate, to: report, when: 'ask-consolidate.answer == "skip"' }
+  - { from: consolidate, to: suggestion-next }
+  - { from: suggestion-next, to: ask-suggestion, when: "suggestion-next.done == false" }
+  - { from: suggestion-next, to: consolidation-record, when: "suggestion-next.done == true" }
+  - { from: ask-suggestion, to: ask-suggestion-reason, when: 'ask-suggestion.answer == "reject"' }
+  - { from: ask-suggestion, to: suggestion-next }
+  - { from: ask-suggestion-reason, to: suggestion-next }
+  - { from: consolidation-record, to: report }
   - { from: report, to: END }

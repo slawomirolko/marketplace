@@ -71,7 +71,8 @@ test("a harness drives the YAML olko-review workflow over stdio in delegate mode
   try {
     const started = await call(client, "factory_start", { goal: `Review PR #${PR} in ${REPO}`, workflow: "olko-review", input: { repo: REPO, pr: PR, fresh: true } });
     const runId = started.runId as string;
-    let status = await call(client, "factory_confirm", { runId });
+    const testModel = process.env.FACTORY_TEST_MODEL ?? "claude-haiku-5-5";
+    let status = await call(client, "factory_confirm", { runId, overrides: { tierModels: { low: testModel, medium: testModel, high: testModel } } });
     while (!ENDED.has(status.status)) {
       status = await call(client, "factory_wait", { runId, timeoutSec: 50 });
       if (status.status === "waiting_for_client") {

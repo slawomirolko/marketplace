@@ -1,4 +1,5 @@
 import json
+import re
 
 from factory_host import ReviewRun
 
@@ -82,6 +83,77 @@ async def test_agent_definition_folders_are_removed_after_each_step(claude_sync_
 
 async def test_every_claude_sync_llm_step_has_measured_cost(claude_sync_run: ReviewRun):
     for path, node in claude_sync_run.report["byNode"].items():
+        if node["tier"] is None:
+            continue
+        assert node["unknownSteps"] == 0, path
+        assert all(agent["costSource"] == "measured" for agent in node["byAgent"].values()), path
+
+
+OLKO_DERIVED = {"registry.json", "search-index.json", "capability-graph.json", "README.md", "agents/opencode/index.json"}
+
+
+async def test_apply_run_finishes_after_publish_is_declined(claude_sync_apply_run: ReviewRun):
+    assert claude_sync_apply_run.report["status"] == "done", claude_sync_apply_run.report
+    assert claude_sync_apply_run.chosen, "no row offered a port or an install; the run had nothing to apply"
+
+
+async def test_every_approved_row_is_staged_by_one_porter_first(claude_sync_apply_run: ReviewRun):
+    porters = claude_sync_apply_run.report["byNode"][f"{WF}/stage"]["byAgent"]
+    assert len(porters) == len(claude_sync_apply_run.chosen)
+    assert {a["agentName"] for a in porters.values()} == {"olko-claude-sync-porter"}
+    path = visited(claude_sync_apply_run)
+    assert path.index("stage") < path.index("apply-next")
+
+
+async def test_every_sanitize_finding_is_asked_one_at_a_time(claude_sync_apply_run: ReviewRun):
+    findings = completed(claude_sync_apply_run, "findings")["metrics"]["findings"]
+    asked = [i for i in claude_sync_apply_run.interrupts if i["kind"] == "question" and i["question"]["id"].startswith("q-claude-sync-finding-")]
+    assert len(asked) == findings
+
+
+async def test_olko_changes_stay_inside_the_ported_artifact_and_its_registry_entries(claude_sync_apply_run: ReviewRun):
+    if "olko" not in claude_sync_apply_run.chosen:
+        assert claude_sync_apply_run.changed_files == []
+        return
+    applied = completed(claude_sync_apply_run, "olko-tests")["metrics"]
+    assert applied["failed"] == 0
+    assert claude_sync_apply_run.changed_files
+    paths = [c for c in claude_sync_apply_run.changed_files if c not in OLKO_DERIVED and not re.fullmatch(r"skills/[^/]+/index\.json", c)]
+    assert paths and len({p.split("/")[2] if p.startswith("skills/") else p for p in paths}) == 1, paths
+
+
+async def test_no_leak_term_or_target_name_reaches_olko(claude_sync_apply_run: ReviewRun):
+    assert completed(claude_sync_apply_run, "leak-check")["metrics"]["leaks"] == 0
+    olko = claude_sync_apply_run.stores["olko"]
+    text = "".join((olko / c).read_text(encoding="utf-8", errors="ignore") for c in claude_sync_apply_run.changed_files if (olko / c).is_file()).lower()
+    assert "public-plugins" not in text and str(claude_sync_apply_run.stores["target"]).lower() not in text
+
+
+async def test_user_scope_writes_only_after_a_yes_and_only_the_approved_artifact(claude_sync_apply_run: ReviewRun):
+    writes = [i["question"]["id"] for i in claude_sync_apply_run.interrupts if i["kind"] == "question" and i["question"]["id"].startswith("q-claude-sync-write-")]
+    if "user" not in claude_sync_apply_run.chosen:
+        assert claude_sync_apply_run.user_changed == [] and writes == []
+        return
+    assert writes
+    written = completed(claude_sync_apply_run, "apply-user")["result"]
+    assert "-> user scope" in written, written
+    assert len({c.split("/")[1].removesuffix(".md") for c in claude_sync_apply_run.user_changed}) <= 1, claude_sync_apply_run.user_changed
+    assert all(c.split("/")[1].removesuffix(".md") in written for c in claude_sync_apply_run.user_changed)
+
+
+async def test_lineage_is_recorded_for_every_applied_row(claude_sync_apply_run: ReviewRun):
+    lineage = json.loads((claude_sync_apply_run.stores["state"] / "lineage.json").read_text(encoding="utf-8"))
+    assert len(lineage.get("capabilities", lineage)) >= completed(claude_sync_apply_run, "apply-record")["metrics"]["applied"] > 0
+
+
+async def test_declined_publish_leaves_branches_commits_and_the_target_unchanged(claude_sync_apply_run: ReviewRun):
+    assert not {"publish-pr", "merge"} & set(visited(claude_sync_apply_run))
+    assert claude_sync_apply_run.stores_after == claude_sync_apply_run.stores_before
+    assert "consolidat" in claude_sync_apply_run.report["result"].lower()
+
+
+async def test_every_claude_sync_apply_llm_step_has_measured_cost(claude_sync_apply_run: ReviewRun):
+    for path, node in claude_sync_apply_run.report["byNode"].items():
         if node["tier"] is None:
             continue
         assert node["unknownSteps"] == 0, path

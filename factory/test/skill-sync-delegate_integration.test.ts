@@ -87,7 +87,8 @@ test("a harness drives the YAML marketplace skill sync over stdio in delegate mo
   try {
     const started = await call(client, "factory_start", { goal: "Sync project-local skills and agents to the marketplace", workflow: "olko-marketplace-skill-sync", input: { project, marketplace, artifacts: ARTIFACTS } });
     const runId = started.runId as string;
-    let status = await call(client, "factory_confirm", { runId });
+    const testModel = process.env.FACTORY_TEST_MODEL ?? "claude-haiku-5-5";
+    let status = await call(client, "factory_confirm", { runId, overrides: { tierModels: { low: testModel, medium: testModel, high: testModel } } });
     while (!ENDED.has(status.status)) {
       status = await call(client, "factory_wait", { runId, timeoutSec: 50 });
       if (status.status === "waiting_for_client") {

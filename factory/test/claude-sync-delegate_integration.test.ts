@@ -117,7 +117,8 @@ test("a harness drives the YAML claude sync over stdio in delegate mode: three i
   try {
     const started = await call(client, "factory_start", { goal: "Sync skills and agents between a Claude marketplace, Olko and the user scope", workflow: "olko-claude-sync", input: { target, targetName: "public-plugins", olko, user, stateDir: state, artifacts: ARTIFACTS } });
     const runId = started.runId as string;
-    let status = await call(client, "factory_confirm", { runId });
+    const testModel = process.env.FACTORY_TEST_MODEL ?? "claude-haiku-5-5";
+    let status = await call(client, "factory_confirm", { runId, overrides: { tierModels: { low: testModel, medium: testModel, high: testModel } } });
     while (!ENDED.has(status.status)) {
       status = await call(client, "factory_wait", { runId, timeoutSec: 50 });
       if (status.status === "waiting_for_client") {
@@ -133,7 +134,7 @@ test("a harness drives the YAML claude sync over stdio in delegate mode: three i
       } else if (status.status === "waiting_for_user") {
         const question = status.pendingQuestion as Payload;
         asked.push(question);
-        const answer = question.id === "q-claude-sync-leak" ? "none" : question.id.startsWith("q-claude-sync-probable-") ? "confirm" : question.allowed?.includes("leave") ? "leave" : "stop";
+        const answer = question.id === "q-claude-sync-leak" ? "none" : question.id === "q-claude-sync-consolidate" ? "skip" : question.id.startsWith("q-claude-sync-probable-") ? "confirm" : question.allowed?.includes("leave") ? "leave" : "stop";
         status = await call(client, "factory_answer", { runId, questionId: question.id, answer });
       }
     }

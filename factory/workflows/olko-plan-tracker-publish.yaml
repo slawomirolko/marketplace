@@ -1,0 +1,26 @@
+name: olko-plan-tracker-publish
+version: 0.1.0
+source: skills/workflow/olko-plan-backlog-discovery/SKILL.md (approval-gated publish to the tracker and read-back)
+roles:
+  backlog: medium
+entry: ask-publish
+nodes:
+  - id: ask-publish
+    kind: interrupt
+    question:
+      id: q-plan-publish
+      text: "Publish the approved Epic/Feature/Task draft to the tracker now?"
+      allowed: [publish, skip]
+  - id: publish
+    kind: llm
+    role: backlog
+    agent: olko-feature-backlog-writer
+    parse: text.raw
+    prompt: |
+      Mode: publish. Publish exactly this approved draft to the tracker, then read every created or changed issue back and list its link.
+      {{state.draft-check.draft.text}}
+      Reply with the verified issue links, one per line.
+edges:
+  - { from: ask-publish, to: publish, when: 'ask-publish.answer == "publish"' }
+  - { from: ask-publish, to: END, when: 'ask-publish.answer == "skip"' }
+  - { from: publish, to: END }

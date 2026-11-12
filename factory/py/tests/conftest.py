@@ -76,10 +76,7 @@ def factory_server():
     finally:
         process.terminate()
         process.wait(timeout=10)
-        if os.environ.get("FACTORY_KEEP_DATA"):
-            print(f"factory data kept in {data_dir}")
-        else:
-            shutil.rmtree(data_dir, ignore_errors=True)
+        print(f"factory data kept in {data_dir}; the viewer lists it, pnpm clean:tmp removes it")
 
 
 @pytest.fixture(scope="session")
@@ -281,7 +278,7 @@ async def claude_sync_run(factory_server) -> ReviewRun:
         workflow="olko-claude-sync",
         goal="Sync skills and agents between a Claude marketplace, Olko and the user scope",
         workflow_input={"target": str(target), "targetName": "public-plugins", "olko": str(olko), "user": str(user), "stateDir": str(state), "artifacts": CLAUDE_SYNC_ARTIFACTS},
-        answer=lambda q: "none" if q["id"] == "q-claude-sync-leak" else "confirm" if q["id"].startswith("q-claude-sync-probable-") else "leave" if "leave" in (q.get("allowed") or []) else "stop",
+        answer=lambda q: "none" if q["id"] == "q-claude-sync-leak" else "skip" if q["id"] == "q-claude-sync-consolidate" else "confirm" if q["id"].startswith("q-claude-sync-probable-") else "leave" if "leave" in (q.get("allowed") or []) else "stop",
     )
     run.stores = {"target": target, "olko": olko, "user": user, "state": state}
     run.stores_before = before
@@ -291,4 +288,103 @@ async def claude_sync_run(factory_server) -> ReviewRun:
     run.artifacts = CLAUDE_SYNC_ARTIFACTS
     run.skipped_user = skipped
     print(json.dumps({"runId": run.run_id, "skippedUser": len(skipped), "costUsd": run.report["cost"]["costUsd"], "viewerUrl": run.viewer_url}))
+    return run
+
+
+def claude_sync_apply_answer(question: dict, chosen: dict) -> str:
+    qid, allowed = question["id"], question.get("allowed") or []
+    if qid == "q-claude-sync-leak":
+        return "none"
+    if qid.startswith("q-claude-sync-probable-"):
+        return "confirm"
+    if qid[len("q-claude-sync-"):].isdigit():
+        for action in ("port-to-olko", "port-to-olko-patch", "install-user", "update-user"):
+            direction = "olko" if action.startswith("port") else "user"
+            if action in allowed and direction not in chosen:
+                chosen[direction] = qid
+                return action
+        return "leave"
+    answers = {"q-claude-sync-publish": "stop", "q-claude-sync-consolidate": "skip"}
+    if qid in answers:
+        return answers[qid]
+    for prefix, answer in (("q-claude-sync-finding-", "replace"), ("q-claude-sync-missing-", "leave"), ("q-claude-sync-write-", "write")):
+        if qid.startswith(prefix):
+            return answer
+    if qid.startswith("q-claude-sync-category-"):
+        return allowed[0]
+    return "leave" if "leave" in allowed else "stop"
+
+
+@pytest.fixture(scope="session")
+async def claude_sync_apply_run(factory_server) -> ReviewRun:
+    root = Path(os.path.realpath(tempfile.mkdtemp(prefix="factory-claude-sync-apply-")))
+    target, olko, user, state = root / "target", root / "olko", root / "user", root / "state"
+    subprocess.run(["gh", "repo", "clone", CLAUDE_SYNC_TARGET, str(target), "--", "--depth", "50"], check=True, capture_output=True)
+    subprocess.run(["gh", "repo", "clone", MARKETPLACE_REMOTE, str(olko), "--", "--depth", "50"], check=True, capture_output=True)
+    copy_user_store(user, leak_terms())
+    before = {"target": marketplace_snapshot(target), "olko": {**marketplace_snapshot(olko), "remote": remote_heads(olko)}}
+    user_before = {p.relative_to(user).as_posix(): p.read_bytes() for p in user.rglob("*") if p.is_file()}
+    chosen: dict = {}
+    run = await run_workflow(
+        url=f"{factory_server['url']}/mcp",
+        token=factory_server["token"],
+        workflow="olko-claude-sync",
+        goal="Sync skills and agents between a Claude marketplace, Olko and the user scope and apply two rows",
+        workflow_input={"target": str(target), "targetName": "public-plugins", "olko": str(olko), "user": str(user), "stateDir": str(state), "artifacts": CLAUDE_SYNC_ARTIFACTS},
+        answer=lambda q: claude_sync_apply_answer(q, chosen),
+    )
+    olko_after = marketplace_snapshot(olko)
+    run.stores = {"target": target, "olko": olko, "user": user, "state": state}
+    run.stores_before = before
+    run.stores_after = {"target": marketplace_snapshot(target), "olko": {**olko_after, "status": before["olko"]["status"], "remote": remote_heads(olko)}}
+    run.changed_files = [line.split(maxsplit=1)[1] for line in git(olko, "status", "--porcelain", "--untracked-files=all").splitlines()]
+    user_after = {p.relative_to(user).as_posix(): p.read_bytes() for p in user.rglob("*") if p.is_file()}
+    run.user_changed = sorted(k for k in set(user_before) | set(user_after) if user_before.get(k) != user_after.get(k))
+    run.accepted = [chosen[k] for k in sorted(chosen)]
+    run.chosen = chosen
+    run.artifacts = CLAUDE_SYNC_ARTIFACTS
+    print(json.dumps({"runId": run.run_id, "chosen": chosen, "olkoChanged": run.changed_files, "userChanged": run.user_changed, "costUsd": run.report["cost"]["costUsd"], "viewerUrl": run.viewer_url}))
+    return run
+
+
+PLAN_IDEA = os.environ.get("FACTORY_PLAN_IDEA", "Add approval gates to the skill factory: a script node can declare approval: required, and the engine asks the user before it runs the operation and records the answer in the run (item E7 of factory/docs/yaml-migration-plan.md).")
+PLAN_FEATURE_ID = os.environ.get("FACTORY_PLAN_FEATURE_ID", "e7-approval-gates")
+
+
+def plan_answer(question: dict) -> str:
+    qid, allowed = question["id"], question.get("allowed") or []
+    if qid.startswith("q-plan-draft-review"):
+        return "approve"
+    if qid.startswith("q-plan-questions-") or qid.startswith("q-plan-blocker-text-"):
+        return "Use your recommended answer for every question."
+    if allowed == ["1", "2", "3"]:
+        return "1"
+    if "accept" in allowed:
+        return "accept"
+    if "finding" in allowed:
+        return "finding"
+    if "skip" in allowed:
+        return "skip"
+    return allowed[0] if allowed else "Use your recommendation."
+
+
+@pytest.fixture(scope="session")
+async def plan_doc_run(factory_server) -> ReviewRun:
+    root = Path(os.path.realpath(tempfile.mkdtemp(prefix="factory-plan-doc-")))
+    project = root / "project"
+    subprocess.run(["gh", "repo", "clone", MARKETPLACE_REMOTE, str(project), "--", "--depth", "1"], check=True, capture_output=True)
+    before_head = git(project, "rev-parse", "HEAD")
+    run = await run_workflow(
+        url=f"{factory_server['url']}/mcp",
+        token=factory_server["token"],
+        workflow="olko-plan-documentation",
+        goal="Draft the Feature and plan it with an implementation plan for every Task",
+        workflow_input={"project": str(project), "idea": PLAN_IDEA, "route": "both", "featureId": PLAN_FEATURE_ID, "switches": {"tracker": False, "editor": False}},
+        answer=plan_answer,
+    )
+    run.stores = {"project": project}
+    run.changed_files = [line.split(maxsplit=1)[1] for line in git(project, "status", "--porcelain", "--untracked-files=all").splitlines()]
+    run.stores_before = {"head": before_head}
+    run.stores_after = {"head": git(project, "rev-parse", "HEAD")}
+    print(json.dumps({"runId": run.run_id, "changed": run.changed_files, "costUsd": run.report["cost"]["costUsd"], "viewerUrl": run.viewer_url}))
     return run

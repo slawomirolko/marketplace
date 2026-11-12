@@ -121,11 +121,12 @@
         },
         "kind": {
           "enum": [
-            "llm",
-            "script",
+            "call",
             "interrupt",
-            "subgraph",
-            "map"
+            "llm",
+            "map",
+            "script",
+            "subgraph"
           ]
         },
         "role": {
@@ -170,7 +171,7 @@
         },
         "agentsFrom": {
           "type": "string",
-          "pattern": "^state.[a-zA-Z0-9_.]+$",
+          "pattern": "^state\\.[a-zA-Z0-9_.-]+$",
           "description": "Agents chosen at run time from state; each one is priced on its own."
         },
         "op": {
@@ -231,6 +232,18 @@
             "minLength": 1
           },
           "description": "Mustache templates of extra directories the agent may read or write besides the run workspace."
+        },
+        "enabledWhen": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Subgraph only: a condition on switches, input or state (for example switches.tracker == true). When it is false the run skips the subgraph and goes to its exits."
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Call only: input of the called workflow, as Mustache templates over the caller's goal, input and state."
         }
       },
       "allOf": [
@@ -302,6 +315,20 @@
           "then": {
             "required": [
               "over",
+              "workflow"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "call"
+              }
+            }
+          },
+          "then": {
+            "required": [
               "workflow"
             ]
           }

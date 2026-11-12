@@ -21,8 +21,16 @@ roles:
   sync: medium
   publisher: medium
   sync-worker: low
+  backlog: medium
+  plan-worker: medium
+  writer: medium
+  plan-gate: medium
+  auditor: medium
 budget:
   maxCostUsd: 20
   infoRatio: 0.5
   pauseRatio: 0.8
   onExceeded: ask_user
+switches:
+  tracker: true
+  editor: true

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { marketplaceDir } from "./marketplace-agents.ts";
+import { evaluateWhen } from "./workflow-yaml.ts";
 import type { Agent, Operation, ScriptContext, WorkflowState } from "./types.ts";
 
 export interface DiffFile {
@@ -301,8 +302,8 @@ const listNext: Operation = async ({ state, args, nodeId }) => {
   if (typeof args.over !== "string") throw new Error("with.over must be a state path");
   const list = args.over.split(".").reduce<unknown>((value, key) => (value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined), state);
   if (!Array.isArray(list)) throw new Error(`state.${args.over} is not a list`);
-  const previous = nodeId ? (state[nodeId] as { index?: number } | undefined) : undefined;
-  const index = previous?.index === undefined ? 0 : previous.index + 1;
+  const previous = nodeId ? (state[nodeId] as { index?: number; done?: boolean } | undefined) : undefined;
+  const index = previous?.index === undefined || previous.done ? 0 : previous.index + 1;
   const done = index >= list.length;
   return { state: { index, number: index + 1, total: list.length, item: done ? null : list[index], done }, metrics: { index, total: list.length }, output: done ? `All ${list.length} items handled.` : `Item ${index + 1} of ${list.length}.` };
 };
@@ -810,10 +811,15 @@ const prOf: Operation = async ({ state }) => {
   return { state: { publish: pr }, metrics: { prs: 1 }, output: `PR ${pr.url} on branch ${pr.branch}.` };
 };
 
-const squashMerge: Operation = async ({ state, exec }) => {
+const squashMerge: Operation = async ({ state, exec, args }) => {
   if (!exec) throw new Error("sync.merge needs the host exec tool");
-  const root = marketplaceRoot(state);
+  const root = typeof args.path === "string" ? String(args.path.split(".").reduce<unknown>((v, k) => (v && typeof v === "object" ? (v as Record<string, unknown>)[k] : undefined), state) ?? "") : marketplaceRoot(state);
   const pr = stateOf<{ publish: { url: string; branch: string } }>(state, "publish-pr").publish;
+  const draft = JSON.parse((await exec("gh", ["pr", "view", pr.url, "--json", "isDraft"])).stdout || "{}") as { isDraft?: boolean };
+  if (draft.isDraft) {
+    const ready = await exec("gh", ["pr", "ready", pr.url]);
+    if (ready.code !== 0) throw new Error(`gh pr ready failed: ${(ready.stderr || ready.stdout).trim()}`);
+  }
   const merge = await exec("gh", ["pr", "merge", pr.url, "--squash", "--delete-branch"], { cwd: root });
   if (merge.code !== 0) throw new Error(`squash merge failed: ${(merge.stderr || merge.stdout).trim()}`);
   const view = JSON.parse((await exec("gh", ["pr", "view", pr.url, "--json", "mergeCommit"])).stdout || "{}") as { mergeCommit?: { oid?: string } };
@@ -998,10 +1004,74 @@ export function normalizeName(name: string): string {
   return name.toLowerCase().replace(/^[a-z0-9-]+:/, "").replace(/^olko-/, "");
 }
 
+interface InventoryRow {
+  kind: "skill" | "agent";
+  name: string;
+  path: string;
+  version?: string;
+  hash?: string;
+  portedFrom?: string;
+}
+
+export function parseInventory(text: string): { rows: InventoryRow[] } {
+  const data = lastJsonBlock(text) as { rows?: InventoryRow[] };
+  if (!Array.isArray(data.rows)) throw new Error("inventory JSON has no rows list");
+  const rows = data.rows.filter((r) => r && (r.kind === "skill" || r.kind === "agent") && typeof r.name === "string" && typeof r.path === "string");
+  if (rows.length !== data.rows.length) throw new Error(`inventory JSON has ${data.rows.length - rows.length} malformed rows`);
+  return { rows };
+}
+
+const STORES = ["target", "olko", "user"] as const;
+
+const claudeSyncInventories: Operation = async ({ state }) => {
+  const inventory = stateOf<Record<string, { rows: InventoryRow[] }>>(state, "inventory");
+  const texts = Object.fromEntries(STORES.map((store) => [store, JSON.stringify(inventory[store]?.rows ?? [])]));
+  const counts = Object.fromEntries(STORES.map((store) => [store, inventory[store]?.rows.length ?? 0]));
+  return { state: { ...texts, counts }, metrics: counts, output: `Inventory: ${STORES.map((st) => `${st} ${counts[st]}`).join(", ")} artifacts.` };
+};
+
+export function buildCapabilities(inventory: Record<string, { rows: InventoryRow[] }>, roots: Record<string, string>, linked: Capability[]): Capability[] {
+  const absolute = (store: string, p: string) => (path.isAbsolute(p) ? p : path.join(roots[store]!, p));
+  const key = (store: string, kind: string, name: string) => `${store}|${kind}|${name}`;
+  const rowsByKey = new Map<string, InventoryRow & { store: string }>();
+  for (const store of STORES) for (const row of inventory[store]?.rows ?? []) rowsByKey.set(key(store, row.kind, row.name), { ...row, store });
+  const used = new Set<string>();
+  const copyOf = (store: string, row: InventoryRow) => ({ name: row.name, path: absolute(store, row.path), ...(row.version ? { version: row.version } : {}), ...(row.hash ? { hash: row.hash } : {}) });
+  const result: Capability[] = [];
+  for (const c of linked) {
+    const copies: Capability["copies"] = {};
+    for (const store of STORES) {
+      const copy = c.copies[store];
+      if (!copy) continue;
+      const row = rowsByKey.get(key(store, c.kind, copy.name));
+      if (!row || used.has(key(store, c.kind, copy.name))) continue;
+      used.add(key(store, c.kind, copy.name));
+      copies[store] = copyOf(store, row);
+    }
+    if (Object.keys(copies).length) result.push({ ...c, copies });
+  }
+  const byName = new Map<string, (InventoryRow & { store: string })[]>();
+  for (const [k, row] of rowsByKey) {
+    if (used.has(k)) continue;
+    const name = `${row.kind}|${normalizeName(row.name)}`;
+    byName.set(name, [...(byName.get(name) ?? []), row]);
+  }
+  for (const [name, rows] of byName) {
+    const copies: Capability["copies"] = {};
+    for (const row of rows) if (!copies[row.store as (typeof STORES)[number]]) copies[row.store as (typeof STORES)[number]] = copyOf(row.store, row);
+    const stores = Object.keys(copies).length;
+    result.push({ id: name.split("|")[1]!, basis: stores > 1 ? "name" : "single", kind: rows[0]!.kind, copies });
+  }
+  return result;
+}
+
 const claudeSyncCapabilities: Operation = async ({ state }) => {
   const parsed = Object.values(stateOf<Record<string, ReturnType<typeof parseCapabilities>>>(state, "match"))[0];
   if (!parsed) throw new Error("the matcher returned nothing");
-  return { state: parsed, metrics: { capabilities: parsed.capabilities.length, probable: parsed.probable.length }, output: `${parsed.capabilities.length} capabilities, ${parsed.probable.length} probable links.` };
+  const { target, olko, user } = stateOf<{ target: string; olko: string; user: string }>(state, "state");
+  const capabilities = buildCapabilities(stateOf<Record<string, { rows: InventoryRow[] }>>(state, "inventory"), { target, olko, user }, parsed.capabilities);
+  const linked = capabilities.filter((c) => Object.keys(c.copies).length > 1).length;
+  return { state: { capabilities, probable: parsed.probable }, metrics: { capabilities: capabilities.length, linked, probable: parsed.probable.length }, output: `${capabilities.length} capabilities (${linked} across stores), ${parsed.probable.length} probable links.` };
 };
 
 const claudeSyncSelect: Operation = async ({ state, input }) => {
@@ -1104,11 +1174,500 @@ const claudeSyncReport: Operation = async ({ state }) => {
   const { excluded } = stateOf<{ excluded: { id: string }[] }>(state, "exclusions");
   const lines = [...plan.decided.map((r) => `row | ${r.id} | ${r.verdict} | ${r.decision}`), ...excluded.map((e) => `row | ${e.id} | excluded | excluded`)];
   const changes = plan.decided.filter((r) => !["none", "leave", "exclude", "reject", "unanswered"].includes(r.decision)).length;
-  return { state: { lines }, metrics: { rows: lines.length }, output: ["Claude sync report", ...lines, changes ? `${changes} rows to apply.` : "Olko, the target and the user scope: unchanged."].join("\n") };
+  const applied = (state["apply-record"] as { applied?: string[] } | undefined)?.applied ?? [];
+  const pr = (state["publish-pr"] as { publish?: { url: string } } | undefined)?.publish;
+  const merged = state.merge as { commit?: string } | undefined;
+  const olkoChanged = (state["apply-record"] as { olkoChanged?: boolean } | undefined)?.olkoChanged;
+  const published = pr ? (merged ? `Published as ${pr.url}, squash merged as ${merged.commit?.slice(0, 12)}.` : `Published as draft ${pr.url}, not merged.`) : olkoChanged ? "Olko changes are in the working tree and not published." : "No Olko change to publish.";
+  const outcome = changes ? `Applied ${applied.length} of ${changes} rows: ${applied.join(", ") || "none"}. ${published}` : "Olko, the target and the user scope: unchanged.";
+  const consolidation = state["consolidation-record"] as { accepted: number; rejected: number; planFile: string } | undefined;
+  const consolidated = consolidation ? `Consolidation: ${consolidation.accepted} accepted (plan ${consolidation.planFile}), ${consolidation.rejected} rejected.` : "Consolidation: skipped.";
+  return { state: { lines }, metrics: { rows: lines.length }, output: ["Claude sync report", ...lines, outcome, consolidated].join("\n") };
+};
+
+interface StageItem {
+  id: string;
+  rowId: string;
+  kind: "skill" | "agent";
+  decision: string;
+  direction: "to-olko" | "to-user";
+  source: string;
+  sourceStore: "target" | "olko" | "user";
+  existing: string;
+  stageDir: string;
+  overwrite: boolean;
+  version: string;
+}
+
+interface Staged {
+  name: string;
+  stagedPath: string;
+  findings: { file: string; line: number; category: string; replacement: string }[];
+  missing: string[];
+  entry: Record<string, unknown> | null;
+  category: string | null;
+  blockers: string[];
+}
+
+function directionOf(decision: string): { direction: StageItem["direction"]; from: StageItem["sourceStore"]; overwrite: boolean } {
+  if (decision.startsWith("port-to-olko") || decision === "take-target") return { direction: "to-olko", from: "target", overwrite: decision === "take-target" };
+  if (decision.startsWith("publish-to-olko")) return { direction: "to-olko", from: "user", overwrite: false };
+  return { direction: "to-user", from: "olko", overwrite: decision === "take-olko" || decision === "revert-user" };
+}
+
+const claudeSyncStagePlan: Operation = async ({ state, answers, nodeId }) => {
+  const { changes } = stateOf<{ changes: { id: string; kind: "skill" | "agent"; decision: string; nextVersion?: string }[] }>(state, "plan");
+  const { compare } = stateOf<{ compare: Capability[] }>(state, "exclusions");
+  const rows = stateOf<{ rows: { id: string; nextVersion: string }[] }>(state, "rows").rows;
+  const previous = nodeId ? (state[nodeId] as { items?: StageItem[]; round?: number } | undefined) : undefined;
+  const round = (previous?.round ?? 0) + 1;
+  const missing = (state.findings as { missing?: { id: string; kind: "skill" | "agent"; name: string; olkoPath: string }[] } | undefined)?.missing ?? [];
+  const added = missing.filter((_, i) => answers?.[`q-claude-sync-missing-${previous?.round ?? 0}-${i}`] === "install-user");
+  const items: StageItem[] = [];
+  const add = (row: Omit<StageItem, "stageDir">) => items.push({ ...row, stageDir: fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "factory-stage-"))) });
+  if (round === 1) {
+    for (const change of changes) {
+      const c = compare.find((x) => x.id === change.id)!;
+      const { direction, from, overwrite } = directionOf(change.decision);
+      const source = c.copies[from];
+      if (!source) throw new Error(`${change.decision} for ${change.id} needs a ${from} copy`);
+      const existing = direction === "to-olko" ? c.copies.olko?.path : c.copies.user?.path;
+      const bump = change.decision.match(/-(patch|minor|major)$/)?.[1];
+      const version = direction === "to-user" ? c.copies.olko?.version ?? "none" : bump ? bumpVersion(c.copies.olko?.version ?? "0.0.0", bump) : rows.find((r) => r.id === change.id)?.nextVersion ?? "1.0.0";
+      add({ id: change.id, rowId: change.id, kind: c.kind, decision: change.decision, direction, source: source.path, sourceStore: from, existing: existing ?? "none", overwrite, version: direction === "to-user" || /^\d+\.\d+\.\d+$/.test(version) ? version : "1.0.0" });
+    }
+  } else {
+    for (const m of added) add({ id: `${m.kind}-${m.name}`, rowId: m.id, kind: m.kind, decision: "install-user", direction: "to-user", source: m.olkoPath, sourceStore: "olko", existing: "none", overwrite: false, version: "none" });
+  }
+  const all = [...(previous?.items ?? []), ...items];
+  return { state: { items: all, wave: items, round }, metrics: { staged: items.length, round }, output: `Wave C round ${round}: ${items.length} rows to stage.` };
+};
+
+export function parseStaged(text: string): Staged {
+  const data = lastJsonBlock(text) as Partial<Staged>;
+  if (typeof data.name !== "string" || typeof data.stagedPath !== "string") throw new Error("porter JSON needs name and stagedPath");
+  return { name: data.name, stagedPath: data.stagedPath, findings: data.findings ?? [], missing: data.missing ?? [], entry: data.entry ?? null, category: data.category ?? null, blockers: data.blockers ?? [] };
+}
+
+const claudeSyncFindings: Operation = async ({ state }) => {
+  const { wave: items, items: all, round } = stateOf<{ wave: StageItem[]; items: StageItem[]; round: number }>(state, "stage-plan");
+  const staged = stateOf<Record<string, Staged>>(state, "stage");
+  const olko = stateOf<{ olko: string }>(state, "state").olko;
+  const blocked = items.filter((i) => staged[i.id]?.blockers.length).map((i) => `${i.id}: ${staged[i.id]!.blockers.join("; ")}`);
+  if (blocked.length) throw new Error(`porter blockers, nothing applied: ${blocked.join(" | ")}`);
+  const findings = items.flatMap((i) => (staged[i.id]?.findings ?? []).map((f) => ({ item: i.id, ...f, line: `${i.id} ${f.file}:${f.line} — ${f.category} — proposed: ${f.replacement}` })));
+  const missing = items
+    .filter((i) => i.direction === "to-user")
+    .flatMap((i) => (staged[i.id]?.missing ?? []).map((ref) => {
+      const [kind, name] = ref.split(":") as ["skill" | "agent", string];
+      const olkoPath = kind === "agent" ? path.join(olko, "agents", "opencode", `${name}.md`) : (skillDirIn(olko, name) ?? "none");
+      return { id: `${kind}:${name}`, kind, name, olkoPath, for: i.id, line: `${kind} ${name}, needed by ${i.id}` };
+    }))
+    .filter((m, i, list) => m.olkoPath !== "none" && list.findIndex((x) => x.id === m.id) === i && !all.some((it) => it.id === `${m.kind}-${m.name}`));
+  return { state: { findings, missing, round }, metrics: { findings: findings.length, missing: missing.length }, output: `${findings.length} sanitize findings to decide, ${missing.length} missing dependencies.` };
+};
+
+const claudeSyncFixes: Operation = async ({ state, answers, nodeId }) => {
+  const { findings, round } = stateOf<{ findings: { item: string; line: string }[]; round: number }>(state, "findings");
+  const previous = nodeId ? (state[nodeId] as { ready?: StageItem[]; skipped?: string[] } | undefined) : undefined;
+  const decided = findings.map((f, i) => ({ ...f, decision: answers?.[`q-claude-sync-finding-${round}-${i}`] ?? "skip-row" }));
+  const skipped = [...new Set([...(previous?.skipped ?? []), ...decided.filter((d) => d.decision === "skip-row").map((d) => d.item)])];
+  const byItem = new Map<string, string[]>();
+  for (const d of decided.filter((d) => d.decision === "replace" || d.decision === "delete")) byItem.set(d.item, [...(byItem.get(d.item) ?? []), `${d.decision}: ${d.line}`]);
+  const { items, wave } = stateOf<{ items: StageItem[]; wave: StageItem[] }>(state, "stage-plan");
+  const fixes = wave.filter((i) => byItem.has(i.id) && !skipped.includes(i.id)).map((i) => ({ ...i, decisions: byItem.get(i.id)!.join("\n") }));
+  const ready = items.filter((i) => !skipped.includes(i.id));
+  return { state: { fixes, ready, skipped }, metrics: { fixes: fixes.length, ready: ready.length, skipped: skipped.length }, output: `${ready.length} rows ready, ${fixes.length} need staged fixes, ${skipped.length} skipped by a finding.` };
+};
+
+function olkoCategories(olko: string): string[] {
+  const skills = path.join(olko, "skills");
+  return fs.existsSync(skills) ? fs.readdirSync(skills).filter((c) => fs.statSync(path.join(skills, c)).isDirectory()).sort() : [];
+}
+
+const claudeSyncMoreDeps: Operation = async ({ state, answers }) => {
+  const { missing, round } = stateOf<{ missing: unknown[]; round: number }>(state, "findings");
+  const more = round < 2 ? missing.filter((_, i) => answers?.[`q-claude-sync-missing-${round}-${i}`] === "install-user").length : 0;
+  return { state: { more }, metrics: { more }, output: more ? `${more} missing dependencies to stage in the next wave.` : "No more dependencies to stage." };
+};
+
+const claudeSyncApplyPlan: Operation = async ({ state }) => {
+  const { ready } = stateOf<{ ready: StageItem[] }>(state, "fixes");
+  const staged = stateOf<Record<string, Staged>>(state, "stage");
+  const olko = stateOf<{ olko: string }>(state, "state").olko;
+  const categories = olkoCategories(olko);
+  const rows = ready.map((i) => {
+    const s = staged[i.id]!;
+    const newSkill = i.direction === "to-olko" && i.kind === "skill" && i.existing === "none";
+    const diffFile = path.join(i.stageDir, "diff.patch");
+    const diff = fs.existsSync(diffFile) ? fs.readFileSync(diffFile, "utf8").slice(0, 6000) : "new file, no existing copy";
+    return { ...i, name: s.name, stagedPath: s.stagedPath, needsCategory: newSkill, categories: s.category && categories.includes(s.category) ? [s.category, ...categories.filter((c) => c !== s.category)] : categories, diff };
+  });
+  return { state: { rows }, metrics: { rows: rows.length }, output: `${rows.length} rows to apply one at a time.` };
+};
+
+async function contentHash(exec: NonNullable<ScriptContext["exec"]>, stateDir: string, target: string): Promise<string> {
+  return (await syncState(exec, stateDir, ["hash", "--path", target])).trim().split(/\s+/).at(-1) ?? "";
+}
+
+async function recordLineage(exec: NonNullable<ScriptContext["exec"]>, stateDir: string, capability: string, store: string, target: string, sourceStore: string, source: string) {
+  const hash = await contentHash(exec, stateDir, target);
+  const sourceHash = await contentHash(exec, stateDir, source);
+  await syncState(exec, stateDir, ["lineage", "set", "--capability", capability.replace(/[^a-z0-9-]/g, "-"), "--store", store, "--path", target, "--hash", hash, "--ported-from", `${sourceStore}@${sourceHash}`]);
+  return hash;
+}
+
+function upsertEntry(file: string, key: "skills" | "agents", entry: Record<string, unknown>): void {
+  const json = JSON.parse(fs.readFileSync(file, "utf8"));
+  const list = json[key] as Record<string, unknown>[];
+  const index = list.findIndex((e) => e.name === entry.name);
+  if (index >= 0) list[index] = { ...list[index], ...entry };
+  else list.push(entry);
+  fs.writeFileSync(file, `${JSON.stringify(json, null, 2)}\n`);
+}
+
+const claudeSyncApplyOlko: Operation = async ({ state, exec, answers }) => {
+  if (!exec) throw new Error("csync.applyOlko needs the host exec tool");
+  const { item, index } = stateOf<{ item: { id: string; kind: string; name: string; stagedPath: string; version: string; needsCategory: boolean; existing: string; source: string; sourceStore: string; overwrite: boolean }; index: number }>(state, "apply-next");
+  const { olko, stateDir } = stateOf<{ olko: string; stateDir: string }>(state, "state");
+  const staged = stateOf<Record<string, Staged>>(state, "stage")[item.id]!;
+  if (item.overwrite && answers?.[`q-claude-sync-overwrite-${index}`] !== "overwrite") return { state: { applied: false }, metrics: { applied: 0, failed: 0 }, output: `${item.id}: overwrite not confirmed, nothing written.` };
+  const results: string[] = [];
+  let target: string;
+  if (item.kind === "skill") {
+    const category = item.needsCategory ? answers?.[`q-claude-sync-category-${index}`] : path.basename(path.dirname(item.existing));
+    if (!category) throw new Error(`no category for ${item.name}`);
+    target = item.existing !== "none" ? item.existing : path.join(olko, "skills", category, item.name);
+    fs.mkdirSync(target, { recursive: true });
+    fs.cpSync(item.stagedPath, target, { recursive: true, force: true, filter: (f) => path.basename(f) !== "diff.patch" });
+    upsertEntry(path.join(olko, "registry.json"), "skills", { ...(staged.entry ?? {}), name: item.name, category, version: item.version });
+    for (const args of [["scripts/registry.mjs", "--fix"], ["scripts/registry.mjs"]]) {
+      const res = await exec("node", args, { cwd: olko });
+      results.push(`${args.join(" ")}: ${res.code === 0 ? "pass" : `FAIL ${(res.stderr || res.stdout).trim().split(/\r?\n/).slice(-2).join(" ")}`}`);
+    }
+  } else {
+    target = path.join(olko, "agents", "opencode", `${item.name}.md`);
+    fs.copyFileSync(fs.statSync(item.stagedPath).isDirectory() ? path.join(item.stagedPath, `${item.name}.md`) : item.stagedPath, target);
+    upsertEntry(path.join(olko, "agents", "opencode", "index.json"), "agents", { ...(staged.entry ?? {}), name: item.name, version: item.version, file: `${item.name}.md` });
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "factory-agent-check-"));
+    const res = await exec("node", ["scripts/install-opencode-agents.mjs", "--project", scratch, "--agent", item.name], { cwd: olko });
+    fs.rmSync(scratch, { recursive: true, force: true });
+    results.push(`install-opencode-agents ${item.name}: ${res.code === 0 ? "pass" : `FAIL ${(res.stderr || res.stdout).trim().split(/\r?\n/).slice(-2).join(" ")}`}`);
+  }
+  await recordLineage(exec, stateDir, item.id, "olko", target, item.sourceStore, item.source);
+  const failed = results.filter((r) => r.includes("FAIL")).length;
+  return { state: { applied: true, target, results, failed }, metrics: { applied: 1, failed }, output: `${item.id} -> Olko ${path.relative(olko, target)} at ${item.version}. ${results.join("; ")}` };
+};
+
+const claudeSyncApplyUser: Operation = async ({ state, exec, answers }) => {
+  if (!exec) throw new Error("csync.applyUser needs the host exec tool");
+  const { item, index } = stateOf<{ item: { id: string; kind: string; name: string; stagedPath: string; source: string; overwrite: boolean }; index: number }>(state, "apply-next");
+  const { user, stateDir } = stateOf<{ user: string; stateDir: string }>(state, "state");
+  if (answers?.[`q-claude-sync-write-${index}`] !== "write") return { state: { applied: false }, metrics: { applied: 0 }, output: `${item.id}: write to the user scope declined.` };
+  const target = item.kind === "skill" ? path.join(user, "skills", item.name) : path.join(user, "agents", `${item.name}.md`);
+  if (item.kind === "skill") {
+    fs.mkdirSync(target, { recursive: true });
+    fs.cpSync(item.stagedPath, target, { recursive: true, force: true, filter: (f) => path.basename(f) !== "diff.patch" });
+  } else {
+    fs.copyFileSync(fs.statSync(item.stagedPath).isDirectory() ? path.join(item.stagedPath, `${item.name}.md`) : item.stagedPath, target);
+  }
+  await recordLineage(exec, stateDir, item.id, "user", target, "olko", item.source);
+  return { state: { applied: true, target }, metrics: { applied: 1 }, output: `${item.id} -> user scope ${target}.` };
+};
+
+const claudeSyncApplyRecord: Operation = async ({ state, nodeId }) => {
+  const previous = nodeId ? (state[nodeId] as { applied?: string[]; failed?: number } | undefined) : undefined;
+  const { item } = stateOf<{ item: { id: string; direction: string } }>(state, "apply-next");
+  const result = (item.direction === "to-olko" ? state["apply-olko"] : state["apply-user"]) as { applied?: boolean; failed?: number } | undefined;
+  const applied = [...(previous?.applied ?? []), ...(result?.applied ? [`${item.id} ${item.direction}`] : [])];
+  const failed = (previous?.failed ?? 0) + (result?.failed ?? 0);
+  return { state: { applied, failed, olkoChanged: applied.some((a) => a.endsWith("to-olko")) }, metrics: { applied: applied.length, failed }, output: `${applied.length} rows applied so far.` };
+};
+
+const claudeSyncOlkoTests: Operation = async ({ state, exec }) => {
+  if (!exec) throw new Error("csync.olkoTests needs the host exec tool");
+  const { olko } = stateOf<{ olko: string }>(state, "state");
+  const res = await exec("node", ["--test", "scripts/*.test.mjs"], { cwd: olko });
+  const summary = (res.stdout.match(/^ℹ (pass|fail) \d+$/gm) ?? []).join(", ");
+  return { state: { passed: res.code === 0, summary }, metrics: { failed: res.code === 0 ? 0 : 1 }, output: `Olko node tests: ${res.code === 0 ? "pass" : "FAIL"} (${summary || (res.stderr || res.stdout).trim().split(/\r?\n/).slice(-2).join(" ")}).` };
+};
+
+const claudeSyncLeakCheck: Operation = async ({ state, exec, input }) => {
+  if (!exec) throw new Error("csync.leakCheck needs the host exec tool");
+  const { olko, target, leakTerms } = stateOf<{ olko: string; target: string; leakTerms: string[] }>(state, "state");
+  const plugins = fs.existsSync(path.join(target, "plugins")) ? fs.readdirSync(path.join(target, "plugins")) : [];
+  const portedPlugins = new Set(stateOf<{ rows: { source: string; sourceStore: string }[] }>(state, "apply-plan").rows.filter((r) => r.sourceStore === "target").map((r) => path.relative(path.join(target, "plugins"), r.source).split(path.sep)[0]));
+  const terms = [...leakTerms, input.targetName ?? "", target, path.basename(target), ...plugins.filter((p) => !portedPlugins.has(p))].filter((t) => t.length > 2).map((t) => t.toLowerCase());
+  const changed = (await exec("git", ["-C", olko, "status", "--porcelain", "--untracked-files=all"])).stdout.split(/\r?\n/).filter(Boolean).map((l) => l.slice(3).trim());
+  const hits: string[] = [];
+  for (const file of changed) {
+    const full = path.join(olko, file);
+    if (!fs.existsSync(full) || fs.statSync(full).isDirectory()) continue;
+    const added = file.endsWith(".json") ? (await exec("git", ["-C", olko, "diff", "--", file])).stdout.split(/\r?\n/).filter((l) => l.startsWith("+")).join("\n") : fs.readFileSync(full, "utf8");
+    terms.forEach((t, n) => {
+      if (added.toLowerCase().includes(t)) hits.push(`${file}: leak term #${n + 1}`);
+    });
+  }
+  if (hits.length) throw new Error(`leak check failed, nothing published: ${hits.join("; ")}`);
+  return { state: { changed, files: changed.join("\n") }, metrics: { leaks: 0, changed: changed.length }, output: `Leak check passed on ${changed.length} changed Olko files.` };
+};
+
+const claudeSyncPublish: Operation = async ({ state, exec }) => {
+  if (!exec) throw new Error("csync.publish needs the host exec tool");
+  const { olko } = stateOf<{ olko: string }>(state, "state");
+  const { changed } = stateOf<{ changed: string[] }>(state, "leak-check");
+  const rows = stateOf<{ rows: { name: string; version: string; decision: string }[] }>(state, "apply-plan").rows.filter((r) => !r.decision.includes("user"));
+  const tests = stateOf<{ summary: string; passed: boolean }>(state, "olko-tests");
+  const slug = rows.map((r) => r.name.replace(/^olko-/, "")).join("-").slice(0, 40).replace(/-+$/, "");
+  const branch = `feat/claude-sync-${slug}`;
+  const git = async (...args: string[]) => {
+    const res = await exec("git", ["-C", olko, ...args]);
+    if (res.code !== 0) throw new Error(`git ${args[0]} failed: ${(res.stderr || res.stdout).trim()}`);
+    return res.stdout.trim();
+  };
+  await git("checkout", "-b", branch);
+  await git("add", "--", ...changed);
+  const subject = `feat(sync): port ${rows.map((r) => `${r.name} ${r.version}`).join(", ")}`;
+  await git("commit", "-m", subject);
+  await git("push", "-u", "origin", branch);
+  const body = [`Artifacts: ${rows.map((r) => `${r.name} ${r.version} (${r.decision})`).join(", ")}`, `Validation: ${tests.passed ? "node tests pass" : "node tests FAIL"} ${tests.summary}`].join("\n\n");
+  const pr = await exec("gh", ["pr", "create", "--draft", "--head", branch, "--base", "main", "--title", subject, "--body", body], { cwd: olko });
+  if (pr.code !== 0) throw new Error(`gh pr create failed: ${(pr.stderr || pr.stdout).trim()}`);
+  const url = pr.stdout.trim().split(/\r?\n/).at(-1)!;
+  const commit = await git("rev-parse", "HEAD");
+  return { state: { publish: { url, branch, commit } }, metrics: { prs: 1 }, output: `Draft PR ${url} on ${branch}.` };
+};
+
+const claudeSyncConsolidationRecord: Operation = async ({ state, exec, answers }) => {
+  if (!exec) throw new Error("csync.consolidationRecord needs the host exec tool");
+  const { stateDir } = stateOf<{ stateDir: string }>(state, "state");
+  const suggestions = Object.values(stateOf<Record<string, { suggestions: { items: string[]; verdict: string; evidence: string; loses: string }[] }>>(state, "consolidate"))[0]?.suggestions ?? [];
+  const accepted: string[] = [];
+  const rejected: string[] = [];
+  for (const [i, s] of suggestions.entries()) {
+    const answer = answers?.[`q-claude-sync-suggestion-${i}`];
+    if (answer === "reject") {
+      await syncState(exec, stateDir, ["rejection", "add", "--items", s.items.join(","), "--suggestion", s.verdict, "--reason", answers?.[`q-claude-sync-suggestion-reason-${i}`] ?? "declined"]);
+      rejected.push(s.items.join(","));
+    } else if (answer === "accept") accepted.push(`- ${s.verdict}: ${s.items.join(", ")}\n  evidence: ${s.evidence}\n  loses: ${s.loses}`);
+  }
+  const planFile = path.join(stateDir, `consolidation-plan-${new Date().toISOString().slice(0, 10)}.md`);
+  if (accepted.length) fs.appendFileSync(planFile, `${accepted.join("\n")}\n`);
+  return { state: { accepted: accepted.length, rejected: rejected.length, planFile: accepted.length ? planFile : "none" }, metrics: { accepted: accepted.length, rejected: rejected.length }, output: `Consolidation: ${accepted.length} accepted${accepted.length ? ` (plan ${planFile})` : ""}, ${rejected.length} rejected.` };
+};
+
+export function parseSuggestions(text: string): { suggestions: { items: string[]; verdict: string; evidence: string; loses: string }[] } {
+  const data = lastJsonBlock(text) as { suggestions?: { items: string[]; verdict: string; evidence: string; loses: string }[] };
+  const suggestions = (data.suggestions ?? []).filter((s) => ["merge", "remove", "extend"].includes(s.verdict) && Array.isArray(s.items) && s.items.length >= 2);
+  return { suggestions: suggestions.map((s, i) => ({ ...s, line: `${i + 1}. ${s.verdict}: ${s.items.join(" + ")} — ${s.evidence} — loses: ${s.loses}` })) as never };
+}
+
+interface DraftTask {
+  id: string;
+  title: string;
+  criteria: string[];
+}
+
+interface Draft {
+  questions: string[];
+  feature: { title: string; goal: string; criteria: string[] } | null;
+  tasks: DraftTask[];
+  text: string;
+}
+
+interface GrillQuestion {
+  problem: string;
+  why: string;
+  options: { label: string; business: string; scope: string }[];
+  glossary?: string;
+}
+
+export function parseDraft(text: string): Draft {
+  const data = lastJsonBlock(text) as Partial<Draft>;
+  return { questions: (data.questions ?? []).filter((q) => typeof q === "string" && q.trim()), feature: data.feature ?? null, tasks: data.tasks ?? [], text: String(data.text ?? "") };
+}
+
+export function parseGrill(text: string): { questions: GrillQuestion[] } {
+  const data = lastJsonBlock(text) as { questions?: GrillQuestion[] };
+  const questions = data.questions ?? [];
+  for (const q of questions) {
+    if (!q.problem || !Array.isArray(q.options) || q.options.length !== 3) throw new Error(`grill question needs a problem and exactly 3 options: ${JSON.stringify(q).slice(0, 200)}`);
+  }
+  return { questions };
+}
+
+export function parseVerdictLine(prefix: string): (text: string) => { pass: boolean; count: number; detail: string } {
+  return (text) => {
+    const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.startsWith(`${prefix} |`));
+    if (!line) throw new Error(`output has no '${prefix} |' line`);
+    const [, verdict = "", count = "0", detail = ""] = line.split("|").map((p) => p.trim());
+    return { pass: verdict === "pass" || verdict === "yes" || verdict === "none", count: Number(count) || 0, detail };
+  };
+}
+
+const planRoute: Operation = async ({ input, answers }) => {
+  const route = input.route ?? answers?.["q-plan-route"];
+  if (route && !["discovery", "planning", "both"].includes(route)) throw new Error(`input.route must be discovery, planning or both, not ${route}`);
+  return { state: { route: route ?? "ask" }, metrics: {}, output: `Route: ${route ?? "ask the user"}.` };
+};
+
+const planDraftCheck: Operation = async ({ state, answers, nodeId }) => {
+  const draft = Object.values(stateOf<Record<string, Draft>>(state, "draft"))[0]!;
+  const previous = nodeId ? (state[nodeId] as { round?: number; answered?: string } | undefined) : undefined;
+  const round = (previous?.round ?? 0) + 1;
+  const answer = previous ? (answers?.[`q-plan-questions-${previous.round}`] ?? answers?.[`q-plan-revise-${previous.round}`]) : undefined;
+  const answered = [previous?.answered, answer].filter(Boolean).join("\n\n");
+  const ask = draft.questions.length > 0 && round <= 3;
+  return { state: { round, ask, questions: draft.questions.map((q, i) => `${i + 1}. ${q}`).join("\n"), answered: answered || "none yet", draft }, metrics: { questions: draft.questions.length, round }, output: ask ? `Draft round ${round}: ${draft.questions.length} open questions.` : `Draft ready: ${draft.tasks.length} Tasks.` };
+};
+
+const planFeature: Operation = async ({ state, input, cwd }) => {
+  const fromTracker = state["tracker-context/context"] as Record<string, Draft> | undefined;
+  const draft = (fromTracker && Object.values(fromTracker)[0]) ?? (state["draft-check"] as { draft?: Draft } | undefined)?.draft;
+  if (!draft) throw new Error("no Feature context: give input.route planning with the tracker on, or run the discovery draft first");
+  const missing = draft.tasks.filter((t) => !t.criteria?.length).map((t) => t.id);
+  if (!draft.tasks.length) throw new Error("entry gate: the Feature has no child Tasks; route to the backlog writer draft first");
+  if (missing.length) throw new Error(`entry gate: Tasks without acceptance criteria: ${missing.join(", ")}; never plan from a guessed criterion`);
+  const featureId = input.featureId ?? (draft.feature?.title ?? "feature").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const featureDir = `plans/features/${featureId}`;
+  fs.mkdirSync(path.join(cwd ?? ".", featureDir, "tasks"), { recursive: true });
+  const tasks = draft.tasks.map((t) => `- ${t.id}: ${t.title}\n${t.criteria.map((c) => `  - ${c}`).join("\n")}`).join("\n");
+  const criteria = [...(draft.feature?.criteria ?? []), ...draft.tasks.flatMap((t) => t.criteria)].join("\n");
+  return { state: { featureId, featureDir, text: draft.text, tasks, taskIds: draft.tasks.map((t) => t.id), criteria }, metrics: { tasks: draft.tasks.length }, output: `Feature ${featureId}: ${draft.tasks.length} Tasks with acceptance criteria; plan folder ${featureDir}.` };
+};
+
+const AUDITORS: [RegExp, string][] = [
+  [/\.net|c#|csproj|asp\.net/i, "olko-dotnet-auditor"],
+  [/kotlin|android/i, "olko-mobile-auditor"],
+  [/react native|expo/i, "olko-react-native-auditor"],
+  [/\breact\b(?! native)/i, "olko-react-auditor"],
+  [/army python|python army/i, "olko-army-python-auditor"],
+];
+
+const planAuditors: Operation = async ({ state, cwd }) => {
+  const { featureDir } = stateOf<{ featureDir: string }>(state, "feature");
+  const file = path.join(cwd ?? ".", featureDir, "implementation.md");
+  const text = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+  const scope = text.split(/^## /m).find((s) => /^(implementation scope|scope|technical scope)/i.test(s)) ?? text;
+  const agents = AUDITORS.filter(([re]) => re.test(scope)).map(([, agent]) => ({ id: agent.replace(/^olko-|-auditor$/g, ""), agentName: agent }));
+  return { state: { agents }, metrics: { auditors: agents.length }, output: agents.length ? `Auditors for the planned technologies: ${agents.map((a) => a.agentName).join(", ")}.` : "No stack auditor matches the planned technologies; audits skipped." };
+};
+
+const planFindings: Operation = async ({ state, args }) => {
+  const from = String(args.from);
+  const results = Object.entries((state[from] as Record<string, { pass: boolean; count: number; detail: string }> | undefined) ?? {});
+  const total = results.reduce((sum, [, r]) => sum + r.count, 0);
+  const text = results.filter(([, r]) => r.count > 0).map(([id, r]) => `${id}: ${r.detail}`).join("\n");
+  return { state: { total, text: text || "none" }, metrics: { findings: total }, output: total ? `${total} findings to fold from ${from}.` : `No findings from ${from}.` };
+};
+
+const planFiles: Operation = async ({ state, cwd }) => {
+  const { featureDir, criteria } = stateOf<{ featureDir: string; criteria: string }>(state, "feature");
+  const root = path.join(cwd ?? ".", featureDir);
+  const tasks = fs.existsSync(path.join(root, "tasks")) ? fs.readdirSync(path.join(root, "tasks")).filter((f) => f.endsWith("-implementation.md")).sort().map((f) => `${featureDir}/tasks/${f}`) : [];
+  const files = [`${featureDir}/implementation.md`, ...tasks].map((p) => ({ path: p, criteria }));
+  return { state: { files }, metrics: { files: files.length }, output: `${files.length} plan files to review.` };
+};
+
+const planReviewCollect: Operation = async ({ state, nodeId }) => {
+  const previous = nodeId ? (state[nodeId] as { reports?: string[]; confirmed?: number } | undefined) : undefined;
+  const review = state["plan-review"] as Record<string, unknown> | undefined;
+  const report = review?.["plan-report"] as { kept?: { line: string }[] } | undefined;
+  const file = (state["plan-next"] as { item?: { path: string } } | undefined)?.item?.path ?? "?";
+  const lines = (report?.kept ?? []).map((f) => f.line);
+  const reports = [...(previous?.reports ?? []), ...lines.map((l) => `${file}: ${l}`)];
+  return { state: { reports, confirmed: reports.length, text: reports.join("\n") || "none" }, metrics: { confirmed: reports.length }, output: `${lines.length} confirmed plan findings for ${file}.` };
+};
+
+const planGrillQuestions: Operation = async ({ state, nodeId }) => {
+  const parsed = Object.values(stateOf<Record<string, { questions: GrillQuestion[] }>>(state, "grill"))[0]!;
+  const previous = nodeId ? (state[nodeId] as { round?: number } | undefined) : undefined;
+  const round = (previous?.round ?? 0) + 1;
+  const questions = parsed.questions.map((q, i) => ({
+    index: i,
+    text: [`Problem: ${q.problem}`, `Why I am asking: ${q.why}`, ...q.options.map((o, n) => `${n + 1}. ${o.label}${n === 0 ? " (recommended)" : ""}\n   Business: ${o.business}\n   Change scope: ${o.scope}`), q.glossary ? `Glossary: ${q.glossary}` : ""].filter(Boolean).join("\n"),
+  }));
+  const count = round <= 3 ? questions.length : 0;
+  return { state: { round, questions, count }, metrics: { questions: questions.length, round }, output: count ? `Grill round ${round}: ${count} questions as one batch.` : `Grill round ${round}: no open question${questions.length ? " (round limit reached; the rest stays in Open items)" : ""}.` };
+};
+
+const planAnswers: Operation = async ({ state, answers, args }) => {
+  const from = String(args.from);
+  const prefix = String(args.prefix);
+  const source = stateOf<{ round: number; questions: { index: number; text: string }[] }>(state, from);
+  const lines = source.questions.map((q) => `Question ${q.index + 1}:\n${q.text}\nAnswer: ${answers?.[`${prefix}${source.round}-${q.index}`] ?? "unanswered"}`);
+  return { state: { text: lines.join("\n\n") || "none", count: lines.length }, metrics: { answers: lines.length }, output: `${lines.length} answers collected.` };
+};
+
+const planReadiness: Operation = async ({ state, nodeId }) => {
+  const parsed = Object.values(stateOf<Record<string, { questions: GrillQuestion[] }>>(state, "readiness"))[0]!;
+  const previous = nodeId ? (state[nodeId] as { round?: number } | undefined) : undefined;
+  const round = (previous?.round ?? 0) + 1;
+  const questions = parsed.questions.map((q, i) => ({ index: i, text: [`Blocker: ${q.problem}`, `Why I am asking: ${q.why}`, ...q.options.map((o, n) => `${n + 1}. ${o.label}${n === 0 ? " (recommended)" : ""}\n   Business: ${o.business}\n   Change scope: ${o.scope}`)].join("\n") }));
+  return { state: { round, questions, count: round <= 3 ? questions.length : 0 }, metrics: { blockers: questions.length, round }, output: questions.length ? `Readiness round ${round}: ${questions.length} blockers.` : "Ready for implementation: no blockers." };
+};
+
+const planOpenEditor: Operation = async ({ state, exec, cwd }) => {
+  const { featureDir } = stateOf<{ featureDir: string }>(state, "feature");
+  const res = exec ? await exec("code", ["-n", featureDir], { cwd: cwd ?? "." }) : { code: -1, stdout: "", stderr: "no exec" };
+  return { state: { opened: res.code === 0 }, metrics: { opened: res.code === 0 ? 1 : 0 }, output: res.code === 0 ? `Opened ${featureDir} in VS Code.` : `Could not open VS Code; run: code -n ${featureDir}` };
+};
+
+const planScopeCheck: Operation = async ({ state, exec, cwd }) => {
+  if (!exec) throw new Error("plan.scopeCheck needs the host exec tool");
+  const { featureDir } = stateOf<{ featureDir: string }>(state, "feature");
+  const status = (await exec("git", ["-C", cwd ?? ".", "status", "--porcelain", "--untracked-files=all"])).stdout.split(/\r?\n/).filter(Boolean).map((l) => l.slice(3).trim());
+  const allowed = (p: string) => p.startsWith(`${featureDir}/`) || p === ".opencode/memory/olko-plan-documentation-orchestrator.md";
+  const outside = status.filter((p) => !allowed(p));
+  if (outside.length) throw new Error(`planning changed files outside the plan folder: ${outside.join(", ")}`);
+  return { state: { changed: status }, metrics: { changed: status.length }, output: `Plan scope check passed: ${status.length} changed files, all under ${featureDir}.` };
+};
+
+const planFeatureReport: Operation = async ({ state, cwd }) => {
+  const { featureDir, featureId } = stateOf<{ featureDir: string; featureId: string }>(state, "feature");
+  const root = path.join(cwd ?? ".", featureDir);
+  const tasks = fs.existsSync(path.join(root, "tasks")) ? fs.readdirSync(path.join(root, "tasks")).filter((f) => f.endsWith("-implementation.md")) : [];
+  const ready = fs.existsSync(path.join(root, "implementation.md")) ? (fs.readFileSync(path.join(root, "implementation.md"), "utf8").match(/Ready for implementation:\s*(yes|no)/i)?.[1] ?? "missing") : "missing";
+  const auditors = (state.auditors as { agents?: { agentName: string }[] } | undefined)?.agents?.map((a) => a.agentName) ?? [];
+  const review = (state["plan-collect"] as { confirmed?: number } | undefined)?.confirmed ?? 0;
+  return {
+    state: { ready },
+    metrics: { tasks: tasks.length },
+    output: [`Feature plan ${featureId}`, `Files: ${["business.md", "implementation.md", "stack.md", "tracker.md"].map((f) => `${featureDir}/${f}`).join(", ")}`, `Task plans: ${tasks.map((t) => `${featureDir}/tasks/${t}`).join(", ") || "none"}`, `Ready for implementation: ${ready}`, `Auditors: ${auditors.join(", ") || "none (no matching technology)"}`, `Plan review: ${review} confirmed findings folded`, "Domain changes: write-free recommendation in business.md; vault changes stay approval-gated after implementation."].join("\n"),
+  };
 };
 
 export const OPERATIONS: Record<string, Operation> = {
   "builtin.pass": pass,
+  "builtin.count": async ({ state, nodeId }) => {
+    const count = ((nodeId ? (state[nodeId] as { count?: number } | undefined)?.count : 0) ?? 0) + 1;
+    return { state: { count }, metrics: { count }, output: `Round ${count}.` };
+  },
+  "builtin.stop": async ({ args }) => {
+    throw new Error(String(args.reason ?? "stopped by the user"));
+  },
+  "plan.route": planRoute,
+  "plan.draftCheck": planDraftCheck,
+  "plan.feature": planFeature,
+  "plan.auditors": planAuditors,
+  "plan.findings": planFindings,
+  "plan.files": planFiles,
+  "plan.reviewCollect": planReviewCollect,
+  "plan.grillQuestions": planGrillQuestions,
+  "plan.answers": planAnswers,
+  "plan.readiness": planReadiness,
+  "plan.openEditor": planOpenEditor,
+  "plan.scopeCheck": planScopeCheck,
+  "plan.report": planFeatureReport,
+  "builtin.values": async ({ args }) => {
+    if (!Array.isArray(args.values)) throw new Error("with.values must be a list");
+    return { state: { values: args.values }, metrics: { values: args.values.length }, output: `${args.values.length} values.` };
+  },
+  "builtin.gate": async ({ state, input, args }) => {
+    const when = String(args.when);
+    const enabled = evaluateWhen(when, { ...state, input, switches: input.switches ?? {} });
+    return { state: { enabled }, metrics: { enabled: enabled ? 1 : 0 }, output: enabled ? `Subgraph ${String(args.subgraph)} runs (${when}).` : `Subgraph ${String(args.subgraph)} skipped: switch off (${when} is false).` };
+  },
   "github.prScope": prScope,
   "github.postComment": postComment,
   "list.next": listNext,
@@ -1145,6 +1704,7 @@ export const OPERATIONS: Record<string, Operation> = {
   "sync.memorySave": syncMemorySave,
   "csync.state": claudeSyncState,
   "csync.leakSave": claudeSyncLeakSave,
+  "csync.inventories": claudeSyncInventories,
   "csync.capabilities": claudeSyncCapabilities,
   "csync.select": claudeSyncSelect,
   "csync.exclusions": claudeSyncExclusions,
@@ -1152,9 +1712,18 @@ export const OPERATIONS: Record<string, Operation> = {
   "csync.plan": claudeSyncPlan,
   "csync.record": claudeSyncRecord,
   "csync.report": claudeSyncReport,
-  "csync.applyNotAvailable": async () => {
-    throw new Error("Applying claude sync rows (porting, installing into ~/.claude, publishing) is not in the factory yet. The run stops before any change.");
-  },
+  "csync.stagePlan": claudeSyncStagePlan,
+  "csync.findings": claudeSyncFindings,
+  "csync.fixes": claudeSyncFixes,
+  "csync.applyPlan": claudeSyncApplyPlan,
+  "csync.moreDeps": claudeSyncMoreDeps,
+  "csync.applyOlko": claudeSyncApplyOlko,
+  "csync.applyUser": claudeSyncApplyUser,
+  "csync.applyRecord": claudeSyncApplyRecord,
+  "csync.olkoTests": claudeSyncOlkoTests,
+  "csync.leakCheck": claudeSyncLeakCheck,
+  "csync.publish": claudeSyncPublish,
+  "csync.consolidationRecord": claudeSyncConsolidationRecord,
   "sync.report": syncReport,
   "sync.stopUnsafe": async ({ state, args }) => {
     const source = stateOf<{ detail?: string }>(state, typeof args.from === "string" ? args.from : "safe-source");
@@ -1171,5 +1740,12 @@ export const PARSERS: Record<string, (text: string) => unknown> = {
   "sync.prLine": parsePrLine,
   "sync.applied": parseApplied,
   "csync.capabilities": parseCapabilities,
+  "csync.inventory": parseInventory,
   "csync.verdict": parseVerdict,
+  "csync.staged": parseStaged,
+  "plan.draft": parseDraft,
+  "plan.grill": parseGrill,
+  "plan.consistency": parseVerdictLine("consistency"),
+  "plan.findings": parseVerdictLine("findings"),
+  "csync.suggestions": parseSuggestions,
 };

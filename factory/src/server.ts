@@ -8,6 +8,7 @@ import { cliExecutor, hostExec } from "./cli-backend.ts";
 import type { CliName, Executors } from "./types.ts";
 import type { DefaultBackend } from "./engine.ts";
 import { allowedHostsFor, viewerHandler } from "./viewer-routes.ts";
+import { registerDataSource } from "./paths.ts";
 import { createFactoryTools } from "./tools.ts";
 
 const PORT = Number(process.env.FACTORY_PORT ?? 7340);
@@ -40,6 +41,7 @@ try {
 }
 
 const executors: Executors = { exec: hostExec, ...(CLI ? { [CLI]: cliExecutor(CLI) } : {}) };
+registerDataSource(DATA_DIR);
 const factory = new Factory(DATA_DIR, { backend: DEFAULT_BACKEND, executors, ...(CLI ? { cli: CLI } : {}) });
 const tools = createFactoryTools(factory, PUBLIC_URL);
 

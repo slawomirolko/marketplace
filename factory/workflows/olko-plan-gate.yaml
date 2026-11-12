@@ -1,0 +1,74 @@
+name: olko-plan-gate
+version: 0.1.0
+source: agents/opencode/olko-plan-documentation-orchestrator.md (steps 2a and 3, stack.md and the bidirectional consistency gate with its correction loop)
+roles:
+  plan-gate: medium
+  planner: high
+entry: stack
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: stack
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    tools: [read, edit]
+    maxVisits: 4
+    parse: text.raw
+    prompt: |
+      Do only step 2a of your workflow for the Feature plan folder {{input.featureDir}} in the project {{input.project}}: create or refresh stack.md from the verified implementation scope and record the dependency evidence in tracker.md. Write only stack.md and tracker.md in that folder. Do not delegate, ask the user, or run commands.
+      Reply with one line: `stack | <new dependencies or none>`.
+  - id: consistency
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    maxVisits: 4
+    parse: plan.consistency
+    prompt: |
+      Do only the check of step 3 of your workflow for the Feature plan folder {{input.featureDir}} in the project {{input.project}}: the bidirectional business-to-technical consistency gate, stack.md against the final scope, and every Task file against its Feature milestone, file estimate, dependencies, parallelism and acceptance. Read only; do not edit anything, do not delegate, do not ask the user.
+      End with exactly one line: `consistency | <pass|fail> | <number of mismatches> | <mismatches, semicolon separated, or none>`.
+  - id: round
+    kind: script
+    op: builtin.count
+    maxVisits: 4
+  - id: fix
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    maxVisits: 4
+    parse: text.raw
+    prompt: |
+      Correct the Feature plan package in {{input.featureDir}} (project {{input.project}}) so these consistency mismatches are resolved, then stop. Edit only the files of that folder; leave business.md to its own wording unless a verified fact requires a correction.
+      Mismatches: {{state.consistency.consistency.detail}}
+      Reply with one line: `fixed | <files changed>`.
+  - id: ask-gap
+    kind: interrupt
+    question:
+      id: q-plan-gap
+      text: "The consistency gate still fails after {{state.round.count}} correction rounds: {{state.consistency.consistency.detail}}. Accept the remaining mismatches as ACCEPTED-GAP in tracker.md and continue, or stop?"
+      allowed: [accept, stop]
+  - id: record-gap
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    tools: [read, edit]
+    parse: text.raw
+    prompt: |
+      Record in {{input.featureDir}}/tracker.md (and in the `## Open items` of the affected plans as ACCEPTED-GAP) that the user accepted these consistency mismatches: {{state.consistency.consistency.detail}}. Edit only those files.
+      Reply with one line: `recorded | <files>`.
+  - id: stop
+    kind: script
+    op: builtin.stop
+    with: { reason: "The user stopped planning at the consistency gate." }
+edges:
+  - { from: stack, to: consistency }
+  - { from: consistency, to: END, when: "consistency.consistency.pass == true" }
+  - { from: consistency, to: round }
+  - { from: round, to: fix, when: "round.count < 3" }
+  - { from: round, to: ask-gap }
+  - { from: fix, to: stack }
+  - { from: ask-gap, to: record-gap, when: 'ask-gap.answer == "accept"' }
+  - { from: ask-gap, to: stop, when: 'ask-gap.answer == "stop"' }
+  - { from: record-gap, to: END }
+  - { from: stop, to: END }

@@ -1,0 +1,419 @@
+name: olko-plan-documentation
+version: 0.1.0
+source: agents/opencode/olko-plan-documentation-orchestrator.md (DISCOVERY and IMPLEMENTATION PLANNING; tracker steps sit in subgraphs behind switches.tracker)
+roles:
+  backlog: medium
+  plan-worker: medium
+  writer: medium
+  planner: high
+  plan-gate: medium
+  auditor: medium
+entry: route
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: route
+    kind: script
+    op: plan.route
+    maxVisits: 2
+  - id: ask-route
+    kind: interrupt
+    question:
+      id: q-plan-route
+      text: "What do you want: discovery (create or refine Epic/Feature/Task issues), planning (implementation plans for an accepted Feature), or both?"
+      allowed: [discovery, planning, both]
+  - id: draft
+    kind: llm
+    role: backlog
+    agent: olko-feature-backlog-writer
+    maxVisits: 4
+    parse: plan.draft
+    prompt: |
+      Mode: draft. Do not write to the tracker. Idea: {{input.idea}}
+      Project: {{input.project}} (use its repository evidence to establish what exists and what should change).
+      Answers so far: {{state.draft-check.answered}}
+
+      When decisions remain open, return all currently answerable questions together. When the draft is ready, return no questions.
+      End with one ```json block: {"questions": ["<question>"], "feature": {"title": "", "goal": "", "criteria": [""]}, "tasks": [{"id": "T1", "title": "", "criteria": [""]}], "text": "<the Epic/Feature/Task hierarchy as markdown>"}
+  - id: draft-check
+    kind: script
+    op: plan.draftCheck
+    maxVisits: 4
+  - id: ask-questions
+    kind: interrupt
+    maxVisits: 3
+    question:
+      id: "q-plan-questions-{{state.draft-check.round}}"
+      text: "The backlog writer needs these answers, as one batch:\n{{state.draft-check.questions}}"
+  - id: ask-draft
+    kind: interrupt
+    maxVisits: 3
+    question:
+      id: "q-plan-draft-review-{{state.draft-check.round}}"
+      text: "Review the draft once:\n{{state.draft-check.draft.text}}"
+      allowed: [approve, revise]
+  - id: ask-revise
+    kind: interrupt
+    maxVisits: 3
+    question:
+      id: "q-plan-revise-{{state.draft-check.round}}"
+      text: "What should change in the draft?"
+  - id: tracker-publish
+    kind: subgraph
+    workflow: olko-plan-tracker-publish
+    enabledWhen: "switches.tracker == true"
+  - id: after-discovery
+    kind: script
+    op: builtin.pass
+  - id: tracker-context
+    kind: subgraph
+    workflow: olko-plan-tracker-context
+    enabledWhen: "switches.tracker == true"
+  - id: feature
+    kind: script
+    op: plan.feature
+  - id: investigate
+    kind: llm
+    role: plan-worker
+    agents:
+      - { id: knowledge, agent: olko-obsidian-knowledge-manager }
+      - { id: flow, agent: olko-investigation-flow-worker }
+      - { id: runtime, agent: olko-investigation-runtime-worker }
+      - { id: test, agent: olko-investigation-test-worker }
+      - { id: readiness, agent: olko-investigation-readiness-worker }
+    parse: text.raw
+    prompt: |
+      Project: {{input.project}}. Read only; change no file and no vault note.
+      Feature to plan (plan folder {{state.feature.featureDir}}):
+      {{state.feature.text}}
+      Tasks with acceptance criteria:
+      {{state.feature.tasks}}
+      Return your verified findings with file:line evidence for this Feature and every Task.
+  - id: business
+    kind: llm
+    role: writer
+    agent: olko-plan-business-writer
+    tools: [read, edit]
+    parse: text.raw
+    prompt: |
+      Write the business document {{state.feature.featureDir}}/business.md for this Feature in the project {{input.project}}. Edit only that file.
+      {{state.feature.text}}
+      Tasks: {{state.feature.tasks}}
+      Knowledge base context: {{state.investigate.knowledge}}
+  - id: merge
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    parse: text.raw
+    prompt: |
+      Step 2 of the planning cycle in the project {{input.project}}: from the verified evidence below, create {{state.feature.featureDir}}/implementation.md and one {{state.feature.featureDir}}/tasks/<task-id>-implementation.md for EVERY Task ({{state.feature.taskIds}}), with `## Implementation readiness` ending in `Ready for implementation: yes|no` and `## Open items` in each. Keep business.md as the business writer wrote it unless a verified fact requires a correction. Write only inside {{state.feature.featureDir}}; create tracker.md there with the decisions and evidence.
+      Feature: {{state.feature.text}}
+      Tasks: {{state.feature.tasks}}
+      Flow evidence: {{state.investigate.flow}}
+      Runtime evidence: {{state.investigate.runtime}}
+      Test evidence: {{state.investigate.test}}
+      Readiness evidence: {{state.investigate.readiness}}
+  - id: gate-merge
+    kind: call
+    workflow: olko-plan-gate
+    input: { featureDir: "{{state.feature.featureDir}}" }
+  - id: auditors
+    kind: script
+    op: plan.auditors
+  - id: audit
+    kind: llm
+    role: auditor
+    agentsFrom: state.auditors.agents
+    parse: plan.findings
+    prompt: |
+      Review only: audit the architecture and style of the planned changes in {{state.feature.featureDir}}/implementation.md and its Task files (project {{input.project}}). Do not edit code, tests, configuration, AGENTS.md, plan documents, agents or skills.
+      Return exact rule and file:line evidence plus corrections to the technical document. End with one line: `findings | <none|found> | <count> | <findings, semicolon separated>`.
+  - id: audit-findings
+    kind: script
+    op: plan.findings
+    with: { from: audit }
+  - id: fold-audit
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    parse: text.raw
+    prompt: |
+      Fold only these verified auditor findings into the plan package {{state.feature.featureDir}} (project {{input.project}}); edit only that folder.
+      {{state.audit-findings.text}}
+  - id: gate-audit
+    kind: call
+    workflow: olko-plan-gate
+    input: { featureDir: "{{state.feature.featureDir}}" }
+  - id: plan-files
+    kind: script
+    op: plan.files
+  - id: plan-next
+    kind: script
+    op: list.next
+    maxVisits: 50
+    with: { over: plan-files.files }
+  - id: plan-review
+    kind: call
+    workflow: olko-review
+    maxVisits: 50
+    input: { plan: "{{state.plan-next.item.path}}", criteria: "{{state.plan-next.item.criteria}}" }
+  - id: plan-collect
+    kind: script
+    op: plan.reviewCollect
+    maxVisits: 50
+  - id: fold-review
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    parse: text.raw
+    prompt: |
+      Fold every confirmed plan review finding below into the plan files it names (project {{input.project}}, folder {{state.feature.featureDir}}), and record the review result in tracker.md. Edit only that folder.
+      {{state.plan-collect.text}}
+  - id: gate-review
+    kind: call
+    workflow: olko-plan-gate
+    input: { featureDir: "{{state.feature.featureDir}}" }
+  - id: grill
+    kind: llm
+    role: planner
+    skill: grill-with-docs
+    maxVisits: 4
+    parse: plan.grill
+    prompt: |
+      Grill the plan package {{state.feature.featureDir}} (business.md, implementation.md, stack.md and the Task files) in the project {{input.project}} against the project's docs and code. Read only.
+      Answers already given: {{state.grill-answers.text}}
+      Gather every currently answerable question (business scope, mechanism, delivery, risks, non-goals, acceptance criteria, assumptions) as ONE batch; on a later round return only follow-up questions the answers raised, or none. Do not ask the user yourself.
+      End with one ```json block: {"questions": [{"problem": "", "why": "", "options": [{"label": "<recommended>", "business": "", "scope": ""}, {"label": "", "business": "", "scope": ""}, {"label": "", "business": "", "scope": ""}], "glossary": ""}]}
+  - id: grill-questions
+    kind: script
+    op: plan.grillQuestions
+    maxVisits: 4
+  - id: grill-next
+    kind: script
+    op: list.next
+    maxVisits: 100
+    with: { over: grill-questions.questions }
+  - id: ask-grill
+    kind: interrupt
+    maxVisits: 100
+    question:
+      id: "q-plan-grill-{{state.grill-questions.round}}-{{state.grill-next.index}}"
+      text: "Grill question {{state.grill-next.number}} of {{state.grill-next.total}} (the whole batch is answered before anything changes):\n{{state.grill-next.item.text}}"
+      allowed: ["1", "2", "3"]
+  - id: grill-answers
+    kind: script
+    op: plan.answers
+    maxVisits: 4
+    with: { from: grill-questions, prefix: q-plan-grill- }
+  - id: grill-apply
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    maxVisits: 4
+    parse: text.raw
+    prompt: |
+      Apply ALL these grill answers together to the plan package {{state.feature.featureDir}} (project {{input.project}}) and record the batch, its answers and its closure in tracker.md. Edit only that folder.
+      {{state.grill-answers.text}}
+  - id: revalidate
+    kind: llm
+    role: plan-worker
+    maxVisits: 4
+    agents:
+      - { id: flow, agent: olko-investigation-flow-worker }
+      - { id: runtime, agent: olko-investigation-runtime-worker }
+      - { id: test, agent: olko-investigation-test-worker }
+      - { id: readiness, agent: olko-investigation-readiness-worker }
+    parse: plan.findings
+    prompt: |
+      Re-validation after decisions: verify every new or changed claim in {{state.feature.featureDir}} (project {{input.project}}) against the codebase with file:line evidence. Read only.
+      End with one line: `findings | <none|found> | <count> | <unverified or false claims, semicolon separated>`.
+  - id: reval-findings
+    kind: script
+    op: plan.findings
+    maxVisits: 4
+    with: { from: revalidate }
+  - id: fold-reval
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    maxVisits: 4
+    parse: text.raw
+    prompt: |
+      Fold only these verified re-validation findings into {{state.feature.featureDir}} (project {{input.project}}); edit only that folder.
+      {{state.reval-findings.text}}
+  - id: gate-grill
+    kind: call
+    workflow: olko-plan-gate
+    maxVisits: 4
+    input: { featureDir: "{{state.feature.featureDir}}" }
+  - id: cleanup
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    parse: text.raw
+    prompt: |
+      Step 8 cleanup of {{state.feature.featureDir}}/implementation.md and the Task files (project {{input.project}}): remove denied, rejected, superseded or unchosen options only after checking their approved replacement is concrete; keep scope, ordered actions, validation, acceptance criteria and blockers. Update tracker.md with the final decisions. Edit only that folder.
+  - id: gate-cleanup
+    kind: call
+    workflow: olko-plan-gate
+    input: { featureDir: "{{state.feature.featureDir}}" }
+  - id: readiness
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    maxVisits: 4
+    parse: plan.grill
+    prompt: |
+      Do only the read of step 8b for {{state.feature.featureDir}} (project {{input.project}}): read `## Implementation readiness` and `## Open items` of implementation.md and every Task file. Read only; do not delegate or ask.
+      Return every BLOCKING item as a question with exactly 3 options (the first recommended); return no questions when every plan says `Ready for implementation: yes`.
+      End with one ```json block: {"questions": [{"problem": "", "why": "", "options": [{"label": "", "business": "", "scope": ""}, {"label": "", "business": "", "scope": ""}, {"label": "", "business": "", "scope": ""}]}]}
+  - id: readiness-check
+    kind: script
+    op: plan.readiness
+    maxVisits: 4
+  - id: blocker-next
+    kind: script
+    op: list.next
+    maxVisits: 100
+    with: { over: readiness-check.questions }
+  - id: ask-blocker
+    kind: interrupt
+    maxVisits: 100
+    question:
+      id: "q-plan-blocker-{{state.readiness-check.round}}-{{state.blocker-next.index}}"
+      text: "Blocker {{state.blocker-next.number}} of {{state.blocker-next.total}}:\n{{state.blocker-next.item.text}}"
+      allowed: ["1", "2", "3"]
+  - id: blocker-answers
+    kind: script
+    op: plan.answers
+    maxVisits: 4
+    with: { from: readiness-check, prefix: q-plan-blocker- }
+  - id: blocker-apply
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    maxVisits: 4
+    parse: text.raw
+    prompt: |
+      Apply ALL these blocker decisions together to {{state.feature.featureDir}} (project {{input.project}}), refresh `## Implementation readiness`, and record them as locked decisions in tracker.md. Edit only that folder.
+      {{state.blocker-answers.text}}
+  - id: gate-blocker
+    kind: call
+    workflow: olko-plan-gate
+    maxVisits: 4
+    input: { featureDir: "{{state.feature.featureDir}}" }
+  - id: tracker-triage
+    kind: subgraph
+    workflow: olko-plan-tracker-triage
+    enabledWhen: "switches.tracker == true"
+  - id: knowledge-final
+    kind: llm
+    role: plan-worker
+    agent: olko-obsidian-knowledge-manager
+    parse: text.raw
+    prompt: |
+      Write-free post-implementation Obsidian recommendation for the approved plan {{state.feature.featureDir}} (project {{input.project}}): list the affected note paths, whether each needs creation or an update, and the related mechanism. Do not change the vault.
+  - id: domain
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    tools: [read, edit]
+    parse: text.raw
+    prompt: |
+      Do only step 9 of olko-plan-finalization: add or replace the `## Domain changes` section of {{state.feature.featureDir}}/business.md (project {{input.project}}) from this verified recommendation, stating that vault changes stay separately approval-gated after implementation. Edit only that section.
+      {{state.knowledge-final.knowledge-final}}
+  - id: memory
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    tools: [read, edit]
+    parse: text.raw
+    prompt: |
+      Do only step 10 of olko-plan-finalization in the project {{input.project}}: append verified flow improvements from this planning run to your own memory block .opencode/memory/olko-plan-documentation-orchestrator.md (create it when missing), then update the gate status in {{state.feature.featureDir}}/tracker.md. Edit only those two files.
+  - id: editor
+    kind: subgraph
+    workflow: olko-plan-editor-open
+    enabledWhen: "switches.editor == true"
+  - id: scope-check
+    kind: script
+    op: plan.scopeCheck
+  - id: report
+    kind: script
+    op: plan.report
+  - id: discovery-report
+    kind: script
+    op: builtin.pass
+edges:
+  - { from: route, to: ask-route, when: 'route.route == "ask"' }
+  - { from: route, to: tracker-context, when: 'route.route == "planning"' }
+  - { from: route, to: draft }
+  - { from: ask-route, to: route }
+  - { from: draft, to: draft-check }
+  - { from: draft-check, to: ask-questions, when: "draft-check.ask == true" }
+  - { from: draft-check, to: ask-draft }
+  - { from: ask-questions, to: draft }
+  - { from: ask-draft, to: tracker-publish, when: 'ask-draft.answer == "approve"' }
+  - { from: ask-draft, to: ask-revise }
+  - { from: ask-revise, to: draft }
+  - { from: tracker-publish, to: after-discovery }
+  - { from: after-discovery, to: discovery-report, when: 'route.route == "discovery"' }
+  - { from: after-discovery, to: tracker-context }
+  - { from: discovery-report, to: END }
+  - { from: tracker-context, to: feature }
+  - { from: feature, to: investigate }
+  - { from: investigate, to: business }
+  - { from: business, to: merge }
+  - { from: merge, to: gate-merge }
+  - { from: gate-merge, to: auditors }
+  - { from: auditors, to: audit }
+  - { from: audit, to: audit-findings }
+  - { from: audit-findings, to: fold-audit, when: "audit-findings.total > 0" }
+  - { from: audit-findings, to: plan-files }
+  - { from: fold-audit, to: gate-audit }
+  - { from: gate-audit, to: plan-files }
+  - { from: plan-files, to: plan-next }
+  - { from: plan-next, to: plan-review, when: "plan-next.done == false" }
+  - { from: plan-next, to: fold-review, when: "plan-collect.confirmed > 0" }
+  - { from: plan-next, to: grill }
+  - { from: plan-review, to: plan-collect }
+  - { from: plan-collect, to: plan-next }
+  - { from: fold-review, to: gate-review }
+  - { from: gate-review, to: grill }
+  - { from: grill, to: grill-questions }
+  - { from: grill-questions, to: grill-next, when: "grill-questions.count > 0" }
+  - { from: grill-questions, to: cleanup }
+  - { from: grill-next, to: ask-grill, when: "grill-next.done == false" }
+  - { from: grill-next, to: grill-answers }
+  - { from: ask-grill, to: grill-next }
+  - { from: grill-answers, to: grill-apply }
+  - { from: grill-apply, to: revalidate }
+  - { from: revalidate, to: reval-findings }
+  - { from: reval-findings, to: fold-reval, when: "reval-findings.total > 0" }
+  - { from: reval-findings, to: gate-grill }
+  - { from: fold-reval, to: gate-grill }
+  - { from: gate-grill, to: grill }
+  - { from: cleanup, to: gate-cleanup }
+  - { from: gate-cleanup, to: readiness }
+  - { from: readiness, to: readiness-check }
+  - { from: readiness-check, to: blocker-next, when: "readiness-check.count > 0" }
+  - { from: readiness-check, to: tracker-triage }
+  - { from: blocker-next, to: ask-blocker, when: "blocker-next.done == false" }
+  - { from: blocker-next, to: blocker-answers }
+  - { from: ask-blocker, to: blocker-next }
+  - { from: blocker-answers, to: blocker-apply }
+  - { from: blocker-apply, to: gate-blocker }
+  - { from: gate-blocker, to: readiness }
+  - { from: tracker-triage, to: knowledge-final }
+  - { from: knowledge-final, to: domain }
+  - { from: domain, to: memory }
+  - { from: memory, to: editor }
+  - { from: editor, to: scope-check }
+  - { from: scope-check, to: report }
+  - { from: report, to: END }

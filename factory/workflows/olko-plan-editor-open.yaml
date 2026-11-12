@@ -1,0 +1,10 @@
+name: olko-plan-editor-open
+version: 0.1.0
+source: skills/workflow/olko-plan-finalization/SKILL.md (step 11, open the plan folder in VS Code)
+entry: open
+nodes:
+  - id: open
+    kind: script
+    op: plan.openEditor
+edges:
+  - { from: open, to: END }

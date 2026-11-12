@@ -13,7 +13,7 @@ export function buildLevel(workflows: Workflow[], name: string, prefix = name, s
   const isRoot = stack.length === 1;
   const items: Item[] = workflow.nodes.map((node): Item => {
     const key = `${prefix}/${node.id}`;
-    if (node.kind === "subgraph" || node.kind === "map") {
+    if (node.kind === "subgraph" || node.kind === "map" || node.kind === "call") {
       const inner = node.workflow;
       const known = inner !== undefined && workflows.some((w) => w.name === inner) && !stack.includes(inner);
       if (!known) return { key, kind: "missing", node };
@@ -35,6 +35,15 @@ export function buildLevel(workflows: Workflow[], name: string, prefix = name, s
     edges.unshift({ from: START_KEY, to: `${prefix}/${workflow.entry}`, label: null });
   }
   return { items, edges };
+}
+
+export function disabledKeys(run: RunData | null): string[] {
+  if (!run) return [];
+  return run.events.filter((e) => e.type === "node_completed" && typeof e.result === "string" && e.result.includes("skipped: switch off")).map((e) => String(e.node));
+}
+
+export function isDisabled(key: string, disabled: string[]): boolean {
+  return disabled.some((d) => key === d || key.startsWith(`${d}/`) || key.startsWith(`${d}#`));
 }
 
 export function costOf(item: Item, report: RunReport | null): Cost | null {

@@ -8,7 +8,7 @@ import type { ViewerState } from "./context.ts";
 import { Details } from "./Details.tsx";
 import { layoutGraph } from "./layout.ts";
 import { nodeAriaLabel, nodeTypes } from "./nodes.tsx";
-import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost } from "./tree.ts";
+import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost, disabledKeys } from "./tree.ts";
 import type { Bounds, FactoryConfig, FlowEdge, FlowNode, Item, Level, RunDetail, RunIndex, RunListItem, Workflow } from "./types.ts";
 
 const API = `${import.meta.env.BASE_URL}api`;
@@ -113,7 +113,8 @@ function Viewer() {
     });
   }, []);
 
-  const context = useMemo((): ViewerState => ({ config, report: detail?.report ?? null, run: detail?.run ?? null, toggle, focusKey, index: runIndex }), [config, detail, toggle, focusKey, runIndex]);
+  const disabled = useMemo(() => disabledKeys(detail?.run ?? null), [detail]);
+  const context = useMemo((): ViewerState => ({ config, report: detail?.report ?? null, run: detail?.run ?? null, toggle, focusKey, index: runIndex, disabled }), [config, detail, toggle, focusKey, runIndex, disabled]);
   const total = detail?.report.cost;
 
   if (error) return <p className="error" role="alert">Could not load factory data: {error}</p>;
@@ -130,7 +131,7 @@ function Viewer() {
               <option value="">no run (structure only)</option>
               {runs.map((r) => (
                 <option key={r.runId} value={r.runId}>
-                  {r.runId} · {r.status} · {r.harness ?? "?"} · {(r.usedModels.length ? r.usedModels : r.requestedModels).join(", ")}{r.usedModels.length ? "" : " (requested, none ran)"} · {formatAmount(r.costUsd, r.coverage)} · {r.goal}{r.synthetic ? " · fake model" : ""}
+                  {r.runId} · {r.status} · {r.harness ?? "?"} · {(r.usedModels.length ? r.usedModels : r.requestedModels).join(", ")}{r.usedModels.length ? "" : " (requested, none ran)"} · {formatAmount(r.costUsd, r.coverage)} · {r.goal}{r.synthetic ? " · fake model" : ""}{r.source && r.source !== "main" ? ` · ${r.source}` : ""}
                 </option>
               ))}
             </select>

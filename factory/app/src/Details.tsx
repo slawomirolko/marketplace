@@ -155,11 +155,14 @@ export function Details({ item }: { item: Item | null }) {
   const harnessAgent = records.find((r) => r.agentName)?.agentName ?? item.node.agent;
   const role = item.kind === "agent" ? (item.agent.role ?? item.node.role) : item.node.role;
   const failure = failureOf(item, run);
+  const switchedOff = run?.events.find((e) => e.type === "node_completed" && typeof e.result === "string" && e.result.includes("skipped: switch off") && (item.key === e.node || item.key.startsWith(`${e.node}/`)))?.result ?? null;
   return (
     <section>
       <h2>{item.kind === "agent" ? `${item.agent.id} (agent of ${item.node.id})` : item.node.id}</h2>
       <Row label="Path" value={item.kind === "agent" ? `${item.nodePath} / ${item.agent.id}` : item.key} />
       <Row label="Kind" value={kindLabel(item)} />
+      {item.node.enabledWhen && <Row label="Enabled when" value={item.node.enabledWhen} />}
+      {switchedOff && <Row label="Status" value={`switched off in this run: ${switchedOff}`} />}
       {item.node.run && <Row label="Runs" value={item.node.run} />}
       {harnessAgent && <Row label="Harness agent" value={harnessAgent} />}
       {role && <Row label="Role" value={role} />}

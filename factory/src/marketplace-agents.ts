@@ -50,7 +50,9 @@ function findSkill(name: string): string | undefined {
     const file = path.join(root, category, name, "SKILL.md");
     if (fs.existsSync(file)) return file;
   }
-  return undefined;
+  const plugins = path.join(marketplaceDir(), "plugins");
+  if (!fs.existsSync(plugins)) return undefined;
+  return fs.readdirSync(plugins).map((p) => path.join(plugins, p, "skills", name, "SKILL.md")).find((f) => fs.existsSync(f));
 }
 
 function findPluginAgent(name: string): string | undefined {
@@ -112,9 +114,11 @@ export function readMarketplaceAgent(name: string): MarketplaceAgent {
   const skillFile = findSkill(name);
   if (!skillFile) throw new Error(`agent or skill ${name} is not in the marketplace (${file})`);
   const skillDir = path.dirname(skillFile);
+  const inPlugin = path.basename(path.dirname(path.dirname(path.dirname(skillDir)))) === "plugins";
+  const pluginRoot = inPlugin ? path.dirname(path.dirname(skillDir)) : undefined;
   const { front, body } = readFrontmatter(skillFile);
-  const prompt = `Follow the skill ${name} below for the task in the user message. The skill directory is ${skillDir}; read the files it names from there.\n\n${body}`;
-  return { name, description: front.description ?? name, prompt, file: skillFile, frontmatter: "", skills: [], dirs: [skillDir], skillDir };
+  const prompt = `Follow the skill ${name} below for the task in the user message. The skill directory is ${skillDir}; read the files it names from there.\n\n${withPluginRoot(body, pluginRoot)}${skillsSection([], [], pluginRoot)}`;
+  return { name, description: front.description ?? name, prompt, file: skillFile, frontmatter: "", skills: [], dirs: pluginRoot ? [pluginRoot, skillDir] : [skillDir], skillDir, ...(pluginRoot ? { pluginRoot } : {}) };
 }
 
 export function claudeTools(tools: AgentTool[]): { allowed: string[]; disallowed: string[] } {

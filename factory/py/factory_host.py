@@ -1,4 +1,5 @@
 import json
+import os
 from dataclasses import dataclass, field
 from typing import Any, Callable, TypedDict
 
@@ -34,6 +35,8 @@ class ReviewRun:
     real_unchanged: bool = False
     new_temp_dirs: list = field(default_factory=list)
     skipped_user: list = field(default_factory=list)
+    user_changed: list = field(default_factory=list)
+    chosen: dict = field(default_factory=dict)
 
 
 class HostState(TypedDict, total=False):
@@ -69,7 +72,8 @@ def build_graph(tools: dict, workflow: str, goal: str, workflow_input: dict):
         return {}
 
     async def confirm(state: HostState) -> HostState:
-        return {"status": await call("factory_confirm", runId=state["run_id"])}
+        model = os.environ.get("FACTORY_TEST_MODEL", "claude-haiku-5-5")
+        return {"status": await call("factory_confirm", runId=state["run_id"], overrides={"tierModels": {"low": model, "medium": model, "high": model}})}
 
     async def wait(state: HostState) -> HostState:
         return {"status": await call("factory_wait", runId=state["run_id"], timeoutSec=50)}
@@ -128,5 +132,5 @@ async def run_workflow(url: str, token: str, workflow: str, goal: str, workflow_
         events=events,
         interrupts=interrupts,
         viewer_url=result["report"]["viewerUrl"],
-        lens_findings_found=bool(merged and merged["metrics"]["findings"] > 0),
+        lens_findings_found=bool(merged and merged.get("metrics", {}).get("findings", 0) > 0),
     )

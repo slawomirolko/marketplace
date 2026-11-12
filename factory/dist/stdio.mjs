@@ -1,4 +1,4 @@
-import { a as errorMessage, c as require_dist, d as claudeTools, f as opencodeConfigDir, g as defaultDataDir, i as Factory, l as require_ajv, m as FACTORY_DIR, o as parseBackend, r as viewerUrlFor, s as parseCli, u as claudeAgentsFile, v as __toESM } from "./viewer-routes.mjs";
+import { _ as registerDataSource, a as errorMessage, c as require_dist, d as claudeTools, f as opencodeConfigDir, g as defaultDataDir, i as Factory, l as require_ajv, m as FACTORY_DIR, o as parseBackend, r as viewerUrlFor, s as parseCli, u as claudeAgentsFile, y as __toESM } from "./viewer-routes.mjs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15349,7 +15349,15 @@ function createFactoryTools(factory, publicUrl) {
 					targetName: string().regex(/^[a-z0-9-]+$/).optional(),
 					olko: string().min(1).optional(),
 					user: string().min(1).optional(),
-					stateDir: string().min(1).optional()
+					stateDir: string().min(1).optional(),
+					switches: record(string().regex(/^[a-z][a-z0-9-]*$/), boolean()).optional(),
+					idea: string().max(2e4).optional(),
+					route: _enum([
+						"discovery",
+						"planning",
+						"both"
+					]).optional(),
+					featureId: string().regex(/^[a-z0-9-]+$/).optional()
 				}).strict().optional(),
 				idempotencyKey: string().optional()
 			}
@@ -15367,7 +15375,11 @@ function createFactoryTools(factory, publicUrl) {
 				...input?.targetName ? { targetName: input.targetName } : {},
 				...input?.olko ? { olko: longPath(input.olko) } : {},
 				...input?.user ? { user: longPath(input.user) } : {},
-				...input?.stateDir ? { stateDir: path.resolve(input.stateDir) } : {}
+				...input?.stateDir ? { stateDir: path.resolve(input.stateDir) } : {},
+				...input?.switches ? { switches: input.switches } : {},
+				...input?.idea ? { idea: input.idea } : {},
+				...input?.route ? { route: input.route } : {},
+				...input?.featureId ? { featureId: input.featureId } : {}
 			};
 			const { run, reused } = factory.start(goal, idempotencyKey, {
 				...workflow ? { workflow } : {},
@@ -15550,6 +15562,7 @@ async function ensureViewer() {
 }
 var backend = parseBackend(process.env.FACTORY_BACKEND);
 var cli = backend === "cli" ? parseCli(process.env.FACTORY_CLI) : void 0;
+registerDataSource(dataDir);
 var server = createFactoryTools(new Factory(dataDir, {
 	backend,
 	executors: {

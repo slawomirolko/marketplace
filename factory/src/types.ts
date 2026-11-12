@@ -83,6 +83,10 @@ export interface RunInput {
   olko?: string;
   user?: string;
   stateDir?: string;
+  switches?: Record<string, boolean>;
+  idea?: string;
+  route?: string;
+  featureId?: string;
 }
 
 export interface ExecResult {
@@ -185,6 +189,9 @@ export interface WorkflowNode {
   parallel?: number;
   tools?: AgentTool[];
   dirs?: (context: PromptContext) => string[];
+  scope?: string;
+  localId?: string;
+  enterScope?: { workflow: string; input: Record<string, string> };
 }
 
 export interface Workflow {
@@ -250,6 +257,7 @@ export interface Run {
   input?: RunInput;
   state?: WorkflowState;
   nodeAgents?: Record<string, Agent[]>;
+  scopes?: Record<string, { iteration: number; input: RunInput }>;
   status: RunStatus;
   proposal: RunConfig;
   config: RunConfig | null;
@@ -374,6 +382,10 @@ export interface WorkflowSpecNode {
   skill?: string;
   tools?: AgentTool[];
   dirs?: string[];
+  enabledWhen?: string;
+  input?: Record<string, string>;
+  scope?: string;
+  localId?: string;
 }
 
 export interface WorkflowSpecEdge {

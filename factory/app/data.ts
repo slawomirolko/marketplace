@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { loadWorkflowSpecs } from "../src/workflow-yaml.ts";
 import path from "node:path";
 import { Factory, errorMessage, runReport } from "../src/engine.ts";
+import { homeDataDir, readSources } from "../src/paths.ts";
 import type { Coverage, FactoryConfigFile, Report, Run, WorkflowSpec } from "../src/types.ts";
 
 const RUN_ID = /^r-[a-f0-9]{8}$/;
@@ -24,6 +25,7 @@ export interface RunListItem {
   synthetic: boolean;
   requestedModels: string[];
   usedModels: string[];
+  source: string;
 }
 
 export interface RunDetail {
@@ -75,6 +77,16 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo }: DataApi
     return fs.readdirSync(runsDir).filter((f) => RUN_ID.test(path.basename(f, ".json")));
   }
 
+  function allRunFiles(): { file: string; source: string }[] {
+    const sources = [path.resolve(dataDir), ...(path.resolve(dataDir) === path.resolve(homeDataDir()) ? readSources() : [])];
+    return [...new Set(sources)].flatMap((dir) => {
+      const runs = path.join(dir, "runs");
+      if (!fs.existsSync(runs)) return [];
+      const source = dir === path.resolve(dataDir) ? "main" : `test · ${path.basename(dir)}`;
+      return fs.readdirSync(runs).filter((f) => RUN_ID.test(path.basename(f, ".json"))).map((f) => ({ file: path.join(runs, f), source }));
+    });
+  }
+
   let demoRun: Promise<Run> | null = null;
 
   return {
@@ -104,10 +116,17 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo }: DataApi
     },
 
     runs() {
-      return runFiles()
-        .map((f) => readJson(path.join(runsDir, f)) as Run)
-        .map((run) => ({ run, report: runReport(run) }))
-        .map(({ run, report }) => ({
+      return allRunFiles()
+        .flatMap(({ file, source }) => {
+          try {
+            return [{ run: readJson(file) as Run, source }];
+          } catch {
+            return [];
+          }
+        })
+        .map(({ run, source }) => ({ run, source, report: runReport(run) }))
+        .map(({ run, source, report }) => ({
+          source,
           runId: run.runId,
           goal: run.goal,
           status: run.status,
@@ -124,8 +143,8 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo }: DataApi
 
     run(runId) {
       if (!RUN_ID.test(runId)) return null;
-      const file = path.join(runsDir, `${runId}.json`);
-      if (!fs.existsSync(file)) return null;
+      const file = allRunFiles().find((f) => path.basename(f.file, ".json") === runId)?.file;
+      if (!file || !fs.existsSync(file)) return null;
       const run = readJson(file) as Run;
       const { runId: id, goal, status, config, answers, ledger, events, pendingQuestion } = run;
       return { run: { runId: id, goal, status, config, answers, ledger, events, pendingQuestion }, report: runReport(run) };

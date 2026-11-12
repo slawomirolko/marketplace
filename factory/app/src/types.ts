@@ -23,6 +23,8 @@ export interface WorkflowNode {
   run?: string;
   maxTurns?: number;
   question?: WorkflowQuestion;
+  enabledWhen?: string;
+  skill?: string;
 }
 
 export interface WorkflowEdge {
@@ -143,6 +145,7 @@ export interface RunEvent {
   type: string;
   node?: string;
   error?: unknown;
+  result?: string;
 }
 
 export interface RunConfig {
@@ -168,6 +171,7 @@ export interface RunDetail {
 }
 
 export interface RunListItem {
+  source?: string;
   runId: string;
   goal: string;
   status: string;

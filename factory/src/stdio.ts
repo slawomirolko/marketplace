@@ -5,7 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { Factory, parseBackend, parseCli } from "./engine.ts";
 import { cliExecutor, hostExec } from "./cli-backend.ts";
 import { createFactoryTools } from "./tools.ts";
-import { DEFAULT_VIEWER_PORT, VIEWER_HEALTH, defaultDataDir } from "./paths.ts";
+import { DEFAULT_VIEWER_PORT, VIEWER_HEALTH, defaultDataDir, registerDataSource } from "./paths.ts";
 
 const firstPort = Number(process.env.FACTORY_VIEWER_PORT ?? DEFAULT_VIEWER_PORT);
 const dataDir = defaultDataDir();
@@ -49,6 +49,7 @@ async function ensureViewer(): Promise<number> {
 
 const backend = parseBackend(process.env.FACTORY_BACKEND);
 const cli = backend === "cli" ? parseCli(process.env.FACTORY_CLI) : undefined;
+registerDataSource(dataDir);
 const factory = new Factory(dataDir, { backend, executors: { exec: hostExec, ...(cli ? { [cli]: cliExecutor(cli) } : {}) }, ...(cli ? { cli } : {}) });
 const port = await ensureViewer();
 const server = createFactoryTools(factory, `http://127.0.0.1:${port}`).buildServer();

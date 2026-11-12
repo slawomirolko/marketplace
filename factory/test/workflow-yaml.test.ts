@@ -3,9 +3,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { evaluateWhen, loadWorkflowFile } from "../src/workflow-yaml.ts";
+import { evaluateWhen, loadWorkflowDir, loadWorkflowFile, negateWhen } from "../src/workflow-yaml.ts";
 import { claudeAgentsFile, claudeTools, marketplaceDir, readMarketplaceAgent } from "../src/marketplace-agents.ts";
-import { bumpVersion, claudeSyncActions, normalizeName, parseCapabilities, parseComparison, parsePrLine, parseVerdict, syncOptions } from "../src/ops.ts";
+import { buildCapabilities, bumpVersion, claudeSyncActions, normalizeName, parseCapabilities, parseComparison, parsePrLine, parseVerdict, syncOptions } from "../src/ops.ts";
 
 function writeYaml(text: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-yaml-"));
@@ -216,4 +216,53 @@ test("comparator verdicts map to the actions of the source table", () => {
   assert.deepEqual(claudeSyncActions("olko-only"), ["install-user", "reject", "exclude", "leave"]);
   assert.deepEqual(claudeSyncActions("platform-delta-only"), ["leave", "exclude"]);
   assert.deepEqual(claudeSyncActions("identical"), []);
+});
+
+test("capabilities keep the matcher's links, add name links and single-store artifacts, and make paths absolute", () => {
+  const inventory = {
+    target: { rows: [{ kind: "skill" as const, name: "frontend-design", path: "plugins/frontend-design/skills/frontend-design" }] },
+    olko: { rows: [{ kind: "skill" as const, name: "olko-design-rules", path: "skills/workflow/olko-design-rules", version: "1.0.0" }, { kind: "agent" as const, name: "olko-review-verifier", path: "agents/opencode/olko-review-verifier.md" }] },
+    user: { rows: [{ kind: "skill" as const, name: "olko-design-rules", path: "skills/olko-design-rules" }, { kind: "agent" as const, name: "scan-verifier", path: "agents/scan-verifier.md" }] },
+  };
+  const roots = { target: "/t", olko: "/o", user: "/u" };
+  const linked = [{ id: "verifier", basis: "probable", kind: "agent" as const, copies: { olko: { name: "olko-review-verifier", path: "" }, user: { name: "scan-verifier", path: "" } } }];
+  const caps = buildCapabilities(inventory, roots, linked);
+  assert.deepEqual(caps.map((c) => `${c.id}:${c.basis}:${Object.keys(c.copies).join(",")}`).sort(), ["design-rules:name:olko,user", "frontend-design:single:target", "verifier:probable:olko,user"]);
+  assert.equal(caps.find((c) => c.id === "design-rules")!.copies.olko!.path, path.join("/o", "skills/workflow/olko-design-rules"));
+});
+
+test("a switched subgraph gets a gate: switch on enters it, switch off goes straight to its exits", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-yaml-"));
+  fs.writeFileSync(path.join(dir, "tracker.yaml"), `
+name: tracker-steps
+version: 1.0.0
+entry: read
+nodes:
+  - { id: read, kind: script, op: builtin.pass }
+edges:
+  - { from: read, to: END }
+`);
+  fs.writeFileSync(path.join(dir, "main.yaml"), `
+name: main
+version: 1.0.0
+entry: start
+nodes:
+  - { id: start, kind: script, op: builtin.pass }
+  - { id: tracker, kind: subgraph, workflow: tracker-steps, enabledWhen: "switches.tracker == true" }
+  - { id: plan, kind: script, op: builtin.pass }
+edges:
+  - { from: start, to: tracker }
+  - { from: tracker, to: plan }
+  - { from: plan, to: END }
+`);
+  const main = loadWorkflowDir(dir).get("main")!;
+  assert.ok(main.nodes.some((n) => n.id === "tracker") && main.nodes.some((n) => n.id === "tracker/read"));
+  const gate = main.edges.filter((e) => e.from === "tracker");
+  assert.deepEqual(gate, [{ from: "tracker", to: "tracker/read", when: "switches.tracker == true" }, { from: "tracker", to: "plan", when: "switches.tracker != true" }]);
+  assert.ok(main.edges.some((e) => e.from === "tracker/read" && e.to === "plan"));
+  const off = await main.nodes.find((n) => n.id === "tracker")!.script!({ input: { switches: { tracker: false } }, state: {}, exec: undefined });
+  assert.equal((off.state as { enabled: boolean }).enabled, false);
+  assert.match(String(off.output), /skipped: switch off/);
+  assert.equal(negateWhen("a.b != 3"), "a.b == 3");
+  assert.throws(() => negateWhen("a.b > 3"), /== or !=/);
 });
