@@ -1,0 +1,209 @@
+{
+  "olko-claude-sync": {
+    "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+  },
+  "olko-claude-sync-apply": {
+    "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+  },
+  "olko-claude-sync-compare": {
+    "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+  },
+  "olko-claude-sync-consolidate": {
+    "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+  },
+  "olko-claude-sync-decide": {
+    "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+  },
+  "olko-claude-sync-inventories": {
+    "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+  },
+  "olko-claude-sync-probable": {
+    "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+  },
+  "olko-claude-sync-publish": {
+    "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+  },
+  "olko-claude-sync-sources": {
+    "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+  },
+  "olko-claude-sync-stage": {
+    "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+  },
+  "olko-claude-sync-state": {
+    "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+  },
+  "olko-impl-adopt": {
+    "agents/opencode/olko-implementation-orchestrator.md": "46c35126003415b2"
+  },
+  "olko-impl-build": {
+    "agents/opencode/olko-implementation-orchestrator.md": "46c35126003415b2"
+  },
+  "olko-impl-checks": {
+    "agents/opencode/olko-implementation-orchestrator.md": "46c35126003415b2"
+  },
+  "olko-impl-closure": {
+    "agents/opencode/olko-implementation-orchestrator.md": "46c35126003415b2",
+    "skills/workflow/olko-implementation-closure/SKILL.md": "d83c961e8271826a"
+  },
+  "olko-impl-context": {
+    "agents/opencode/olko-implementation-orchestrator.md": "46c35126003415b2"
+  },
+  "olko-impl-deliver": {
+    "agents/opencode/olko-implementation-orchestrator.md": "46c35126003415b2",
+    "skills/workflow/olko-implementation-pr-gates/SKILL.md": "af0ba442ac362df5"
+  },
+  "olko-impl-docker": {
+    "agents/opencode/olko-implementation-orchestrator.md": "46c35126003415b2",
+    "skills/workflow/olko-worktree-compose-isolation/SKILL.md": "a5fc1d88b38a599c"
+  },
+  "olko-impl-editor": {
+    "skills/workflow/olko-implementation-pr-gates/SKILL.md": "af0ba442ac362df5"
+  },
+  "olko-impl-entry": {
+    "agents/opencode/olko-implementation-orchestrator.md": "46c35126003415b2"
+  },
+  "olko-impl-obsidian": {
+    "skills/workflow/olko-implementation-pr-gates/SKILL.md": "af0ba442ac362df5"
+  },
+  "olko-impl-preflight": {
+    "agents/opencode/olko-implementation-orchestrator.md": "46c35126003415b2"
+  },
+  "olko-impl-review": {
+    "agents/opencode/olko-implementation-orchestrator.md": "46c35126003415b2"
+  },
+  "olko-impl-scope": {
+    "agents/opencode/olko-implementation-orchestrator.md": "46c35126003415b2",
+    "skills/workflow/olko-task-scope-gates/SKILL.md": "0b8c95a15f8ca8c3"
+  },
+  "olko-impl-tests-first": {
+    "agents/opencode/olko-implementation-orchestrator.md": "46c35126003415b2"
+  },
+  "olko-impl-tracker-task": {
+    "agents/opencode/olko-implementation-orchestrator.md": "46c35126003415b2"
+  },
+  "olko-impl-verify": {
+    "agents/opencode/olko-implementation-orchestrator.md": "46c35126003415b2"
+  },
+  "olko-impl-workspace": {
+    "agents/opencode/olko-implementation-orchestrator.md": "46c35126003415b2"
+  },
+  "olko-implementation": {
+    "agents/opencode/olko-implementation-orchestrator.md": "46c35126003415b2"
+  },
+  "olko-marketplace-skill-sync": {
+    "agents/opencode/olko-marketplace-skill-sync-manager.md": "f029d64f3ddabe69"
+  },
+  "olko-plan-audit": {
+    "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+  },
+  "olko-plan-discovery": {
+    "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+  },
+  "olko-plan-documentation": {
+    "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+  },
+  "olko-plan-editor-open": {
+    "skills/workflow/olko-plan-finalization/SKILL.md": "75a2afad30759434"
+  },
+  "olko-plan-entry": {
+    "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+  },
+  "olko-plan-finalize": {
+    "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+  },
+  "olko-plan-gate": {
+    "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+  },
+  "olko-plan-grill": {
+    "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+  },
+  "olko-plan-package": {
+    "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+  },
+  "olko-plan-readiness": {
+    "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+  },
+  "olko-plan-review-files": {
+    "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+  },
+  "olko-plan-tracker-context": {
+    "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+  },
+  "olko-plan-tracker-publish": {
+    "skills/workflow/olko-plan-backlog-discovery/SKILL.md": "ea254bc4a66c8b64"
+  },
+  "olko-plan-tracker-triage": {
+    "skills/workflow/olko-plan-change-triage/SKILL.md": "70d1dd627864dd3a"
+  },
+  "olko-pr-merge": {
+    "agents/opencode/olko-marketplace-skill-sync-manager.md": "f029d64f3ddabe69",
+    "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+  },
+  "olko-review": {
+    "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+  },
+  "olko-review-feedback": {
+    "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+  },
+  "olko-review-feedback-items": {
+    "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+  },
+  "olko-review-feedback-replies": {
+    "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+  },
+  "olko-review-findings": {
+    "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+  },
+  "olko-review-plan": {
+    "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+  },
+  "olko-review-plan-findings": {
+    "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+  },
+  "olko-review-plan-rules": {
+    "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+  },
+  "olko-review-post": {
+    "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+  },
+  "olko-review-review": {
+    "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+  },
+  "olko-review-rules": {
+    "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+  },
+  "olko-review-scope": {
+    "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+  },
+  "olko-safe-source": {
+    "agents/opencode/olko-marketplace-skill-sync-manager.md": "f029d64f3ddabe69",
+    "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+  },
+  "olko-skill-sync-adapt": {
+    "agents/opencode/olko-marketplace-skill-sync-manager.md": "f029d64f3ddabe69"
+  },
+  "olko-skill-sync-apply": {
+    "agents/opencode/olko-marketplace-skill-sync-manager.md": "f029d64f3ddabe69"
+  },
+  "olko-skill-sync-compare": {
+    "agents/opencode/olko-marketplace-skill-sync-manager.md": "f029d64f3ddabe69"
+  },
+  "olko-skill-sync-decide": {
+    "agents/opencode/olko-marketplace-skill-sync-manager.md": "f029d64f3ddabe69"
+  },
+  "olko-skill-sync-install": {
+    "agents/opencode/olko-marketplace-skill-sync-manager.md": "f029d64f3ddabe69"
+  },
+  "olko-skill-sync-path": {
+    "agents/opencode/olko-marketplace-skill-sync-manager.md": "f029d64f3ddabe69"
+  },
+  "olko-skill-sync-prepare": {
+    "agents/opencode/olko-marketplace-skill-sync-manager.md": "f029d64f3ddabe69"
+  },
+  "olko-skill-sync-publish": {
+    "agents/opencode/olko-marketplace-skill-sync-manager.md": "f029d64f3ddabe69"
+  },
+  "olko-skill-sync-sources": {
+    "agents/opencode/olko-marketplace-skill-sync-manager.md": "f029d64f3ddabe69"
+  }
+}

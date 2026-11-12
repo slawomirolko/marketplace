@@ -9,6 +9,7 @@ import { Details } from "./Details.tsx";
 import { layoutGraph } from "./layout.ts";
 import { nodeAriaLabel, nodeTypes } from "./nodes.tsx";
 import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost, disabledKeys, configDisabledKeys, liveAncestors, liveState, LIVE_STATUSES, mainAgentOf, containedWorkflows } from "./tree.ts";
+import type { StaleWorkflow } from "./types.ts";
 import type { AgentInfo, Bounds, FactoryConfig, FlowEdge, FlowNode, Item, Level, RunDetail, RunIndex, RunListItem, Workflow } from "./types.ts";
 
 const API = `${import.meta.env.BASE_URL}api`;
@@ -39,10 +40,10 @@ function FitToBounds({ bounds }: { bounds: Bounds | null }) {
   return null;
 }
 
-function WorkflowOptions({ workflows }: { workflows: Workflow[] }) {
+function WorkflowOptions({ workflows, stale = {} }: { workflows: Workflow[]; stale?: Record<string, StaleWorkflow> }) {
   const option = (w: Workflow) => (
     <option key={w.name} value={w.name}>
-      {w.name} · {w.version} · {w.nodes.length} nodes
+      {stale[w.name] ? "⚠ " : ""}{w.name} · {w.version} · {w.nodes.length} nodes{stale[w.name] ? " · source changed" : ""}
     </option>
   );
   return (
@@ -70,6 +71,38 @@ function Viewer() {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [selected, setSelected] = useState<Item | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState<Record<string, StaleWorkflow>>({});
+  const [marketplace, setMarketplace] = useState("");
+  const [updating, setUpdating] = useState(false);
+  const [updateNote, setUpdateNote] = useState<string | null>(null);
+  const loadStale = useCallback(() => {
+    getJson<{ marketplace: string; stale: StaleWorkflow[] }>("/stale")
+      .then((r) => {
+        setMarketplace(r.marketplace);
+        setStale(Object.fromEntries(r.stale.map((s) => [s.workflow, s])));
+      })
+      .catch(() => setStale({}));
+  }, []);
+  useEffect(loadStale, [loadStale]);
+  const update = useCallback(async () => {
+    setUpdating(true);
+    setUpdateNote(null);
+    try {
+      const response = await fetch(`${API}/update`, { method: "POST", headers: { "x-factory-action": "update" } });
+      const body = (await response.json()) as { error?: string; before?: string; after?: string; changedFiles?: string[]; stale?: StaleWorkflow[] };
+      if (!response.ok) throw new Error(body.error ?? `update failed: ${response.status}`);
+      const [workflowList, agentList] = await Promise.all([getJson<Workflow[]>("/workflows"), getJson<Record<string, AgentInfo>>("/agents")]);
+      setWorkflows(workflowList);
+      setAgents(agentList);
+      setStale(Object.fromEntries((body.stale ?? []).map((s) => [s.workflow, s])));
+      const moved = body.before === body.after ? "already up to date" : `${body.before?.slice(0, 7)} → ${body.after?.slice(0, 7)}, ${body.changedFiles?.length ?? 0} files changed`;
+      setUpdateNote(`Marketplace ${moved}; agents and skills reloaded; ${body.stale?.length ?? 0} workflows have a changed source.`);
+    } catch (updateError) {
+      setUpdateNote(messageOf(updateError));
+    } finally {
+      setUpdating(false);
+    }
+  }, []);
 
   useEffect(() => {
     Promise.all([getJson<Workflow[]>("/workflows"), getJson<FactoryConfig>("/config")])
@@ -196,7 +229,7 @@ function Viewer() {
   const shown = mode === "workflows" ? null : detail;
   const disabled = useMemo(() => (mode === "workflows" ? configDisabledKeys(level, config) : disabledKeys(detail?.run ?? null)), [mode, level, config, detail]);
   const workflow = useMemo(() => workflows?.find((w) => w.name === rootName) ?? null, [workflows, rootName]);
-  const context = useMemo((): ViewerState => ({ config, report: shown?.report ?? null, run: shown?.run ?? null, toggle, focusKey, index: runIndex, disabled, mode, workflow, workflows: workflows ?? [], agents, live, mainAgent: mainAgentOf(workflow) }), [config, shown, toggle, focusKey, runIndex, disabled, mode, workflow, workflows, agents, live]);
+  const context = useMemo((): ViewerState => ({ config, report: shown?.report ?? null, run: shown?.run ?? null, toggle, focusKey, index: runIndex, disabled, mode, workflow, workflows: workflows ?? [], agents, live, mainAgent: mainAgentOf(workflow), stale }), [config, shown, toggle, focusKey, runIndex, disabled, mode, workflow, workflows, agents, live, stale]);
   const total = detail?.report.cost;
 
   if (error) return <p className="error" role="alert">Could not load factory data: {error}</p>;
@@ -218,7 +251,7 @@ function Viewer() {
             <label>
               Workflow{" "}
               <select value={workflowName} onChange={(e) => setWorkflowName(e.target.value)}>
-                <WorkflowOptions workflows={workflows ?? []} />
+                <WorkflowOptions workflows={workflows ?? []} stale={stale} />
               </select>
             </label>
           )}
@@ -228,7 +261,7 @@ function Viewer() {
               <select value={runFilter} onChange={(e) => setRunFilter(e.target.value)}>
                 <option value="">all workflows</option>
                 <hr />
-                <WorkflowOptions workflows={workflows ?? []} />
+                <WorkflowOptions workflows={workflows ?? []} stale={stale} />
               </select>
             </label>
           )}
@@ -266,6 +299,13 @@ function Viewer() {
               <button type="button" onClick={showCurrent}>Show current step</button>
             </span>
           )}
+          <span className="update">
+            <button type="button" onClick={update} disabled={updating} title={`git fetch and fast-forward of ${marketplace || "the marketplace checkout"} (only when it is clean and on main), then reload agents, skills and workflows`}>
+              {updating ? "Updating…" : "Update from marketplace"}
+            </button>
+            {Object.keys(stale).length > 0 && <span className="stale-count">⚠ {Object.keys(stale).length} workflows: source changed</span>}
+            {updateNote && <span className="muted" role="status"> {updateNote}</span>}
+          </span>
         </header>
         <main>
           <div className="canvas">

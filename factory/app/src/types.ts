@@ -54,6 +54,12 @@ export interface WorkflowEdge {
   description?: string;
 }
 
+export interface StaleWorkflow {
+  workflow: string;
+  changed: string[];
+  missing: string[];
+}
+
 export interface Workflow {
   name: string;
   version: string;

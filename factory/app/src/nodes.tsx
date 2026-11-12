@@ -95,6 +95,13 @@ function useNotRun(item: Item): boolean {
   return mode === "runs" && run !== null && item.kind !== "terminal" && !ranIn(item, run);
 }
 
+function useStale(item: Item): string | null {
+  const { stale } = useViewer();
+  if (item.kind === "terminal" || item.kind === "agent" || !item.node.workflow) return null;
+  const entry = stale[item.node.workflow];
+  return entry ? [...entry.changed, ...entry.missing.map((m) => `${m} (missing)`)].join(", ") : null;
+}
+
 function useLive(item: Item): { className: string; label: string | null } {
   const { live } = useViewer();
   if (item.kind === "terminal" || !isLive(item, live)) return { className: "", label: null };
@@ -109,11 +116,13 @@ export function CardNode({ data, selected }: NodeProps<CardFlowNode>) {
   const live = useLive(item);
   const notRun = useNotRun(item) && !off;
   const { mainAgent } = useViewer();
+  const staleSource = useStale(item);
   return (
-    <div className={`${notRun ? "not-run " : ""}card tier-${tier ?? "none"} kind-${item.kind} ${item.kind === "step" ? `node-${item.node.kind}` : ""} ${selected ? "selected" : ""} ${off ? "disabled" : ""} ${live.className}`} title={off ? "switched off in this run" : undefined}>
+    <div className={`${notRun ? "not-run " : ""}${staleSource ? "stale " : ""}card tier-${tier ?? "none"} kind-${item.kind} ${item.kind === "step" ? `node-${item.node.kind}` : ""} ${selected ? "selected" : ""} ${off ? "disabled" : ""} ${live.className}`} title={off ? "switched off in this run" : undefined}>
       <Handles />
       <div className="card-title">{title(item)}</div>
       {live.label && <div className="card-sub live-label">● {live.label}</div>}
+      {staleSource && <div className="card-sub stale-label">⚠ source changed</div>}
       {off && <div className="card-sub off-label">switched off</div>}
       <div className="card-sub">{subtitle(item, mainAgent)}</div>
       {item.kind !== "terminal" && item.kind !== "agent" && item.node.description && <div className="card-desc">{item.node.description}</div>}
@@ -130,12 +139,14 @@ export function GroupNode({ data, selected }: NodeProps<ClusterFlowNode>) {
   const live = useLive(item);
   const notRun = useNotRun(item) && !off;
   const { mainAgent } = useViewer();
+  const staleSource = useStale(item);
   return (
-    <div className={`${notRun ? "not-run " : ""}group kind-${item.kind} ${selected ? "selected" : ""} ${off ? "disabled" : ""} ${live.className}`} title={off ? "switched off in this run" : undefined}>
+    <div className={`${notRun ? "not-run " : ""}${staleSource ? "stale " : ""}group kind-${item.kind} ${selected ? "selected" : ""} ${off ? "disabled" : ""} ${live.className}`} title={off ? "switched off in this run" : undefined}>
       <Handles />
       <div className="group-header">
         <span className="card-title">{title(item)}</span>
         {live.label && <span className="card-sub live-label"> ● {live.label}</span>}
+        {staleSource && <div className="card-sub stale-label">⚠ source changed since the YAML was written: {staleSource}</div>}
         {off && <span className="card-sub off-label"> switched off</span>}
         <span className="card-sub"> {subtitle(item, mainAgent)}</span>
         {item.kind !== "terminal" && item.kind !== "agent" && item.node.description && <div className="card-desc">{item.node.description}</div>}

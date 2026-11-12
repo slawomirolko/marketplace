@@ -20,7 +20,8 @@
     "bundle": "vite build --config bundle.config.ts",
     "build": "pnpm run viewer:build && pnpm run bundle",
     "stdio": "node src/stdio.ts",
-    "clean:tmp": "node src/clean-tmp.ts"
+    "clean:tmp": "node src/clean-tmp.ts",
+    "sources:lock": "node src/sources-lock.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",

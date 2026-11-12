@@ -6,6 +6,9 @@ import { Factory, errorMessage, runReport } from "../src/engine.ts";
 import { homeDataDir, readSources } from "../src/paths.ts";
 import { describeAgent, marketplaceDir } from "../src/marketplace-agents.ts";
 import { standaloneNames, workflowsThatRan } from "../src/standalone.ts";
+import { readLock, staleWorkflows, updateMarketplace } from "../src/sources-lock.ts";
+import type { StaleWorkflow, UpdateResult } from "../src/sources-lock.ts";
+import { hostExec } from "../src/cli-backend.ts";
 import type { AgentInfo } from "../src/marketplace-agents.ts";
 import type { Coverage, FactoryConfigFile, Report, Run, WorkflowSpec } from "../src/types.ts";
 
@@ -35,7 +38,7 @@ export interface RunListItem {
 }
 
 export interface RunDetail {
-  run: Pick<Run, "runId" | "goal" | "status" | "config" | "answers" | "ledger" | "events" | "pendingQuestion">;
+  run: Pick<Run, "runId" | "goal" | "status" | "config" | "answers" | "ledger" | "events" | "pendingQuestion" | "pendingWorkItems">;
   report: Report;
 }
 
@@ -47,11 +50,14 @@ export interface DataApi {
   config(): FactoryConfigFile;
   runs(): RunListItem[];
   run(runId: string): RunDetail | null;
+  stale(): { marketplace: string; stale: StaleWorkflow[] };
+  update(): Promise<UpdateResult & { stale: StaleWorkflow[] }>;
 }
 
 export interface ApiRequest {
   method?: string | undefined;
   url?: string | undefined;
+  headers?: Record<string, string | string[] | undefined>;
 }
 
 export interface JsonResponse {
@@ -173,18 +179,39 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo }: DataApi
       const file = allRunFiles().find((f) => path.basename(f.file, ".json") === runId)?.file;
       if (!file || !fs.existsSync(file)) return null;
       const run = readJson(file) as Run;
-      const { runId: id, goal, status, config, answers, ledger, events, pendingQuestion } = run;
-      return { run: { runId: id, goal, status, config, answers, ledger, events, pendingQuestion }, report: runReport(run) };
+      const { runId: id, goal, status, config, answers, ledger, events, pendingQuestion, pendingWorkItems } = run;
+      return { run: { runId: id, goal, status, config, answers, ledger, events, pendingQuestion, pendingWorkItems }, report: runReport(run) };
+    },
+
+    stale() {
+      const marketplace = marketplaceDir();
+      return { marketplace, stale: staleWorkflows(readLock(), marketplace) };
+    },
+
+    async update() {
+      const marketplace = marketplaceDir();
+      const result = await updateMarketplace(hostExec, marketplace);
+      return { ...result, stale: staleWorkflows(readLock(), marketplace) };
     },
   };
 }
 
 export function apiMiddleware(api: DataApi) {
   return async (req: ApiRequest, res: JsonResponse, next: () => unknown): Promise<unknown> => {
-    if (req.method !== "GET") return next();
     const url = new URL(req.url ?? "/", "http://localhost");
     const send = (status: number, body: unknown) => res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(body));
+    if (req.method === "POST" && url.pathname === "/api/update") {
+      const origin = String(req.headers?.origin ?? "");
+      if (req.headers?.["x-factory-action"] !== "update" || (origin && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin))) return send(403, { error: "update needs the viewer's own request" });
+      try {
+        return send(200, await api.update());
+      } catch (error) {
+        return send(409, { error: errorMessage(error) });
+      }
+    }
+    if (req.method !== "GET") return next();
     try {
+      if (url.pathname === "/api/stale") return send(200, api.stale());
       if (url.pathname === "/api/workflows") return send(200, api.workflows());
       if (url.pathname === "/api/agents") return send(200, api.agents());
       if (url.pathname === "/api/config") return send(200, api.config());

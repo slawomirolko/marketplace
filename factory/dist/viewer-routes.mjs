@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
@@ -7274,7 +7275,7 @@ var import_dist$1 = (/* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.visit = visit.visit;
 	exports.visitAsync = visit.visitAsync;
 })))();
-var FACTORY_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+var FACTORY_DIR$1 = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 var VIEWER_HEALTH = "skill-factory-viewer";
 var DEFAULT_VIEWER_PORT = 7340;
 function defaultDataDir() {
@@ -7304,10 +7305,10 @@ function registerDataSource(dataDir) {
 }
 function viewerOptions(dataDir) {
 	return {
-		viewerDir: process.env.FACTORY_VIEWER_DIR ?? path.join(FACTORY_DIR, "app", "dist"),
+		viewerDir: process.env.FACTORY_VIEWER_DIR ?? path.join(FACTORY_DIR$1, "app", "dist"),
 		dataDir,
-		factoryDir: FACTORY_DIR,
-		configFile: process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR, "config", "factory.yaml")
+		factoryDir: FACTORY_DIR$1,
+		configFile: process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR$1, "config", "factory.yaml")
 	};
 }
 // src/marketplace-agents.ts
@@ -7336,7 +7337,7 @@ var CLAUDE_ALL_TOOLS = [
 	"NotebookEdit"
 ];
 function marketplaceDir() {
-	return process.env.FACTORY_MARKETPLACE_DIR ?? path.join(FACTORY_DIR, "..");
+	return process.env.FACTORY_MARKETPLACE_DIR ?? path.join(FACTORY_DIR$1, "..");
 }
 function readFrontmatter(file) {
 	const match = fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n").match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
@@ -18833,7 +18834,7 @@ function loadWorkflowSpecs(dir) {
 }
 // src/config.ts
 function configFile() {
-	return process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR, "config", "factory.yaml");
+	return process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR$1, "config", "factory.yaml");
 }
 function loadFactoryConfig(file = configFile()) {
 	const raw = (0, import_dist$1.parse)(fs.readFileSync(file, "utf8"));
@@ -18912,7 +18913,7 @@ function parseCli(value) {
 }
 var workflows;
 function workflowsDir() {
-	return process.env.FACTORY_WORKFLOWS_DIR ?? path.join(FACTORY_DIR, "workflows");
+	return process.env.FACTORY_WORKFLOWS_DIR ?? path.join(FACTORY_DIR$1, "workflows");
 }
 function loadedWorkflows() {
 	workflows ??= loadWorkflowDir(workflowsDir());
@@ -19944,6 +19945,245 @@ function errorMessage(error) {
 function runReport(run) {
 	return Factory.prototype.report.call(Factory.prototype, run);
 }
+// src/cli-backend.ts
+var TIMEOUT_MS = 9e5;
+var OPENCODE_IDS = {
+	haiku: "anthropic/claude-haiku-5-5",
+	sonnet: "anthropic/claude-sonnet-5-5",
+	opus: "anthropic/claude-opus-5-5"
+};
+var CLAUDE_DISALLOWED = "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,Agent,Task,NotebookEdit";
+var workDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-cli-"));
+fs.writeFileSync(path.join(workDir, "opencode.json"), "{}\n");
+function cleanEnv() {
+	const env = {};
+	for (const [k, v] of Object.entries(process.env)) if (!/^(CLAUDE|ANTHROPIC)/.test(k)) env[k] = v;
+	return env;
+}
+function spawnCli(command, args, stdinText, { cwd = workDir, env = {} } = {}) {
+	return new Promise((resolve) => {
+		const started = Date.now();
+		const child = spawn(command, args, {
+			cwd,
+			env: {
+				...cleanEnv(),
+				PWD: cwd,
+				...env
+			},
+			shell: process.platform === "win32"
+		});
+		let stdout = "";
+		let stderr = "";
+		const timer = setTimeout(() => child.kill(), TIMEOUT_MS);
+		child.stdout.on("data", (d) => stdout += d);
+		child.stderr.on("data", (d) => stderr += d);
+		child.on("close", (code) => {
+			clearTimeout(timer);
+			resolve({
+				code,
+				stdout,
+				stderr,
+				durationMs: Date.now() - started
+			});
+		});
+		child.stdin.end(stdinText ?? "");
+	});
+}
+function parseEvents(stdout) {
+	const events = [];
+	for (const line of stdout.trim().split("\n").filter(Boolean)) try {
+		const event = JSON.parse(line);
+		if (event) events.push(event);
+	} catch {
+		continue;
+	}
+	return events;
+}
+function removeTempDir(dir) {
+	if (path.dirname(path.resolve(dir)) === path.resolve(os.tmpdir())) fs.rmSync(dir, {
+		recursive: true,
+		force: true,
+		maxRetries: 3
+	});
+}
+function claudeAgentArgs(agent, tools, dirs) {
+	const { allowed, disallowed } = claudeTools(tools);
+	const permission = tools.includes("edit") ? ["--permission-mode", "acceptEdits"] : [];
+	return [
+		"--agents",
+		claudeAgentsFile(agent, tools),
+		"--agent",
+		agent,
+		"--max-turns",
+		"40",
+		"--strict-mcp-config",
+		"--allowedTools",
+		allowed.join(","),
+		"--disallowedTools",
+		disallowed.join(","),
+		...permission,
+		...dirs.flatMap((d) => ["--add-dir", d])
+	];
+}
+async function runClaude(model, prompt, { agent, cwd, tools = ["read"], dirs = [] } = {}) {
+	if (agent && !/^[a-z0-9-]+$/.test(agent)) return {
+		ok: false,
+		error: `invalid agent name ${agent}`
+	};
+	const args = agent ? [
+		"-p",
+		"--model",
+		model,
+		"--output-format",
+		"json",
+		...claudeAgentArgs(agent, tools, dirs)
+	] : [
+		"-p",
+		"--model",
+		model,
+		"--output-format",
+		"json",
+		"--max-turns",
+		"2",
+		"--strict-mcp-config",
+		"--disallowedTools",
+		CLAUDE_DISALLOWED
+	];
+	const agentFile = args[args.indexOf("--agents") + 1];
+	const res = await spawnCli("claude", args, prompt, { cwd: cwd ?? workDir }).finally(() => {
+		if (agent && agentFile) removeTempDir(path.dirname(agentFile));
+	});
+	let out;
+	try {
+		out = JSON.parse(res.stdout);
+	} catch {
+		return {
+			ok: false,
+			error: `claude exit ${res.code}: ${(res.stderr || res.stdout).slice(-300)}`,
+			durationMs: res.durationMs
+		};
+	}
+	const usageByModel = Object.entries(out.modelUsage ?? {}).map(([id, u]) => ({
+		model: id,
+		tokens: {
+			input: u.inputTokens ?? 0,
+			output: u.outputTokens ?? 0,
+			cacheRead: u.cacheReadInputTokens ?? 0,
+			cacheWrite5m: u.cacheCreationEphemeral5mInputTokens ?? 0,
+			cacheWrite1h: u.cacheCreationEphemeral1hInputTokens ?? 0
+		},
+		cacheWriteTtlKnown: true,
+		harnessCostUsd: u.costUSD ?? null
+	}));
+	return {
+		ok: !out.is_error,
+		error: out.is_error ? String(out.result).slice(0, 300) : void 0,
+		text: out.result,
+		turns: out.num_turns,
+		harnessCostUsd: out.total_cost_usd ?? null,
+		usageByModel,
+		durationMs: res.durationMs
+	};
+}
+async function runOpencode(model, prompt, { agent, cwd, configDir, tools = ["read"] } = {}) {
+	const id = OPENCODE_IDS[model] ?? model;
+	if (agent && !/^[a-z0-9-]+$/.test(agent)) return {
+		ok: false,
+		error: `invalid agent name ${agent}`
+	};
+	const args = [
+		"run",
+		"--standalone",
+		"--archived",
+		"--format",
+		"json",
+		"-m",
+		id,
+		...agent ? ["--agent", agent] : []
+	];
+	const agentDir = configDir ?? (agent ? opencodeConfigDir(agent, tools) : void 0);
+	const res = await spawnCli("opencode", args, prompt, {
+		cwd: cwd ?? workDir,
+		env: agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {}
+	}).finally(() => {
+		if (agentDir && !configDir) removeTempDir(agentDir);
+	});
+	const events = parseEvents(res.stdout);
+	const error = events.find((e) => e.type === "error");
+	const tokens = {
+		input: 0,
+		output: 0,
+		cacheRead: 0,
+		cacheWrite5m: 0,
+		cacheWrite1h: 0,
+		reasoning: 0
+	};
+	let steps = 0;
+	let harnessCostUsd = 0;
+	let text = "";
+	for (const e of events) {
+		const p = e.part ?? {};
+		if (p.type === "step-finish") {
+			steps += 1;
+			const t = p.tokens ?? {};
+			tokens.input += t.input ?? 0;
+			tokens.output += t.output ?? 0;
+			tokens.reasoning += t.reasoning ?? 0;
+			tokens.cacheRead += t.cache?.read ?? 0;
+			tokens.cacheWrite5m += t.cache?.write ?? 0;
+			harnessCostUsd += p.cost ?? 0;
+		}
+		if (p.type === "text") text = p.text ?? text;
+	}
+	if (error || steps === 0) return {
+		ok: false,
+		error: error ? JSON.stringify(error.error).slice(0, 300) : `opencode exit ${res.code}: ${res.stderr.slice(-300)}`,
+		durationMs: res.durationMs
+	};
+	const sessionId = events.find((e) => e.sessionID)?.sessionID ?? null;
+	return {
+		ok: true,
+		text,
+		turns: steps,
+		sessionId,
+		harnessCostUsd,
+		usageByModel: [{
+			model: id,
+			tokens,
+			cacheWriteTtlKnown: false,
+			harnessCostUsd
+		}],
+		durationMs: res.durationMs
+	};
+}
+function cliExecutor(cli) {
+	if (cli === "claude") return ({ model, prompt, ...options }) => runClaude(model, prompt, options);
+	if (cli === "opencode") return ({ model, prompt, ...options }) => runOpencode(model, prompt, options);
+	throw new Error(`unsupported cli ${cli}`);
+}
+function hostExec(command, args, options = {}) {
+	return new Promise((resolve) => {
+		const child = spawn(command, args, {
+			env: cleanEnv(),
+			shell: false,
+			...options.cwd ? { cwd: options.cwd } : {}
+		});
+		let stdout = "";
+		let stderr = "";
+		child.stdout.on("data", (d) => stdout += d);
+		child.stderr.on("data", (d) => stderr += d);
+		child.on("error", (error) => resolve({
+			code: -1,
+			stdout,
+			stderr: String(error)
+		}));
+		child.on("close", (code) => resolve({
+			code,
+			stdout,
+			stderr
+		}));
+	});
+}
 // app/csp.ts
 var NONCE_PLACEHOLDER = "FACTORYCSPNONCEPLACEHOLD";
 function createNonce() {
@@ -20026,6 +20266,83 @@ function workflowsThatRan(specs, root, startedNodes) {
 		if (name) ran.add(name);
 	}
 	return [...ran].sort();
+}
+// src/sources-lock.ts
+var FACTORY_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+var LOCK_FILE = path.join(FACTORY_DIR, "workflows.lock.json");
+var SOURCE_FILE = /agents\/opencode\/[a-z0-9-]+\.md|plugins\/[a-z0-9-]+\/agents\/[a-z0-9-]+\.md|skills\/(?:\*|[a-z0-9-]+)\/[a-z0-9-]+(?:\/SKILL\.md)?/g;
+function resolveSkill(ref, marketplace) {
+	if (ref.endsWith(".md")) return ref;
+	const name = ref.split("/").pop();
+	const category = ref.split("/")[1];
+	const skills = path.join(marketplace, "skills");
+	const found = (category === "*" ? fs.existsSync(skills) ? fs.readdirSync(skills) : [] : [category]).find((c) => fs.existsSync(path.join(skills, c, name, "SKILL.md")));
+	return found ? `skills/${found}/${name}/SKILL.md` : `skills/${category}/${name}/SKILL.md`;
+}
+function sourceFiles(spec, marketplace) {
+	const refs = spec.source?.match(SOURCE_FILE) ?? [];
+	return [...new Set(refs.map((r) => r.startsWith("skills/") ? resolveSkill(r, marketplace) : r))].sort();
+}
+function fileHash(file) {
+	if (!fs.existsSync(file)) return null;
+	return crypto.createHash("sha256").update(fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n")).digest("hex").slice(0, 16);
+}
+function buildLock(specs, marketplace) {
+	const lock = {};
+	for (const spec of [...specs].sort((a, b) => a.name.localeCompare(b.name))) {
+		const files = sourceFiles(spec, marketplace);
+		if (files.length) lock[spec.name] = Object.fromEntries(files.map((f) => [f, fileHash(path.join(marketplace, f)) ?? "missing"]));
+	}
+	return lock;
+}
+function readLock(file = LOCK_FILE) {
+	return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
+}
+function staleWorkflows(lock, marketplace) {
+	return Object.entries(lock).flatMap(([workflow, files]) => {
+		const changed = [];
+		const missing = [];
+		for (const [file, hash] of Object.entries(files)) {
+			const now = fileHash(path.join(marketplace, file));
+			if (now === null) missing.push(file);
+			else if (now !== hash) changed.push(file);
+		}
+		return changed.length || missing.length ? [{
+			workflow,
+			changed,
+			missing
+		}] : [];
+	});
+}
+async function updateMarketplace(exec, marketplace) {
+	const git = async (...args) => {
+		const result = await exec("git", [
+			"-C",
+			marketplace,
+			...args
+		]);
+		if (result.code !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr.trim().slice(-300)}`);
+		return result.stdout.trim();
+	};
+	const branch = await git("branch", "--show-current");
+	if (branch !== "main") throw new Error(`${marketplace} is on '${branch || "a detached HEAD"}', not main; nothing was pulled. Switch it to main yourself or point FACTORY_MARKETPLACE_DIR at a main checkout.`);
+	if (await git("status", "--porcelain", "--untracked-files=no")) throw new Error(`${marketplace} has uncommitted changes; nothing was pulled.`);
+	const before = await git("rev-parse", "HEAD");
+	await git("fetch", "--quiet", "origin", "main");
+	await git("merge", "--ff-only", "origin/main");
+	const after = await git("rev-parse", "HEAD");
+	return {
+		marketplace,
+		before,
+		after,
+		changedFiles: before === after ? [] : (await git("diff", "--name-only", before, after)).split(/\r?\n/).filter(Boolean)
+	};
+}
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+	const marketplace = marketplaceDir();
+	const lock = buildLock(loadWorkflowSpecs(path.join(FACTORY_DIR, "workflows")), marketplace);
+	fs.writeFileSync(LOCK_FILE, `${JSON.stringify(lock, null, 2)}\n`);
+	console.log(`${Object.keys(lock).length} workflows locked against ${marketplace} in ${LOCK_FILE}`);
 }
 // app/data.ts
 var RUN_ID = /^r-[a-f0-9]{8}$/;
@@ -20139,7 +20456,7 @@ function createDataApi({ factoryDir, dataDir, configFile, demo }) {
 			const file = allRunFiles().find((f) => path.basename(f.file, ".json") === runId)?.file;
 			if (!file || !fs.existsSync(file)) return null;
 			const run = readJson(file);
-			const { runId: id, goal, status, config, answers, ledger, events, pendingQuestion } = run;
+			const { runId: id, goal, status, config, answers, ledger, events, pendingQuestion, pendingWorkItems } = run;
 			return {
 				run: {
 					runId: id,
@@ -20149,19 +20466,44 @@ function createDataApi({ factoryDir, dataDir, configFile, demo }) {
 					answers,
 					ledger,
 					events,
-					pendingQuestion
+					pendingQuestion,
+					pendingWorkItems
 				},
 				report: runReport(run)
+			};
+		},
+		stale() {
+			const marketplace = marketplaceDir();
+			return {
+				marketplace,
+				stale: staleWorkflows(readLock(), marketplace)
+			};
+		},
+		async update() {
+			const marketplace = marketplaceDir();
+			return {
+				...await updateMarketplace(hostExec, marketplace),
+				stale: staleWorkflows(readLock(), marketplace)
 			};
 		}
 	};
 }
 function apiMiddleware(api) {
 	return async (req, res, next) => {
-		if (req.method !== "GET") return next();
 		const url = new URL(req.url ?? "/", "http://localhost");
 		const send = (status, body) => res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(body));
+		if (req.method === "POST" && url.pathname === "/api/update") {
+			const origin = String(req.headers?.origin ?? "");
+			if (req.headers?.["x-factory-action"] !== "update" || origin && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin)) return send(403, { error: "update needs the viewer's own request" });
+			try {
+				return send(200, await api.update());
+			} catch (error) {
+				return send(409, { error: errorMessage(error) });
+			}
+		}
+		if (req.method !== "GET") return next();
 		try {
+			if (url.pathname === "/api/stale") return send(200, api.stale());
 			if (url.pathname === "/api/workflows") return send(200, api.workflows());
 			if (url.pathname === "/api/agents") return send(200, api.agents());
 			if (url.pathname === "/api/config") return send(200, api.config());
@@ -20221,7 +20563,7 @@ function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHost
 			res.writeHead(403, { "content-type": "text/plain" }).end("forbidden host");
 			return true;
 		}
-		if (req.method !== "GET") {
+		if (req.method !== "GET" && !(req.method === "POST" && url.pathname === `${PREFIX}/api/update`)) {
 			res.writeHead(405, { allow: "GET" }).end();
 			return true;
 		}
@@ -20256,4 +20598,4 @@ function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHost
 		return true;
 	};
 }
-export { registerDataSource as _, errorMessage as a, require_dist as c, claudeTools as d, opencodeConfigDir as f, defaultDataDir as g, VIEWER_HEALTH as h, Factory as i, require_ajv as l, FACTORY_DIR as m, viewerHandler as n, parseBackend as o, DEFAULT_VIEWER_PORT as p, viewerUrlFor as r, parseCli as s, allowedHostsFor as t, claudeAgentsFile as u, viewerOptions as v, __toESM as y };
+export { viewerOptions as _, hostExec as a, parseBackend as c, require_ajv as d, DEFAULT_VIEWER_PORT as f, registerDataSource as g, defaultDataDir as h, cliExecutor as i, parseCli as l, VIEWER_HEALTH as m, viewerHandler as n, Factory as o, FACTORY_DIR$1 as p, viewerUrlFor as r, errorMessage as s, allowedHostsFor as t, require_dist as u, __toESM as v };
