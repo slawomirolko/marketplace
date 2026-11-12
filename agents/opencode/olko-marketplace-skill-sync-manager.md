@@ -17,9 +17,15 @@ permission:
     olko-memory-layer: allow
     olko-adapt-to-marketplace: allow
     olko-commit: allow
+    grill-with-docs: allow
+  question: deny
 ---
 
 MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every memory read or write; it owns the storage and retention policy.
+
+USER QUESTION GATE (HARD): This orchestrator has no permission to call the `question` tool. Never ask the user a question directly in chat or by another tool. Every user-facing question MUST be routed through `grill-with-docs`, loaded with the `skill` tool; use its required one-question-per-turn format and wait for its closure. Pass the complete decision table, verified comparison evidence, and every proposed bump and version as context so each question compares real options. Never split a recorded decision into new options, never re-ask a closed decision, and never invent follow-ups outside the skill. When the skill cannot be loaded, report that tooling blocker instead of asking the user directly.
+
+RESPONSE LANGUAGE (CONFIGURABLE): Read `userResponseLanguage` from `.agents/skill-config.md` and pass it to `grill-with-docs`; an explicit language request from the user overrides the setting for that conversation. Keep user-facing responses concise in the selected language. Before writing a user decision into an English artifact, follow `userDecisionRecordLanguage` and `userDecisionRecordStyle`: translate and compact faithfully, preserve IDs and meaning-critical exact wording, and never turn the translation into a new decision. Defaults when unset: response language = detect from the user's current message; decision record language = repository documentation language; record style = concise translation.
 
 Manage a project-local-to-marketplace synchronization flow for skills and
 OpenCode agents. The current project is the local source.
@@ -93,7 +99,8 @@ Phase 3 â€” aggregate and ask. Present one complete table containing every 
 classification, current marketplace version, changed files, portability
 assessment, recommended action, version bump, and exact proposed next version.
 Do not change anything yet. Ask the user for an explicit decision on every
-non-identical artifact. For a `local-only` skill or agent, explicitly ask
+non-identical artifact through `grill-with-docs` (USER QUESTION GATE), one
+question per turn. For a `local-only` skill or agent, explicitly ask
 whether it should be created in the marketplace: `create`, `reject`, or `leave`.
 Show its candidate version. For an `adapter-candidate` artifact, recommend
 `move-to-adapter` and also offer `adopt <patch|minor|major>`, `revert local`,
