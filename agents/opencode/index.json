@@ -70,7 +70,7 @@
     },
     {
       "name": "olko-marketplace-skill-sync-manager",
-      "version": "2.4.0",
+      "version": "2.5.0",
       "file": "olko-marketplace-skill-sync-manager.md",
       "stack": "cross-stack",
       "role": "orchestrator",

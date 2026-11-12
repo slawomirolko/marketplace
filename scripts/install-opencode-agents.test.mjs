@@ -223,12 +223,16 @@ test("installs the visible marketplace skill sync manager and its comparator", (
     JSON.parse(fs.readFileSync(path.join(marketplaceRoot, "agents", "opencode", "index.json"), "utf8")).agents.find(
       (agent) => agent.name === "olko-marketplace-skill-sync-manager",
     ).version,
-    "2.4.0",
+    "2.5.0",
   );
   assert.match(manager, /bash: allow/);
   assert.match(manager, /Never pass `--force` to `olko-commit`/);
   assert.match(manager, /scope-named feature branch and PR flow/);
   assert.match(manager, /Squash merge only after the user/);
+  assert.match(manager, /TWO-PULL-REQUEST CONTRACT \(HARD\)/);
+  assert.match(manager, /always as two separate pull requests/);
+  assert.match(manager, /Phase 6 . local project delivery/);
+  assert.match(manager, /`glab mr create`/);
   assert.match(manager, /skills and\s+OpenCode agents/);
   assert.match(manager, /agents\/opencode\/index\.json/);
   assert.match(manager, /including the approved SemVer version/);

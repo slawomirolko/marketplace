@@ -29,7 +29,11 @@ requesting agent.
 project-local skills with marketplace sources. It delegates one read-only
 comparison per skill, aggregates the results, and waits for an explicit
 per-skill decision before changing marketplace content, publishing, or
-reinstalling anything.
+reinstalling anything. Every run that writes files must deliver two pull
+requests: the marketplace one for portable artifacts, and a second one in the
+local project for project adapters, local bindings, local-only versions, and the
+reinstalled copies. The local pull request is not optional and is never replaced
+by the marketplace merge.
 
 `olko-implementation-orchestrator` writes failing tests before code: step 3a
 delegates `olko-test-first-author` (one failing test per acceptance criterion, one call
