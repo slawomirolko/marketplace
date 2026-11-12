@@ -1,0 +1,33 @@
+name: olko-skill-sync-adapt
+version: 0.1.0
+description: "Runs olko-adapt-to-marketplace --local-only on every local skill so it carries a SemVer version before comparison."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 2, mandatory local-only adaptation)"
+roles:
+  adapter: medium
+entry: adapt-next
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: adapt-next
+    description: "Takes the next local skill."
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: discover.skills }
+  - id: adapt
+    description: "Runs olko-adapt-to-marketplace --local-only on the skill (read and edit, project only)."
+    kind: llm
+    role: adapter
+    skill: olko-adapt-to-marketplace
+    tools: [read, edit]
+    maxVisits: 200
+    parse: text.raw
+    prompt: |
+      olko-adapt-to-marketplace --local-only {{state.adapt-next.item.name}}
+
+      Local skill: {{state.adapt-next.item.localPath}}
+      Do not touch the marketplace ({{state.resolve-path.path}}) and do not publish. The hard deliverable: SKILL.md frontmatter of this skill carries a valid SemVer `version` (1.0.0 for a new skill; for an existing skill keep or bump it and say which). Reply with one line: `version | <x.y.z> | <kept|bumped|new> | <what changed>`.
+edges:
+  - { from: adapt-next, to: adapt, when: "adapt-next.done == false", description: "a local skill is left" }
+  - { from: adapt-next, to: END, when: "adapt-next.done == true", description: "all skills adapted" }
+  - { from: adapt, to: adapt-next }

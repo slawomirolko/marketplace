@@ -1,0 +1,86 @@
+name: olko-review-plan-rules
+version: 0.1.0
+description: "Checks the plan findings against the project rule store and asks one question per conflict."
+source: "agents/opencode/olko-review-orchestrator.md (PLAN ROUTE, project rules check)"
+roles:
+  rules: medium
+  verifier: medium
+entry: plan-rules
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: plan-rules
+    description: "Checks the plan findings against the project rule store."
+    kind: llm
+    role: rules
+    agent: olko-project-rules-check
+    parse: review.rulesCheck
+    prompt: |
+      Mode: plan
+      Plan file: {{state.plan-read.path}}
+
+      Confirmed findings ({{state.plan-confirm.confirmed.length}}), one per line:
+      {{#state.plan-confirm.confirmed}}
+      {{line}}
+      {{/state.plan-confirm.confirmed}}
+
+      Plan text:
+      {{state.plan-read.text}}
+  - id: plan-rules-merge
+    description: "Splits kept, dropped, violations and conflicts for the plan."
+    kind: script
+    op: review.mergeRules
+    with: { confirmed: plan-confirm, check: plan-rules }
+  - id: plan-verify-violations
+    description: "The verifier checks the new violations in the plan."
+    kind: llm
+    role: verifier
+    agent: olko-review-verifier
+    parse: review.verdicts
+    prompt: |
+      Plan review of {{state.plan-read.path}}.
+
+      Findings ({{state.plan-rules-merge.violations.length}}), one per line:
+      {{#state.plan-rules-merge.violations}}
+      {{.}}
+      {{/state.plan-rules-merge.violations}}
+
+      Plan text:
+      {{state.plan-read.text}}
+  - id: plan-rules-violations
+    description: "Adds the confirmed plan violations."
+    kind: script
+    op: review.addViolations
+    with: { rules: plan-rules-merge, verdicts: plan-verify-violations }
+  - id: plan-next-decision
+    description: "Takes the next plan conflict (after violations)."
+    kind: script
+    op: list.next
+    maxVisits: 100
+    with: { over: plan-rules-violations.decide }
+  - id: plan-next-decision-ask
+    description: "Takes the next plan conflict (no new violations)."
+    kind: script
+    op: list.next
+    maxVisits: 100
+    with: { over: plan-rules-merge.decide }
+  - id: plan-ask-rule
+    description: "Asks which holds for the plan: the finding or the store entry."
+    kind: interrupt
+    maxVisits: 100
+    question:
+      id: "q-plan-rule-{{state.plan-next-decision.index}}{{state.plan-next-decision-ask.index}}"
+      text: "Plan approval stops here: the project store and a finding disagree. Which holds?\n{{state.plan-next-decision.item.line}}{{state.plan-next-decision-ask.item.line}}\nStore entry: {{state.plan-next-decision.item.cite}}{{state.plan-next-decision-ask.item.cite}}"
+      allowed: [finding, store]
+edges:
+  - { from: plan-rules, to: plan-rules-merge }
+  - { from: plan-rules-merge, to: plan-verify-violations, when: "plan-rules-merge.violations > 0", description: "new violations in the plan" }
+  - { from: plan-rules-merge, to: plan-next-decision-ask, when: "plan-rules-merge.violations == 0", description: "no new violation" }
+  - { from: plan-verify-violations, to: plan-rules-violations }
+  - { from: plan-rules-violations, to: plan-next-decision }
+  - { from: plan-next-decision, to: plan-ask-rule, when: "plan-next-decision.done == false" }
+  - { from: plan-next-decision, to: END, when: "plan-next-decision.done == true" }
+  - { from: plan-next-decision-ask, to: plan-ask-rule, when: "plan-next-decision-ask.done == false" }
+  - { from: plan-next-decision-ask, to: END, when: "plan-next-decision-ask.done == true" }
+  - { from: plan-ask-rule, to: plan-next-decision, when: "plan-rules-merge.violations > 0" }
+  - { from: plan-ask-rule, to: plan-next-decision-ask, when: "plan-rules-merge.violations == 0" }

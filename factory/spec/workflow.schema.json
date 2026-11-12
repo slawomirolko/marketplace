@@ -379,8 +379,12 @@
             },
             {
               "const": "END"
+            },
+            {
+              "const": "FINISH"
             }
-          ]
+          ],
+          "description": "A node id, END (leave this workflow; inside a group or subgraph: leave the group) or FINISH (end the whole run, even from inside a group or subgraph; inside a call it ends the call)."
         },
         "when": {
           "type": "string",

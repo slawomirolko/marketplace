@@ -138,8 +138,8 @@ edges:
   assert.equal(workflow.nodes[1]!.question?.allowedFrom, "state.adapt.options");
 });
 
-test("the marketplace skill sync workflow loads from YAML", () => {
-  const workflow = loadWorkflowFile(path.join(import.meta.dirname, "..", "workflows", "olko-marketplace-skill-sync.yaml"));
+test("the marketplace skill sync workflow loads from YAML with its phase groups", () => {
+  const workflow = loadWorkflowDir(path.join(import.meta.dirname, "..", "workflows")).get("olko-marketplace-skill-sync")!;
   assert.equal(workflow.name, "olko-marketplace-skill-sync");
   assert.equal(workflow.nodes.find((n) => n.id === "adapt")?.agent, "olko-adapt-to-marketplace");
   assert.deepEqual(workflow.nodes.find((n) => n.id === "compare")?.tools, undefined);

@@ -1,0 +1,53 @@
+name: olko-review-feedback-replies
+version: 0.1.0
+description: "Drafts one reply per wont-fix or question item and posts it only after the user says post."
+source: "agents/opencode/olko-review-orchestrator.md (FEEDBACK ROUTE, replies)"
+roles:
+  feedback: medium
+entry: fb-reply-next
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: fb-reply-next
+    description: "Takes the next item that needs a reply."
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: fb-plan.replies }
+  - id: fb-draft
+    description: "The feedback handler drafts one reply (not posted)."
+    kind: llm
+    role: feedback
+    agent: olko-review-feedback-handler
+    maxVisits: 200
+    parse: text.raw
+    prompt: |
+      Do only step 7 of your workflow for this one item: draft one reply, and do not post it or change any file.
+      Decision: {{state.fb-reply-next.item.decision}}.
+
+      Comments:
+      {{#state.fb-reply-next.item.comments}}
+      - {{author}} ({{url}}): {{body}}
+      {{/state.fb-reply-next.item.comments}}
+
+      Reply with the reply text only.
+  - id: fb-reply-ask
+    description: "Asks post or skip for the drafted reply."
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-reply-{{state.fb-reply-next.index}}"
+      text: "Post this reply?\n{{state.fb-draft.fb-draft}}"
+      allowed: [post, skip]
+  - id: fb-post
+    description: "Posts the reply in its review thread."
+    kind: script
+    op: github.postReply
+    maxVisits: 200
+edges:
+  - { from: fb-reply-next, to: fb-draft, when: "fb-reply-next.done == false", description: "a reply is left" }
+  - { from: fb-reply-next, to: END, when: "fb-reply-next.done == true" }
+  - { from: fb-draft, to: fb-reply-ask }
+  - { from: fb-reply-ask, to: fb-post, when: 'fb-reply-ask.answer == "post"', description: "you chose post" }
+  - { from: fb-reply-ask, to: fb-reply-next, when: 'fb-reply-ask.answer == "skip"', description: "you chose skip" }
+  - { from: fb-post, to: fb-reply-next }

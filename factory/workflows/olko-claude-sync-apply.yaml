@@ -1,0 +1,71 @@
+name: olko-claude-sync-apply
+version: 0.1.0
+description: "Phase 4: applies one staged row at a time into Olko (registry or agent manifest, validation) or into the user scope after a yes, and records lineage."
+source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 4, apply)"
+entry: apply-plan
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: apply-plan
+    description: "Lists the staged rows to apply one at a time."
+    kind: script
+    op: csync.applyPlan
+  - id: apply-next
+    description: "Takes the next staged row."
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: apply-plan.rows }
+  - id: ask-category
+    description: "Asks the Olko category of a new skill."
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-category-{{state.apply-next.index}}"
+      text: "New Olko skill {{state.apply-next.item.name}}: which category?"
+      allowedFrom: state.apply-next.item.categories
+  - id: ask-overwrite
+    description: "Final confirmation before take-target, take-olko or revert-user overwrites a copy."
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-overwrite-{{state.apply-next.index}}"
+      text: "Final confirmation: {{state.apply-next.item.decision}} overwrites {{state.apply-next.item.existing}}. Overwrite it?"
+      allowed: [overwrite, keep]
+  - id: apply-olko
+    description: "Copies the row into Olko, updates its registry or manifest entry, validates, records lineage."
+    kind: script
+    op: csync.applyOlko
+    maxVisits: 200
+  - id: ask-write
+    description: "Shows the diff and asks before writing into the user scope."
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-write-{{state.apply-next.index}}"
+      text: "Write {{state.apply-next.item.kind}} {{state.apply-next.item.name}} into the user scope?\n{{state.apply-next.item.diff}}"
+      allowed: [write, skip]
+  - id: apply-user
+    description: "Writes the row into the user scope and records lineage."
+    kind: script
+    op: csync.applyUser
+    maxVisits: 200
+  - id: apply-record
+    description: "Counts the applied rows."
+    kind: script
+    op: csync.applyRecord
+    maxVisits: 200
+edges:
+  - { from: apply-plan, to: apply-next }
+  - { from: apply-next, to: END, when: "apply-next.done == true", description: "all rows applied" }
+  - { from: apply-next, to: ask-category, when: "apply-next.item.needsCategory == true", description: "new Olko skill" }
+  - { from: apply-next, to: ask-overwrite, when: "apply-next.item.overwrite == true", description: "the row overwrites a copy" }
+  - { from: apply-next, to: apply-olko, when: 'apply-next.item.direction == "to-olko"', description: "row goes to Olko" }
+  - { from: apply-next, to: ask-write, description: "row goes to the user scope" }
+  - { from: ask-category, to: apply-olko }
+  - { from: ask-overwrite, to: apply-olko, when: 'apply-next.item.direction == "to-olko"', description: "confirmed, row goes to Olko" }
+  - { from: ask-overwrite, to: ask-write, description: "row goes to the user scope" }
+  - { from: apply-olko, to: apply-record }
+  - { from: ask-write, to: apply-user }
+  - { from: apply-user, to: apply-record }
+  - { from: apply-record, to: apply-next }

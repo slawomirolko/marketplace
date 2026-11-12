@@ -1,0 +1,45 @@
+name: olko-review-post
+version: 0.1.0
+description: "Ranks the kept findings, asks post or skip for each one, posts one PR comment per post and records the decisions in the lens memory."
+source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE, posting and memory)"
+entry: rank
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: rank
+    description: "Ranks the kept findings by severity tier."
+    kind: script
+    op: review.rankFindings
+  - id: next-finding
+    description: "Takes the next ranked finding."
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: rank.kept }
+  - id: ask-post
+    description: "Asks post or skip for this finding."
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-post-{{state.next-finding.index}}"
+      text: "Finding {{state.next-finding.number}} of {{state.next-finding.total}} on PR #{{state.scope.pr}}. Post it as a PR comment?\n{{state.next-finding.item.line}}"
+      allowed: [post, skip]
+  - id: post-one
+    description: "Posts the finding as one PR comment."
+    kind: script
+    op: github.postComment
+    maxVisits: 200
+    with: { from: next-finding }
+  - id: memory-save
+    description: "Records confirmed and rejected patterns in the review memory."
+    kind: script
+    op: memory.persist
+    with: { questionPrefix: q-post- }
+edges:
+  - { from: rank, to: next-finding }
+  - { from: next-finding, to: ask-post, when: "next-finding.done == false", description: "a finding is left" }
+  - { from: next-finding, to: memory-save, when: "next-finding.done == true", description: "all findings decided" }
+  - { from: ask-post, to: post-one, when: 'ask-post.answer == "post"', description: "you chose post" }
+  - { from: ask-post, to: next-finding, when: 'ask-post.answer == "skip"', description: "you chose skip" }
+  - { from: post-one, to: next-finding }
+  - { from: memory-save, to: END }

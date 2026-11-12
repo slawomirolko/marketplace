@@ -17837,7 +17837,7 @@ function workflowGraphErrors(workflow) {
 	const pairs = /* @__PURE__ */ new Set();
 	for (const edge of workflow.edges) {
 		if (!ids.has(edge.from)) errors.push(`edge from unknown node '${edge.from}'`);
-		if (edge.to !== "END" && !ids.has(edge.to)) errors.push(`edge to unknown node '${edge.to}'`);
+		if (edge.to !== "END" && edge.to !== "FINISH" && !ids.has(edge.to)) errors.push(`edge to unknown node '${edge.to}'`);
 		const pair = `${edge.from}->${edge.to}`;
 		if (pairs.has(pair)) errors.push(`more than one edge ${pair}; merge their conditions into one edge`);
 		pairs.add(pair);
@@ -18046,7 +18046,11 @@ function expandSubgraphs(spec, specs, seen = []) {
 			});
 		}
 		const inner = sub.edges.flatMap((e) => {
-			if (e.to !== "END") return [{
+			if (e.to === "FINISH" && !scoped) return [{
+				...e,
+				from: prefix(e.from)
+			}];
+			if (e.to !== "END" && e.to !== "FINISH") return [{
 				...e,
 				from: prefix(e.from),
 				to: prefix(e.to)
@@ -18115,7 +18119,10 @@ function buildWorkflow(spec, file) {
 		version: spec.version,
 		entry: spec.entry,
 		nodes,
-		edges: spec.edges,
+		edges: spec.edges.map((e) => e.to === "FINISH" ? {
+			...e,
+			to: "END"
+		} : e),
 		maxCycleIterations: spec.limits?.maxCycleIterations ?? 3,
 		...spec.source ? { source: spec.source } : {},
 		...spec.roles ? { roles: spec.roles } : {}

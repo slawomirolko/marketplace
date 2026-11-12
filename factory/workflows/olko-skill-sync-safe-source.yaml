@@ -1,0 +1,31 @@
+name: olko-skill-sync-safe-source
+version: 0.1.0
+description: "Phase 1: requires a clean marketplace worktree on main, fast-forwarded to origin/main; asks before switching branch and stops otherwise."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 1, safe source)"
+entry: safe-source
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: safe-source
+    description: "Checks the marketplace: clean worktree, branch main, fetch and fast-forward pull."
+    kind: script
+    op: sync.safeSource
+    maxVisits: 2
+  - id: ask-main
+    description: "Asks whether to switch the marketplace checkout to main."
+    kind: interrupt
+    question:
+      id: q-marketplace-main
+      text: "The marketplace {{state.resolve-path.path}} is on {{state.safe-source.detail}}, not main. Switch it to main?"
+      allowed: [switch, stop]
+  - id: stop-unsafe
+    description: "Stops the run: the marketplace checkout is not safe to compare against."
+    kind: script
+    op: sync.stopUnsafe
+edges:
+  - { from: safe-source, to: END, when: "safe-source.ok == true", description: "marketplace is clean and current" }
+  - { from: safe-source, to: ask-main, when: 'safe-source.reason == "not-main"', description: "not on main" }
+  - { from: safe-source, to: stop-unsafe, description: "dirty, no remote or pull failed" }
+  - { from: ask-main, to: safe-source, when: 'ask-main.answer == "switch"', description: "you chose switch" }
+  - { from: ask-main, to: stop-unsafe, when: 'ask-main.answer == "stop"', description: "you chose stop" }
+  - { from: stop-unsafe, to: FINISH }

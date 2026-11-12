@@ -1,0 +1,26 @@
+name: olko-claude-sync-probable
+version: 0.1.0
+description: "Asks the user to confirm or split every probable link the matcher proposed."
+source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 2, probable links)"
+entry: probable-next
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: probable-next
+    description: "Takes the next probable link."
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: select.probable }
+  - id: ask-probable
+    description: "Asks to confirm the link or split it per store."
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-probable-{{state.probable-next.index}}"
+      text: "Probable link for capability {{state.probable-next.item.id}}: {{state.probable-next.item.evidence}}. Confirm it as one capability, or split it per store?"
+      allowed: [confirm, split]
+edges:
+  - { from: probable-next, to: ask-probable, when: "probable-next.done == false", description: "a probable link is left" }
+  - { from: probable-next, to: END, when: "probable-next.done == true", description: "all links decided" }
+  - { from: ask-probable, to: probable-next }

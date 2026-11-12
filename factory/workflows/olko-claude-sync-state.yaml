@@ -1,0 +1,26 @@
+name: olko-claude-sync-state
+version: 0.1.0
+description: "Phase 0: prepares the sync state (Olko path, target, user scope) and asks once for leak terms that must never reach Olko."
+source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 0)"
+entry: state
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: state
+    description: "Prepares the sync state: Olko path, target name and path, user scope, leak terms."
+    kind: script
+    op: csync.state
+  - id: ask-leak
+    description: "Asks once for more leak terms (free text, or none)."
+    kind: interrupt
+    question:
+      id: q-claude-sync-leak
+      text: "Leak terms are words that must never reach Olko ({{state.state.leakTermsText}}). Add more? Reply with comma-separated words, or none."
+  - id: leak-save
+    description: "Saves the new leak terms."
+    kind: script
+    op: csync.leakSave
+edges:
+  - { from: state, to: ask-leak }
+  - { from: ask-leak, to: leak-save }
+  - { from: leak-save, to: END }

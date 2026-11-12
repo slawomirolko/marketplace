@@ -175,7 +175,8 @@ function expandSubgraphs(spec: WorkflowSpec, specs: Map<string, WorkflowSpec>, s
       nodes.push({ id: node.id, kind: "script", op: "builtin.gate", with: { subgraph: node.workflow, when: node.enabledWhen } });
     }
     const inner = sub.edges.flatMap((e) => {
-      if (e.to !== "END") return [{ ...e, from: prefix(e.from), to: prefix(e.to) }];
+      if (e.to === "FINISH" && !scoped) return [{ ...e, from: prefix(e.from) }];
+      if (e.to !== "END" && e.to !== "FINISH") return [{ ...e, from: prefix(e.from), to: prefix(e.to) }];
       return exits.map((x) => {
         if (e.when && x.when) throw new Error(`subgraph ${node.id}: both the inner edge and the outer edge have a condition`);
         const when = e.when ?? x.when;
@@ -211,7 +212,7 @@ function buildWorkflow(spec: WorkflowSpec, file: string): Workflow {
     version: spec.version,
     entry: spec.entry,
     nodes,
-    edges: spec.edges,
+    edges: spec.edges.map((e) => (e.to === "FINISH" ? { ...e, to: "END" } : e)),
     maxCycleIterations: spec.limits?.maxCycleIterations ?? 3,
     ...(spec.source ? { source: spec.source } : {}),
     ...(spec.roles ? { roles: spec.roles as Record<string, Tier> } : {}),

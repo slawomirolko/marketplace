@@ -26,14 +26,17 @@ export function buildLevel(workflows: Workflow[], name: string, prefix = name, s
     }
     return { key, kind: "step", node };
   });
+  const finishKey = `${prefix}/__finish_${name}`;
+  const finishes = !isRoot && workflow.edges.some((e) => e.to === "FINISH");
   const edges: LevelEdge[] = workflow.edges
     .filter((e) => e.to !== "END" || isRoot)
     .map((e) => {
       const branching = workflow.edges.filter((o) => o.from === e.from).length > 1;
       const condition = e.when ?? (branching ? "otherwise" : null);
       const label = e.description ? (condition ? `${e.description} (${condition})` : e.description) : condition;
-      return { from: `${prefix}/${e.from}`, to: e.to === "END" ? END_KEY : `${prefix}/${e.to}`, label };
+      return { from: `${prefix}/${e.from}`, to: e.to === "END" || (e.to === "FINISH" && isRoot) ? END_KEY : e.to === "FINISH" ? finishKey : `${prefix}/${e.to}`, label };
     });
+  if (finishes) items.push({ key: finishKey, kind: "terminal", label: "ends run" });
   if (isRoot) {
     items.unshift({ key: START_KEY, kind: "terminal", label: "start" });
     items.push({ key: END_KEY, kind: "terminal", label: "END" });

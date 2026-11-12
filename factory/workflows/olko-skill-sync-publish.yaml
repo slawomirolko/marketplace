@@ -1,0 +1,76 @@
+name: olko-skill-sync-publish
+version: 0.1.0
+description: "Phase 5: validates the marketplace, publishes through olko-commit after approval, then leave, wait for CI or squash merge, and installs after the merge."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 5)"
+roles:
+  publisher: medium
+entry: validate
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: validate
+    description: "Runs registry --fix, the agent installer check and the marketplace node tests."
+    kind: script
+    op: sync.validate
+  - id: ask-publish
+    description: "Shows the diff, versions and validation; asks before commit and push."
+    kind: interrupt
+    question:
+      id: q-sync-publish
+      text: "Marketplace diff:\n{{state.validate.status}}\n{{state.validate.diffStat}}\n\nVersions:\n{{state.validate.versions}}\n\nValidation: {{state.validate.summary}}\n\nCommit and push on a feature branch and open a PR?"
+      allowed: [publish, stop]
+  - id: publish
+    description: "olko-commit commits on a feature branch, pushes and opens the PR."
+    kind: llm
+    role: publisher
+    skill: olko-commit
+    tools: [read, edit, bash]
+    dirs: ["{{state.resolve-path.path}}"]
+    parse: sync.prLine
+    prompt: |
+      Run the olko-commit workflow in the marketplace repository {{state.resolve-path.path}} (use `git -C` or change into it), not in the current directory.
+      Never pass --force, never push to main: use its scope-named feature branch and PR flow. Do not merge. Do not ask questions; the user already approved this publish.
+      PR title: the conventional commit subject for this change, for example `feat(sync): {{#state.plan.accepted}}{{name}} {{/state.plan.accepted}}`.
+      PR description, concise: the artifacts and versions below, and the validation result.
+      {{state.validate.versions}}
+      Validation: {{state.validate.summary}}
+
+      End with exactly one line: `pr | <PR URL> | <branch> | <commit sha>`.
+  - id: publish-pr
+    description: "Reads the PR URL and branch from the publish output."
+    kind: script
+    op: sync.prOf
+  - id: ask-pr
+    description: "Asks: leave the PR open, wait for CI, or squash merge."
+    kind: interrupt
+    maxVisits: 20
+    question:
+      id: "q-sync-pr-{{state.wait-ci.round}}"
+      text: "Published: {{state.publish-pr.publish.url}}{{#state.wait-ci}}\nCI checks passed: {{state.wait-ci.passed}}{{/state.wait-ci}}\nLeave it open, wait for CI, or squash merge? Installing needs the merge."
+      allowed: [leave, wait, merge]
+  - id: wait-ci
+    description: "Waits for the PR checks."
+    kind: script
+    op: sync.waitChecks
+    maxVisits: 20
+  - id: merge
+    description: "Squash merges, updates local main and checks the commit is on origin/main."
+    kind: script
+    op: sync.merge
+  - id: install-phase
+    description: "Installs the merged artifacts from origin/main into the project and records the verified decisions in memory."
+    kind: group
+    workflow: olko-skill-sync-install
+edges:
+  - { from: validate, to: ask-publish, when: "validate.changed > 0", description: "the marketplace changed" }
+  - { from: validate, to: END, when: "validate.changed == 0", description: "only local reverts, nothing to publish" }
+  - { from: ask-publish, to: publish, when: 'ask-publish.answer == "publish"', description: "you chose publish" }
+  - { from: ask-publish, to: END, when: 'ask-publish.answer == "stop"', description: "you chose stop: changes stay unpublished" }
+  - { from: publish, to: publish-pr }
+  - { from: publish-pr, to: ask-pr }
+  - { from: ask-pr, to: merge, when: 'ask-pr.answer == "merge"', description: "you chose merge" }
+  - { from: ask-pr, to: wait-ci, when: 'ask-pr.answer == "wait"', description: "you chose wait" }
+  - { from: ask-pr, to: END, when: 'ask-pr.answer == "leave"', description: "you chose leave: PR stays open, nothing installed" }
+  - { from: wait-ci, to: ask-pr }
+  - { from: merge, to: install-phase }
+  - { from: install-phase, to: END }

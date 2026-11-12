@@ -48,7 +48,7 @@ function workflowGraphErrors(workflow: WorkflowSpec): string[] {
   const pairs = new Set<string>();
   for (const edge of workflow.edges) {
     if (!ids.has(edge.from)) errors.push(`edge from unknown node '${edge.from}'`);
-    if (edge.to !== "END" && !ids.has(edge.to)) errors.push(`edge to unknown node '${edge.to}'`);
+    if (edge.to !== "END" && edge.to !== "FINISH" && !ids.has(edge.to)) errors.push(`edge to unknown node '${edge.to}'`);
     const pair = `${edge.from}->${edge.to}`;
     if (pairs.has(pair)) errors.push(`more than one edge ${pair}; merge their conditions into one edge`);
     pairs.add(pair);

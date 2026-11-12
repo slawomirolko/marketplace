@@ -1,0 +1,33 @@
+name: olko-claude-sync-safe-target
+version: 0.1.0
+description: "Requires a clean target marketplace checkout on main, fast-forwarded; asks before switching branch and stops otherwise."
+source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 1, target)"
+entry: safe-target
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: safe-target
+    description: "Checks the target marketplace the same way."
+    kind: script
+    op: sync.safeSource
+    maxVisits: 2
+    with: { path: state.target, question: q-claude-sync-main-target }
+  - id: ask-main-target
+    description: "Asks whether to switch the target to main."
+    kind: interrupt
+    question:
+      id: q-claude-sync-main-target
+      text: "The Claude marketplace target is on {{state.safe-target.detail}}, not main. Switch it to main?"
+      allowed: [switch, stop]
+  - id: stop-target
+    description: "Stops the run: the target checkout is not safe."
+    kind: script
+    op: sync.stopUnsafe
+    with: { from: safe-target }
+edges:
+  - { from: safe-target, to: END, when: "safe-target.ok == true", description: "target is clean and current" }
+  - { from: safe-target, to: ask-main-target, when: 'safe-target.reason == "not-main"', description: "not on main" }
+  - { from: safe-target, to: stop-target, description: "dirty, no remote or pull failed" }
+  - { from: ask-main-target, to: safe-target, when: 'ask-main-target.answer == "switch"', description: "you chose switch" }
+  - { from: ask-main-target, to: stop-target, when: 'ask-main-target.answer == "stop"', description: "you chose stop" }
+  - { from: stop-target, to: FINISH }

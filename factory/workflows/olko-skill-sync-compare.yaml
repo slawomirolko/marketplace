@@ -1,0 +1,54 @@
+name: olko-skill-sync-compare
+version: 0.1.0
+description: "Phase 2: discovers local skills and agents, adapts the skills locally, checks their versions and compares every artifact with its marketplace copy in parallel."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 2)"
+roles:
+  comparator: medium
+entry: discover
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: discover
+    description: "Lists local skills (.agents/skills) and agents (.opencode/agents), limited by input artifacts."
+    kind: script
+    op: sync.discover
+  - id: adapt-loop
+    description: "Runs olko-adapt-to-marketplace --local-only on every local skill so it carries a SemVer version before comparison."
+    kind: group
+    workflow: olko-skill-sync-adapt
+  - id: versions
+    description: "Requires a SemVer version in every local SKILL.md; stops otherwise."
+    kind: script
+    op: sync.checkVersions
+  - id: compare
+    description: "One comparator per artifact classifies it against its marketplace copy, in parallel."
+    kind: llm
+    role: comparator
+    agent: olko-marketplace-skill-sync-comparator
+    agentsFrom: state.discover.compare
+    dirs: ["{{state.resolve-path.path}}"]
+    parse: sync.comparison
+    prompt: |
+      Compare exactly one artifact. Use only read tools.
+      Artifact type: {{agent.type}}
+      Artifact name: {{agent.name}}
+      Local project: {{state.discover.project}}
+      Local path: {{agent.localPath}}
+      Local version: {{agent.localVersion}}
+      Marketplace: {{state.resolve-path.path}}
+      Marketplace path: {{agent.marketplacePath}}
+      Marketplace registry or agent manifest: {{agent.manifestPath}}
+      Current marketplace manifest version: {{agent.marketplaceVersion}}
+
+      Return your structured report. End it with exactly one line:
+      result | <identical|local-only|marketplace-only|project-adapter-only|adapter-candidate|portable-local-change|conflict> | <current marketplace version or none> | <none|patch|minor|major> | <exact proposed next version or none> | <recommended action>
+  - id: rows
+    description: "Builds the decision table with the actions each classification allows."
+    kind: script
+    op: sync.rows
+edges:
+  - { from: discover, to: adapt-loop }
+  - { from: adapt-loop, to: versions }
+  - { from: versions, to: compare }
+  - { from: compare, to: rows }
+  - { from: rows, to: END }

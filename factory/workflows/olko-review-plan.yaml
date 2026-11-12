@@ -1,0 +1,24 @@
+name: olko-review-plan
+version: 0.1.0
+description: "PLAN route: reviews a plan file against its acceptance criteria and the project rules before implementation; no memory."
+source: "agents/opencode/olko-review-orchestrator.md (PLAN ROUTE)"
+entry: plan-findings
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: plan-findings
+    description: "Reads the plan file, runs the requirements lens in plan mode and lets the verifier confirm each finding against the plan text."
+    kind: group
+    workflow: olko-review-plan-findings
+  - id: plan-store
+    description: "Checks the plan findings against the project rule store and asks one question per conflict."
+    kind: group
+    workflow: olko-review-plan-rules
+  - id: plan-report
+    description: "Writes the plan review report with plan: lines."
+    kind: script
+    op: review.planReport
+edges:
+  - { from: plan-findings, to: plan-store }
+  - { from: plan-store, to: plan-report }
+  - { from: plan-report, to: END }

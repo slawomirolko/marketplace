@@ -1,0 +1,19 @@
+name: olko-claude-sync-sources
+version: 0.1.0
+description: "Phase 1: both marketplaces must be clean and current before anything is compared."
+source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 1)"
+entry: safe-olko-phase
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: safe-olko-phase
+    description: "Requires a clean Olko checkout on main, fast-forwarded to origin/main; asks before switching branch and stops otherwise."
+    kind: group
+    workflow: olko-claude-sync-safe-olko
+  - id: safe-target-phase
+    description: "Requires a clean target marketplace checkout on main, fast-forwarded; asks before switching branch and stops otherwise."
+    kind: group
+    workflow: olko-claude-sync-safe-target
+edges:
+  - { from: safe-olko-phase, to: safe-target-phase }
+  - { from: safe-target-phase, to: END }

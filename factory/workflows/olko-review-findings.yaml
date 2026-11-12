@@ -1,0 +1,76 @@
+name: olko-review-findings
+version: 0.1.0
+description: "Runs the lenses in parallel on the diff, merges their findings and lets the verifier confirm or reject each one."
+source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE, lenses and verification)"
+roles:
+  lens: medium
+  verifier: medium
+entry: lenses
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: lenses
+    description: "Runs the selected lenses in parallel on the diff hunks (read only)."
+    kind: llm
+    role: lens
+    agentsFrom: state.detect.lenses
+    parse: review.findings
+    prompt: |
+      PR #{{state.scope.pr}}: {{state.scope.title}}
+      {{#agent.criteria}}
+
+      Mode: {{agent.mode}}
+      Acceptance criteria (from the PR description):
+      {{agent.criteria}}
+      {{/agent.criteria}}
+
+      PR description:
+      {{state.scope.body}}
+
+      Files for this lens ({{agent.files.length}}):
+      {{#agent.files}}
+      - {{path}}
+      {{/agent.files}}
+
+      Suppress: {{state.memory.suppressText}}. Prioritize: {{state.memory.prioritizeText}}.
+      {{#state.scope.stale}}
+      The current branch is not the PR head: the working-tree files are stale. Judge changed lines from the hunks only.
+      {{/state.scope.stale}}
+      {{^state.scope.stale}}
+      The current branch is the PR head. The files in the working tree match the diff.
+      {{/state.scope.stale}}
+
+      Diff hunks:
+      {{#agent.files}}
+      {{diff}}
+      {{/agent.files}}
+  - id: merge
+    description: "Merges and de-duplicates the lens findings."
+    kind: script
+    op: review.mergeFindings
+  - id: verify
+    description: "The verifier confirms or rejects every finding against the code and the false-positive list."
+    kind: llm
+    role: verifier
+    agent: olko-review-verifier
+    parse: review.verdicts
+    prompt: |
+      PR #{{state.scope.pr}}: {{state.scope.title}}
+      {{#state.scope.stale}}
+      The current branch is not the PR head: the working-tree files are stale. Judge changed lines from the hunks only.
+      {{/state.scope.stale}}
+
+      Findings ({{state.merge.findings.length}}), one per line:
+      {{#state.merge.findings}}
+      {{line}}
+      {{/state.merge.findings}}
+  - id: confirm
+    description: "Keeps the confirmed findings."
+    kind: script
+    op: review.confirmFindings
+edges:
+  - { from: lenses, to: merge }
+  - { from: merge, to: verify, when: "merge.findings > 0", description: "the lenses found something" }
+  - { from: merge, to: confirm, when: "merge.findings == 0", description: "nothing to verify" }
+  - { from: verify, to: confirm }
+  - { from: confirm, to: END }

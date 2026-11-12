@@ -1,5 +1,6 @@
 name: olko-marketplace-skill-sync
 version: 0.2.0
+description: "Synchronizes project-local skills and OpenCode agents with the marketplace: compares every artifact, asks one decision per difference, applies, publishes through a PR and installs after the merge."
 source: agents/opencode/olko-marketplace-skill-sync-manager.md (phases 1-5)
 roles:
   bootstrap: low
@@ -7,277 +8,44 @@ roles:
   comparator: medium
   sync: medium
   publisher: medium
-entry: resolve-path
+entry: sources
 limits:
   maxCycleIterations: 3
 nodes:
-  - id: resolve-path
-    kind: script
-    op: sync.resolvePath
-  - id: ask-fallback
-    kind: interrupt
-    question:
-      id: q-marketplace-fallback
-      text: "The marketplace path comes from the built-in fallback: {{state.resolve-path.path}}. Use it?"
-      allowed: [continue, stop]
-  - id: memory
-    kind: script
-    op: memory.load
-    with: { agent: olko-marketplace-skill-sync-manager }
-  - id: bootstrap
-    kind: llm
-    role: bootstrap
-    agent: olko-marketplace-skill-bootstrapper
-    tools: [read, bash]
-    parse: text.raw
-    prompt: |
-      Project: {{input.project}}
-      Install the registry skills that are missing from .agents/skills/ of this project, as your instructions say. Report the present, installed and failed skill lists.
-  - id: safe-source
-    kind: script
-    op: sync.safeSource
-    maxVisits: 2
-  - id: ask-main
-    kind: interrupt
-    question:
-      id: q-marketplace-main
-      text: "The marketplace {{state.resolve-path.path}} is on {{state.safe-source.detail}}, not main. Switch it to main?"
-      allowed: [switch, stop]
-  - id: stop-unsafe
-    kind: script
-    op: sync.stopUnsafe
-  - id: discover
-    kind: script
-    op: sync.discover
-  - id: adapt-next
-    kind: script
-    op: list.next
-    maxVisits: 200
-    with: { over: discover.skills }
-  - id: adapt
-    kind: llm
-    role: adapter
-    skill: olko-adapt-to-marketplace
-    tools: [read, edit]
-    maxVisits: 200
-    parse: text.raw
-    prompt: |
-      olko-adapt-to-marketplace --local-only {{state.adapt-next.item.name}}
-
-      Local skill: {{state.adapt-next.item.localPath}}
-      Do not touch the marketplace ({{state.resolve-path.path}}) and do not publish. The hard deliverable: SKILL.md frontmatter of this skill carries a valid SemVer `version` (1.0.0 for a new skill; for an existing skill keep or bump it and say which). Reply with one line: `version | <x.y.z> | <kept|bumped|new> | <what changed>`.
-  - id: versions
-    kind: script
-    op: sync.checkVersions
-  - id: compare
-    kind: llm
-    role: comparator
-    agent: olko-marketplace-skill-sync-comparator
-    agentsFrom: state.discover.compare
-    dirs: ["{{state.resolve-path.path}}"]
-    parse: sync.comparison
-    prompt: |
-      Compare exactly one artifact. Use only read tools.
-      Artifact type: {{agent.type}}
-      Artifact name: {{agent.name}}
-      Local project: {{state.discover.project}}
-      Local path: {{agent.localPath}}
-      Local version: {{agent.localVersion}}
-      Marketplace: {{state.resolve-path.path}}
-      Marketplace path: {{agent.marketplacePath}}
-      Marketplace registry or agent manifest: {{agent.manifestPath}}
-      Current marketplace manifest version: {{agent.marketplaceVersion}}
-
-      Return your structured report. End it with exactly one line:
-      result | <identical|local-only|marketplace-only|project-adapter-only|adapter-candidate|portable-local-change|conflict> | <current marketplace version or none> | <none|patch|minor|major> | <exact proposed next version or none> | <recommended action>
-  - id: rows
-    kind: script
-    op: sync.rows
-  - id: decide-next
-    kind: script
-    op: list.next
-    maxVisits: 200
-    with: { over: rows.decide }
-  - id: decide
-    kind: interrupt
-    maxVisits: 200
-    question:
-      id: "q-sync-{{state.decide-next.index}}"
-      text: "Artifact {{state.decide-next.number}} of {{state.decide-next.total}} needs a decision.\n{{state.decide-next.item.line}}\n\nAll artifacts:\n{{state.rows.table}}\n\nNothing changes until you decide. revert-local overwrites the local copy."
-      allowedFrom: state.decide-next.item.options
+  - id: sources
+    description: "Prepares both sides: the marketplace path, memory and missing skills, and a safe, current marketplace checkout."
+    kind: group
+    workflow: olko-skill-sync-sources
+  - id: compare-phase
+    description: "Phase 2: discovers local skills and agents, adapts the skills locally, checks their versions and compares every artifact with its marketplace copy in parallel."
+    kind: group
+    workflow: olko-skill-sync-compare
+  - id: decide-phase
+    description: "Phase 3: one decision per non-identical artifact, with the actions its classification allows."
+    kind: group
+    workflow: olko-skill-sync-decide
   - id: plan
+    description: "Collects the accepted decisions and how each one is applied."
     kind: script
     op: sync.plan
-  - id: apply-next
-    kind: script
-    op: list.next
-    maxVisits: 200
-    with: { over: plan.accepted }
-  - id: apply
-    kind: llm
-    role: sync
-    agent: olko-marketplace-skill-sync-manager
-    tools: [read, edit]
-    dirs: ["{{state.resolve-path.path}}"]
-    maxVisits: 200
-    parse: sync.applied
-    prompt: |
-      Do only Phase 4 of your workflow for this one accepted decision. The factory owns every other phase and every question: do not ask, do not commit, push, install, run registry --fix, or touch any other artifact.
-      Decision: {{state.apply-next.item.decision}} for {{state.apply-next.item.type}} {{state.apply-next.item.name}} (classification {{state.apply-next.item.classification}}).
-      Local project: {{state.discover.project}}
-      Marketplace: {{state.resolve-path.path}}
-
-      {{state.apply-next.item.instruction}}
-      The user approved version {{state.apply-next.item.version}}: set it on the manifest entry even when the body has no portable change. Use `blocked` only when a write fails.
-
-      Reply with one line: `applied | <changed files, comma separated> | <version>`, or `blocked | <reason>` when you could not apply it.
-  - id: adapter-draft
-    kind: llm
-    role: sync
-    agent: olko-marketplace-skill-sync-manager
-    dirs: ["{{state.resolve-path.path}}"]
-    maxVisits: 200
-    parse: text.raw
-    prompt: |
-      Do only step (1) of the move-to-adapter decision in Phase 4 for {{state.apply-next.item.type}} {{state.apply-next.item.name}}, and do not write any file: draft the exact diff for the project's `.agents/skill-config.md` or `.agents/skills/{{state.apply-next.item.name}}/project.md` (every reported project value and every delegated skill in `uses`), and list the keys the marketplace skill does not expose yet (step 2, a marketplace change with at least a minor bump).
-      Local project: {{state.discover.project}}
-      Local path: {{state.apply-next.item.localPath}}
-      Marketplace path: {{state.apply-next.item.marketplacePath}}
-      Reply with the diff and the key list only.
-  - id: ask-adapter
-    kind: interrupt
-    maxVisits: 200
-    question:
-      id: "q-sync-adapter-{{state.apply-next.index}}"
-      text: "Adapter change for {{state.apply-next.item.type}} {{state.apply-next.item.name}}:\n{{state.adapter-draft.adapter-draft}}\n\nWrite the adapter and the marketplace keys?"
-      allowed: [write, skip]
-  - id: adapter-write
-    kind: llm
-    role: sync
-    agent: olko-marketplace-skill-sync-manager
-    tools: [read, edit]
-    dirs: ["{{state.resolve-path.path}}"]
-    maxVisits: 200
-    parse: sync.applied
-    prompt: |
-      Do only steps (1) and (2) of the move-to-adapter decision in Phase 4 for {{state.apply-next.item.type}} {{state.apply-next.item.name}}, exactly as the approved draft below. Do not replace the local skill body (the factory does step 3 after one more confirmation), do not commit, push or install.
-      Local project: {{state.discover.project}}
-      Marketplace: {{state.resolve-path.path}}
-
-      Approved draft:
-      {{state.adapter-draft.adapter-draft}}
-
-      Reply with one line: `applied | <changed files, comma separated> | <version>`, or `blocked | <reason>` when you could not apply it.
-  - id: ask-revert
-    kind: interrupt
-    maxVisits: 200
-    question:
-      id: "q-sync-revert-{{state.apply-next.index}}"
-      text: "Final confirmation: replace the local {{state.apply-next.item.type}} {{state.apply-next.item.localPath}} with its marketplace counterpart {{state.apply-next.item.marketplacePath}}? This overwrites the local copy."
-      allowed: [revert, keep]
-  - id: revert
-    kind: script
-    op: sync.revertLocal
-    maxVisits: 200
-  - id: validate
-    kind: script
-    op: sync.validate
-  - id: ask-publish
-    kind: interrupt
-    question:
-      id: q-sync-publish
-      text: "Marketplace diff:\n{{state.validate.status}}\n{{state.validate.diffStat}}\n\nVersions:\n{{state.validate.versions}}\n\nValidation: {{state.validate.summary}}\n\nCommit and push on a feature branch and open a PR?"
-      allowed: [publish, stop]
-  - id: publish
-    kind: llm
-    role: publisher
-    skill: olko-commit
-    tools: [read, edit, bash]
-    dirs: ["{{state.resolve-path.path}}"]
-    parse: sync.prLine
-    prompt: |
-      Run the olko-commit workflow in the marketplace repository {{state.resolve-path.path}} (use `git -C` or change into it), not in the current directory.
-      Never pass --force, never push to main: use its scope-named feature branch and PR flow. Do not merge. Do not ask questions; the user already approved this publish.
-      PR title: the conventional commit subject for this change, for example `feat(sync): {{#state.plan.accepted}}{{name}} {{/state.plan.accepted}}`.
-      PR description, concise: the artifacts and versions below, and the validation result.
-      {{state.validate.versions}}
-      Validation: {{state.validate.summary}}
-
-      End with exactly one line: `pr | <PR URL> | <branch> | <commit sha>`.
-  - id: publish-pr
-    kind: script
-    op: sync.prOf
-  - id: ask-pr
-    kind: interrupt
-    maxVisits: 20
-    question:
-      id: "q-sync-pr-{{state.wait-ci.round}}"
-      text: "Published: {{state.publish-pr.publish.url}}{{#state.wait-ci}}\nCI checks passed: {{state.wait-ci.passed}}{{/state.wait-ci}}\nLeave it open, wait for CI, or squash merge? Installing needs the merge."
-      allowed: [leave, wait, merge]
-  - id: wait-ci
-    kind: script
-    op: sync.waitChecks
-    maxVisits: 20
-  - id: merge
-    kind: script
-    op: sync.merge
-  - id: install
-    kind: script
-    op: sync.install
-  - id: memory-save
-    kind: script
-    op: sync.memorySave
+  - id: apply-phase
+    description: "Phase 4: applies one accepted decision at a time: marketplace change, move-to-adapter with draft and approval, or revert-local after a final confirmation."
+    kind: group
+    workflow: olko-skill-sync-apply
+  - id: publish-phase
+    description: "Phase 5: validates the marketplace, publishes through olko-commit after approval, then leave, wait for CI or squash merge, and installs after the merge."
+    kind: group
+    workflow: olko-skill-sync-publish
   - id: report
+    description: "Reports every artifact with its classification and decision, and what was published or installed."
     kind: script
     op: sync.report
 edges:
-  - { from: resolve-path, to: ask-fallback, when: "resolve-path.fallback == true" }
-  - { from: resolve-path, to: memory, when: "resolve-path.fallback == false" }
-  - { from: ask-fallback, to: memory, when: 'ask-fallback.answer == "continue"' }
-  - { from: ask-fallback, to: END, when: 'ask-fallback.answer == "stop"' }
-  - { from: memory, to: bootstrap }
-  - { from: bootstrap, to: safe-source }
-  - { from: safe-source, to: discover, when: "safe-source.ok == true" }
-  - { from: safe-source, to: ask-main, when: 'safe-source.reason == "not-main"' }
-  - { from: safe-source, to: stop-unsafe }
-  - { from: ask-main, to: safe-source, when: 'ask-main.answer == "switch"' }
-  - { from: ask-main, to: stop-unsafe, when: 'ask-main.answer == "stop"' }
-  - { from: stop-unsafe, to: END }
-  - { from: discover, to: adapt-next }
-  - { from: adapt-next, to: adapt, when: "adapt-next.done == false" }
-  - { from: adapt-next, to: versions, when: "adapt-next.done == true" }
-  - { from: adapt, to: adapt-next }
-  - { from: versions, to: compare }
-  - { from: compare, to: rows }
-  - { from: rows, to: decide-next }
-  - { from: decide-next, to: decide, when: "decide-next.done == false" }
-  - { from: decide-next, to: plan, when: "decide-next.done == true" }
-  - { from: decide, to: decide-next }
-  - { from: plan, to: apply-next, when: "plan.accepted > 0" }
-  - { from: plan, to: report, when: "plan.accepted == 0" }
-  - { from: apply-next, to: validate, when: "apply-next.done == true" }
-  - { from: apply-next, to: apply, when: 'apply-next.item.route == "change"' }
-  - { from: apply-next, to: ask-revert, when: 'apply-next.item.route == "revert"' }
-  - { from: apply-next, to: adapter-draft, when: 'apply-next.item.route == "adapter"' }
-  - { from: apply, to: apply-next }
-  - { from: adapter-draft, to: ask-adapter }
-  - { from: ask-adapter, to: adapter-write, when: 'ask-adapter.answer == "write"' }
-  - { from: ask-adapter, to: apply-next, when: 'ask-adapter.answer == "skip"' }
-  - { from: adapter-write, to: ask-revert }
-  - { from: ask-revert, to: revert, when: 'ask-revert.answer == "revert"' }
-  - { from: ask-revert, to: apply-next, when: 'ask-revert.answer == "keep"' }
-  - { from: revert, to: apply-next }
-  - { from: validate, to: ask-publish, when: "validate.changed > 0" }
-  - { from: validate, to: report, when: "validate.changed == 0" }
-  - { from: ask-publish, to: publish, when: 'ask-publish.answer == "publish"' }
-  - { from: ask-publish, to: report, when: 'ask-publish.answer == "stop"' }
-  - { from: publish, to: publish-pr }
-  - { from: publish-pr, to: ask-pr }
-  - { from: ask-pr, to: merge, when: 'ask-pr.answer == "merge"' }
-  - { from: ask-pr, to: wait-ci, when: 'ask-pr.answer == "wait"' }
-  - { from: ask-pr, to: report, when: 'ask-pr.answer == "leave"' }
-  - { from: wait-ci, to: ask-pr }
-  - { from: merge, to: install }
-  - { from: install, to: memory-save }
-  - { from: memory-save, to: report }
+  - { from: sources, to: compare-phase }
+  - { from: compare-phase, to: decide-phase }
+  - { from: decide-phase, to: plan }
+  - { from: plan, to: apply-phase, when: "plan.accepted > 0", description: "some decisions change something" }
+  - { from: plan, to: report, when: "plan.accepted == 0", description: "every decision is leave or reject" }
+  - { from: apply-phase, to: publish-phase }
+  - { from: publish-phase, to: report }
   - { from: report, to: END }
