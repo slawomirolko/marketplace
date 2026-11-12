@@ -32,6 +32,8 @@ Rules for writing and checking Software Factory workflow YAML (`factory/workflow
 - A step in the agent text that needs a new operation or parser: do not fake it with an llm node. Report it as `needs engine op: <proposed name>: <what it must do>`.
 
 ## Mapping an agent change
+The current marketplace text of the agent or skill is the decision; the YAML follows it. Never turn a rule the text states into a question for the user, and never call the YAML lagging behind the text a conflict.
+
 1. Read the diff of the source file and only the YAML files whose `source:` names it.
 2. Change the smallest part that covers the diff; keep node ids stable so run history still matches.
 3. A new main agent with no workflow: write the root workflow plus one group file per phase.

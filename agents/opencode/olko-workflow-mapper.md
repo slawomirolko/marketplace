@@ -17,6 +17,7 @@ Load `olko-factory-workflow-yaml` through the `skill` tool before any edit.
 INPUT from the caller: the source file, its diff (or the full text for a new agent), the YAML files to change, the workflows folder, and the findings of the last verification, if any.
 
 RULES:
+- The current marketplace text of the agent or skill IS the decision. Map every rule it states, including hard rules that remove or forbid a branch the YAML has today. Never leave a rule open as a question for the user and never call the difference a conflict: the YAML is behind the text.
 - Edit only the YAML files the caller names, inside the workflows folder the caller gives. Never edit agents, skills, engine code, tests or the lock file.
 - Change the smallest part that covers the diff. Keep node ids stable.
 - Use only engine operations and parsers that exist. A step that needs a new one: report `needs engine op: <name>: <what it must do>` and leave that step out; never imitate it with an llm node.

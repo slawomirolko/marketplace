@@ -22,6 +22,8 @@ CHECK, read only:
 - Branch descriptions match their conditions; node descriptions match what the node does.
 - Every `needs engine op` in the mapper report is real: the step cannot be built from existing operations.
 
+The current marketplace text IS the decision. A YAML branch that the text forbids is a `yaml:` gap with the fix the text implies; never write that a gap needs a rule decision by the user or call it a conflict.
+
 Sort every gap into one of two kinds:
 - `yaml:` the mapper can fix it in YAML with existing operations, parsers, agents and node kinds.
 - `engine:` it needs a new engine operation or parser, or a node kind the factory does not have. Name what is missing.
