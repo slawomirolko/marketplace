@@ -92,3 +92,7 @@ pre { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line
 .disabled { opacity: 0.45; filter: grayscale(1); border-style: dashed; }
 .disabled .card-title { text-decoration: line-through; }
 .off-label { font-style: italic; }
+
+.mode { display: inline-flex; border: 1px solid var(--neutral-line); border-radius: 8px; overflow: hidden; }
+.mode button { border: 0; background: transparent; color: var(--fg); padding: 4px 10px; cursor: pointer; }
+.mode button.active { background: var(--neutral-line); font-weight: 600; }

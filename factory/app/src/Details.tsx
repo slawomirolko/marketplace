@@ -106,8 +106,41 @@ function group<T>(entries: [string, T][], format: (value: T, key: string) => Rea
   return entries.map(([k, v]) => <Row key={k} label={k} value={format(v, k)} />);
 }
 
+function WorkflowSummary() {
+  const { workflow, config } = useViewer();
+  if (!workflow) return <p className="muted">No workflow selected.</p>;
+  const kinds = workflow.nodes.reduce<Record<string, number>>((acc, n) => ({ ...acc, [n.kind]: (acc[n.kind] ?? 0) + 1 }), {});
+  const agents = [...new Set(workflow.nodes.flatMap((n) => [n.agent, n.skill ? `skill ${n.skill}` : undefined, ...(n.agents ?? []).map((a) => (a as { agent?: string }).agent)]).filter((a): a is string => Boolean(a)))];
+  const loops = workflow.nodes.filter((n) => n.maxVisits).map((n) => `${n.id} (max ${n.maxVisits})`);
+  const switched = workflow.nodes.filter((n) => n.enabledWhen).map((n) => `${n.id}: ${n.enabledWhen}`);
+  const writers = workflow.nodes.filter((n) => n.tools?.some((t) => t !== "read")).map((n) => `${n.id}: ${n.tools!.join(", ")}`);
+  return (
+    <section>
+      <h2>{workflow.name}</h2>
+      <p className="muted">Configuration only: no run, no cost.</p>
+      <Row label="Version" value={workflow.version} />
+      {workflow.source && <Row label="Source" value={workflow.source} />}
+      <Row label="Entry" value={workflow.entry} />
+      <Row label="Nodes" value={Object.entries(kinds).map(([k, v]) => `${v} ${k}`).join(", ")} />
+      <Row label="Edges" value={workflow.edges.length} />
+      <h3>Roles → tier</h3>
+      {Object.entries(workflow.roles ?? {}).map(([role, tier]) => <Row key={role} label={role} value={config?.roles?.[role] ?? `${tier} (workflow default)`} />)}
+      <h3>Agents and skills</h3>
+      {agents.length ? agents.map((a) => <Row key={a} label={a} value="" />) : <p className="muted">None.</p>}
+      <h3>Write access</h3>
+      {writers.length ? writers.map((w) => <Row key={w} label={w} value="" />) : <p className="muted">Every agent is read-only.</p>}
+      <h3>Loops (maxVisits)</h3>
+      {loops.length ? <p>{loops.join(", ")}</p> : <p className="muted">None.</p>}
+      <h3>Switches</h3>
+      {switched.length ? switched.map((s) => <Row key={s} label={s} value="" />) : <p className="muted">None.</p>}
+      {Object.entries(config?.switches ?? {}).map(([k, v]) => <Row key={k} label={`config switches.${k}`} value={String(v)} />)}
+    </section>
+  );
+}
+
 function RunSummary() {
-  const { run, report, config } = useViewer();
+  const { run, report, config, mode } = useViewer();
+  if (mode === "workflows") return <WorkflowSummary />;
   if (!report) {
     return (
       <section>
@@ -164,6 +197,15 @@ export function Details({ item }: { item: Item | null }) {
       {item.node.enabledWhen && <Row label="Enabled when" value={item.node.enabledWhen} />}
       {switchedOff && <Row label="Status" value={`switched off in this run: ${switchedOff}`} />}
       {item.node.run && <Row label="Runs" value={item.node.run} />}
+      {item.node.skill && <Row label="Skill" value={item.node.skill} />}
+      {item.node.agentsFrom && <Row label="Agents from" value={item.node.agentsFrom} />}
+      {item.node.tools && <Row label="Tools" value={item.node.tools.join(", ")} />}
+      {item.node.dirs && <Row label="Extra dirs" value={item.node.dirs.join(", ")} />}
+      {item.node.op && <Row label="Operation" value={item.node.op} />}
+      {item.node.with && <Row label="Operation args" value={JSON.stringify(item.node.with)} />}
+      {item.node.parse && <Row label="Parser" value={item.node.parse} />}
+      {item.node.maxVisits && <Row label="Max visits" value={item.node.maxVisits} />}
+      {item.node.input && <Row label="Call input" value={Object.entries(item.node.input).map(([k, v]) => `${k} = ${v}`).join("; ")} />}
       {harnessAgent && <Row label="Harness agent" value={harnessAgent} />}
       {role && <Row label="Role" value={role} />}
       {tier && <Row label="Tier" value={tier} />}
@@ -179,7 +221,7 @@ export function Details({ item }: { item: Item | null }) {
           <h3>Question to the user</h3>
           <p>{question.text}</p>
           <Row label="Allowed" value={(question.allowed ?? []).join(", ") || "free text"} />
-          <Row label="Answer" value={run?.answers?.[question.id] ?? "not answered"} />
+          {run && <Row label="Answer" value={run.answers?.[question.id] ?? "not answered"} />}
         </section>
       )}
       {item.kind === "team" && <AgentTable item={item} />}
@@ -187,6 +229,12 @@ export function Details({ item }: { item: Item | null }) {
         <section>
           <h3>Ledger records</h3>
           <LedgerTable records={records} />
+        </section>
+      )}
+      {!run && item.kind !== "agent" && item.node.prompt && (
+        <section>
+          <h3>Prompt template</h3>
+          <pre>{item.node.prompt}</pre>
         </section>
       )}
       {outputs.length > 0 && (

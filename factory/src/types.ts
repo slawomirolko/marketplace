@@ -408,4 +408,5 @@ export interface WorkflowSpec {
 export interface FactoryConfigFile {
   tiers: string[];
   roles: Record<string, string>;
+  switches?: Record<string, boolean>;
 }

@@ -7307,7 +7307,7 @@ function viewerOptions(dataDir) {
 		viewerDir: process.env.FACTORY_VIEWER_DIR ?? path.join(FACTORY_DIR, "app", "dist"),
 		dataDir,
 		factoryDir: FACTORY_DIR,
-		configFile: path.join(FACTORY_DIR, "spec", "examples", "valid", "factory-config.json")
+		configFile: process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR, "config", "factory.yaml")
 	};
 }
 // src/marketplace-agents.ts
@@ -19272,7 +19272,8 @@ function createDataApi({ factoryDir, dataDir, configFile, demo }) {
 			return loadWorkflowSpecs(path.join(factoryDir, "workflows"));
 		},
 		config() {
-			return readJson(configFile);
+			const text = fs.readFileSync(configFile, "utf8");
+			return /\.ya?ml$/i.test(configFile) ? (0, import_dist$1.parse)(text) : JSON.parse(text);
 		},
 		runs() {
 			return allRunFiles().flatMap(({ file, source }) => {

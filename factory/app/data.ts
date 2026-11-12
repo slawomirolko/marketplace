@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { loadWorkflowSpecs } from "../src/workflow-yaml.ts";
 import path from "node:path";
+import { parse as parseYaml } from "yaml";
 import { Factory, errorMessage, runReport } from "../src/engine.ts";
 import { homeDataDir, readSources } from "../src/paths.ts";
 import type { Coverage, FactoryConfigFile, Report, Run, WorkflowSpec } from "../src/types.ts";
@@ -112,7 +113,8 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo }: DataApi
     },
 
     config() {
-      return readJson(configFile) as FactoryConfigFile;
+      const text = fs.readFileSync(configFile, "utf8");
+      return (/\.ya?ml$/i.test(configFile) ? parseYaml(text) : JSON.parse(text)) as FactoryConfigFile;
     },
 
     runs() {

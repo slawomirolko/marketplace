@@ -25,6 +25,15 @@ export interface WorkflowNode {
   question?: WorkflowQuestion;
   enabledWhen?: string;
   skill?: string;
+  tools?: string[];
+  dirs?: string[];
+  op?: string;
+  with?: Record<string, unknown>;
+  parse?: string;
+  maxVisits?: number;
+  parallel?: number;
+  input?: Record<string, string>;
+  prompt?: string;
 }
 
 export interface WorkflowEdge {
@@ -36,6 +45,8 @@ export interface WorkflowEdge {
 export interface Workflow {
   name: string;
   version: string;
+  source?: string;
+  roles?: Record<string, string>;
   entry: string;
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
@@ -60,6 +71,7 @@ export interface FactoryConfig {
   backends?: FactoryBackend[];
   roles?: Record<string, string>;
   budget?: Budget;
+  switches?: Record<string, boolean>;
 }
 
 export interface Coverage {

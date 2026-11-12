@@ -42,6 +42,6 @@ export function viewerOptions(dataDir: string) {
     viewerDir: process.env.FACTORY_VIEWER_DIR ?? path.join(FACTORY_DIR, "app", "dist"),
     dataDir,
     factoryDir: FACTORY_DIR,
-    configFile: path.join(FACTORY_DIR, "spec", "examples", "valid", "factory-config.json"),
+    configFile: process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR, "config", "factory.yaml"),
   };
 }

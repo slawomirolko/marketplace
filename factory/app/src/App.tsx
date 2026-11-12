@@ -8,7 +8,7 @@ import type { ViewerState } from "./context.ts";
 import { Details } from "./Details.tsx";
 import { layoutGraph } from "./layout.ts";
 import { nodeAriaLabel, nodeTypes } from "./nodes.tsx";
-import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost, disabledKeys } from "./tree.ts";
+import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost, disabledKeys, configDisabledKeys } from "./tree.ts";
 import type { Bounds, FactoryConfig, FlowEdge, FlowNode, Item, Level, RunDetail, RunIndex, RunListItem, Workflow } from "./types.ts";
 
 const API = `${import.meta.env.BASE_URL}api`;
@@ -41,26 +41,45 @@ function Viewer() {
   const [config, setConfig] = useState<FactoryConfig | null>(null);
   const [runs, setRuns] = useState<RunListItem[]>([]);
   const [runId, setRunId] = useState("");
+  const params = new URLSearchParams(window.location.search);
+  const [mode, setMode] = useState<"runs" | "workflows">(params.get("mode") === "workflows" ? "workflows" : "runs");
+  const [workflowName, setWorkflowName] = useState(params.get("workflow") ?? "olko-review");
+  const [requestedRun] = useState(params.get("run"));
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [selected, setSelected] = useState<Item | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([getJson<Workflow[]>("/workflows"), getJson<FactoryConfig>("/config"), getJson<RunListItem[]>("/runs")])
-      .then(([workflowList, factoryConfig, runList]) => {
+    Promise.all([getJson<Workflow[]>("/workflows"), getJson<FactoryConfig>("/config")])
+      .then(([workflowList, factoryConfig]) => {
         setWorkflows(workflowList);
         setConfig(factoryConfig);
-        setRuns(runList);
-        const requested = new URLSearchParams(window.location.search).get("run");
-        setRunId(requested !== null && runList.some((r) => r.runId === requested) ? requested : (runList[0]?.runId ?? ""));
       })
       .catch((loadError: unknown) => setError(messageOf(loadError)));
   }, []);
 
+  const [runsLoaded, setRunsLoaded] = useState(false);
+  useEffect(() => {
+    if (mode !== "runs" || runsLoaded) return;
+    setRunsLoaded(true);
+    getJson<RunListItem[]>("/runs")
+      .then((runList) => {
+        setRuns(runList);
+        setRunId(requestedRun !== null && runList.some((r) => r.runId === requestedRun) ? requestedRun : (runList[0]?.runId ?? ""));
+      })
+      .catch((loadError: unknown) => setError(messageOf(loadError)));
+  }, [mode, runsLoaded, requestedRun]);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    url.search = mode === "workflows" ? `?mode=workflows&workflow=${encodeURIComponent(workflowName)}` : runId ? `?run=${encodeURIComponent(runId)}` : "";
+    window.history.replaceState(null, "", url);
+  }, [mode, workflowName, runId]);
+
   useEffect(() => {
     setSelected(null);
-    if (!runId) {
+    if (!runId || mode === "workflows") {
       setDetail(null);
       return undefined;
     }
@@ -75,9 +94,9 @@ function Viewer() {
     return () => {
       current = false;
     };
-  }, [runId]);
+  }, [runId, mode]);
 
-  const rootName = detail?.report.workflow.split("@")[0] ?? "hello";
+  const rootName = mode === "workflows" ? workflowName : (detail?.report.workflow.split("@")[0] ?? "hello");
   const built = useMemo((): { level?: Level; error?: string } | null => {
     if (!workflows) return null;
     try {
@@ -113,8 +132,10 @@ function Viewer() {
     });
   }, []);
 
-  const disabled = useMemo(() => disabledKeys(detail?.run ?? null), [detail]);
-  const context = useMemo((): ViewerState => ({ config, report: detail?.report ?? null, run: detail?.run ?? null, toggle, focusKey, index: runIndex, disabled }), [config, detail, toggle, focusKey, runIndex, disabled]);
+  const shown = mode === "workflows" ? null : detail;
+  const disabled = useMemo(() => (mode === "workflows" ? configDisabledKeys(level, config) : disabledKeys(detail?.run ?? null)), [mode, level, config, detail]);
+  const workflow = useMemo(() => workflows?.find((w) => w.name === rootName) ?? null, [workflows, rootName]);
+  const context = useMemo((): ViewerState => ({ config, report: shown?.report ?? null, run: shown?.run ?? null, toggle, focusKey, index: runIndex, disabled, mode, workflow }), [config, shown, toggle, focusKey, runIndex, disabled, mode, workflow]);
   const total = detail?.report.cost;
 
   if (error) return <p className="error" role="alert">Could not load factory data: {error}</p>;
@@ -125,6 +146,26 @@ function Viewer() {
       <div className="app">
         <header>
           <h1>Factory viewer</h1>
+          <div className="mode" role="radiogroup" aria-label="View">
+            {(["runs", "workflows"] as const).map((m) => (
+              <button key={m} type="button" role="radio" aria-checked={mode === m} className={mode === m ? "active" : ""} onClick={() => setMode(m)}>
+                {m === "runs" ? "Runs" : "Workflows (config)"}
+              </button>
+            ))}
+          </div>
+          {mode === "workflows" && (
+            <label>
+              Workflow{" "}
+              <select value={workflowName} onChange={(e) => setWorkflowName(e.target.value)}>
+                {(workflows ?? []).map((w) => (
+                  <option key={w.name} value={w.name}>
+                    {w.name} · {w.version} · {w.nodes.length} nodes
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {mode === "runs" && (
           <label>
             Run{" "}
             <select value={runId} onChange={(e) => setRunId(e.target.value)}>
@@ -136,7 +177,8 @@ function Viewer() {
               ))}
             </select>
           </label>
-          {detail && total && (
+          )}
+          {mode === "runs" && detail && total && (
             <span className="total">
               Total <strong className={isUnknownCost(detail.report.coverage?.run) ? "cost-unknown" : ""}>{formatAmount(total.costUsd, detail.report.coverage?.run)}</strong> of ${total.budgetUsd.toFixed(2)} · {formatTokens(total.tokens, detail.report.cacheTokens)} · {total.steps} steps · {total.source}
             </span>
