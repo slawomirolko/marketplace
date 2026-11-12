@@ -6,8 +6,9 @@ import { Factory, errorMessage, runReport } from "../src/engine.ts";
 import { homeDataDir, readSources } from "../src/paths.ts";
 import { describeAgent, marketplaceDir } from "../src/marketplace-agents.ts";
 import { standaloneNames, workflowsThatRan } from "../src/standalone.ts";
-import { readLock, staleWorkflows, updateMarketplace } from "../src/sources-lock.ts";
-import type { StaleWorkflow, UpdateResult } from "../src/sources-lock.ts";
+import { readLock, scanMarketplace, updateMarketplace } from "../src/sources-lock.ts";
+import type { MarketplaceScan, UpdateResult } from "../src/sources-lock.ts";
+import { execFileSync } from "node:child_process";
 import { hostExec } from "../src/cli-backend.ts";
 import type { AgentInfo } from "../src/marketplace-agents.ts";
 import type { Coverage, FactoryConfigFile, Report, Run, WorkflowSpec } from "../src/types.ts";
@@ -50,8 +51,8 @@ export interface DataApi {
   config(): FactoryConfigFile;
   runs(): RunListItem[];
   run(runId: string): RunDetail | null;
-  stale(): { marketplace: string; stale: StaleWorkflow[] };
-  update(): Promise<UpdateResult & { stale: StaleWorkflow[] }>;
+  stale(): MarketplaceScan;
+  update(): Promise<UpdateResult & MarketplaceScan>;
 }
 
 export interface ApiRequest {
@@ -184,16 +185,26 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo }: DataApi
     },
 
     stale() {
-      const marketplace = marketplaceDir();
-      return { marketplace, stale: staleWorkflows(readLock(), marketplace) };
+      return scan(factoryDir);
     },
 
     async update() {
-      const marketplace = marketplaceDir();
-      const result = await updateMarketplace(hostExec, marketplace);
-      return { ...result, stale: staleWorkflows(readLock(), marketplace) };
+      const result = await updateMarketplace(hostExec, marketplaceDir());
+      return { ...result, ...scan(factoryDir) };
     },
   };
+}
+
+function scan(factoryDir: string): MarketplaceScan {
+  const marketplace = marketplaceDir();
+  let head = "";
+  try {
+    head = execFileSync("git", ["-C", marketplace, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  } catch {
+    head = "";
+  }
+  const specs = loadWorkflowSpecs(path.join(factoryDir, "workflows"));
+  return scanMarketplace(specs, readLock(), marketplace, head, (name) => describeAgent(name) !== null);
 }
 
 export function apiMiddleware(api: DataApi) {

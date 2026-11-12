@@ -3,7 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { marketplaceDir } from "./marketplace-agents.ts";
 import { evaluateWhen } from "./workflow-yaml.ts";
-import { IMPL_OPERATIONS, IMPL_PARSERS } from "./impl-ops.ts";
+import { IMPL_OPERATIONS, IMPL_PARSERS, parseLine } from "./impl-ops.ts";
+import { WFSYNC_OPERATIONS } from "./wfsync-ops.ts";
 import type { Agent, Operation, RunInput, ScriptContext, ScriptResult, WorkflowState } from "./types.ts";
 
 export interface DiffFile {
@@ -1674,6 +1675,7 @@ const planFeatureReport: Operation = async ({ state, cwd }) => {
 
 export const OPERATIONS: Record<string, Operation> = {
   ...IMPL_OPERATIONS,
+  ...WFSYNC_OPERATIONS,
   "builtin.pass": pass,
   "builtin.count": async ({ state, nodeId }) => {
     const count = ((nodeId ? (state[nodeId] as { count?: number } | undefined)?.count : 0) ?? 0) + 1;
@@ -1769,6 +1771,8 @@ export const OPERATIONS: Record<string, Operation> = {
 
 export const PARSERS: Record<string, (text: string) => unknown> = {
   ...IMPL_PARSERS,
+  "wfsync.mapping": parseLine("mapping"),
+  "wfsync.verify": parseLine("verify"),
   "text.raw": (text) => String(text).trim(),
   "review.findings": parseFindings,
   "review.verdicts": parseVerdicts,

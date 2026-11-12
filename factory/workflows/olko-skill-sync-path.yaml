@@ -20,5 +20,5 @@ nodes:
 edges:
   - { from: resolve-path, to: ask-fallback, when: "resolve-path.fallback == true", description: "only the built-in fallback path was found" }
   - { from: resolve-path, to: END, when: "resolve-path.fallback == false", description: "path from input, environment or adapter" }
-  - { from: ask-fallback, to: END, when: 'ask-fallback.answer == "continue"' }
+  - { from: ask-fallback, to: END, when: 'ask-fallback.answer == "continue"', description: "you chose continue with the fallback path" }
   - { from: ask-fallback, to: FINISH, when: 'ask-fallback.answer == "stop"', description: "you chose stop" }

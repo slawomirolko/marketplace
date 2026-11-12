@@ -46,7 +46,7 @@ nodes:
     maxVisits: 200
 edges:
   - { from: fb-reply-next, to: fb-draft, when: "fb-reply-next.done == false", description: "a reply is left" }
-  - { from: fb-reply-next, to: END, when: "fb-reply-next.done == true" }
+  - { from: fb-reply-next, to: END, when: "fb-reply-next.done == true", description: "every reply handled" }
   - { from: fb-draft, to: fb-reply-ask }
   - { from: fb-reply-ask, to: fb-post, when: 'fb-reply-ask.answer == "post"', description: "you chose post" }
   - { from: fb-reply-ask, to: fb-reply-next, when: 'fb-reply-ask.answer == "skip"', description: "you chose skip" }

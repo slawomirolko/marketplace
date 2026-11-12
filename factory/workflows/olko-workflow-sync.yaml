@@ -1,0 +1,139 @@
+name: olko-workflow-sync
+version: 0.1.0
+description: "Keeps the factory workflows in step with the Olko marketplace: finds sources that changed, were removed or are new main agents; the mapper updates or writes the YAML from the diff, a script validates it and the verifier checks it against the agent text, up to three rounds per source; you approve the whole YAML diff before the lock is updated, or everything is reverted."
+source: "factory software-factory section: agents/opencode/olko-workflow-mapper.md and agents/opencode/olko-workflow-verifier.md with skills/software-factory/olko-factory-workflow-yaml"
+roles:
+  writer: medium
+  verifier: medium
+entry: scan
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: scan
+    description: "Compares the lock with the marketplace: changed and removed sources with their git diff, main agents without a workflow, workflows missing from the lock, and nodes that name an agent or skill the marketplace no longer has. Saves a copy of the YAML for a revert."
+    kind: script
+    op: wfsync.scan
+  - id: item-next
+    description: "Takes the next source to handle."
+    kind: script
+    op: list.next
+    maxVisits: 60
+    with: { over: scan.items }
+  - id: item
+    description: "Prepares the source, its diff and the YAML files that name it."
+    kind: script
+    op: wfsync.item
+    maxVisits: 60
+  - id: ask-new
+    description: "A main agent has no workflow yet: asks whether to map it now (a new workflow costs more than an update)."
+    kind: interrupt
+    maxVisits: 30
+    question:
+      id: "q-wfsync-new-{{state.item-next.index}}"
+      text: "{{state.item.source}} is a main agent with no factory workflow. Map it into a new workflow now, or skip it for this run?"
+      allowed: [map, skip]
+  - id: map
+    description: "olko-workflow-mapper changes the smallest part of the named YAML files that covers the diff, or writes a new workflow; steps that need new engine code are reported, not faked."
+    kind: llm
+    role: writer
+    agent: olko-workflow-mapper
+    tools: [read, edit, bash]
+    maxVisits: 90
+    dirs: ["{{state.scan.workflows}}", "{{state.scan.marketplace}}", "{{state.scan.factory}}"]
+    parse: wfsync.mapping
+    prompt: |
+      Source ({{state.item.kind}}): {{state.scan.marketplace}}/{{state.item.source}}
+      Workflows folder (edit only YAML files here): {{state.scan.workflows}}
+      YAML files that name this source:
+      {{state.item.yamlList}}
+      Validate with: node {{state.scan.factory}}/src/validate-workflows.ts {{state.scan.workflows}}
+      Diff of the source since the YAML was written ({{state.item.kind}} == new means the full text of a new main agent):
+      {{state.item.diff}}
+      Findings of the last check of {{state.check.source}} (use them only when that is this source):
+      {{state.check.findings}}
+  - id: validate
+    description: "Script check of every YAML file: schema, names, descriptions, known operations and parsers, agents and skills that exist, and a full load."
+    kind: script
+    op: wfsync.validate
+    maxVisits: 90
+  - id: verify
+    description: "olko-workflow-verifier compares the YAML with the current agent text and lists every gap (read only)."
+    kind: llm
+    role: verifier
+    agent: olko-workflow-verifier
+    maxVisits: 90
+    dirs: ["{{state.scan.workflows}}", "{{state.scan.marketplace}}"]
+    parse: wfsync.verify
+    prompt: |
+      Current source: {{state.scan.marketplace}}/{{state.item.source}} ({{state.item.kind}})
+      YAML files in {{state.scan.workflows}} that implement it:
+      {{state.item.yamlList}}
+      Diff of the source:
+      {{state.item.diff}}
+      Mapper report:
+      {{state.map.map.text}}
+      Script validation: {{state.validate.errors}}
+  - id: check
+    description: "Passes when the validation is clean and the verifier passes; otherwise the mapper gets the findings, up to three rounds per source."
+    kind: script
+    op: wfsync.check
+    maxVisits: 90
+  - id: ask-open
+    description: "After three rounds the source is still open: shows the findings; it stays unlocked so it is marked stale again."
+    kind: interrupt
+    maxVisits: 30
+    question:
+      id: "q-wfsync-open-{{state.item-next.index}}"
+      text: "{{state.item.source}} is still open after three rounds:\n{{state.check.findings}}\nContinue with the next source (this one stays marked stale), or stop?"
+      allowed: [continue, stop]
+  - id: stop
+    description: "Stops the run; the YAML edits stay on disk for you to inspect, the lock is unchanged."
+    kind: script
+    op: builtin.stop
+    with: { reason: "stopped by the user during the workflow sync; YAML edits are on disk, the lock is unchanged" }
+  - id: diff
+    description: "Builds the diff of every YAML file against the copy taken at the start."
+    kind: script
+    op: wfsync.diff
+  - id: ask-apply
+    description: "Shows the whole YAML diff and the steps that need engine work; nothing is kept without your approval."
+    kind: interrupt
+    question:
+      id: q-wfsync-apply
+      text: "YAML changes:\n{{state.diff.stat}}\nSources that need engine work:\n{{state.diff.needsOp}}\nApprove (keep the YAML, update the lock for the verified sources) or revert everything?"
+      allowed: [approve, revert]
+  - id: apply
+    description: "Updates the lock for the verified sources and the unlocked workflows, at the current marketplace commit."
+    kind: script
+    op: wfsync.apply
+  - id: revert
+    description: "Puts every YAML file back from the copy; the lock is unchanged."
+    kind: script
+    op: wfsync.revert
+  - id: report
+    description: "Lists what was found, what was mapped and verified, what needs engine work, and what the lock now says."
+    kind: script
+    op: wfsync.report
+edges:
+  - { from: scan, to: item-next }
+  - { from: item-next, to: item, when: "item-next.done == false", description: "a source is left" }
+  - { from: item-next, to: report, when: "scan.pending == 0", description: "nothing to update" }
+  - { from: item-next, to: diff, description: "every source handled" }
+  - { from: item, to: ask-new, when: "item.ask == true", description: "a new main agent" }
+  - { from: item, to: map, description: "a changed or removed source" }
+  - { from: ask-new, to: map, when: 'ask-new.answer == "map"', description: "you chose map" }
+  - { from: ask-new, to: item-next, description: "you skipped it" }
+  - { from: map, to: validate }
+  - { from: validate, to: verify }
+  - { from: verify, to: check }
+  - { from: check, to: item-next, when: 'check.next == "pass"', description: "valid and verified" }
+  - { from: check, to: map, when: 'check.next == "retry"', description: "findings left and rounds left" }
+  - { from: check, to: ask-open, description: "still open after three rounds" }
+  - { from: ask-open, to: item-next, when: 'ask-open.answer == "continue"', description: "you chose continue" }
+  - { from: ask-open, to: stop, description: "you chose stop" }
+  - { from: diff, to: ask-apply }
+  - { from: ask-apply, to: apply, when: 'ask-apply.answer == "approve"', description: "you approved" }
+  - { from: ask-apply, to: revert, description: "you chose revert" }
+  - { from: apply, to: report }
+  - { from: revert, to: report }
+  - { from: report, to: END }

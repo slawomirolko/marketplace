@@ -58,6 +58,6 @@ edges:
   - { from: suggestion-next, to: ask-suggestion, when: "suggestion-next.done == false", description: "a suggestion is left" }
   - { from: suggestion-next, to: consolidation-record, when: "suggestion-next.done == true", description: "all suggestions decided" }
   - { from: ask-suggestion, to: ask-suggestion-reason, when: 'ask-suggestion.answer == "reject"', description: "you rejected it" }
-  - { from: ask-suggestion, to: suggestion-next }
+  - { from: ask-suggestion, to: suggestion-next, description: "suggestion accepted: next suggestion" }
   - { from: ask-suggestion-reason, to: suggestion-next }
   - { from: consolidation-record, to: END }

@@ -76,7 +76,7 @@ edges:
   - { from: round, to: fix, when: "round.count < 3", description: "fewer than three correction rounds" }
   - { from: round, to: ask-gap, description: "three rounds did not fix it" }
   - { from: fix, to: stack }
-  - { from: ask-gap, to: record-gap, when: 'ask-gap.answer == "accept"' }
-  - { from: ask-gap, to: stop, when: 'ask-gap.answer == "stop"' }
+  - { from: ask-gap, to: record-gap, when: 'ask-gap.answer == "accept"', description: "you accepted the gap" }
+  - { from: ask-gap, to: stop, when: 'ask-gap.answer == "stop"', description: "you chose stop" }
   - { from: record-gap, to: END }
   - { from: stop, to: END }

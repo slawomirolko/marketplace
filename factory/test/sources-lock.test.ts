@@ -28,14 +28,14 @@ const spec = { name: "wf", version: "1", entry: "x", source: "agents/opencode/ol
 
 test("a workflow is stale after its source agent changes upstream and the marketplace is updated", async () => {
   const { origin, clone } = repo();
-  const lock = buildLock([spec as never], clone);
+  const lock = buildLock([spec as never], clone, git(clone, "rev-parse", "HEAD"));
   assert.deepEqual(staleWorkflows(lock, clone), []);
   fs.writeFileSync(path.join(origin, "agents", "opencode", "olko-a.md"), "---\nmode: primary\n---\nstep one\nstep two\n");
   git(origin, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "-am", "b");
   const result = await updateMarketplace(hostExec, clone);
   assert.notEqual(result.before, result.after);
   assert.deepEqual(result.changedFiles, ["agents/opencode/olko-a.md"]);
-  assert.deepEqual(staleWorkflows(lock, clone), [{ workflow: "wf", changed: ["agents/opencode/olko-a.md"], missing: [] }]);
+  assert.deepEqual(staleWorkflows(lock, clone), [{ workflow: "wf", commit: result.before, changed: ["agents/opencode/olko-a.md"], missing: [] }]);
 });
 
 test("update refuses a checkout that is not on main or has local changes, and pulls nothing", async () => {

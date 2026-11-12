@@ -10,7 +10,7 @@ const workflows = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", 
 
 test("standalone workflows are the entry workflows of agents a user can start", () => {
   const names = [...standaloneNames(loadWorkflowSpecs(workflows), marketplaceDir())].sort();
-  assert.deepEqual(names, ["olko-claude-sync", "olko-implementation", "olko-marketplace-skill-sync", "olko-plan-documentation", "olko-review"]);
+  assert.deepEqual(names, ["olko-claude-sync", "olko-implementation", "olko-marketplace-skill-sync", "olko-plan-documentation", "olko-review", "olko-workflow-sync"]);
 });
 
 test("only the workflows whose steps started count as run", () => {

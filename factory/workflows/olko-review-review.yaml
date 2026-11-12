@@ -44,9 +44,9 @@ nodes:
     workflow: olko-review-post
 edges:
   - { from: review-scope, to: memory }
-  - { from: memory, to: review-findings, when: "memory.loaded == true" }
+  - { from: memory, to: review-findings, when: "memory.loaded == true", description: "memory block loaded" }
   - { from: memory, to: ask-memory, when: "memory.loaded == false", description: "no memory block yet" }
-  - { from: ask-memory, to: review-findings, when: 'ask-memory.answer == "continue"' }
+  - { from: ask-memory, to: review-findings, when: 'ask-memory.answer == "continue"', description: "you chose continue without memory" }
   - { from: ask-memory, to: END, when: 'ask-memory.answer == "stop"', description: "you chose stop" }
   - { from: review-findings, to: review-rules }
   - { from: review-rules, to: after-rules }

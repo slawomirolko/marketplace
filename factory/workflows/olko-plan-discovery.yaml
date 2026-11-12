@@ -61,7 +61,7 @@ nodes:
 edges:
   - { from: draft, to: draft-check }
   - { from: draft-check, to: ask-questions, when: "draft-check.ask == true", description: "the writer still has open questions" }
-  - { from: draft-check, to: ask-draft }
+  - { from: draft-check, to: ask-draft, description: "no open question left: review the draft" }
   - { from: ask-questions, to: draft }
   - { from: ask-draft, to: tracker-publish, when: 'ask-draft.answer == "approve"', description: "draft approved" }
   - { from: ask-draft, to: ask-revise, description: "draft needs changes" }

@@ -1,6 +1,7 @@
 name: hello
 version: 0.2.0
 source: sample workflow of the factory (offline checks)
+description: "Sample workflow for offline checks: plan, build, review and a cost summary."
 roles:
   planner: high
   implementer: medium
@@ -9,14 +10,17 @@ roles:
 entry: plan
 nodes:
   - id: plan
+    description: "Plans the change (sample step)."
     kind: llm
     role: planner
     turns: 3
     prompt: "You are the planner node of a test workflow. Goal: {{goal}}. Reply with a 3-step plan in at most 50 words. Do not use any tools."
   - id: build
+    description: "Builds it in the sample subgraph."
     kind: subgraph
     workflow: hello-build
   - id: review
+    description: "Reviews the result (sample step)."
     kind: llm
     role: reviewer
     turns: 1
@@ -27,6 +31,7 @@ nodes:
       - { id: docs, role: accountant }
     prompt: "You are the {{agent.id}} reviewer of a test workflow. Goal: {{goal}}. In one sentence, name one {{agent.id}} risk of a greeting function. Do not use any tools."
   - id: accountant
+    description: "Summarizes the cost of the run (sample step)."
     kind: llm
     role: accountant
     turns: 1

@@ -646,6 +646,26 @@
         "olko-test",
         "olko-commit"
       ]
+    },
+    {
+      "name": "olko-workflow-mapper",
+      "version": "0.1.0",
+      "file": "olko-workflow-mapper.md",
+      "stack": "software-factory",
+      "role": "writer",
+      "skills": [
+        "olko-factory-workflow-yaml"
+      ]
+    },
+    {
+      "name": "olko-workflow-verifier",
+      "version": "0.1.0",
+      "file": "olko-workflow-verifier.md",
+      "stack": "software-factory",
+      "role": "investigator",
+      "skills": [
+        "olko-factory-workflow-yaml"
+      ]
     }
   ]
 }

@@ -83,7 +83,7 @@ edges:
   - { from: readiness-check, to: blocker-next, when: "readiness-check.count > 0", description: "blockers remain" }
   - { from: readiness-check, to: END, description: "every plan is ready" }
   - { from: blocker-next, to: ask-blocker, when: "blocker-next.done == false", description: "a blocker of the batch is left" }
-  - { from: blocker-next, to: blocker-answers }
+  - { from: blocker-next, to: blocker-answers, description: "every blocker of the batch answered" }
   - { from: ask-blocker, to: blocker-next }
   - { from: blocker-answers, to: blocker-apply }
   - { from: blocker-apply, to: gate-blocker }

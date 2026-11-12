@@ -84,5 +84,5 @@ edges:
   - { from: next-decision, to: END, when: "next-decision.done == true", description: "all conflicts decided" }
   - { from: next-decision-ask, to: ask-rule, when: "next-decision-ask.done == false", description: "a conflict is left" }
   - { from: next-decision-ask, to: END, when: "next-decision-ask.done == true", description: "all conflicts decided" }
-  - { from: ask-rule, to: next-decision, when: "rules-merge.violations > 0" }
-  - { from: ask-rule, to: next-decision-ask, when: "rules-merge.violations == 0" }
+  - { from: ask-rule, to: next-decision, when: "rules-merge.violations > 0", description: "store violations exist: next violation" }
+  - { from: ask-rule, to: next-decision-ask, when: "rules-merge.violations == 0", description: "no store violation: next question" }

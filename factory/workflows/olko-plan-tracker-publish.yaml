@@ -24,6 +24,6 @@ nodes:
       {{state.draft-check.draft.text}}
       Reply with the verified issue links, one per line.
 edges:
-  - { from: ask-publish, to: publish, when: 'ask-publish.answer == "publish"' }
-  - { from: ask-publish, to: END, when: 'ask-publish.answer == "skip"' }
+  - { from: ask-publish, to: publish, when: 'ask-publish.answer == "publish"', description: "you chose publish" }
+  - { from: ask-publish, to: END, when: 'ask-publish.answer == "skip"', description: "you chose skip: nothing published" }
   - { from: publish, to: END }

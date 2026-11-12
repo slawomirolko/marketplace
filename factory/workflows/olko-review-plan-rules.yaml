@@ -78,9 +78,9 @@ edges:
   - { from: plan-rules-merge, to: plan-next-decision-ask, when: "plan-rules-merge.violations == 0", description: "no new violation" }
   - { from: plan-verify-violations, to: plan-rules-violations }
   - { from: plan-rules-violations, to: plan-next-decision }
-  - { from: plan-next-decision, to: plan-ask-rule, when: "plan-next-decision.done == false" }
-  - { from: plan-next-decision, to: END, when: "plan-next-decision.done == true" }
-  - { from: plan-next-decision-ask, to: plan-ask-rule, when: "plan-next-decision-ask.done == false" }
-  - { from: plan-next-decision-ask, to: END, when: "plan-next-decision-ask.done == true" }
-  - { from: plan-ask-rule, to: plan-next-decision, when: "plan-rules-merge.violations > 0" }
-  - { from: plan-ask-rule, to: plan-next-decision-ask, when: "plan-rules-merge.violations == 0" }
+  - { from: plan-next-decision, to: plan-ask-rule, when: "plan-next-decision.done == false", description: "a rule conflict is left" }
+  - { from: plan-next-decision, to: END, when: "plan-next-decision.done == true", description: "every rule conflict decided" }
+  - { from: plan-next-decision-ask, to: plan-ask-rule, when: "plan-next-decision-ask.done == false", description: "a rule question is left" }
+  - { from: plan-next-decision-ask, to: END, when: "plan-next-decision-ask.done == true", description: "every rule question decided" }
+  - { from: plan-ask-rule, to: plan-next-decision, when: "plan-rules-merge.violations > 0", description: "store violations exist: next violation" }
+  - { from: plan-ask-rule, to: plan-next-decision-ask, when: "plan-rules-merge.violations == 0", description: "no store violation: next question" }

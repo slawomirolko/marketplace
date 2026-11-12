@@ -99,12 +99,12 @@ edges:
   - { from: grill-questions, to: grill-next, when: "grill-questions.count > 0", description: "the batch has questions" }
   - { from: grill-questions, to: END, description: "no open question or round limit reached" }
   - { from: grill-next, to: ask-grill, when: "grill-next.done == false", description: "a question of the batch is left" }
-  - { from: grill-next, to: grill-answers }
+  - { from: grill-next, to: grill-answers, description: "every question of the batch answered" }
   - { from: ask-grill, to: grill-next }
   - { from: grill-answers, to: grill-apply }
   - { from: grill-apply, to: revalidate }
   - { from: revalidate, to: reval-findings }
   - { from: reval-findings, to: fold-reval, when: "reval-findings.total > 0", description: "unverified claims found" }
-  - { from: reval-findings, to: gate-grill }
+  - { from: reval-findings, to: gate-grill, description: "nothing to fold: run the consistency gate" }
   - { from: fold-reval, to: gate-grill }
   - { from: gate-grill, to: grill }

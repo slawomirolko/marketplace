@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
@@ -7275,7 +7275,7 @@ var import_dist$1 = (/* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.visit = visit.visit;
 	exports.visitAsync = visit.visitAsync;
 })))();
-var FACTORY_DIR$1 = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+var FACTORY_DIR$2 = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 var VIEWER_HEALTH = "skill-factory-viewer";
 var DEFAULT_VIEWER_PORT = 7340;
 function defaultDataDir() {
@@ -7305,10 +7305,10 @@ function registerDataSource(dataDir) {
 }
 function viewerOptions(dataDir) {
 	return {
-		viewerDir: process.env.FACTORY_VIEWER_DIR ?? path.join(FACTORY_DIR$1, "app", "dist"),
+		viewerDir: process.env.FACTORY_VIEWER_DIR ?? path.join(FACTORY_DIR$2, "app", "dist"),
 		dataDir,
-		factoryDir: FACTORY_DIR$1,
-		configFile: process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR$1, "config", "factory.yaml")
+		factoryDir: FACTORY_DIR$2,
+		configFile: process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR$2, "config", "factory.yaml")
 	};
 }
 // src/marketplace-agents.ts
@@ -7337,7 +7337,7 @@ var CLAUDE_ALL_TOOLS = [
 	"NotebookEdit"
 ];
 function marketplaceDir() {
-	return process.env.FACTORY_MARKETPLACE_DIR ?? path.join(FACTORY_DIR$1, "..");
+	return process.env.FACTORY_MARKETPLACE_DIR ?? path.join(FACTORY_DIR$2, "..");
 }
 function readFrontmatter(file) {
 	const match = fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n").match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
@@ -8130,2869 +8130,148 @@ var IMPL_PARSERS = {
 	"impl.runtime": parseLine("runtime"),
 	"impl.delivery": parseLine("delivery")
 };
-// src/ops.ts
-var TIERS = [
-	"bug",
-	"security",
-	"repo-rule",
-	"design",
-	"style",
-	"nit"
-];
-function stateOf(state, key) {
-	const value = state[key];
-	if (value === void 0) throw new Error(`state.${key} is not set`);
-	return value;
+// src/sources-lock.ts
+var FACTORY_DIR$1 = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+var LOCK_FILE = path.join(FACTORY_DIR$1, "workflows.lock.json");
+var SOURCE_FILE = /agents\/opencode\/[a-z0-9-]+\.md|plugins\/[a-z0-9-]+\/agents\/[a-z0-9-]+\.md|skills\/(?:\*|[a-z0-9-]+)\/[a-z0-9-]+(?:\/SKILL\.md)?/g;
+function resolveSkill(ref, marketplace) {
+	if (ref.endsWith(".md")) return ref;
+	const name = ref.split("/").pop();
+	const category = ref.split("/")[1];
+	const skills = path.join(marketplace, "skills");
+	const found = (category === "*" ? fs.existsSync(skills) ? fs.readdirSync(skills) : [] : [category]).find((c) => fs.existsSync(path.join(skills, c, name, "SKILL.md")));
+	return found ? `skills/${found}/${name}/SKILL.md` : `skills/${category}/${name}/SKILL.md`;
 }
-function stringList(value, name) {
-	if (!Array.isArray(value) || !value.every((v) => typeof v === "string")) throw new Error(`${name} must be a list of strings`);
-	return value;
+function sourceFiles(spec, marketplace) {
+	const refs = spec.source?.match(SOURCE_FILE) ?? [];
+	return [...new Set(refs.map((r) => r.startsWith("skills/") ? resolveSkill(r, marketplace) : r))].sort();
 }
-function splitDiff(diff) {
-	const files = [];
-	for (const chunk of diff.split(/^(?=diff --git )/m)) {
-		const header = chunk.match(/^diff --git a\/(.+?) b\/(.+)$/m);
-		if (header?.[2] !== void 0) files.push({
-			path: header[2],
-			diff: chunk
-		});
-	}
-	return files;
+function fileHash(file) {
+	if (!fs.existsSync(file)) return null;
+	return crypto.createHash("sha256").update(fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n")).digest("hex").slice(0, 16);
 }
-function cleanLine(line) {
-	const bare = line.trim().replace(/^[-*]\s+/, "");
-	return /^`[^`]*`$/.test(bare) ? bare.slice(1, -1) : bare;
-}
-function parseFindings(text) {
-	return String(text).split("\n").map(cleanLine).filter((line) => line.split("|").length >= 5 && !/^path\s*\|/i.test(line)).map((line) => {
-		const [location = "", ruleId = "", sev = "", problem = "", ...fix] = line.split("|").map((p) => p.trim());
-		return {
-			location,
-			ruleId,
-			sev,
-			problem,
-			fix: fix.join(" | "),
-			line
-		};
-	});
-}
-function parseVerdicts(text) {
-	const verdicts = [];
-	for (const line of String(text).split("\n").map(cleanLine)) {
-		const match = line.match(/^(CONFIRMED-UNCHECKED|CONFIRMED|REJECTED)\s*\|\s*(.+)$/);
-		if (match?.[1] !== void 0 && match[2] !== void 0) verdicts.push({
-			verdict: match[1],
-			rest: match[2]
-		});
-	}
-	return verdicts;
-}
-function tierOf$1(finding) {
-	const rule = finding.ruleId;
-	const skillPrefix = (name) => new RegExp(`^${name}[.:]`).test(rule);
-	if (finding.sev === "nit") return "nit";
-	if (rule.startsWith("bug.")) return "bug";
-	if (rule.startsWith("sec.") || /-security[.:]/.test(rule)) return "security";
-	if (rule.startsWith("repo.") || /-testing[.:]/.test(rule)) return "repo-rule";
-	if (skillPrefix("olko-design-rules") || /-architecture[.:]/.test(rule)) return "design";
-	return "style";
-}
-var pass = async () => ({
-	state: { passed: true },
-	output: "verify passed"
-});
-var reviewRoute = async ({ input, exec }) => {
-	if (input.plan) return {
-		state: {
-			route: "PLAN",
-			review: false
-		},
-		output: `PLAN (${input.plan})`
-	};
-	if (input.base) return {
-		state: {
-			route: "LOCAL",
-			review: true
-		},
-		output: `LOCAL (working tree against ${input.base})`
-	};
-	if (!exec) throw new Error("review.route needs the host exec tool");
-	if (input.pr === void 0 || !input.repo) throw new Error("review.route needs repo and pr, or plan, in the input");
-	const view = await exec("gh", [
-		"pr",
-		"view",
-		String(input.pr),
-		"--repo",
-		input.repo,
-		"--json",
-		"author"
-	]);
-	const user = await exec("gh", [
-		"api",
-		"user",
-		"--jq",
-		".login"
-	]);
-	if (view.code !== 0 || user.code !== 0) throw new Error(`gh failed: ${(view.stderr || user.stderr).slice(-300)}`);
-	const author = JSON.parse(view.stdout).author.login;
-	const own = author === user.stdout.trim();
-	if (own && !input.fresh) return {
-		state: {
-			route: "FEEDBACK",
-			review: false,
-			own
-		},
-		output: "FEEDBACK (the PR author is the signed-in user)"
-	};
-	const reason = own ? "fresh review of own PR" : `PR by ${author}`;
-	return {
-		state: {
-			route: "REVIEW",
-			review: true,
-			own
-		},
-		output: `REVIEW (${reason})`
-	};
-};
-function untrackedDiff(file, text) {
-	const lines = text.replace(/\r\n/g, "\n").replace(/\n$/, "").split("\n");
-	return `diff --git a/${file} b/${file}\nnew file mode 100644\n--- /dev/null\n+++ b/${file}\n@@ -0,0 +1,${lines.length} @@\n${lines.map((l) => `+${l}`).join("\n")}\n`;
-}
-async function localDiff(exec, root, base) {
-	if (!/^[\w./-]+$/.test(base)) throw new Error(`base ${base} is not a git ref`);
-	const mergeBase = await exec("git", [
-		"-C",
-		root,
-		"merge-base",
-		base,
-		"HEAD"
-	]);
-	if (mergeBase.code !== 0) throw new Error(`git merge-base ${base} HEAD failed: ${mergeBase.stderr.slice(-300)}`);
-	const tracked = await exec("git", [
-		"-C",
-		root,
-		"diff",
-		mergeBase.stdout.trim()
-	]);
-	const untracked = await exec("git", [
-		"-C",
-		root,
-		"ls-files",
-		"--others",
-		"--exclude-standard"
-	]);
-	if (tracked.code !== 0 || untracked.code !== 0) throw new Error(`git diff failed: ${(tracked.stderr || untracked.stderr).slice(-300)}`);
-	const added = untracked.stdout.split(/\r?\n/).filter(Boolean).map((f) => untrackedDiff(f, fs.readFileSync(path.join(root, f), "utf8")));
-	return {
-		files: splitDiff(tracked.stdout + added.join("")),
-		added: added.length,
-		mergeBase: mergeBase.stdout.trim()
-	};
-}
-async function localScope(input, exec, exclude, root) {
-	const base = String(input.base);
-	const diff = await localDiff(exec, root, base);
-	const isExcluded = (p) => exclude.some((re) => re.test(p));
-	const files = diff.files.filter((f) => !isExcluded(f.path));
-	const excluded = diff.files.filter((f) => isExcluded(f.path)).map((f) => f.path);
-	if (files.length === 0) throw new Error(`no local change against ${base} to review`);
-	return {
-		state: {
-			base,
-			repo: "",
-			title: `local changes against ${base}`,
-			body: (input.criteria ?? "").trim(),
-			head: "working tree",
-			files,
-			excluded,
-			stale: false
-		},
-		metrics: {
-			files: files.length,
-			excluded: excluded.length,
-			stale: 0
-		},
-		output: `Local diff against ${base}: ${files.length} files (${diff.added} new). Not sent to lenses: ${excluded.join(", ") || "none"}.`
-	};
-}
-var prScope = async ({ input, exec, args, cwd }) => {
-	if (input.base) {
-		if (!exec) throw new Error("github.prScope needs the host exec tool");
-		return localScope(input, exec, stringList(args.exclude ?? [], "with.exclude").map((p) => new RegExp(p)), path.resolve(cwd ?? "."));
-	}
-	const pr = input.pr;
-	const repo = input.repo ?? "";
-	if (pr === void 0 || !Number.isInteger(pr) || !/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error("input needs repo owner/name and an integer pr");
-	if (!exec) throw new Error("github.prScope needs the host exec tool");
-	const exclude = stringList(args.exclude ?? [], "with.exclude").map((p) => new RegExp(p));
-	const view = await exec("gh", [
-		"pr",
-		"view",
-		String(pr),
-		"--repo",
-		repo,
-		"--json",
-		"title,body,headRefName,author"
-	]);
-	const diff = await exec("gh", [
-		"pr",
-		"diff",
-		String(pr),
-		"--repo",
-		repo
-	]);
-	if (view.code !== 0 || diff.code !== 0) throw new Error(`gh failed: ${(view.stderr || diff.stderr).slice(-300)}`);
-	const branch = await exec("git", [
-		"-C",
-		cwd ?? ".",
-		"branch",
-		"--show-current"
-	]);
-	const meta = JSON.parse(view.stdout);
-	const all = splitDiff(diff.stdout);
-	const isExcluded = (p) => exclude.some((re) => re.test(p));
-	const files = all.filter((f) => !isExcluded(f.path));
-	const excluded = all.filter((f) => isExcluded(f.path)).map((f) => f.path);
-	if (files.length === 0) throw new Error("no diff to review");
-	const stale = branch.code !== 0 || branch.stdout.trim() !== meta.headRefName;
-	return {
-		state: {
-			pr,
-			repo,
-			title: meta.title,
-			body: meta.body || "",
-			head: meta.headRefName,
-			files,
-			excluded,
-			stale
-		},
-		metrics: {
-			files: files.length,
-			excluded: excluded.length,
-			stale: stale ? 1 : 0
-		},
-		output: `PR #${pr} "${meta.title}" (${meta.headRefName}): ${files.length} files, ${diff.stdout.length} characters of diff. Not sent to lenses: ${excluded.join(", ") || "none"}. Working tree ${stale ? "is not the PR head: lenses judge changed lines from the hunks only" : "is the PR head"}.`
-	};
-};
-var detectLenses = async ({ state, args }) => {
-	const scope = stateOf(state, "scope");
-	const files = scope.files;
-	const always = args.always;
-	const stacks = args.stacks ?? [];
-	const requirements = args.requirements;
-	if (!always?.id || !always.agent) throw new Error("with.always needs id and agent");
-	const lenses = [{
-		id: always.id,
-		agentName: always.agent,
-		role: "lens",
-		paths: files.map((f) => f.path),
-		files
-	}];
-	for (const stack of stacks) {
-		const extensions = stringList(stack.extensions ?? [], `with.stacks.${stack.id}.extensions`);
-		const matched = files.filter((f) => extensions.some((ext) => f.path.endsWith(ext)));
-		if (matched.length) lenses.push({
-			id: stack.id,
-			agentName: stack.agent,
-			role: "lens",
-			paths: matched.map((f) => f.path),
-			files: matched
-		});
-	}
-	const covered = new Set(lenses.slice(1).flatMap((l) => l.paths ?? []));
-	const onlyAlways = [...new Set(files.map((f) => f.path).filter((p) => !covered.has(p)).map((p) => p.match(/\.[^./]+$/)?.[0] ?? "(no extension)"))];
-	const criteria = scope.body.trim();
-	if (requirements?.id && requirements.agent && criteria) lenses.push({
-		id: requirements.id,
-		agentName: requirements.agent,
-		role: "lens",
-		paths: files.map((f) => f.path),
-		files,
-		criteria,
-		mode: "code"
-	});
-	return {
-		state: {
-			lenses,
-			bugsOnlyTypes: onlyAlways,
-			criteria: criteria ? "PR description" : "none"
-		},
-		metrics: { lenses: lenses.length },
-		output: `Lenses: ${lenses.map((l) => `${l.agentName} (${l.paths?.length} files)`).join(", ")}. File types reviewed only by ${always.agent}: ${onlyAlways.join(", ") || "none"}. Acceptance criteria: ${criteria ? "PR description" : "none, requirements lens skipped"}.`
-	};
-};
-function memoryLists(text) {
-	const counts = /* @__PURE__ */ new Map();
-	for (const line of text.split(/\r?\n/)) {
-		const match = line.trim().replace(/^[-*]\s+/, "").match(/^(confirmed|rejected):(\S+)/);
-		if (!match?.[1] || !match[2]) continue;
-		const entry = counts.get(match[2]) ?? {
-			confirmed: 0,
-			rejected: 0
-		};
-		entry[match[1]] += 1;
-		counts.set(match[2], entry);
-	}
-	return {
-		suppress: [...counts].filter(([, c]) => c.rejected >= 2).map(([p]) => p),
-		prioritize: [...counts].filter(([, c]) => c.confirmed >= 1).map(([p]) => p)
-	};
-}
-function memoryFile(cwd, agent) {
-	if (typeof agent !== "string" || !/^[a-z0-9-]+$/.test(agent)) throw new Error("with.agent must name the agent that owns the memory block");
-	return path.join(cwd ?? process.cwd(), ".opencode", "memory", `${agent}.md`);
-}
-var memoryLoad = async ({ args, cwd }) => {
-	const file = memoryFile(cwd, args.agent);
-	if (!fs.existsSync(file)) return {
-		state: {
-			loaded: false,
-			file,
-			suppressText: "none",
-			prioritizeText: "none"
-		},
-		metrics: {
-			loaded: 0,
-			suppress: 0,
-			prioritize: 0
-		},
-		output: `Memory block ${file} does not exist.`
-	};
-	const { suppress, prioritize } = memoryLists(fs.readFileSync(file, "utf8"));
-	return {
-		state: {
-			loaded: true,
-			file,
-			suppress,
-			prioritize,
-			suppressText: suppress.join(", ") || "none",
-			prioritizeText: prioritize.join(", ") || "none"
-		},
-		metrics: {
-			loaded: 1,
-			suppress: suppress.length,
-			prioritize: prioritize.length
-		},
-		output: `Memory loaded from ${file}: ${suppress.length} suppressed, ${prioritize.length} prioritized patterns.`
-	};
-};
-function nodeArg(args, key, fallback) {
-	const value = args[key] ?? fallback;
-	if (typeof value !== "string") throw new Error(`with.${key} must name a node`);
-	return value;
-}
-var mergeFindings = async ({ state, args }) => {
-	const byKey = /* @__PURE__ */ new Map();
-	const lensResults = state[nodeArg(args, "from", "lenses")] ?? {};
-	for (const [lens, findings] of Object.entries(lensResults)) for (const f of findings) {
-		const key = `${f.location}|${f.ruleId}`;
-		const current = byKey.get(key);
-		if (!current || TIERS.indexOf(tierOf$1(f)) < TIERS.indexOf(tierOf$1(current))) byKey.set(key, {
-			...f,
-			lens
-		});
-	}
-	const findings = [...byKey.values()];
-	return {
-		state: { findings },
-		metrics: { findings: findings.length },
-		output: findings.length ? findings.map((f) => f.line).join("\n") : "No findings from the lenses."
-	};
-};
-var confirmFindings = async ({ state, args }) => {
-	const findings = stateOf(state, nodeArg(args, "findings", "merge")).findings;
-	const verifyNode = nodeArg(args, "verdicts", "verify");
-	const verdicts = state[verifyNode]?.[verifyNode] ?? [];
-	const confirmed = [];
-	const dropped = [];
-	findings.forEach((f, i) => {
-		const v = verdicts[i];
-		if (v && v.verdict !== "REJECTED") confirmed.push({
-			...f,
-			unchecked: v.verdict === "CONFIRMED-UNCHECKED"
-		});
-		else dropped.push({
-			...f,
-			reason: v ? (v.rest.split("|").at(-1) ?? "").trim() : "no verdict returned"
-		});
-	});
-	return {
-		state: {
-			confirmed,
-			dropped,
-			count: confirmed.length
-		},
-		metrics: {
-			confirmed: confirmed.length,
-			dropped: dropped.length
-		},
-		output: `${confirmed.length} confirmed, ${dropped.length} dropped by the verifier.`
-	};
-};
-function parseRulesCheck(text) {
-	const lines = String(text).split("\n").map(cleanLine).filter(Boolean);
-	const result = {
-		noStore: lines.some((l) => /^no-store$/i.test(l)),
-		violations: [],
-		verdicts: []
-	};
-	for (const line of lines) {
-		if (/^violation\s*\|/.test(line)) result.violations.push(line.replace(/^violation\s*\|\s*/, ""));
-		const verdict = line.match(/^(keep|drop|ask)\s*\|\s*(.+)\|\s*([^|]+)$/);
-		if (verdict?.[1] && verdict[2] && verdict[3]) result.verdicts.push({
-			verdict: verdict[1],
-			finding: verdict[2].trim(),
-			cite: verdict[3].trim()
-		});
-	}
-	return result;
-}
-var mergeRules = async ({ state, args }) => {
-	const confirmed = stateOf(state, nodeArg(args, "confirmed", "confirm")).confirmed;
-	const check = Object.values(state[nodeArg(args, "check", "rules-check")] ?? {})[0];
-	if (!check) throw new Error("rules-check returned nothing");
-	if (check.noStore) return {
-		state: {
-			kept: confirmed,
-			dropped: [],
-			decide: [],
-			violations: [],
-			noStore: true
-		},
-		metrics: {
-			noStore: 1,
-			decide: 0,
-			violations: 0,
-			dropped: 0
-		},
-		output: "Project rules check: no-store (no ADR or rule directory). Skipped."
-	};
-	const kept = [];
-	const dropped = [];
-	const decide = [];
-	confirmed.forEach((f, i) => {
-		const v = check.verdicts[i];
-		if (v?.verdict === "drop") dropped.push({
-			line: f.line,
-			cite: v.cite
-		});
-		else if (v?.verdict === "ask") decide.push({
-			kind: "ask",
-			line: f.line,
-			cite: v.cite
-		});
-		else kept.push(f);
-	});
-	return {
-		state: {
-			kept,
-			dropped,
-			decide,
-			violations: check.violations,
-			noStore: false
-		},
-		metrics: {
-			noStore: 0,
-			decide: decide.length,
-			violations: check.violations.length,
-			dropped: dropped.length
-		},
-		output: `Project rules check: ${check.violations.length} violations, ${dropped.length} findings dropped by the store, ${decide.length} to decide.`
-	};
-};
-var addViolations = async ({ state, args }) => {
-	const rules = stateOf(state, nodeArg(args, "rules", "rules-merge"));
-	const verifyNode = nodeArg(args, "verdicts", "verify-violations");
-	const verdicts = state[verifyNode]?.[verifyNode] ?? [];
-	const confirmed = rules.violations.filter((_, i) => verdicts[i] && verdicts[i].verdict !== "REJECTED");
-	const decide = [...rules.decide, ...confirmed.map((line) => ({
-		kind: "violation",
-		line,
-		cite: line.split("|").slice(-2).join("|").trim()
-	}))];
-	return {
-		state: { decide },
-		metrics: {
-			decide: decide.length,
-			violations: confirmed.length
-		},
-		output: `${confirmed.length} store violations confirmed by the verifier.`
-	};
-};
-var listNext = async ({ state, args, nodeId }) => {
-	if (typeof args.over !== "string") throw new Error("with.over must be a state path");
-	const list = args.over.split(".").reduce((value, key) => value && typeof value === "object" ? value[key] : void 0, state);
-	if (!Array.isArray(list)) throw new Error(`state.${args.over} is not a list`);
-	const previous = nodeId ? state[nodeId] : void 0;
-	const index = previous?.index === void 0 || previous.done ? 0 : previous.index + 1;
-	const done = index >= list.length;
-	return {
-		state: {
-			index,
-			number: index + 1,
-			total: list.length,
-			item: done ? null : list[index],
-			done
-		},
-		metrics: {
-			index,
-			total: list.length
-		},
-		output: done ? `All ${list.length} items handled.` : `Item ${index + 1} of ${list.length}.`
-	};
-};
-var rankFindings = async ({ state, answers }) => {
-	const scope = stateOf(state, "scope");
-	const detect = stateOf(state, "detect");
-	const confirm = stateOf(state, "confirm");
-	const rules = stateOf(state, "rules-merge");
-	const decide = state["rules-violations"]?.decide ?? state["rules-merge"].decide;
-	const memory = state.memory;
-	const decided = decide.map((d, i) => ({
-		...d,
-		answer: answers?.[`q-rule-${i}`] ?? "unanswered"
-	}));
-	const kept = [...rules.kept];
-	for (const d of decided) if (d.answer !== "store") kept.push({
-		location: d.line.split("|")[0]?.trim() ?? "",
-		ruleId: d.kind === "violation" ? "repo.store" : "repo.ask",
-		sev: "bug",
-		problem: d.line,
-		fix: "",
-		line: d.line,
-		unchecked: false
-	});
-	kept.sort((a, b) => TIERS.indexOf(tierOf$1(a)) - TIERS.indexOf(tierOf$1(b)));
-	const totals = TIERS.map((t) => `${t}: ${kept.filter((f) => tierOf$1(f) === t).length}`).join(", ");
-	const lines = [
-		scope.pr === void 0 ? `Review of ${scope.title}` : `Review of PR #${scope.pr}: ${scope.title}`,
-		"",
-		...kept.length ? kept.map((f) => `${f.line}${f.unchecked ? " (rule unchecked)" : ""}`) : ["No confirmed findings."],
-		"",
-		`Totals: ${totals}`,
-		`Lenses run: ${detect.lenses.map((l) => l.agentName).join(", ")}`,
-		`Acceptance criteria: ${detect.criteria}`,
-		`File types reviewed only by the always-on lens: ${detect.bugsOnlyTypes.join(", ") || "none"}`,
-		`Not reviewed (excluded): ${scope.excluded.join(", ") || "none"}`,
-		`Dropped by the verifier: ${confirm.dropped.length}`,
-		...confirm.dropped.map((f) => `  - ${f.line} | ${f.reason}`),
-		`Project rules check: ${rules.noStore ? "no-store, skipped" : `${rules.dropped.length} dropped by the store`}`,
-		...rules.dropped.map((d) => `  - ${d.line} | ${d.cite}`),
-		...decided.map((d) => `Decided (${d.kind}): ${d.line} -> ${d.answer === "store" ? "store entry holds" : "finding holds"}`),
-		`Memory: ${memory?.loaded ? "loaded" : "not loaded (the user chose to continue without it)"}`
-	];
-	return {
-		state: {
-			kept,
-			count: kept.length
-		},
-		metrics: { kept: kept.length },
-		output: lines.join("\n")
-	};
-};
-var postComment = async ({ state, exec, args }) => {
-	if (!exec) throw new Error("github.postComment needs the host exec tool");
-	if (typeof args.from !== "string") throw new Error("with.from must name the list node");
-	const scope = stateOf(state, "scope");
-	const item = state[args.from]?.item;
-	if (!item) throw new Error(`state.${args.from}.item is not set`);
-	const result = await exec("gh", [
-		"pr",
-		"comment",
-		String(scope.pr),
-		"--repo",
-		scope.repo,
-		"--body",
-		item.line
-	]);
-	if (result.code !== 0) throw new Error(`gh pr comment failed: ${result.stderr.slice(-300)}`);
-	return {
-		state: { posted: item.line },
-		metrics: { posted: 1 },
-		output: `Posted on PR #${scope.pr}: ${item.line}`
-	};
-};
-function memoryDecisionLines(kept, answers, prefix) {
-	return kept.flatMap((f, i) => {
-		const answer = answers[`${prefix}${i}`];
-		if (answer === "post") return [`confirmed:${f.ruleId}`];
-		if (answer === "skip") return [`rejected:${f.ruleId}`];
-		return [];
-	});
-}
-var memoryPersist = async ({ state, answers, args }) => {
-	const memory = state.memory;
-	if (!memory?.loaded || !memory.file) return {
-		state: { written: 0 },
-		metrics: { written: 0 },
-		output: "Learning skipped: the memory block was not loaded."
-	};
-	const kept = stateOf(state, "rank").kept;
-	const lines = memoryDecisionLines(kept, answers ?? {}, typeof args.questionPrefix === "string" ? args.questionPrefix : "q-post-");
-	if (lines.length) fs.appendFileSync(memory.file, `${lines.join("\n")}\n`);
-	return {
-		state: { written: lines.length },
-		metrics: { written: lines.length },
-		output: lines.length ? `Memory: ${lines.length} decisions recorded in ${memory.file}.` : "Memory: nothing durable happened."
-	};
-};
-var planRead = async ({ input, cwd }) => {
-	const root = path.resolve(cwd ?? process.cwd());
-	const file = path.resolve(root, input.plan ?? "");
-	if (!input.plan || file !== root && !file.startsWith(root + path.sep)) throw new Error("input.plan must be a file inside the workspace");
-	if (!fs.existsSync(file)) throw new Error(`plan file ${input.plan} does not exist in ${root}`);
-	const text = fs.readFileSync(file, "utf8");
-	const criteria = (input.criteria ?? "").trim();
-	return {
-		state: {
-			path: input.plan,
-			text,
-			criteria: criteria || "none"
-		},
-		metrics: {
-			characters: text.length,
-			criteria: criteria ? 1 : 0
-		},
-		output: `Plan ${input.plan}: ${text.length} characters. Acceptance criteria: ${criteria ? "given" : "none (design rules only)"}.`
-	};
-};
-function decisions(state, answers, violationsNode, rulesNode, prefix) {
-	return (state[violationsNode]?.decide ?? state[rulesNode]?.decide ?? []).map((d, i) => ({
-		...d,
-		answer: answers?.[`${prefix}${i}`] ?? "unanswered"
-	}));
-}
-var planReport = async ({ state, answers }) => {
-	const plan = stateOf(state, "plan-read");
-	const confirm = stateOf(state, "plan-confirm");
-	const rules = stateOf(state, "plan-rules-merge");
-	const asPlanLine = (line) => line.startsWith("plan:") ? line : `plan: ${line}`;
-	const lines = [
-		`Plan review of ${plan.path}`,
-		"",
-		...rules.kept.length ? rules.kept.map((f) => `${asPlanLine(f.line)}${f.unchecked ? " (rule unchecked)" : ""}`) : ["No confirmed findings."],
-		"",
-		`Totals: ${TIERS.map((t) => `${t}: ${rules.kept.filter((f) => tierOf$1(f) === t).length}`).join(", ")}`,
-		`Acceptance criteria: ${plan.criteria === "none" ? "none, design rules only" : "given"}`,
-		`Dropped by the verifier: ${confirm.dropped.length}`,
-		...confirm.dropped.map((f) => `  - ${f.line} | ${f.reason}`),
-		`Project rules check: ${rules.noStore ? "no-store, skipped" : `${rules.dropped.length} dropped by the store`}`,
-		...rules.dropped.map((d) => `  - ${d.line} | ${d.cite}`),
-		...decisions(state, answers, "plan-rules-violations", "plan-rules-merge", "q-plan-rule-").map((d) => `Decided (${d.kind}): ${d.line} -> ${d.answer === "store" ? "store entry holds" : d.answer === "finding" ? "finding holds" : "not decided"}`)
-	];
-	return {
-		state: {
-			kept: rules.kept,
-			count: rules.kept.length
-		},
-		metrics: { kept: rules.kept.length },
-		output: lines.join("\n")
-	};
-};
-function groupComments(comments, nearbyLines = 3) {
-	const items = [];
-	for (const comment of comments) {
-		const near = comment.path ? items.find((i) => i.path === comment.path && i.line !== null && comment.line !== null && Math.abs(i.line - comment.line) <= nearbyLines) : void 0;
-		if (near) near.comments.push(comment);
-		else items.push({
-			index: items.length,
-			path: comment.path,
-			line: comment.line,
-			comments: [comment]
-		});
-	}
-	return items;
-}
-var prFeedback = async ({ input, exec, cwd }) => {
-	if (!exec) throw new Error("github.prFeedback needs the host exec tool");
-	const repo = input.repo ?? "";
-	const [owner, name] = repo.split("/");
-	if (!owner || !name || input.pr === void 0) throw new Error("github.prFeedback needs repo and pr");
-	const view = await exec("gh", [
-		"pr",
-		"view",
-		String(input.pr),
-		"--repo",
-		repo,
-		"--json",
-		"headRefName,author,comments"
-	]);
-	if (view.code !== 0) throw new Error(`gh pr view failed: ${view.stderr.slice(-300)}`);
-	const meta = JSON.parse(view.stdout);
-	const branch = await exec("git", [
-		"-C",
-		cwd ?? ".",
-		"branch",
-		"--show-current"
-	]);
-	if (branch.code !== 0 || branch.stdout.trim() !== meta.headRefName) throw new Error(`the local branch (${branch.stdout.trim() || "unknown"}) is not the PR head branch ${meta.headRefName}: check out ${meta.headRefName} first`);
-	const checks = await exec("gh", [
-		"pr",
-		"checks",
-		String(input.pr),
-		"--repo",
-		repo,
-		"--json",
-		"name,state"
-	]);
-	const checkList = checks.code === 0 && checks.stdout.trim() ? JSON.parse(checks.stdout) : [];
-	const threads = await exec("gh", [
-		"api",
-		"graphql",
-		"-f",
-		`query=${`query { repository(owner: "${owner}", name: "${name}") { pullRequest(number: ${input.pr}) { reviewThreads(first: 100) { nodes { id isResolved isOutdated comments(first: 1) { nodes { author { login } path line body url } } } } } } }`}`
-	]);
-	if (threads.code !== 0) throw new Error(`gh api graphql failed: ${threads.stderr.slice(-300)}`);
-	const comments = [...JSON.parse(threads.stdout).data.repository.pullRequest.reviewThreads.nodes.filter((t) => !t.isResolved && !t.isOutdated && t.comments.nodes[0]).map((t) => {
-		const c = t.comments.nodes[0];
-		return {
-			id: t.id,
-			kind: "thread",
-			author: c.author?.login ?? "unknown",
-			path: c.path,
-			line: c.line,
-			body: c.body,
-			url: c.url
-		};
-	}), ...meta.comments.filter((c) => c.author?.login !== meta.author.login).map((c) => ({
-		id: c.id,
-		kind: "comment",
-		author: c.author?.login ?? "unknown",
-		path: null,
-		line: null,
-		body: c.body,
-		url: c.url
-	}))];
-	const items = groupComments(comments);
-	const ci = checkList.length ? checkList.map((c) => `${c.name}: ${c.state}`).join(", ") : "no checks";
-	return {
-		state: {
-			head: meta.headRefName,
-			checks: checkList,
-			ci,
-			comments,
-			items
-		},
-		metrics: {
-			checks: checkList.length,
-			comments: comments.length,
-			items: items.length
-		},
-		output: `CI: ${ci}. Unresolved comments: ${comments.length} in ${items.length} items.`
-	};
-};
-var feedbackPlan = async ({ state, answers }) => {
-	const decided = stateOf(state, "fb-check").items.map((item) => ({
-		...item,
-		decision: answers?.[`q-feedback-${item.index}`] ?? "skip"
-	}));
-	const count = (d) => decided.filter((i) => i.decision === d).length;
-	const replies = decided.filter((i) => i.decision === "wont-fix" || i.decision === "question");
-	return {
-		state: {
-			decided,
-			replies,
-			fixes: count("fix")
-		},
-		metrics: {
-			fixes: count("fix"),
-			wontFix: count("wont-fix"),
-			questions: count("question"),
-			skipped: count("skip"),
-			replies: replies.length
-		},
-		output: `Plan: ${count("fix")} fix, ${count("wont-fix")} won't fix, ${count("question")} question, ${count("skip")} skipped.`
-	};
-};
-var postReply = async ({ state, exec, input, args }) => {
-	if (!exec) throw new Error("github.postReply needs the host exec tool");
-	const from = nodeArg(args, "from", "fb-reply-next");
-	const draftNode = nodeArg(args, "draft", "fb-draft");
-	const item = state[from]?.item;
-	const draft = Object.values(state[draftNode] ?? {})[0];
-	if (!item || !draft) throw new Error("no reply to post");
-	const first = item.comments[0];
-	const result = first.kind === "thread" ? await exec("gh", [
-		"api",
-		"graphql",
-		"-f",
-		`query=mutation { addPullRequestReviewThreadReply(input: { pullRequestReviewThreadId: "${first.id}", body: ${JSON.stringify(draft)} }) { comment { url } } }`
-	]) : await exec("gh", [
-		"pr",
-		"comment",
-		String(input.pr),
-		"--repo",
-		input.repo ?? "",
-		"--body",
-		draft
-	]);
-	if (result.code !== 0) throw new Error(`posting the reply failed: ${result.stderr.slice(-300)}`);
-	return {
-		state: { posted: first.url },
-		metrics: { posted: 1 },
-		output: `Reply posted to ${first.url}`
-	};
-};
-var feedbackReport = async ({ state, answers }) => {
-	const check = stateOf(state, "fb-check");
-	const plan = stateOf(state, "fb-plan");
-	const implement = answers?.["q-feedback-implement"];
-	return {
-		state: { done: true },
-		output: [
-			`CI: ${check.ci}`,
-			`Unresolved comments: ${check.comments.length}`,
-			...plan.decided.map((i) => `  - ${i.path ?? "PR"}${i.line ? `:${i.line}` : ""} (${i.comments.length} comments): ${i.decision}`),
-			`Implementation: ${implement === "yes" ? "approved" : implement === "no" ? "declined" : "nothing to implement"}`
-		].join("\n")
-	};
-};
-var MARKETPLACE_FALLBACK = "C:\\Users\\Inny\\Documents\\Git\\marketplace";
-var SEMVER_LINE = /^version:\s*["']?(\d+\.\d+\.\d+)["']?\s*$/m;
-var CLASSIFICATIONS = [
-	"identical",
-	"local-only",
-	"marketplace-only",
-	"project-adapter-only",
-	"adapter-candidate",
-	"portable-local-change",
-	"conflict"
-];
-var ADOPT = [
-	"adopt-patch",
-	"adopt-minor",
-	"adopt-major"
-];
-function readJson$1(file) {
-	return JSON.parse(fs.readFileSync(file, "utf8"));
-}
-function marketplaceRoot(state) {
-	return stateOf(state, "resolve-path").path;
-}
-var resolveMarketplacePath = async ({ input, exec, cwd }) => {
-	if (!exec) throw new Error("sync.resolvePath needs the host exec tool");
-	const adapterFile = path.join(cwd ?? ".", ".opencode", "marketplace-path.local.json");
-	const adapter = fs.existsSync(adapterFile) ? readJson$1(adapterFile).marketplacePath : void 0;
-	const [source, target] = input.marketplace ? ["input", input.marketplace] : process.env.MARKETPLACE_PATH ? ["MARKETPLACE_PATH", process.env.MARKETPLACE_PATH] : adapter ? ["project adapter", adapter] : ["fallback", MARKETPLACE_FALLBACK];
-	if (!fs.existsSync(path.resolve(target))) throw new Error(`marketplace path ${path.resolve(target)} (${source}) does not exist`);
-	const resolved = fs.realpathSync.native(path.resolve(target));
-	const repo = await exec("git", [
-		"-C",
-		resolved,
-		"rev-parse",
-		"--is-inside-work-tree"
-	]);
-	if (repo.code !== 0 || repo.stdout.trim() !== "true") throw new Error(`marketplace path ${resolved} (${source}) is not a Git repository`);
-	return {
-		state: {
-			path: resolved,
-			source,
-			fallback: source === "fallback"
-		},
-		metrics: { fallback: source === "fallback" ? 1 : 0 },
-		output: `Marketplace (${source}): ${resolved}`
-	};
-};
-var safeSource = async ({ state, exec, answers, args, input }) => {
-	if (!exec) throw new Error("sync.safeSource needs the host exec tool");
-	const root = typeof args.path === "string" ? String(args.path.split(".").reduce((v, k) => v && typeof v === "object" ? v[k] : void 0, state) ?? "") : input.path ?? marketplaceRoot(state);
-	if (!root) throw new Error(`with.path ${String(args.path)} is not set in state`);
-	const switchQuestion = typeof args.question === "string" ? args.question : "q-marketplace-main";
-	const git = (...args) => exec("git", [
-		"-C",
-		root,
-		...args
-	]);
-	const label = input.label ?? "Marketplace";
-	const stop = (reason, detail, clean) => ({
-		state: {
-			ok: false,
-			reason,
-			detail
-		},
-		metrics: {
-			clean,
-			ok: 0
-		},
-		output: `${label} not safe: ${detail}`
-	});
-	const status = await git("status", "--porcelain");
-	if (status.code !== 0) return stop("status", status.stderr.trim(), 0);
-	if (status.stdout.trim()) return stop("dirty", `the worktree of ${root} has local changes`, 0);
-	let branch = (await git("branch", "--show-current")).stdout.trim();
-	if (branch !== "main") {
-		if (answers?.[switchQuestion] !== "switch") return {
-			state: {
-				ok: false,
-				reason: "not-main",
-				detail: branch || "detached HEAD",
-				branch
-			},
-			metrics: {
-				clean: 1,
-				ok: 0
-			},
-			output: `Marketplace is on ${branch || "a detached HEAD"}, not main.`
-		};
-		const checkout = await git("checkout", "main");
-		if (checkout.code !== 0) return stop("checkout", checkout.stderr.trim(), 1);
-		branch = "main";
-	}
-	if ((await git("remote", "get-url", "origin")).code !== 0) return stop("no-remote", `${root} has no origin remote`, 1);
-	const fetch = await git("fetch", "origin", "main");
-	if (fetch.code !== 0) return stop("fetch", fetch.stderr.trim(), 1);
-	const pull = await git("pull", "--ff-only", "origin", "main");
-	if (pull.code !== 0) return stop("pull", pull.stderr.trim(), 1);
-	const head = (await git("rev-parse", "HEAD")).stdout.trim();
-	return {
-		state: {
-			ok: true,
-			reason: "ok",
-			branch,
-			head
-		},
-		metrics: {
-			clean: 1,
-			ok: 1
-		},
-		output: `Marketplace ${root} is clean on main at ${head.slice(0, 12)}, fast-forwarded to origin/main.`
-	};
-};
-function frontmatterVersion(file) {
-	return fs.existsSync(file) ? fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n").match(SEMVER_LINE)?.[1] ?? "none" : "none";
-}
-function skillDirIn(root, name) {
-	const skills = path.join(root, "skills");
-	if (!fs.existsSync(skills)) return void 0;
-	return fs.readdirSync(skills).map((c) => path.join(skills, c, name)).find((d) => fs.existsSync(path.join(d, "SKILL.md")));
-}
-function manifestVersion(file, key, name) {
-	if (!fs.existsSync(file)) return "none";
-	return (readJson$1(file)[key]?.find((e) => e.name === name))?.version ?? "none";
-}
-var discoverArtifacts = async ({ input, state, cwd }) => {
-	const project = path.resolve(cwd ?? ".");
-	const root = marketplaceRoot(state);
-	const skillsDir = path.join(project, ".agents", "skills");
-	const agentsDir = path.join(project, ".opencode", "agents");
-	const localSkills = fs.existsSync(skillsDir) ? fs.readdirSync(skillsDir).filter((n) => fs.existsSync(path.join(skillsDir, n, "SKILL.md"))) : [];
-	const localAgents = fs.existsSync(agentsDir) ? fs.readdirSync(agentsDir).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)) : [];
-	const wanted = input.artifacts;
-	if (wanted) {
-		const missing = wanted.filter((n) => !localSkills.includes(n) && !localAgents.includes(n));
-		if (missing.length) throw new Error(`input.artifacts not found in ${project}: ${missing.join(", ")}`);
-	}
-	const pick = (names) => wanted ? names.filter((n) => wanted.includes(n)) : names;
-	const skills = pick(localSkills).map((name) => {
-		const dir = skillDirIn(root, name);
-		return {
-			id: name,
-			type: "skill",
-			name,
-			localPath: path.join(skillsDir, name),
-			marketplacePath: dir ?? "none",
-			manifestPath: path.join(root, "registry.json"),
-			marketplaceVersion: manifestVersion(path.join(root, "registry.json"), "skills", name),
-			localVersion: frontmatterVersion(path.join(skillsDir, name, "SKILL.md"))
-		};
-	});
-	const agents = pick(localAgents).map((name) => {
-		const file = path.join(root, "agents", "opencode", `${name}.md`);
-		return {
-			id: name,
-			type: "agent",
-			name,
-			localPath: path.join(agentsDir, `${name}.md`),
-			marketplacePath: fs.existsSync(file) ? file : "none",
-			manifestPath: path.join(root, "agents", "opencode", "index.json"),
-			marketplaceVersion: manifestVersion(path.join(root, "agents", "opencode", "index.json"), "agents", name),
-			localVersion: manifestVersion(path.join(agentsDir, "index.json"), "agents", name)
-		};
-	});
-	const compare = [...skills, ...agents];
-	return {
-		state: {
-			project,
-			skills,
-			agents,
-			compare
-		},
-		metrics: {
-			artifacts: compare.length,
-			skills: skills.length,
-			agents: agents.length
-		},
-		output: `Discovered ${skills.length} local skills and ${agents.length} local agents to compare in ${project}.`
-	};
-};
-var checkSkillVersions = async ({ state }) => {
-	const skills = stateOf(state, "discover").skills;
-	const missing = skills.filter((s) => frontmatterVersion(path.join(s.localPath, "SKILL.md")) === "none").map((s) => s.name);
-	if (missing.length) throw new Error(`olko-adapt-to-marketplace --local-only left no SemVer version in SKILL.md of: ${missing.join(", ")}. The sync stops here; check these skills and run again.`);
-	const versions = skills.map((s) => `${s.name} ${frontmatterVersion(path.join(s.localPath, "SKILL.md"))}`);
-	return {
-		state: { versions },
-		metrics: { skills: skills.length },
-		output: versions.length ? `Local skill versions: ${versions.join(", ")}.` : "No local skills to version."
-	};
-};
-function parseComparison(text) {
-	const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.startsWith("result |"));
-	if (!line) throw new Error("comparator report has no 'result |' line");
-	const [, classification = "", marketplaceVersion = "none", bump = "none", nextVersion = "none", action = ""] = line.split("|").map((p) => p.trim());
-	if (!CLASSIFICATIONS.includes(classification)) throw new Error(`comparator returned unknown classification '${classification}'`);
-	return {
-		classification,
-		marketplaceVersion,
-		bump,
-		nextVersion,
-		action,
-		report: String(text).trim()
-	};
-}
-function syncOptions(classification) {
-	if (classification === "local-only") return [
-		"create",
-		"reject",
-		"leave"
-	];
-	if (classification === "adapter-candidate") return [
-		"move-to-adapter",
-		...ADOPT,
-		"revert-local",
-		"leave"
-	];
-	return [
-		...ADOPT,
-		"revert-local",
-		"leave"
-	];
-}
-var syncRows = async ({ state }) => {
-	const discovered = stateOf(state, "discover").compare;
-	const compared = stateOf(state, "compare");
-	const rows = discovered.map((a) => {
-		const c = compared[a.id];
-		if (!c) throw new Error(`no comparison for ${a.type} ${a.name}`);
-		const candidate = c.classification === "local-only" ? a.localVersion !== "none" ? a.localVersion : "1.0.0" : c.nextVersion;
-		const line = `${a.type} ${a.name}: ${c.classification}; marketplace ${c.marketplaceVersion}; bump ${c.bump}; proposed ${candidate}; recommended ${c.action || "none"}`;
-		return {
-			type: a.type,
-			name: a.name,
-			classification: c.classification,
-			marketplaceVersion: c.marketplaceVersion,
-			bump: c.bump,
-			nextVersion: candidate,
-			action: c.action,
-			line,
-			options: syncOptions(c.classification)
-		};
-	});
-	const decide = rows.filter((r) => r.classification !== "identical");
-	return {
-		state: {
-			rows,
-			decide,
-			table: rows.map((r) => r.line).join("\n")
-		},
-		metrics: {
-			rows: rows.length,
-			decide: decide.length
-		},
-		output: `${rows.length} artifacts compared, ${decide.length} need a decision.`
-	};
-};
-function bumpVersion(version, bump) {
-	const match = version.match(/^(\d+)\.(\d+)\.(\d+)$/);
-	if (!match) return "1.0.0";
-	const [major, minor, patch] = match.slice(1).map(Number);
-	if (bump === "major") return `${major + 1}.0.0`;
-	if (bump === "minor") return `${major}.${minor + 1}.0`;
-	return `${major}.${minor}.${patch + 1}`;
-}
-var KEEP_LOCAL = "Keep project adapters, secrets, local paths, credentials and runtime settings out of the marketplace.";
-function applyInstruction(row, root, version) {
-	const adapt = path.join(root, "skills", "marketplace", "olko-adapt-to-marketplace", "SKILL.md");
-	if (row.decision === "create" && row.type === "skill") return `Create the marketplace skill ${row.name} from the local skill ${row.localPath}. Read ${adapt} and meet its validation requirements before you add the registry entry. Put it in the fitting category under ${path.join(root, "skills")}, set version ${version} in its SKILL.md frontmatter and add its entry to ${path.join(root, "registry.json")} at version ${version}. ${KEEP_LOCAL}`;
-	if (row.decision === "create") return `Create the marketplace agent ${row.name}: copy the local definition ${row.localPath} to ${path.join(root, "agents", "opencode", `${row.name}.md`)} and add a valid entry for it to ${path.join(root, "agents", "opencode", "index.json")} at version ${version}, with its stack, role and declared skills taken from the definition. ${KEEP_LOCAL}`;
-	if (row.type === "skill") return `Update only the marketplace skill directory ${row.marketplacePath} with the portable changes of the local skill ${row.localPath}. Set version ${version} in its SKILL.md frontmatter and in its entry in ${path.join(root, "registry.json")}. ${KEEP_LOCAL}`;
-	return `Update only ${row.marketplacePath} with the portable changes of the local agent ${row.localPath}, and set version ${version} on its entry in ${path.join(root, "agents", "opencode", "index.json")}. Keep its permissions, declared skills and delegates unless they are the approved change. ${KEEP_LOCAL}`;
-}
-function acceptedRoute(decision) {
-	if (decision === "revert-local") return "revert";
-	if (decision === "move-to-adapter") return "adapter";
-	return "change";
-}
-var syncPlanApply = async ({ state, answers }) => {
-	const { rows, decide } = stateOf(state, "rows");
-	const discovered = stateOf(state, "discover").compare;
-	const root = marketplaceRoot(state);
-	const decisionOf = (name) => {
-		const index = decide.findIndex((d) => d.name === name);
-		return index < 0 ? "none" : answers?.[`q-sync-${index}`] ?? "unanswered";
-	};
-	const decided = rows.map((r) => ({
-		...r,
-		decision: decisionOf(r.name)
-	}));
-	const accepted = decided.filter((r) => ![
-		"none",
-		"leave",
-		"reject",
-		"unanswered"
-	].includes(r.decision)).map((r) => {
-		const artifact = discovered.find((a) => a.name === r.name);
-		const version = r.decision.startsWith("adopt-") ? bumpVersion(r.marketplaceVersion, r.decision.slice(6)) : r.decision === "create" ? r.nextVersion : r.marketplaceVersion;
-		const row = {
-			...r,
-			localPath: artifact.localPath,
-			marketplacePath: artifact.marketplacePath
-		};
-		return {
-			...row,
-			route: acceptedRoute(r.decision),
-			version,
-			instruction: applyInstruction(row, root, version)
-		};
-	});
-	return {
-		state: {
-			decided,
-			accepted
-		},
-		metrics: { accepted: accepted.length },
-		output: accepted.length ? `${accepted.length} accepted decisions to apply: ${accepted.map((a) => `${a.name} ${a.decision}`).join(", ")}.` : "No accepted decisions: nothing to apply, publish or install."
-	};
-};
-function copyDir(from, to, keep) {
-	for (const entry of fs.existsSync(to) ? fs.readdirSync(to) : []) if (!keep.includes(entry)) fs.rmSync(path.join(to, entry), {
-		recursive: true,
-		force: true
-	});
-	fs.cpSync(from, to, {
-		recursive: true,
-		force: true
-	});
-}
-var revertLocal = async ({ state }) => {
-	const row = stateOf(state, "apply-next").item;
-	if (row.marketplacePath === "none" || !fs.existsSync(row.marketplacePath)) throw new Error(`${row.type} ${row.name} has no marketplace counterpart to revert to`);
-	if (row.type === "skill") copyDir(row.marketplacePath, row.localPath, ["project.md"]);
-	else fs.copyFileSync(row.marketplacePath, row.localPath);
-	return {
-		state: { reverted: row.name },
-		metrics: { reverted: 1 },
-		output: `Local ${row.type} ${row.name} replaced with ${row.marketplacePath}.`
-	};
-};
-var validateMarketplace = async ({ state, exec }) => {
-	if (!exec) throw new Error("sync.validate needs the host exec tool");
-	const root = marketplaceRoot(state);
-	const accepted = stateOf(state, "plan").accepted.filter((a) => a.route !== "revert");
-	const results = [];
-	let failed = 0;
-	const run = async (label, command, args, cwd = root) => {
-		const res = await exec(command, args, { cwd });
-		if (res.code !== 0) failed += 1;
-		results.push(`${label}: ${res.code === 0 ? "pass" : `FAIL ${(res.stderr || res.stdout).trim().split(/\r?\n/).slice(-3).join(" ")}`}`);
-	};
-	if (accepted.some((a) => a.type === "skill")) await run("registry --fix", "node", ["scripts/registry.mjs", "--fix"]);
-	for (const agent of accepted.filter((a) => a.type === "agent")) {
-		const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "factory-agent-check-"));
-		await run(`install-opencode-agents ${agent.name}`, "node", [
-			"scripts/install-opencode-agents.mjs",
-			"--project",
-			scratch,
-			"--agent",
-			agent.name
-		]);
-		fs.rmSync(scratch, {
-			recursive: true,
-			force: true
-		});
-	}
-	if (accepted.length) await run("node tests", "node", [
-		"--test",
-		"scripts/registry.test.mjs",
-		"scripts/install-opencode-agents.test.mjs",
-		"scripts/readme.test.mjs"
-	]);
-	const status = (await exec("git", [
-		"-C",
-		root,
-		"status",
-		"--porcelain",
-		"--untracked-files=all"
-	])).stdout.trim();
-	const diffStat = (await exec("git", [
-		"-C",
-		root,
-		"diff",
-		"--stat"
-	])).stdout.trim();
-	const versions = accepted.map((a) => `${a.type} ${a.name} ${a.decision} -> ${a.version}`).join("\n");
-	return {
-		state: {
-			changed: status ? 1 : 0,
-			status,
-			diffStat,
-			versions,
-			summary: results.join("; ") || "nothing to validate",
-			failed
-		},
-		metrics: {
-			changed: status ? status.split(/\r?\n/).length : 0,
-			failed
-		},
-		output: `Validation: ${results.join("; ") || "nothing to validate"}.`
-	};
-};
-function parseApplied(text) {
-	const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => /^(applied|blocked) \|/.test(l));
-	if (!line) throw new Error("apply output has no 'applied |' line");
-	const [status, files = "", version = ""] = line.split("|").map((p) => p.trim());
-	if (status === "blocked") throw new Error(`apply blocked: ${line}`);
-	return {
-		files: files.split(",").map((f) => f.trim()).filter(Boolean),
-		version
-	};
-}
-function parsePrLine(text) {
-	const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.startsWith("pr |"));
-	if (!line) throw new Error("publish output has no 'pr |' line");
-	const [, url = "", branch = "", commit = ""] = line.split("|").map((p) => p.trim());
-	if (!/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/.test(url)) throw new Error(`publish output has no PR URL: ${line}`);
-	if (branch === "main") throw new Error("publish pushed to main; the sync requires a feature branch");
-	return {
-		url,
-		branch,
-		commit
-	};
-}
-var waitForChecks = async ({ state, exec, nodeId, input }) => {
-	if (!exec) throw new Error("sync.waitChecks needs the host exec tool");
-	const res = await exec("gh", [
-		"pr",
-		"checks",
-		(input.prUrl ? { url: input.prUrl } : stateOf(state, "publish-pr").publish).url,
-		"--watch",
-		"--fail-fast"
-	]);
-	const round = ((nodeId ? state[nodeId]?.round : 0) ?? 0) + 1;
-	return {
-		state: {
-			round,
-			passed: res.code === 0
-		},
-		metrics: {
-			round,
-			passed: res.code === 0 ? 1 : 0
-		},
-		output: `CI checks ${res.code === 0 ? "passed" : "did not pass"}: ${(res.stdout || res.stderr).trim().split(/\r?\n/).slice(-3).join(" ")}`
-	};
-};
-var prOf = async ({ state }) => {
-	const parsed = stateOf(state, "publish");
-	const pr = Object.values(parsed)[0];
-	if (!pr) throw new Error("publish returned no PR");
-	return {
-		state: { publish: pr },
-		metrics: { prs: 1 },
-		output: `PR ${pr.url} on branch ${pr.branch}.`
-	};
-};
-var squashMerge = async ({ state, exec, args, input }) => {
-	if (!exec) throw new Error("sync.merge needs the host exec tool");
-	const root = typeof args.path === "string" ? String(args.path.split(".").reduce((v, k) => v && typeof v === "object" ? v[k] : void 0, state) ?? "") : input.path ?? marketplaceRoot(state);
-	const pr = input.prUrl ? {
-		url: input.prUrl,
-		branch: input.prBranch ?? ""
-	} : stateOf(state, "publish-pr").publish;
-	if (JSON.parse((await exec("gh", [
-		"pr",
-		"view",
-		pr.url,
-		"--json",
-		"isDraft"
-	])).stdout || "{}").isDraft) {
-		const ready = await exec("gh", [
-			"pr",
-			"ready",
-			pr.url
-		]);
-		if (ready.code !== 0) throw new Error(`gh pr ready failed: ${(ready.stderr || ready.stdout).trim()}`);
-	}
-	const merge = await exec("gh", [
-		"pr",
-		"merge",
-		pr.url,
-		"--squash",
-		"--delete-branch"
-	], { cwd: root });
-	if (merge.code !== 0) throw new Error(`squash merge failed: ${(merge.stderr || merge.stdout).trim()}`);
-	const commit = JSON.parse((await exec("gh", [
-		"pr",
-		"view",
-		pr.url,
-		"--json",
-		"mergeCommit"
-	])).stdout || "{}").mergeCommit?.oid;
-	if (!commit) throw new Error(`no merge commit for ${pr.url}`);
-	for (const args of [["checkout", "main"], [
-		"pull",
-		"--ff-only",
-		"origin",
-		"main"
-	]]) {
-		const res = await exec("git", [
-			"-C",
-			root,
-			...args
-		]);
-		if (res.code !== 0) throw new Error(`git ${args.join(" ")} failed: ${res.stderr.trim()}`);
-	}
-	await exec("git", [
-		"-C",
-		root,
-		"branch",
-		"-D",
-		pr.branch
-	]);
-	if ((await exec("git", [
-		"-C",
-		root,
-		"merge-base",
-		"--is-ancestor",
+function lockEntry(spec, marketplace, commit) {
+	const files = sourceFiles(spec, marketplace);
+	return files.length ? {
 		commit,
-		"origin/main"
-	])).code !== 0) throw new Error(`merge commit ${commit} is not on origin/main`);
-	return {
-		state: { commit },
-		metrics: { merged: 1 },
-		output: `Squash merged ${pr.url} as ${commit.slice(0, 12)}; local main updated, branch ${pr.branch} deleted.`
-	};
-};
-async function openskillsCommand(exec) {
-	if (process.env.OPENSKILLS_CLI) return ["node", [process.env.OPENSKILLS_CLI]];
-	if ((await exec("openskills", ["--help"])).code === 0) return ["openskills", []];
-	for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
-		const cli = path.join(dir, "node_modules", "openskills", "dist", "cli.js");
-		if (fs.existsSync(path.join(dir, "openskills.cmd")) && fs.existsSync(cli)) return ["node", [cli]];
-	}
-	throw new Error("OpenSkills CLI not found: install openskills or set OPENSKILLS_CLI to its dist/cli.js");
+		files: Object.fromEntries(files.map((f) => [f, fileHash(path.join(marketplace, f)) ?? "missing"]))
+	} : null;
 }
-var installArtifacts = async ({ state, exec, cwd }) => {
-	if (!exec) throw new Error("sync.install needs the host exec tool");
-	const root = marketplaceRoot(state);
-	const project = path.resolve(cwd ?? ".");
-	const accepted = stateOf(state, "plan").accepted.filter((a) => a.route !== "revert");
-	const origin = (await exec("git", [
-		"-C",
-		root,
-		"remote",
-		"get-url",
-		"origin"
-	])).stdout.trim();
-	const repo = origin.match(/github\.com[:/]([\w.-]+\/[\w.-]+?)(\.git)?$/)?.[1];
-	if (!repo) throw new Error(`marketplace origin ${origin} is not a GitHub repository`);
-	const [command, prefix] = await openskillsCommand(exec);
-	const help = await exec(command, [
-		...prefix,
-		"install",
-		"--help"
-	]);
-	if (help.code !== 0 || !/--universal/.test(help.stdout) || !/--yes/.test(help.stdout)) throw new Error("the installed OpenSkills CLI has no install --universal --yes");
-	const lines = [];
-	let failed = 0;
-	for (const skill of accepted.filter((a) => a.type === "skill")) {
-		const dir = skillDirIn(root, skill.name);
-		if (!dir) throw new Error(`skill ${skill.name} is not in ${root} after the merge`);
-		const subpath = path.relative(root, dir).split(path.sep).join("/");
-		const res = await exec(command, [
-			...prefix,
-			"install",
-			`${repo}/${subpath}`,
-			"--universal",
-			"--yes"
-		], { cwd: project });
-		const installed = path.join(project, ".agent", "skills", skill.name);
-		if (res.code === 0 && fs.existsSync(installed)) {
-			fs.cpSync(installed, path.join(project, ".agents", "skills", skill.name), {
-				recursive: true,
-				force: true
-			});
-			fs.rmSync(installed, {
-				recursive: true,
-				force: true
-			});
+function buildLock(specs, marketplace, commit) {
+	const lock = {};
+	for (const spec of specs) {
+		const entry = lockEntry(spec, marketplace, commit);
+		if (entry) lock[spec.name] = entry;
+	}
+	return lock;
+}
+function readLock(file = LOCK_FILE) {
+	return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
+}
+function writeLock(lock, file = LOCK_FILE) {
+	const sorted = Object.fromEntries(Object.entries(lock).sort(([a], [b]) => a.localeCompare(b)));
+	fs.writeFileSync(file, `${JSON.stringify(sorted, null, 2)}\n`);
+}
+function staleWorkflows(lock, marketplace) {
+	return Object.entries(lock).flatMap(([workflow, entry]) => {
+		const changed = [];
+		const missing = [];
+		for (const [file, hash] of Object.entries(entry.files)) {
+			const now = fileHash(path.join(marketplace, file));
+			if (now === null) missing.push(file);
+			else if (now !== hash) changed.push(file);
 		}
-		const same = fs.existsSync(path.join(project, ".agents", "skills", skill.name, "SKILL.md")) && fs.readFileSync(path.join(project, ".agents", "skills", skill.name, "SKILL.md"), "utf8") === (await exec("git", [
-			"-C",
-			root,
-			"show",
-			`origin/main:${subpath}/SKILL.md`
-		])).stdout;
-		if (res.code !== 0 || !same) failed += 1;
-		lines.push(`skill ${skill.name}: ${res.code !== 0 ? `FAIL ${res.stderr.trim().slice(-200)}` : same ? "installed, matches origin/main" : "installed, DIFFERS from origin/main"}`);
-	}
-	for (const agent of accepted.filter((a) => a.type === "agent")) {
-		const res = await exec("node", [
-			path.join(root, "scripts", "install-opencode-agents.mjs"),
-			"--project",
-			project,
-			"--agent",
-			agent.name,
-			"--force"
-		]);
-		const local = path.join(project, ".opencode", "agents", `${agent.name}.md`);
-		const same = fs.existsSync(local) && fs.readFileSync(local, "utf8") === (await exec("git", [
-			"-C",
-			root,
-			"show",
-			`origin/main:agents/opencode/${agent.name}.md`
-		])).stdout;
-		if (res.code !== 0 || !same) failed += 1;
-		lines.push(`agent ${agent.name}: ${res.code !== 0 ? `FAIL ${res.stderr.trim().slice(-200)}` : same ? "installed, matches origin/main" : "installed, DIFFERS from origin/main"}`);
-	}
-	return {
-		state: {
-			lines,
-			failed
-		},
-		metrics: {
-			installed: lines.length - failed,
-			failed
-		},
-		output: `Install: ${lines.join("; ")}.`
-	};
-};
-var syncMemorySave = async ({ state }) => {
-	const memory = state.memory;
-	const install = stateOf(state, "install");
-	if (!memory?.file || install.failed) return {
-		state: { written: 0 },
-		metrics: { written: 0 },
-		output: "Memory: nothing verified to record."
-	};
-	const lines = stateOf(state, "plan").accepted.filter((a) => a.route !== "revert").map((a) => `confirmed:sync ${a.decision} ${a.type} ${a.name} ${a.version} installed and verified`);
-	fs.mkdirSync(path.dirname(memory.file), { recursive: true });
-	fs.appendFileSync(memory.file, `${lines.join("\n")}\n`);
-	return {
-		state: { written: lines.length },
-		metrics: { written: lines.length },
-		output: `Memory: ${lines.length} verified sync decisions recorded in ${memory.file}.`
-	};
-};
-var syncReport = async ({ state }) => {
-	const plan = stateOf(state, "plan");
-	const source = state.safe?.["safe-source"] ?? state["safe-source"] ?? {};
-	const lines = plan.decided.map((r) => `${r.type} ${r.name}: ${r.classification} -> ${r.decision}`);
-	const validate = state.validate;
-	const pr = state["publish-pr"]?.publish;
-	const merged = state.merge ?? state.pr?.merge;
-	const install = state.install;
-	const outcome = !validate ? "Marketplace, branches and installs: unchanged." : !validate.changed ? "Marketplace unchanged; local reverts only. Nothing to publish." : !pr ? `Marketplace changes applied in the working tree of ${marketplaceRoot(state)} and not published. Validation: ${validate.summary}.` : !merged ? `Published as ${pr.url}; not merged, nothing installed.` : `Published as ${pr.url}, squash merged as ${merged.commit?.slice(0, 12)}. Install: ${install?.lines?.join("; ") ?? "not run"}.`;
-	return {
-		state: { lines },
-		metrics: { rows: lines.length },
-		output: [
-			`Marketplace sync report (marketplace ${marketplaceRoot(state)} at ${source.head?.slice(0, 12) ?? "unknown"})`,
-			...lines,
-			outcome
-		].join("\n")
-	};
-};
-var DIRECTIONS = [
-	["target", "target->olko"],
-	["olko", "olko->user"],
-	["user", "user->olko"]
-];
-var BUMPS = [
-	"patch",
-	"minor",
-	"major"
-];
-var VERDICT_ACTIONS = {
-	"target-only": [
-		"port-to-olko",
-		"exclude",
-		"leave"
-	],
-	"olko-only": [
-		"install-user",
-		"reject",
-		"exclude",
-		"leave"
-	],
-	"user-only": [
-		"publish-to-olko",
-		"exclude",
-		"leave"
-	],
-	"target-ahead": [
-		...BUMPS.map((b) => `port-to-olko-${b}`),
-		"exclude",
-		"leave"
-	],
-	"olko-ahead": [
-		"update-user",
-		"exclude",
-		"leave"
-	],
-	"user-ahead": [
-		...BUMPS.map((b) => `publish-to-olko-${b}`),
-		"revert-user",
-		"exclude",
-		"leave"
-	],
-	diverged: [
-		"take-target",
-		"take-olko",
-		"exclude",
-		"leave"
-	],
-	"platform-delta-only": ["leave", "exclude"]
-};
-function syncStateScript() {
-	return path.join(marketplaceDir(), "plugins", "olko-sync", "skills", "olko-sync-state", "scripts", "sync-state.mjs");
-}
-async function syncState(exec, stateDir, args) {
-	const res = await exec("node", [
-		syncStateScript(),
-		...args,
-		"--state-dir",
-		stateDir
-	]);
-	if (res.code !== 0) throw new Error(`sync-state ${args.slice(0, 2).join(" ")} failed: ${(res.stderr || res.stdout).trim()}`);
-	return res.stdout;
-}
-function longPathOf(p) {
-	const resolved = path.resolve(p);
-	return fs.existsSync(resolved) ? fs.realpathSync.native(resolved) : resolved;
-}
-var claudeSyncState = async ({ input, exec }) => {
-	if (!exec) throw new Error("csync.state needs the host exec tool");
-	const stateDir = longPathOf(input.stateDir ?? process.env.OLKO_SYNC_HOME ?? path.join(os.homedir(), ".olko-sync"));
-	await syncState(exec, stateDir, ["init"]);
-	if (input.olko) await syncState(exec, stateDir, [
-		"target",
-		"set-olko",
-		"--path",
-		longPathOf(input.olko)
-	]);
-	if (input.target) {
-		if (!input.targetName || !/^[a-z0-9-]+$/.test(input.targetName)) throw new Error("input.targetName must be a kebab-case name for the Claude marketplace in input.target");
-		await syncState(exec, stateDir, [
-			"target",
-			"set",
-			"--name",
-			input.targetName,
-			"--path",
-			longPathOf(input.target)
-		]);
-	}
-	const targets = JSON.parse(await syncState(exec, stateDir, ["target", "get"]));
-	const name = input.targetName ?? targets.default;
-	const target = name ? targets.targets[name]?.path : void 0;
-	if (!targets.olko?.path) throw new Error("no Olko checkout: give input.olko (the Olko marketplace checkout path)");
-	if (!target) throw new Error("no Claude marketplace target: give input.target and input.targetName");
-	const user = longPathOf(input.user ?? path.join(os.homedir(), ".claude"));
-	const stores = [
-		{
-			id: "target",
-			path: target,
-			layout: "plugins/*/skills/*/SKILL.md and plugins/*/agents/*.md"
-		},
-		{
-			id: "olko",
-			path: targets.olko.path,
-			layout: "skills/*/*/SKILL.md, plugins/*/skills/*/SKILL.md, agents/opencode/*.md (versions in agents/opencode/index.json), plugins/*/agents/*.md (version in plugin.json)"
-		},
-		{
-			id: "user",
-			path: user,
-			layout: "skills/*/SKILL.md and agents/*.md"
-		}
-	];
-	return {
-		state: {
-			stateDir,
-			olko: targets.olko.path,
-			target,
-			user,
-			stores,
-			leakTerms: targets.leakTerms,
-			leakTermsText: targets.leakTerms.length ? `${targets.leakTerms.length} saved` : "none saved",
-			script: syncStateScript()
-		},
-		metrics: { leakTerms: targets.leakTerms.length },
-		output: `Sync state ready in ${stateDir}: Olko ${targets.olko.path}, user store ${user}, target set (name and path stay out of logs).`
-	};
-};
-var claudeSyncLeakSave = async ({ state, exec, answers }) => {
-	if (!exec) throw new Error("csync.leakSave needs the host exec tool");
-	const { stateDir } = stateOf(state, "state");
-	const answer = (answers?.["q-claude-sync-leak"] ?? "none").trim();
-	const terms = /^none$/i.test(answer) ? [] : answer.split(",").map((t) => t.trim()).filter(Boolean);
-	for (const term of terms) await syncState(exec, stateDir, [
-		"target",
-		"add-leak-term",
-		"--term",
-		term
-	]);
-	return {
-		state: { added: terms.length },
-		metrics: { added: terms.length },
-		output: terms.length ? `${terms.length} leak terms added.` : "No leak terms added."
-	};
-};
-function lastJsonBlock(text) {
-	const raw = [...String(text).matchAll(/```json\s*([\s\S]*?)```/g)].at(-1)?.[1];
-	if (!raw) throw new Error("matcher output has no ```json block");
-	return JSON.parse(raw);
-}
-function parseCapabilities(text) {
-	const data = lastJsonBlock(text);
-	if (!Array.isArray(data.capabilities)) throw new Error("matcher JSON has no capabilities list");
-	for (const c of data.capabilities) if (!c.id || !["skill", "agent"].includes(c.kind) || typeof c.copies !== "object") throw new Error(`matcher capability is malformed: ${JSON.stringify(c).slice(0, 200)}`);
-	return {
-		capabilities: data.capabilities,
-		probable: data.probable ?? []
-	};
-}
-function normalizeName(name) {
-	return name.toLowerCase().replace(/^[a-z0-9-]+:/, "").replace(/^olko-/, "");
-}
-function parseInventory(text) {
-	const data = lastJsonBlock(text);
-	if (!Array.isArray(data.rows)) throw new Error("inventory JSON has no rows list");
-	const rows = data.rows.filter((r) => r && (r.kind === "skill" || r.kind === "agent") && typeof r.name === "string" && typeof r.path === "string");
-	if (rows.length !== data.rows.length) throw new Error(`inventory JSON has ${data.rows.length - rows.length} malformed rows`);
-	return { rows };
-}
-var STORES = [
-	"target",
-	"olko",
-	"user"
-];
-var claudeSyncInventories = async ({ state }) => {
-	const inventory = stateOf(state, "inventory");
-	const texts = Object.fromEntries(STORES.map((store) => [store, JSON.stringify(inventory[store]?.rows ?? [])]));
-	const counts = Object.fromEntries(STORES.map((store) => [store, inventory[store]?.rows.length ?? 0]));
-	return {
-		state: {
-			...texts,
-			counts
-		},
-		metrics: counts,
-		output: `Inventory: ${STORES.map((st) => `${st} ${counts[st]}`).join(", ")} artifacts.`
-	};
-};
-function buildCapabilities(inventory, roots, linked) {
-	const absolute = (store, p) => path.isAbsolute(p) ? p : path.join(roots[store], p);
-	const key = (store, kind, name) => `${store}|${kind}|${name}`;
-	const rowsByKey = /* @__PURE__ */ new Map();
-	for (const store of STORES) for (const row of inventory[store]?.rows ?? []) rowsByKey.set(key(store, row.kind, row.name), {
-		...row,
-		store
-	});
-	const used = /* @__PURE__ */ new Set();
-	const copyOf = (store, row) => ({
-		name: row.name,
-		path: absolute(store, row.path),
-		...row.version ? { version: row.version } : {},
-		...row.hash ? { hash: row.hash } : {}
-	});
-	const result = [];
-	for (const c of linked) {
-		const copies = {};
-		for (const store of STORES) {
-			const copy = c.copies[store];
-			if (!copy) continue;
-			const row = rowsByKey.get(key(store, c.kind, copy.name));
-			if (!row || used.has(key(store, c.kind, copy.name))) continue;
-			used.add(key(store, c.kind, copy.name));
-			copies[store] = copyOf(store, row);
-		}
-		if (Object.keys(copies).length) result.push({
-			...c,
-			copies
-		});
-	}
-	const byName = /* @__PURE__ */ new Map();
-	for (const [k, row] of rowsByKey) {
-		if (used.has(k)) continue;
-		const name = `${row.kind}|${normalizeName(row.name)}`;
-		byName.set(name, [...byName.get(name) ?? [], row]);
-	}
-	for (const [name, rows] of byName) {
-		const copies = {};
-		for (const row of rows) if (!copies[row.store]) copies[row.store] = copyOf(row.store, row);
-		const stores = Object.keys(copies).length;
-		result.push({
-			id: name.split("|")[1],
-			basis: stores > 1 ? "name" : "single",
-			kind: rows[0].kind,
-			copies
-		});
-	}
-	return result;
-}
-var claudeSyncCapabilities = async ({ state }) => {
-	const parsed = Object.values(stateOf(state, "match"))[0];
-	if (!parsed) throw new Error("the matcher returned nothing");
-	const { target, olko, user } = stateOf(state, "state");
-	const capabilities = buildCapabilities(stateOf(state, "inventory"), {
-		target,
-		olko,
-		user
-	}, parsed.capabilities);
-	const linked = capabilities.filter((c) => Object.keys(c.copies).length > 1).length;
-	return {
-		state: {
-			capabilities,
-			probable: parsed.probable
-		},
-		metrics: {
-			capabilities: capabilities.length,
-			linked,
-			probable: parsed.probable.length
-		},
-		output: `${capabilities.length} capabilities (${linked} across stores), ${parsed.probable.length} probable links.`
-	};
-};
-var claudeSyncSelect = async ({ state, input }) => {
-	const { capabilities, probable } = stateOf(state, "capabilities");
-	const wanted = input.artifacts?.map(normalizeName);
-	const matches = (c) => !wanted || [c.id, ...Object.values(c.copies).map((copy) => copy?.name ?? "")].some((n) => wanted.includes(normalizeName(n)));
-	const selected = capabilities.filter(matches);
-	if (wanted) {
-		const missing = input.artifacts.filter((a) => !selected.some((c) => [c.id, ...Object.values(c.copies).map((copy) => copy?.name ?? "")].some((n) => normalizeName(n) === normalizeName(a))));
-		if (missing.length) throw new Error(`input.artifacts not found in any store: ${missing.join(", ")}`);
-	}
-	const ask = probable.filter((p) => selected.some((c) => c.id === p.id));
-	return {
-		state: {
-			selected,
-			probable: ask
-		},
-		metrics: {
-			selected: selected.length,
-			probable: ask.length
-		},
-		output: `${selected.length} capabilities selected${wanted ? ` from input.artifacts` : ""}; ${ask.length} probable links to confirm.`
-	};
-};
-var claudeSyncExclusions = async ({ state, exec, answers }) => {
-	if (!exec) throw new Error("csync.exclusions needs the host exec tool");
-	const { stateDir } = stateOf(state, "state");
-	const { selected, probable } = stateOf(state, "select");
-	const split = new Set(probable.filter((_, i) => answers?.[`q-claude-sync-probable-${i}`] === "split").map((p) => p.id));
-	const capabilities = selected.flatMap((c) => split.has(c.id) ? Object.entries(c.copies).map(([store, copy]) => ({
-		...c,
-		id: `${c.id}@${store}`,
-		basis: "split",
-		copies: { [store]: copy }
-	})) : [c]);
-	const compare = [];
-	const excluded = [];
-	for (const c of capabilities) {
-		const checks = [];
-		for (const [store, direction] of DIRECTIONS) {
-			const copy = c.copies[store];
-			if (!copy) continue;
-			const out = await syncState(exec, stateDir, [
-				"exclusion",
-				"check",
-				"--artifact",
-				`${c.kind}:${copy.name}`,
-				"--direction",
-				direction,
-				...copy.version && copy.version !== "—" ? ["--version", copy.version] : []
-			]);
-			checks.push(JSON.parse(out));
-		}
-		if (checks.length && checks.every((x) => x.status === "excluded")) excluded.push({
-			id: c.id,
-			reason: checks[0]?.reason ?? "excluded"
-		});
-		else compare.push({
-			...c,
-			copiesText: Object.entries(c.copies).map(([store, copy]) => `${store}: ${copy?.name} ${copy?.path} version ${copy?.version ?? "—"} hash ${copy?.hash ?? "—"}`).join("\n")
-		});
-	}
-	return {
-		state: {
-			compare,
-			excluded
-		},
-		metrics: {
-			compare: compare.length,
-			excluded: excluded.length
-		},
-		output: `${compare.length} capabilities to compare, ${excluded.length} excluded.`
-	};
-};
-function parseVerdict(text) {
-	const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.startsWith("result |"));
-	if (!line) throw new Error("comparator report has no 'result |' line");
-	const [, verdict = "", bump = "none", nextVersion = "none", action = ""] = line.split("|").map((p) => p.trim());
-	if (verdict !== "identical" && !VERDICT_ACTIONS[verdict]) throw new Error(`comparator returned unknown verdict '${verdict}'`);
-	return {
-		verdict,
-		bump,
-		nextVersion,
-		action,
-		report: String(text).trim()
-	};
-}
-function claudeSyncActions(verdict) {
-	return VERDICT_ACTIONS[verdict] ?? [];
-}
-var claudeSyncRows = async ({ state }) => {
-	const { compare, excluded } = stateOf(state, "exclusions");
-	const verdicts = state.compare ?? {};
-	const rows = compare.map((c) => {
-		const v = verdicts[c.id];
-		if (!v) throw new Error(`no verdict for capability ${c.id}`);
-		const copies = Object.entries(c.copies).map(([store, copy]) => `${store} ${copy?.version ?? "—"}`).join(", ");
-		return {
-			id: c.id,
-			kind: c.kind,
-			verdict: v.verdict,
-			bump: v.bump,
-			nextVersion: v.nextVersion,
-			action: v.action,
-			options: claudeSyncActions(v.verdict),
-			line: `${c.kind} ${c.id}: ${v.verdict}; copies ${copies}; recommended ${v.action || "none"}; proposed Olko version ${v.nextVersion}`
-		};
-	});
-	const decide = rows.filter((r) => r.verdict !== "identical");
-	return {
-		state: {
-			rows,
-			decide,
-			excluded,
-			table: [...rows.map((r) => r.line), ...excluded.map((e) => `${e.id}: excluded (${e.reason})`)].join("\n")
-		},
-		metrics: {
-			rows: rows.length,
-			decide: decide.length
-		},
-		output: `${rows.length} capabilities compared, ${decide.length} need a decision, ${excluded.length} excluded.`
-	};
-};
-var claudeSyncPlan = async ({ state, answers }) => {
-	const { rows, decide } = stateOf(state, "rows");
-	const decided = rows.map((r) => {
-		const index = decide.findIndex((d) => d.id === r.id);
-		return {
-			...r,
-			decision: index < 0 ? "none" : answers?.[`q-claude-sync-${index}`] ?? "unanswered"
-		};
-	});
-	const records = decided.filter((r) => r.decision === "exclude");
-	const rejects = decided.filter((r) => r.decision === "reject");
-	const changes = decided.filter((r) => ![
-		"none",
-		"leave",
-		"exclude",
-		"reject",
-		"unanswered"
-	].includes(r.decision));
-	return {
-		state: {
-			decided,
-			records,
-			rejects,
-			changes
-		},
-		metrics: {
-			records: records.length,
-			rejects: rejects.length,
-			changes: changes.length
-		},
-		output: `${changes.length} rows to apply, ${records.length} exclusions and ${rejects.length} rejections to record.`
-	};
-};
-var claudeSyncRecord = async ({ state, exec, answers }) => {
-	if (!exec) throw new Error("csync.record needs the host exec tool");
-	const { stateDir } = stateOf(state, "state");
-	const { compare } = stateOf(state, "exclusions");
-	const { records, rejects } = stateOf(state, "plan");
-	const lines = [];
-	for (const [i, r] of [...records, ...rejects].entries()) {
-		const c = compare.find((x) => x.id === r.id);
-		const source = c.copies.target ?? c.copies.olko ?? c.copies.user;
-		const artifact = `${r.kind}:${source?.name}`;
-		if (r.decision === "reject") await syncState(exec, stateDir, [
-			"exclusion",
-			"add",
-			"--artifact",
-			artifact,
-			"--reason",
-			"rejected new artifact",
-			"--kind",
-			"rejected-new",
-			"--version",
-			c.copies.olko?.version ?? "0.0.0"
-		]);
-		else {
-			const scope = answers?.[`q-claude-sync-scope-${i}`] ?? "all";
-			await syncState(exec, stateDir, [
-				"exclusion",
-				"add",
-				"--artifact",
-				artifact,
-				"--reason",
-				answers?.[`q-claude-sync-reason-${i}`] ?? "excluded by the user",
-				...scope === "all" ? [] : ["--scope", scope]
-			]);
-		}
-		lines.push(`${artifact} ${r.decision}`);
-	}
-	return {
-		state: { lines },
-		metrics: { recorded: lines.length },
-		output: lines.length ? `Recorded: ${lines.join(", ")}.` : "Nothing to record."
-	};
-};
-var claudeSyncReport = async ({ state }) => {
-	const plan = stateOf(state, "plan");
-	const { excluded } = stateOf(state, "exclusions");
-	const lines = [...plan.decided.map((r) => `row | ${r.id} | ${r.verdict} | ${r.decision}`), ...excluded.map((e) => `row | ${e.id} | excluded | excluded`)];
-	const changes = plan.decided.filter((r) => ![
-		"none",
-		"leave",
-		"exclude",
-		"reject",
-		"unanswered"
-	].includes(r.decision)).length;
-	const applied = state["apply-record"]?.applied ?? [];
-	const pr = state["publish-pr"]?.publish;
-	const merged = state.merge ?? state.pr?.merge;
-	const olkoChanged = state["apply-record"]?.olkoChanged;
-	const published = pr ? merged ? `Published as ${pr.url}, squash merged as ${merged.commit?.slice(0, 12)}.` : `Published as draft ${pr.url}, not merged.` : olkoChanged ? "Olko changes are in the working tree and not published." : "No Olko change to publish.";
-	const outcome = changes ? `Applied ${applied.length} of ${changes} rows: ${applied.join(", ") || "none"}. ${published}` : "Olko, the target and the user scope: unchanged.";
-	const consolidation = state["consolidation-record"];
-	const consolidated = consolidation ? `Consolidation: ${consolidation.accepted} accepted (plan ${consolidation.planFile}), ${consolidation.rejected} rejected.` : "Consolidation: skipped.";
-	return {
-		state: { lines },
-		metrics: { rows: lines.length },
-		output: [
-			"Claude sync report",
-			...lines,
-			outcome,
-			consolidated
-		].join("\n")
-	};
-};
-function directionOf(decision) {
-	if (decision.startsWith("port-to-olko") || decision === "take-target") return {
-		direction: "to-olko",
-		from: "target",
-		overwrite: decision === "take-target"
-	};
-	if (decision.startsWith("publish-to-olko")) return {
-		direction: "to-olko",
-		from: "user",
-		overwrite: false
-	};
-	return {
-		direction: "to-user",
-		from: "olko",
-		overwrite: decision === "take-olko" || decision === "revert-user"
-	};
-}
-var claudeSyncStagePlan = async ({ state, answers, nodeId }) => {
-	const { changes } = stateOf(state, "plan");
-	const { compare } = stateOf(state, "exclusions");
-	const rows = stateOf(state, "rows").rows;
-	const previous = nodeId ? state[nodeId] : void 0;
-	const round = (previous?.round ?? 0) + 1;
-	const added = (state.findings?.missing ?? []).filter((_, i) => answers?.[`q-claude-sync-missing-${previous?.round ?? 0}-${i}`] === "install-user");
-	const items = [];
-	const add = (row) => items.push({
-		...row,
-		stageDir: fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "factory-stage-")))
-	});
-	if (round === 1) for (const change of changes) {
-		const c = compare.find((x) => x.id === change.id);
-		const { direction, from, overwrite } = directionOf(change.decision);
-		const source = c.copies[from];
-		if (!source) throw new Error(`${change.decision} for ${change.id} needs a ${from} copy`);
-		const existing = direction === "to-olko" ? c.copies.olko?.path : c.copies.user?.path;
-		const bump = change.decision.match(/-(patch|minor|major)$/)?.[1];
-		const version = direction === "to-user" ? c.copies.olko?.version ?? "none" : bump ? bumpVersion(c.copies.olko?.version ?? "0.0.0", bump) : rows.find((r) => r.id === change.id)?.nextVersion ?? "1.0.0";
-		add({
-			id: change.id,
-			rowId: change.id,
-			kind: c.kind,
-			decision: change.decision,
-			direction,
-			source: source.path,
-			sourceStore: from,
-			existing: existing ?? "none",
-			overwrite,
-			version: direction === "to-user" || /^\d+\.\d+\.\d+$/.test(version) ? version : "1.0.0"
-		});
-	}
-	else for (const m of added) add({
-		id: `${m.kind}-${m.name}`,
-		rowId: m.id,
-		kind: m.kind,
-		decision: "install-user",
-		direction: "to-user",
-		source: m.olkoPath,
-		sourceStore: "olko",
-		existing: "none",
-		overwrite: false,
-		version: "none"
-	});
-	return {
-		state: {
-			items: [...previous?.items ?? [], ...items],
-			wave: items,
-			round
-		},
-		metrics: {
-			staged: items.length,
-			round
-		},
-		output: `Wave C round ${round}: ${items.length} rows to stage.`
-	};
-};
-function parseStaged(text) {
-	const data = lastJsonBlock(text);
-	if (typeof data.name !== "string" || typeof data.stagedPath !== "string") throw new Error("porter JSON needs name and stagedPath");
-	return {
-		name: data.name,
-		stagedPath: data.stagedPath,
-		findings: data.findings ?? [],
-		missing: data.missing ?? [],
-		entry: data.entry ?? null,
-		category: data.category ?? null,
-		blockers: data.blockers ?? []
-	};
-}
-var claudeSyncFindings = async ({ state }) => {
-	const { wave: items, items: all, round } = stateOf(state, "stage-plan");
-	const staged = stateOf(state, "stage");
-	const olko = stateOf(state, "state").olko;
-	const blocked = items.filter((i) => staged[i.id]?.blockers.length).map((i) => `${i.id}: ${staged[i.id].blockers.join("; ")}`);
-	if (blocked.length) throw new Error(`porter blockers, nothing applied: ${blocked.join(" | ")}`);
-	const findings = items.flatMap((i) => (staged[i.id]?.findings ?? []).map((f) => ({
-		item: i.id,
-		...f,
-		line: `${i.id} ${f.file}:${f.line} — ${f.category} — proposed: ${f.replacement}`
-	})));
-	const missing = items.filter((i) => i.direction === "to-user").flatMap((i) => (staged[i.id]?.missing ?? []).map((ref) => {
-		const [kind, name] = ref.split(":");
-		const olkoPath = kind === "agent" ? path.join(olko, "agents", "opencode", `${name}.md`) : skillDirIn(olko, name) ?? "none";
-		return {
-			id: `${kind}:${name}`,
-			kind,
-			name,
-			olkoPath,
-			for: i.id,
-			line: `${kind} ${name}, needed by ${i.id}`
-		};
-	})).filter((m, i, list) => m.olkoPath !== "none" && list.findIndex((x) => x.id === m.id) === i && !all.some((it) => it.id === `${m.kind}-${m.name}`));
-	return {
-		state: {
-			findings,
-			missing,
-			round
-		},
-		metrics: {
-			findings: findings.length,
-			missing: missing.length
-		},
-		output: `${findings.length} sanitize findings to decide, ${missing.length} missing dependencies.`
-	};
-};
-var claudeSyncFixes = async ({ state, answers, nodeId }) => {
-	const { findings, round } = stateOf(state, "findings");
-	const previous = nodeId ? state[nodeId] : void 0;
-	const decided = findings.map((f, i) => ({
-		...f,
-		decision: answers?.[`q-claude-sync-finding-${round}-${i}`] ?? "skip-row"
-	}));
-	const skipped = [.../* @__PURE__ */ new Set([...previous?.skipped ?? [], ...decided.filter((d) => d.decision === "skip-row").map((d) => d.item)])];
-	const byItem = /* @__PURE__ */ new Map();
-	for (const d of decided.filter((d) => d.decision === "replace" || d.decision === "delete")) byItem.set(d.item, [...byItem.get(d.item) ?? [], `${d.decision}: ${d.line}`]);
-	const { items, wave } = stateOf(state, "stage-plan");
-	const fixes = wave.filter((i) => byItem.has(i.id) && !skipped.includes(i.id)).map((i) => ({
-		...i,
-		decisions: byItem.get(i.id).join("\n")
-	}));
-	const ready = items.filter((i) => !skipped.includes(i.id));
-	return {
-		state: {
-			fixes,
-			ready,
-			skipped
-		},
-		metrics: {
-			fixes: fixes.length,
-			ready: ready.length,
-			skipped: skipped.length
-		},
-		output: `${ready.length} rows ready, ${fixes.length} need staged fixes, ${skipped.length} skipped by a finding.`
-	};
-};
-function olkoCategories(olko) {
-	const skills = path.join(olko, "skills");
-	return fs.existsSync(skills) ? fs.readdirSync(skills).filter((c) => fs.statSync(path.join(skills, c)).isDirectory()).sort() : [];
-}
-var claudeSyncMoreDeps = async ({ state, answers }) => {
-	const { missing, round } = stateOf(state, "findings");
-	const more = round < 2 ? missing.filter((_, i) => answers?.[`q-claude-sync-missing-${round}-${i}`] === "install-user").length : 0;
-	return {
-		state: { more },
-		metrics: { more },
-		output: more ? `${more} missing dependencies to stage in the next wave.` : "No more dependencies to stage."
-	};
-};
-var claudeSyncApplyPlan = async ({ state }) => {
-	const { ready } = stateOf(state, "fixes");
-	const staged = stateOf(state, "stage");
-	const olko = stateOf(state, "state").olko;
-	const categories = olkoCategories(olko);
-	const rows = ready.map((i) => {
-		const s = staged[i.id];
-		const newSkill = i.direction === "to-olko" && i.kind === "skill" && i.existing === "none";
-		const diffFile = path.join(i.stageDir, "diff.patch");
-		const diff = fs.existsSync(diffFile) ? fs.readFileSync(diffFile, "utf8").slice(0, 6e3) : "new file, no existing copy";
-		return {
-			...i,
-			name: s.name,
-			stagedPath: s.stagedPath,
-			needsCategory: newSkill,
-			categories: s.category && categories.includes(s.category) ? [s.category, ...categories.filter((c) => c !== s.category)] : categories,
-			diff
-		};
-	});
-	return {
-		state: { rows },
-		metrics: { rows: rows.length },
-		output: `${rows.length} rows to apply one at a time.`
-	};
-};
-async function contentHash(exec, stateDir, target) {
-	return (await syncState(exec, stateDir, [
-		"hash",
-		"--path",
-		target
-	])).trim().split(/\s+/).at(-1) ?? "";
-}
-async function recordLineage(exec, stateDir, capability, store, target, sourceStore, source) {
-	const hash = await contentHash(exec, stateDir, target);
-	const sourceHash = await contentHash(exec, stateDir, source);
-	await syncState(exec, stateDir, [
-		"lineage",
-		"set",
-		"--capability",
-		capability.replace(/[^a-z0-9-]/g, "-"),
-		"--store",
-		store,
-		"--path",
-		target,
-		"--hash",
-		hash,
-		"--ported-from",
-		`${sourceStore}@${sourceHash}`
-	]);
-	return hash;
-}
-function upsertEntry(file, key, entry) {
-	const json = JSON.parse(fs.readFileSync(file, "utf8"));
-	const list = json[key];
-	const index = list.findIndex((e) => e.name === entry.name);
-	if (index >= 0) list[index] = {
-		...list[index],
-		...entry
-	};
-	else list.push(entry);
-	fs.writeFileSync(file, `${JSON.stringify(json, null, 2)}\n`);
-}
-var claudeSyncApplyOlko = async ({ state, exec, answers }) => {
-	if (!exec) throw new Error("csync.applyOlko needs the host exec tool");
-	const { item, index } = stateOf(state, "apply-next");
-	const { olko, stateDir } = stateOf(state, "state");
-	const staged = stateOf(state, "stage")[item.id];
-	if (item.overwrite && answers?.[`q-claude-sync-overwrite-${index}`] !== "overwrite") return {
-		state: { applied: false },
-		metrics: {
-			applied: 0,
-			failed: 0
-		},
-		output: `${item.id}: overwrite not confirmed, nothing written.`
-	};
-	const results = [];
-	let target;
-	if (item.kind === "skill") {
-		const category = item.needsCategory ? answers?.[`q-claude-sync-category-${index}`] : path.basename(path.dirname(item.existing));
-		if (!category) throw new Error(`no category for ${item.name}`);
-		target = item.existing !== "none" ? item.existing : path.join(olko, "skills", category, item.name);
-		fs.mkdirSync(target, { recursive: true });
-		fs.cpSync(item.stagedPath, target, {
-			recursive: true,
-			force: true,
-			filter: (f) => path.basename(f) !== "diff.patch"
-		});
-		upsertEntry(path.join(olko, "registry.json"), "skills", {
-			...staged.entry ?? {},
-			name: item.name,
-			category,
-			version: item.version
-		});
-		for (const args of [["scripts/registry.mjs", "--fix"], ["scripts/registry.mjs"]]) {
-			const res = await exec("node", args, { cwd: olko });
-			results.push(`${args.join(" ")}: ${res.code === 0 ? "pass" : `FAIL ${(res.stderr || res.stdout).trim().split(/\r?\n/).slice(-2).join(" ")}`}`);
-		}
-	} else {
-		target = path.join(olko, "agents", "opencode", `${item.name}.md`);
-		fs.copyFileSync(fs.statSync(item.stagedPath).isDirectory() ? path.join(item.stagedPath, `${item.name}.md`) : item.stagedPath, target);
-		upsertEntry(path.join(olko, "agents", "opencode", "index.json"), "agents", {
-			...staged.entry ?? {},
-			name: item.name,
-			version: item.version,
-			file: `${item.name}.md`
-		});
-		const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "factory-agent-check-"));
-		const res = await exec("node", [
-			"scripts/install-opencode-agents.mjs",
-			"--project",
-			scratch,
-			"--agent",
-			item.name
-		], { cwd: olko });
-		fs.rmSync(scratch, {
-			recursive: true,
-			force: true
-		});
-		results.push(`install-opencode-agents ${item.name}: ${res.code === 0 ? "pass" : `FAIL ${(res.stderr || res.stdout).trim().split(/\r?\n/).slice(-2).join(" ")}`}`);
-	}
-	await recordLineage(exec, stateDir, item.id, "olko", target, item.sourceStore, item.source);
-	const failed = results.filter((r) => r.includes("FAIL")).length;
-	return {
-		state: {
-			applied: true,
-			target,
-			results,
-			failed
-		},
-		metrics: {
-			applied: 1,
-			failed
-		},
-		output: `${item.id} -> Olko ${path.relative(olko, target)} at ${item.version}. ${results.join("; ")}`
-	};
-};
-var claudeSyncApplyUser = async ({ state, exec, answers }) => {
-	if (!exec) throw new Error("csync.applyUser needs the host exec tool");
-	const { item, index } = stateOf(state, "apply-next");
-	const { user, stateDir } = stateOf(state, "state");
-	if (answers?.[`q-claude-sync-write-${index}`] !== "write") return {
-		state: { applied: false },
-		metrics: { applied: 0 },
-		output: `${item.id}: write to the user scope declined.`
-	};
-	const target = item.kind === "skill" ? path.join(user, "skills", item.name) : path.join(user, "agents", `${item.name}.md`);
-	if (item.kind === "skill") {
-		fs.mkdirSync(target, { recursive: true });
-		fs.cpSync(item.stagedPath, target, {
-			recursive: true,
-			force: true,
-			filter: (f) => path.basename(f) !== "diff.patch"
-		});
-	} else fs.copyFileSync(fs.statSync(item.stagedPath).isDirectory() ? path.join(item.stagedPath, `${item.name}.md`) : item.stagedPath, target);
-	await recordLineage(exec, stateDir, item.id, "user", target, "olko", item.source);
-	return {
-		state: {
-			applied: true,
-			target
-		},
-		metrics: { applied: 1 },
-		output: `${item.id} -> user scope ${target}.`
-	};
-};
-var claudeSyncApplyRecord = async ({ state, nodeId }) => {
-	const previous = nodeId ? state[nodeId] : void 0;
-	const { item } = stateOf(state, "apply-next");
-	const result = item.direction === "to-olko" ? state["apply-olko"] : state["apply-user"];
-	const applied = [...previous?.applied ?? [], ...result?.applied ? [`${item.id} ${item.direction}`] : []];
-	const failed = (previous?.failed ?? 0) + (result?.failed ?? 0);
-	return {
-		state: {
-			applied,
-			failed,
-			olkoChanged: applied.some((a) => a.endsWith("to-olko"))
-		},
-		metrics: {
-			applied: applied.length,
-			failed
-		},
-		output: `${applied.length} rows applied so far.`
-	};
-};
-var claudeSyncOlkoTests = async ({ state, exec }) => {
-	if (!exec) throw new Error("csync.olkoTests needs the host exec tool");
-	const { olko } = stateOf(state, "state");
-	const res = await exec("node", ["--test", "scripts/*.test.mjs"], { cwd: olko });
-	const summary = (res.stdout.match(/^ℹ (pass|fail) \d+$/gm) ?? []).join(", ");
-	return {
-		state: {
-			passed: res.code === 0,
-			summary
-		},
-		metrics: { failed: res.code === 0 ? 0 : 1 },
-		output: `Olko node tests: ${res.code === 0 ? "pass" : "FAIL"} (${summary || (res.stderr || res.stdout).trim().split(/\r?\n/).slice(-2).join(" ")}).`
-	};
-};
-var claudeSyncLeakCheck = async ({ state, exec, input }) => {
-	if (!exec) throw new Error("csync.leakCheck needs the host exec tool");
-	const { olko, target, leakTerms } = stateOf(state, "state");
-	const plugins = fs.existsSync(path.join(target, "plugins")) ? fs.readdirSync(path.join(target, "plugins")) : [];
-	const portedPlugins = new Set(stateOf(state, "apply-plan").rows.filter((r) => r.sourceStore === "target").map((r) => path.relative(path.join(target, "plugins"), r.source).split(path.sep)[0]));
-	const terms = [
-		...leakTerms,
-		input.targetName ?? "",
-		target,
-		path.basename(target),
-		...plugins.filter((p) => !portedPlugins.has(p))
-	].filter((t) => t.length > 2).map((t) => t.toLowerCase());
-	const changed = (await exec("git", [
-		"-C",
-		olko,
-		"status",
-		"--porcelain",
-		"--untracked-files=all"
-	])).stdout.split(/\r?\n/).filter(Boolean).map((l) => l.slice(3).trim());
-	const hits = [];
-	for (const file of changed) {
-		const full = path.join(olko, file);
-		if (!fs.existsSync(full) || fs.statSync(full).isDirectory()) continue;
-		const added = file.endsWith(".json") ? (await exec("git", [
-			"-C",
-			olko,
-			"diff",
-			"--",
-			file
-		])).stdout.split(/\r?\n/).filter((l) => l.startsWith("+")).join("\n") : fs.readFileSync(full, "utf8");
-		terms.forEach((t, n) => {
-			if (added.toLowerCase().includes(t)) hits.push(`${file}: leak term #${n + 1}`);
-		});
-	}
-	if (hits.length) throw new Error(`leak check failed, nothing published: ${hits.join("; ")}`);
-	return {
-		state: {
+		return changed.length || missing.length ? [{
+			workflow,
+			commit: entry.commit,
 			changed,
-			files: changed.join("\n")
-		},
-		metrics: {
-			leaks: 0,
-			changed: changed.length
-		},
-		output: `Leak check passed on ${changed.length} changed Olko files.`
+			missing
+		}] : [];
+	});
+}
+function frontmatter(file) {
+	return fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n").match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "";
+}
+function mainAgents(marketplace) {
+	const found = [];
+	const opencode = path.join(marketplace, "agents", "opencode");
+	for (const f of fs.existsSync(opencode) ? fs.readdirSync(opencode).filter((f) => f.endsWith(".md") && f !== "README.md") : []) {
+		const mode = frontmatter(path.join(opencode, f)).match(/^mode:\s*([a-z]+)/m)?.[1] ?? "all";
+		if (mode === "primary" || mode === "all") found.push({
+			agent: f.replace(/\.md$/, ""),
+			file: `agents/opencode/${f}`,
+			mode
+		});
+	}
+	const plugins = path.join(marketplace, "plugins");
+	for (const plugin of fs.existsSync(plugins) ? fs.readdirSync(plugins) : []) {
+		const dir = path.join(plugins, plugin, "agents");
+		for (const f of fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith(".md")) : []) if (/^tools:.*\bAgent\b/m.test(frontmatter(path.join(dir, f)))) found.push({
+			agent: f.replace(/\.md$/, ""),
+			file: `plugins/${plugin}/agents/${f}`,
+			mode: "plugin delegator"
+		});
+	}
+	return found.sort((a, b) => a.agent.localeCompare(b.agent));
+}
+function scanMarketplace(specs, lock, marketplace, head, exists) {
+	const mapped = new Set(specs.flatMap((s) => sourceFiles(s, marketplace)));
+	const broken = specs.flatMap((s) => s.nodes.flatMap((n) => {
+		return [
+			n.agent,
+			n.skill,
+			...(n.agents ?? []).map((a) => a.agent)
+		].filter((x) => typeof x === "string").filter((name) => !exists(name)).map((name) => ({
+			workflow: s.name,
+			node: n.id,
+			name
+		}));
+	}));
+	return {
+		marketplace,
+		head,
+		stale: staleWorkflows(lock, marketplace),
+		unmapped: mainAgents(marketplace).filter((a) => !mapped.has(a.file)),
+		unlocked: specs.filter((s) => !lock[s.name] && sourceFiles(s, marketplace).length > 0).map((s) => s.name),
+		broken
 	};
-};
-var claudeSyncPublish = async ({ state, exec }) => {
-	if (!exec) throw new Error("csync.publish needs the host exec tool");
-	const { olko } = stateOf(state, "state");
-	const { changed } = stateOf(state, "leak-check");
-	const rows = stateOf(state, "apply-plan").rows.filter((r) => !r.decision.includes("user"));
-	const tests = stateOf(state, "olko-tests");
-	const branch = `feat/claude-sync-${rows.map((r) => r.name.replace(/^olko-/, "")).join("-").slice(0, 40).replace(/-+$/, "")}`;
+}
+async function updateMarketplace(exec, marketplace) {
 	const git = async (...args) => {
-		const res = await exec("git", [
+		const result = await exec("git", [
 			"-C",
-			olko,
+			marketplace,
 			...args
 		]);
-		if (res.code !== 0) throw new Error(`git ${args[0]} failed: ${(res.stderr || res.stdout).trim()}`);
-		return res.stdout.trim();
+		if (result.code !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr.trim().slice(-300)}`);
+		return result.stdout.trim();
 	};
-	await git("checkout", "-b", branch);
-	await git("add", "--", ...changed);
-	const subject = `feat(sync): port ${rows.map((r) => `${r.name} ${r.version}`).join(", ")}`;
-	await git("commit", "-m", subject);
-	await git("push", "-u", "origin", branch);
-	const pr = await exec("gh", [
-		"pr",
-		"create",
-		"--draft",
-		"--head",
-		branch,
-		"--base",
-		"main",
-		"--title",
-		subject,
-		"--body",
-		[`Artifacts: ${rows.map((r) => `${r.name} ${r.version} (${r.decision})`).join(", ")}`, `Validation: ${tests.passed ? "node tests pass" : "node tests FAIL"} ${tests.summary}`].join("\n\n")
-	], { cwd: olko });
-	if (pr.code !== 0) throw new Error(`gh pr create failed: ${(pr.stderr || pr.stdout).trim()}`);
-	const url = pr.stdout.trim().split(/\r?\n/).at(-1);
+	const branch = await git("branch", "--show-current");
+	if (branch !== "main") throw new Error(`${marketplace} is on '${branch || "a detached HEAD"}', not main; nothing was pulled. Switch it to main yourself or point FACTORY_MARKETPLACE_DIR at a main checkout.`);
+	if (await git("status", "--porcelain", "--untracked-files=no")) throw new Error(`${marketplace} has uncommitted changes; nothing was pulled.`);
+	const before = await git("rev-parse", "HEAD");
+	await git("fetch", "--quiet", "origin", "main");
+	await git("merge", "--ff-only", "origin/main");
+	const after = await git("rev-parse", "HEAD");
 	return {
-		state: { publish: {
-			url,
-			branch,
-			commit: await git("rev-parse", "HEAD")
-		} },
-		metrics: { prs: 1 },
-		output: `Draft PR ${url} on ${branch}.`
-	};
-};
-var claudeSyncConsolidationRecord = async ({ state, exec, answers }) => {
-	if (!exec) throw new Error("csync.consolidationRecord needs the host exec tool");
-	const { stateDir } = stateOf(state, "state");
-	const suggestions = Object.values(stateOf(state, "consolidate"))[0]?.suggestions ?? [];
-	const accepted = [];
-	const rejected = [];
-	for (const [i, s] of suggestions.entries()) {
-		const answer = answers?.[`q-claude-sync-suggestion-${i}`];
-		if (answer === "reject") {
-			await syncState(exec, stateDir, [
-				"rejection",
-				"add",
-				"--items",
-				s.items.join(","),
-				"--suggestion",
-				s.verdict,
-				"--reason",
-				answers?.[`q-claude-sync-suggestion-reason-${i}`] ?? "declined"
-			]);
-			rejected.push(s.items.join(","));
-		} else if (answer === "accept") accepted.push(`- ${s.verdict}: ${s.items.join(", ")}\n  evidence: ${s.evidence}\n  loses: ${s.loses}`);
-	}
-	const planFile = path.join(stateDir, `consolidation-plan-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.md`);
-	if (accepted.length) fs.appendFileSync(planFile, `${accepted.join("\n")}\n`);
-	return {
-		state: {
-			accepted: accepted.length,
-			rejected: rejected.length,
-			planFile: accepted.length ? planFile : "none"
-		},
-		metrics: {
-			accepted: accepted.length,
-			rejected: rejected.length
-		},
-		output: `Consolidation: ${accepted.length} accepted${accepted.length ? ` (plan ${planFile})` : ""}, ${rejected.length} rejected.`
-	};
-};
-function parseSuggestions(text) {
-	return { suggestions: (lastJsonBlock(text).suggestions ?? []).filter((s) => [
-		"merge",
-		"remove",
-		"extend"
-	].includes(s.verdict) && Array.isArray(s.items) && s.items.length >= 2).map((s, i) => ({
-		...s,
-		line: `${i + 1}. ${s.verdict}: ${s.items.join(" + ")} — ${s.evidence} — loses: ${s.loses}`
-	})) };
-}
-function parseDraft(text) {
-	const data = lastJsonBlock(text);
-	return {
-		questions: (data.questions ?? []).filter((q) => typeof q === "string" && q.trim()),
-		feature: data.feature ?? null,
-		tasks: data.tasks ?? [],
-		text: String(data.text ?? "")
+		marketplace,
+		before,
+		after,
+		changedFiles: before === after ? [] : (await git("diff", "--name-only", before, after)).split(/\r?\n/).filter(Boolean)
 	};
 }
-function parseGrill(text) {
-	const questions = lastJsonBlock(text).questions ?? [];
-	for (const q of questions) if (!q.problem || !Array.isArray(q.options) || q.options.length !== 3) throw new Error(`grill question needs a problem and exactly 3 options: ${JSON.stringify(q).slice(0, 200)}`);
-	return { questions };
-}
-function parseVerdictLine(prefix) {
-	return (text) => {
-		const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.startsWith(`${prefix} |`));
-		if (!line) throw new Error(`output has no '${prefix} |' line`);
-		const [, verdict = "", count = "0", detail = ""] = line.split("|").map((p) => p.trim());
-		return {
-			pass: verdict === "pass" || verdict === "yes" || verdict === "none",
-			count: Number(count) || 0,
-			detail
-		};
-	};
-}
-var planRoute = async ({ input, answers }) => {
-	const route = input.route ?? answers?.["q-plan-route"];
-	if (route && ![
-		"discovery",
-		"planning",
-		"both"
-	].includes(route)) throw new Error(`input.route must be discovery, planning or both, not ${route}`);
-	return {
-		state: { route: route ?? "ask" },
-		metrics: {},
-		output: `Route: ${route ?? "ask the user"}.`
-	};
-};
-var planDraftCheck = async ({ state, answers, nodeId }) => {
-	const draft = Object.values(stateOf(state, "draft"))[0];
-	const previous = nodeId ? state[nodeId] : void 0;
-	const round = (previous?.round ?? 0) + 1;
-	const answer = previous ? answers?.[`q-plan-questions-${previous.round}`] ?? answers?.[`q-plan-revise-${previous.round}`] : void 0;
-	const answered = [previous?.answered, answer].filter(Boolean).join("\n\n");
-	const ask = draft.questions.length > 0 && round <= 3;
-	return {
-		state: {
-			round,
-			ask,
-			questions: draft.questions.map((q, i) => `${i + 1}. ${q}`).join("\n"),
-			answered: answered || "none yet",
-			draft
-		},
-		metrics: {
-			questions: draft.questions.length,
-			round
-		},
-		output: ask ? `Draft round ${round}: ${draft.questions.length} open questions.` : `Draft ready: ${draft.tasks.length} Tasks.`
-	};
-};
-var planFeature = async ({ state, input, cwd }) => {
-	const fromTracker = state["tracker-context/context"];
-	const draft = (fromTracker && Object.values(fromTracker)[0]) ?? state["draft-check"]?.draft;
-	if (!draft) throw new Error("no Feature context: give input.route planning with the tracker on, or run the discovery draft first");
-	const missing = draft.tasks.filter((t) => !t.criteria?.length).map((t) => t.id);
-	if (!draft.tasks.length) throw new Error("entry gate: the Feature has no child Tasks; route to the backlog writer draft first");
-	if (missing.length) throw new Error(`entry gate: Tasks without acceptance criteria: ${missing.join(", ")}; never plan from a guessed criterion`);
-	const featureId = input.featureId ?? (draft.feature?.title ?? "feature").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-	const featureDir = `plans/features/${featureId}`;
-	fs.mkdirSync(path.join(cwd ?? ".", featureDir, "tasks"), { recursive: true });
-	const tasks = draft.tasks.map((t) => `- ${t.id}: ${t.title}\n${t.criteria.map((c) => `  - ${c}`).join("\n")}`).join("\n");
-	const criteria = [...draft.feature?.criteria ?? [], ...draft.tasks.flatMap((t) => t.criteria)].join("\n");
-	return {
-		state: {
-			featureId,
-			featureDir,
-			text: draft.text,
-			tasks,
-			taskIds: draft.tasks.map((t) => t.id),
-			criteria
-		},
-		metrics: { tasks: draft.tasks.length },
-		output: `Feature ${featureId}: ${draft.tasks.length} Tasks with acceptance criteria; plan folder ${featureDir}.`
-	};
-};
-var AUDITORS = [
-	[/\.net|c#|csproj|asp\.net/i, "olko-dotnet-auditor"],
-	[/kotlin|android/i, "olko-mobile-auditor"],
-	[/react native|expo/i, "olko-react-native-auditor"],
-	[/\breact\b(?! native)/i, "olko-react-auditor"],
-	[/army python|python army/i, "olko-army-python-auditor"]
-];
-var planAuditors = async ({ state, cwd }) => {
-	const { featureDir } = stateOf(state, "feature");
-	const file = path.join(cwd ?? ".", featureDir, "implementation.md");
-	const text = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
-	const scope = text.split(/^## /m).find((s) => /^(implementation scope|scope|technical scope)/i.test(s)) ?? text;
-	const agents = AUDITORS.filter(([re]) => re.test(scope)).map(([, agent]) => ({
-		id: agent.replace(/^olko-|-auditor$/g, ""),
-		agentName: agent
-	}));
-	return {
-		state: { agents },
-		metrics: { auditors: agents.length },
-		output: agents.length ? `Auditors for the planned technologies: ${agents.map((a) => a.agentName).join(", ")}.` : "No stack auditor matches the planned technologies; audits skipped."
-	};
-};
-var planFindings = async ({ state, args }) => {
-	const from = String(args.from);
-	const results = Object.entries(state[from] ?? {});
-	const total = results.reduce((sum, [, r]) => sum + r.count, 0);
-	return {
-		state: {
-			total,
-			text: results.filter(([, r]) => r.count > 0).map(([id, r]) => `${id}: ${r.detail}`).join("\n") || "none"
-		},
-		metrics: { findings: total },
-		output: total ? `${total} findings to fold from ${from}.` : `No findings from ${from}.`
-	};
-};
-var planFiles = async ({ state, cwd }) => {
-	const { featureDir, criteria } = stateOf(state, "feature");
-	const root = path.join(cwd ?? ".", featureDir);
-	const tasks = fs.existsSync(path.join(root, "tasks")) ? fs.readdirSync(path.join(root, "tasks")).filter((f) => f.endsWith("-implementation.md")).sort().map((f) => `${featureDir}/tasks/${f}`) : [];
-	const files = [`${featureDir}/implementation.md`, ...tasks].map((p) => ({
-		path: p,
-		criteria
-	}));
-	return {
-		state: { files },
-		metrics: { files: files.length },
-		output: `${files.length} plan files to review.`
-	};
-};
-var planReviewCollect = async ({ state, nodeId }) => {
-	const previous = nodeId ? state[nodeId] : void 0;
-	const report = state["plan-review"]?.["plan-report"];
-	const file = state["plan-next"]?.item?.path ?? "?";
-	const lines = (report?.kept ?? []).map((f) => f.line);
-	const reports = [...previous?.reports ?? [], ...lines.map((l) => `${file}: ${l}`)];
-	return {
-		state: {
-			reports,
-			confirmed: reports.length,
-			text: reports.join("\n") || "none"
-		},
-		metrics: { confirmed: reports.length },
-		output: `${lines.length} confirmed plan findings for ${file}.`
-	};
-};
-var planGrillQuestions = async ({ state, nodeId }) => {
-	const parsed = Object.values(stateOf(state, "grill"))[0];
-	const round = ((nodeId ? state[nodeId] : void 0)?.round ?? 0) + 1;
-	const questions = parsed.questions.map((q, i) => ({
-		index: i,
-		text: [
-			`Problem: ${q.problem}`,
-			`Why I am asking: ${q.why}`,
-			...q.options.map((o, n) => `${n + 1}. ${o.label}${n === 0 ? " (recommended)" : ""}\n   Business: ${o.business}\n   Change scope: ${o.scope}`),
-			q.glossary ? `Glossary: ${q.glossary}` : ""
-		].filter(Boolean).join("\n")
-	}));
-	const count = round <= 3 ? questions.length : 0;
-	return {
-		state: {
-			round,
-			questions,
-			count
-		},
-		metrics: {
-			questions: questions.length,
-			round
-		},
-		output: count ? `Grill round ${round}: ${count} questions as one batch.` : `Grill round ${round}: no open question${questions.length ? " (round limit reached; the rest stays in Open items)" : ""}.`
-	};
-};
-var planAnswers = async ({ state, answers, args }) => {
-	const from = String(args.from);
-	const prefix = String(args.prefix);
-	const source = stateOf(state, from);
-	const lines = source.questions.map((q) => `Question ${q.index + 1}:\n${q.text}\nAnswer: ${answers?.[`${prefix}${source.round}-${q.index}`] ?? "unanswered"}`);
-	return {
-		state: {
-			text: lines.join("\n\n") || "none",
-			count: lines.length
-		},
-		metrics: { answers: lines.length },
-		output: `${lines.length} answers collected.`
-	};
-};
-var planReadiness = async ({ state, nodeId }) => {
-	const parsed = Object.values(stateOf(state, "readiness"))[0];
-	const round = ((nodeId ? state[nodeId] : void 0)?.round ?? 0) + 1;
-	const questions = parsed.questions.map((q, i) => ({
-		index: i,
-		text: [
-			`Blocker: ${q.problem}`,
-			`Why I am asking: ${q.why}`,
-			...q.options.map((o, n) => `${n + 1}. ${o.label}${n === 0 ? " (recommended)" : ""}\n   Business: ${o.business}\n   Change scope: ${o.scope}`)
-		].join("\n")
-	}));
-	return {
-		state: {
-			round,
-			questions,
-			count: round <= 3 ? questions.length : 0
-		},
-		metrics: {
-			blockers: questions.length,
-			round
-		},
-		output: questions.length ? `Readiness round ${round}: ${questions.length} blockers.` : "Ready for implementation: no blockers."
-	};
-};
-var planOpenEditor = async ({ state, exec, cwd }) => {
-	const { featureDir } = stateOf(state, "feature");
-	const res = exec ? await exec("code", ["-n", featureDir], { cwd: cwd ?? "." }) : {
-		code: -1,
-		stdout: "",
-		stderr: "no exec"
-	};
-	return {
-		state: { opened: res.code === 0 },
-		metrics: { opened: res.code === 0 ? 1 : 0 },
-		output: res.code === 0 ? `Opened ${featureDir} in VS Code.` : `Could not open VS Code; run: code -n ${featureDir}`
-	};
-};
-var planScopeCheck = async ({ state, exec, cwd }) => {
-	if (!exec) throw new Error("plan.scopeCheck needs the host exec tool");
-	const { featureDir } = stateOf(state, "feature");
-	const status = (await exec("git", [
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+	const marketplace = marketplaceDir();
+	const commit = process.argv[2] ?? execFileSync("git", [
 		"-C",
-		cwd ?? ".",
-		"status",
-		"--porcelain",
-		"--untracked-files=all"
-	])).stdout.split(/\r?\n/).filter(Boolean).map((l) => l.slice(3).trim());
-	const allowed = (p) => p.startsWith(`${featureDir}/`) || p === ".opencode/memory/olko-plan-documentation-orchestrator.md";
-	const outside = status.filter((p) => !allowed(p));
-	if (outside.length) throw new Error(`planning changed files outside the plan folder: ${outside.join(", ")}`);
-	return {
-		state: { changed: status },
-		metrics: { changed: status.length },
-		output: `Plan scope check passed: ${status.length} changed files, all under ${featureDir}.`
-	};
-};
-var planFeatureReport = async ({ state, cwd }) => {
-	const { featureDir, featureId } = stateOf(state, "feature");
-	const root = path.join(cwd ?? ".", featureDir);
-	const tasks = fs.existsSync(path.join(root, "tasks")) ? fs.readdirSync(path.join(root, "tasks")).filter((f) => f.endsWith("-implementation.md")) : [];
-	const ready = fs.existsSync(path.join(root, "implementation.md")) ? fs.readFileSync(path.join(root, "implementation.md"), "utf8").match(/Ready for implementation:\s*(yes|no)/i)?.[1] ?? "missing" : "missing";
-	const auditors = state.auditors?.agents?.map((a) => a.agentName) ?? [];
-	const review = state["plan-collect"]?.confirmed ?? 0;
-	return {
-		state: { ready },
-		metrics: { tasks: tasks.length },
-		output: [
-			`Feature plan ${featureId}`,
-			`Files: ${[
-				"business.md",
-				"implementation.md",
-				"stack.md",
-				"tracker.md"
-			].map((f) => `${featureDir}/${f}`).join(", ")}`,
-			`Task plans: ${tasks.map((t) => `${featureDir}/tasks/${t}`).join(", ") || "none"}`,
-			`Ready for implementation: ${ready}`,
-			`Auditors: ${auditors.join(", ") || "none (no matching technology)"}`,
-			`Plan review: ${review} confirmed findings folded`,
-			"Domain changes: write-free recommendation in business.md; vault changes stay approval-gated after implementation."
-		].join("\n")
-	};
-};
-var OPERATIONS = {
-	...IMPL_OPERATIONS,
-	"builtin.pass": pass,
-	"builtin.count": async ({ state, nodeId }) => {
-		const count = ((nodeId ? state[nodeId]?.count : 0) ?? 0) + 1;
-		return {
-			state: { count },
-			metrics: { count },
-			output: `Round ${count}.`
-		};
-	},
-	"builtin.stop": async ({ args }) => {
-		throw new Error(String(args.reason ?? "stopped by the user"));
-	},
-	"plan.route": planRoute,
-	"plan.draftCheck": planDraftCheck,
-	"plan.feature": planFeature,
-	"plan.auditors": planAuditors,
-	"plan.findings": planFindings,
-	"plan.files": planFiles,
-	"plan.reviewCollect": planReviewCollect,
-	"plan.grillQuestions": planGrillQuestions,
-	"plan.answers": planAnswers,
-	"plan.readiness": planReadiness,
-	"plan.openEditor": planOpenEditor,
-	"plan.scopeCheck": planScopeCheck,
-	"plan.report": planFeatureReport,
-	"builtin.values": async ({ args }) => {
-		if (!Array.isArray(args.values)) throw new Error("with.values must be a list");
-		return {
-			state: { values: args.values },
-			metrics: { values: args.values.length },
-			output: `${args.values.length} values.`
-		};
-	},
-	"builtin.gate": async ({ state, input, args }) => {
-		const when = String(args.when);
-		const enabled = evaluateWhen(when, {
-			...state,
-			input,
-			switches: input.switches ?? {}
-		});
-		return {
-			state: { enabled },
-			metrics: { enabled: enabled ? 1 : 0 },
-			output: enabled ? `Subgraph ${String(args.subgraph)} runs (${when}).` : `Subgraph ${String(args.subgraph)} skipped: switch off (${when} is false).`
-		};
-	},
-	"github.prScope": prScope,
-	"github.postComment": postComment,
-	"list.next": listNext,
-	"plan.read": planRead,
-	"review.planReport": planReport,
-	"github.prFeedback": prFeedback,
-	"github.postReply": postReply,
-	"feedback.plan": feedbackPlan,
-	"feedback.report": feedbackReport,
-	"feedback.fixNotAvailable": async () => {
-		throw new Error("Fixing code from review comments needs write-capable agents in the factory (docs/yaml-migration-plan.md, E9). The decisions are recorded in this run; nothing was changed.");
-	},
-	"memory.load": memoryLoad,
-	"memory.persist": memoryPersist,
-	"review.route": reviewRoute,
-	"review.detectLenses": detectLenses,
-	"review.mergeFindings": mergeFindings,
-	"review.confirmFindings": confirmFindings,
-	"review.mergeRules": mergeRules,
-	"review.addViolations": addViolations,
-	"review.rankFindings": rankFindings,
-	"sync.resolvePath": resolveMarketplacePath,
-	"sync.safeSource": safeSource,
-	"sync.discover": discoverArtifacts,
-	"sync.checkVersions": checkSkillVersions,
-	"sync.rows": syncRows,
-	"sync.plan": syncPlanApply,
-	"sync.revertLocal": revertLocal,
-	"sync.validate": validateMarketplace,
-	"sync.prOf": prOf,
-	"sync.waitChecks": waitForChecks,
-	"sync.merge": squashMerge,
-	"sync.install": installArtifacts,
-	"sync.memorySave": syncMemorySave,
-	"csync.state": claudeSyncState,
-	"csync.leakSave": claudeSyncLeakSave,
-	"csync.inventories": claudeSyncInventories,
-	"csync.capabilities": claudeSyncCapabilities,
-	"csync.select": claudeSyncSelect,
-	"csync.exclusions": claudeSyncExclusions,
-	"csync.rows": claudeSyncRows,
-	"csync.plan": claudeSyncPlan,
-	"csync.record": claudeSyncRecord,
-	"csync.report": claudeSyncReport,
-	"csync.stagePlan": claudeSyncStagePlan,
-	"csync.findings": claudeSyncFindings,
-	"csync.fixes": claudeSyncFixes,
-	"csync.applyPlan": claudeSyncApplyPlan,
-	"csync.moreDeps": claudeSyncMoreDeps,
-	"csync.applyOlko": claudeSyncApplyOlko,
-	"csync.applyUser": claudeSyncApplyUser,
-	"csync.applyRecord": claudeSyncApplyRecord,
-	"csync.olkoTests": claudeSyncOlkoTests,
-	"csync.leakCheck": claudeSyncLeakCheck,
-	"csync.publish": claudeSyncPublish,
-	"csync.consolidationRecord": claudeSyncConsolidationRecord,
-	"sync.report": syncReport,
-	"sync.stopUnsafe": async ({ state, args, input }) => {
-		const source = stateOf(state, typeof args.from === "string" ? args.from : "safe-source");
-		throw new Error(`Sync stopped before any comparison: ${input.label ?? "the marketplace"} checkout is not safe: ${source.detail ?? "unknown reason"}.`);
-	}
-};
-var PARSERS = {
-	...IMPL_PARSERS,
-	"text.raw": (text) => String(text).trim(),
-	"review.findings": parseFindings,
-	"review.verdicts": parseVerdicts,
-	"review.rulesCheck": parseRulesCheck,
-	"sync.comparison": parseComparison,
-	"sync.prLine": parsePrLine,
-	"sync.applied": parseApplied,
-	"csync.capabilities": parseCapabilities,
-	"csync.inventory": parseInventory,
-	"csync.verdict": parseVerdict,
-	"csync.staged": parseStaged,
-	"plan.draft": parseDraft,
-	"plan.grill": parseGrill,
-	"plan.consistency": parseVerdictLine("consistency"),
-	"plan.findings": parseVerdictLine("findings"),
-	"csync.suggestions": parseSuggestions
-};
+		marketplace,
+		"rev-parse",
+		"HEAD"
+	], { encoding: "utf8" }).trim();
+	const lock = buildLock(loadWorkflowSpecs(path.join(FACTORY_DIR$1, "workflows")), marketplace, commit);
+	writeLock(lock);
+	console.log(`${Object.keys(lock).length} workflows locked against ${marketplace} at ${commit} in ${LOCK_FILE}`);
+}
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/code.js
 var require_code$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
@@ -18536,6 +15815,3170 @@ function configRoleErrors(config) {
 	const tiers = new Set(config.tiers);
 	return Object.entries(config.roles).filter(([, tier]) => !tiers.has(tier)).map(([role, tier]) => `role '${role}' uses unknown tier '${tier}'`);
 }
+// src/validate-workflows.ts
+function checkWorkflows(dir, agentExists = (name) => describeAgent(name) !== null) {
+	const errors = [];
+	const files = fs.readdirSync(dir).filter((f) => f.endsWith(".yaml")).sort();
+	const specs = [];
+	for (const file of files) try {
+		const spec = (0, import_dist$1.parse)(fs.readFileSync(path.join(dir, file), "utf8"));
+		const result = validate("workflow", spec);
+		if (!result.valid) errors.push(...result.errors.map((e) => `${file}: ${e}`));
+		if (spec.name !== file.replace(/\.yaml$/, "")) errors.push(`${file}: name ${spec.name} does not match the file name`);
+		if (!spec.description) errors.push(`${file}: workflow has no description`);
+		for (const node of spec.nodes ?? []) {
+			if (!node.description) errors.push(`${file}: node ${node.id} has no description`);
+			if (node.op && !OPERATIONS[node.op]) errors.push(`${file}: node ${node.id}: unknown op ${node.op} (needs engine op)`);
+			if (node.parse && !PARSERS[node.parse]) errors.push(`${file}: node ${node.id}: unknown parser ${node.parse} (needs engine parser)`);
+			for (const name of [
+				node.agent,
+				node.skill,
+				...(node.agents ?? []).map((a) => a.agent)
+			]) if (typeof name === "string" && !agentExists(name)) errors.push(`${file}: node ${node.id}: agent or skill ${name} is not in the marketplace`);
+		}
+		for (const edge of spec.edges ?? []) if ((spec.edges ?? []).filter((e) => e.from === edge.from).length > 1 && !edge.description) errors.push(`${file}: edge ${edge.from} -> ${edge.to} branches without a description`);
+		specs.push(spec);
+	} catch (error) {
+		errors.push(`${file}: ${error instanceof Error ? error.message : String(error)}`);
+	}
+	try {
+		loadWorkflowDir(dir);
+	} catch (error) {
+		errors.push(`load: ${error instanceof Error ? error.message : String(error)}`);
+	}
+	return {
+		ok: errors.length === 0,
+		errors,
+		workflows: specs.length
+	};
+}
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+	const dir = path.resolve(process.argv[2] ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "workflows"));
+	const result = checkWorkflows(dir);
+	for (const error of result.errors) console.error(error);
+	console.log(result.ok ? `workflows ok: ${result.workflows} files in ${dir}` : `${result.errors.length} problems in ${dir}`);
+	process.exitCode = result.ok ? 0 : 1;
+}
+// src/wfsync-ops.ts
+var FACTORY_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+function dirs(input) {
+	const workflows = path.resolve(input.path ?? path.join(FACTORY_DIR, "workflows"));
+	return {
+		workflows,
+		lock: path.join(path.dirname(workflows), "workflows.lock.json"),
+		marketplace: path.resolve(input.marketplace ?? marketplaceDir())
+	};
+}
+function git(cwd, ...args) {
+	return execFileSync("git", [
+		"-C",
+		cwd,
+		...args
+	], {
+		encoding: "utf8",
+		maxBuffer: 33554432
+	}).trim();
+}
+function diffOf(marketplace, commit, file) {
+	try {
+		return git(marketplace, "diff", commit, "HEAD", "--", file) || `(no textual diff between ${commit.slice(0, 7)} and HEAD)`;
+	} catch {
+		return `(commit ${commit.slice(0, 7)} is not in ${marketplace}; full current text follows)\n${fs.existsSync(path.join(marketplace, file)) ? fs.readFileSync(path.join(marketplace, file), "utf8") : ""}`;
+	}
+}
+function copyDir$1(from, to) {
+	fs.mkdirSync(to, { recursive: true });
+	for (const f of fs.readdirSync(from)) if (f.endsWith(".yaml")) fs.copyFileSync(path.join(from, f), path.join(to, f));
+}
+var wfsyncScan = async ({ input }) => {
+	const { workflows, lock, marketplace } = dirs(input);
+	const specs = loadWorkflowSpecs(workflows);
+	const head = git(marketplace, "rev-parse", "HEAD");
+	const scan = scanMarketplace(specs, readLock(lock), marketplace, head, (name) => describeAgent(name) !== null);
+	const bySource = /* @__PURE__ */ new Map();
+	for (const stale of scan.stale) for (const [kind, files] of [["changed", stale.changed], ["missing", stale.missing]]) for (const source of files) {
+		const item = bySource.get(source) ?? {
+			kind,
+			source,
+			commit: stale.commit,
+			diff: kind === "missing" ? `${source} was removed from the marketplace` : diffOf(marketplace, stale.commit, source),
+			workflows: [],
+			yamlFiles: [],
+			ask: false
+		};
+		item.workflows.push(stale.workflow);
+		item.yamlFiles.push(path.join(workflows, `${stale.workflow}.yaml`));
+		bySource.set(source, item);
+	}
+	const items = [...bySource.values()];
+	for (const agent of scan.unmapped) items.push({
+		kind: "new",
+		source: agent.file,
+		commit: head,
+		diff: fs.readFileSync(path.join(marketplace, agent.file), "utf8"),
+		workflows: [],
+		yamlFiles: [],
+		ask: true
+	});
+	const snapshot = fs.mkdtempSync(path.join(os.tmpdir(), "factory-wfsync-"));
+	copyDir$1(workflows, snapshot);
+	const lines = [
+		...items.map((i) => `${i.kind} ${i.source}: ${i.kind === "new" ? "no workflow yet" : `${i.workflows.length} workflows`}`),
+		...scan.unlocked.map((w) => `unlocked ${w}: not in the lock`),
+		...scan.broken.map((b) => `broken ${b.workflow}#${b.node}: ${b.name} is not in the marketplace`)
+	];
+	return {
+		state: {
+			items,
+			head,
+			workflows,
+			lock,
+			marketplace,
+			snapshot,
+			factory: FACTORY_DIR,
+			unlocked: scan.unlocked,
+			broken: scan.broken,
+			total: items.length,
+			pending: items.length + scan.unlocked.length,
+			text: lines.join("\n") || "nothing to update"
+		},
+		metrics: {
+			changed: items.filter((i) => i.kind === "changed").length,
+			missing: items.filter((i) => i.kind === "missing").length,
+			new: items.filter((i) => i.kind === "new").length,
+			unlocked: scan.unlocked.length,
+			broken: scan.broken.length
+		},
+		output: `Marketplace ${head.slice(0, 7)}: ${lines.length ? lines.join("; ") : "every workflow matches its sources"}.`
+	};
+};
+var wfsyncItem = async ({ state }) => {
+	const item = state["item-next"]?.item;
+	if (!item) throw new Error("no current item");
+	return {
+		state: {
+			...item,
+			ask: item.ask,
+			yamlList: item.yamlFiles.join("\n") || "(none yet: write a new root workflow and its group files)"
+		},
+		metrics: { workflows: item.workflows.length },
+		output: `${item.kind} ${item.source}: ${item.workflows.join(", ") || "new main agent"}.`
+	};
+};
+var wfsyncValidate = async ({ state }) => {
+	const scan = state.scan;
+	const result = checkWorkflows(scan.workflows);
+	return {
+		state: {
+			ok: result.ok,
+			errors: result.errors.join("\n") || "none"
+		},
+		metrics: { problems: result.errors.length },
+		output: result.ok ? `workflows ok: ${result.workflows} files` : `${result.errors.length} problems:\n${result.errors.slice(0, 20).join("\n")}`
+	};
+};
+function lastOf(state, node) {
+	return Object.values(state[node] ?? {})[0];
+}
+var wfsyncCheck = async ({ state, nodeId }) => {
+	const item = state.item;
+	const previous = nodeId ? state[nodeId] : void 0;
+	const round = previous?.source === item.source ? (previous.round ?? 0) + 1 : 1;
+	const validation = state.validate;
+	const mapping = lastOf(state, "map");
+	const verify = lastOf(state, "verify");
+	const pass = validation.ok && verify?.verdict === "pass";
+	const needsOp = (mapping?.text ?? "").split(/\r?\n/).filter((l) => /needs engine (op|parser)/i.test(l)).map((l) => l.trim());
+	const findings = [validation.ok ? "" : `Validation:\n${validation.errors}`, verify?.verdict === "pass" ? "" : `Verifier:\n${verify?.text ?? "no result"}`].filter(Boolean).join("\n\n");
+	const next = pass ? "pass" : round < 3 ? "retry" : "ask";
+	const result = {
+		source: item.source,
+		workflows: item.workflows,
+		verdict: pass ? "pass" : "open",
+		needsOp
+	};
+	const results = [...(previous?.results ?? []).filter((r) => r.source !== item.source), result];
+	return {
+		state: {
+			source: item.source,
+			round,
+			next,
+			findings: findings || "none",
+			needsOp: needsOp.join("\n") || "none",
+			results
+		},
+		metrics: {
+			round,
+			pass: pass ? 1 : 0,
+			needsOp: needsOp.length
+		},
+		output: pass ? `${item.source}: mapped and verified${needsOp.length ? `; ${needsOp.length} steps need engine work` : ""}.` : `${item.source} round ${round}: ${validation.ok ? "valid" : "invalid"}, verifier ${verify?.verdict ?? "missing"}.`
+	};
+};
+var wfsyncDiff = async ({ state }) => {
+	const scan = state.scan;
+	let diff = "";
+	try {
+		execFileSync("git", [
+			"diff",
+			"--no-index",
+			"--stat",
+			scan.snapshot,
+			scan.workflows
+		], { encoding: "utf8" });
+	} catch (error) {
+		diff = String(error.stdout ?? "");
+	}
+	let full = "";
+	try {
+		execFileSync("git", [
+			"diff",
+			"--no-index",
+			scan.snapshot,
+			scan.workflows
+		], {
+			encoding: "utf8",
+			maxBuffer: 33554432
+		});
+	} catch (error) {
+		full = String(error.stdout ?? "");
+	}
+	const changed = (diff.match(/^ \S.*\|/gm) ?? []).length;
+	const needsOp = (state.check?.results ?? []).flatMap((r) => r.needsOp.map((n) => `${r.source}: ${n}`));
+	return {
+		state: {
+			stat: diff.trim() || "no YAML changed",
+			full: full.slice(0, 2e4),
+			changed,
+			needsOp: needsOp.join("\n") || "none"
+		},
+		metrics: {
+			files: changed,
+			needsOp: needsOp.length
+		},
+		output: diff.trim() || "No YAML file changed."
+	};
+};
+var wfsyncApply = async ({ state }) => {
+	const scan = state.scan;
+	const results = state.check?.results ?? [];
+	const accepted = /* @__PURE__ */ new Set([...results.filter((r) => r.verdict === "pass").flatMap((r) => r.workflows), ...scan.unlocked]);
+	const specs = loadWorkflowSpecs(scan.workflows);
+	for (const spec of specs) if (sourceFiles(spec, scan.marketplace).some((f) => results.some((r) => r.verdict === "pass" && r.source === f))) accepted.add(spec.name);
+	const lock = readLock(scan.lock);
+	for (const spec of specs.filter((s) => accepted.has(s.name))) {
+		const entry = lockEntry(spec, scan.marketplace, scan.head);
+		if (entry) lock[spec.name] = entry;
+	}
+	writeLock(lock, scan.lock);
+	return {
+		state: { locked: [...accepted].sort() },
+		metrics: { locked: accepted.size },
+		output: `Lock updated for ${accepted.size} workflows at ${scan.head.slice(0, 7)}.`
+	};
+};
+var wfsyncRevert = async ({ state }) => {
+	const scan = state.scan;
+	for (const f of fs.readdirSync(scan.workflows)) if (f.endsWith(".yaml") && !fs.existsSync(path.join(scan.snapshot, f))) fs.rmSync(path.join(scan.workflows, f));
+	copyDir$1(scan.snapshot, scan.workflows);
+	return {
+		state: { reverted: true },
+		metrics: { reverted: 1 },
+		output: "Every YAML file is back to its state before the run; the lock is unchanged."
+	};
+};
+var wfsyncReport = async ({ state }) => {
+	const scan = state.scan;
+	const results = state.check?.results ?? [];
+	const applied = state.apply;
+	const lines = [
+		`Marketplace ${scan.head.slice(0, 7)}`,
+		`Found: ${scan.text}`,
+		...results.map((r) => `${r.source}: ${r.verdict}${r.needsOp.length ? `; needs engine work: ${r.needsOp.join(" | ")}` : ""}`),
+		applied?.locked ? `Lock updated: ${applied.locked.join(", ") || "none"}` : state.revert ? "Reverted: no YAML or lock change kept" : "Lock unchanged"
+	];
+	return {
+		state: { text: lines.join("\n") },
+		metrics: { results: results.length },
+		output: lines.join("\n")
+	};
+};
+var WFSYNC_OPERATIONS = {
+	"wfsync.scan": wfsyncScan,
+	"wfsync.item": wfsyncItem,
+	"wfsync.validate": wfsyncValidate,
+	"wfsync.check": wfsyncCheck,
+	"wfsync.diff": wfsyncDiff,
+	"wfsync.apply": wfsyncApply,
+	"wfsync.revert": wfsyncRevert,
+	"wfsync.report": wfsyncReport
+};
+// src/ops.ts
+var TIERS = [
+	"bug",
+	"security",
+	"repo-rule",
+	"design",
+	"style",
+	"nit"
+];
+function stateOf(state, key) {
+	const value = state[key];
+	if (value === void 0) throw new Error(`state.${key} is not set`);
+	return value;
+}
+function stringList(value, name) {
+	if (!Array.isArray(value) || !value.every((v) => typeof v === "string")) throw new Error(`${name} must be a list of strings`);
+	return value;
+}
+function splitDiff(diff) {
+	const files = [];
+	for (const chunk of diff.split(/^(?=diff --git )/m)) {
+		const header = chunk.match(/^diff --git a\/(.+?) b\/(.+)$/m);
+		if (header?.[2] !== void 0) files.push({
+			path: header[2],
+			diff: chunk
+		});
+	}
+	return files;
+}
+function cleanLine(line) {
+	const bare = line.trim().replace(/^[-*]\s+/, "");
+	return /^`[^`]*`$/.test(bare) ? bare.slice(1, -1) : bare;
+}
+function parseFindings(text) {
+	return String(text).split("\n").map(cleanLine).filter((line) => line.split("|").length >= 5 && !/^path\s*\|/i.test(line)).map((line) => {
+		const [location = "", ruleId = "", sev = "", problem = "", ...fix] = line.split("|").map((p) => p.trim());
+		return {
+			location,
+			ruleId,
+			sev,
+			problem,
+			fix: fix.join(" | "),
+			line
+		};
+	});
+}
+function parseVerdicts(text) {
+	const verdicts = [];
+	for (const line of String(text).split("\n").map(cleanLine)) {
+		const match = line.match(/^(CONFIRMED-UNCHECKED|CONFIRMED|REJECTED)\s*\|\s*(.+)$/);
+		if (match?.[1] !== void 0 && match[2] !== void 0) verdicts.push({
+			verdict: match[1],
+			rest: match[2]
+		});
+	}
+	return verdicts;
+}
+function tierOf$1(finding) {
+	const rule = finding.ruleId;
+	const skillPrefix = (name) => new RegExp(`^${name}[.:]`).test(rule);
+	if (finding.sev === "nit") return "nit";
+	if (rule.startsWith("bug.")) return "bug";
+	if (rule.startsWith("sec.") || /-security[.:]/.test(rule)) return "security";
+	if (rule.startsWith("repo.") || /-testing[.:]/.test(rule)) return "repo-rule";
+	if (skillPrefix("olko-design-rules") || /-architecture[.:]/.test(rule)) return "design";
+	return "style";
+}
+var pass = async () => ({
+	state: { passed: true },
+	output: "verify passed"
+});
+var reviewRoute = async ({ input, exec }) => {
+	if (input.plan) return {
+		state: {
+			route: "PLAN",
+			review: false
+		},
+		output: `PLAN (${input.plan})`
+	};
+	if (input.base) return {
+		state: {
+			route: "LOCAL",
+			review: true
+		},
+		output: `LOCAL (working tree against ${input.base})`
+	};
+	if (!exec) throw new Error("review.route needs the host exec tool");
+	if (input.pr === void 0 || !input.repo) throw new Error("review.route needs repo and pr, or plan, in the input");
+	const view = await exec("gh", [
+		"pr",
+		"view",
+		String(input.pr),
+		"--repo",
+		input.repo,
+		"--json",
+		"author"
+	]);
+	const user = await exec("gh", [
+		"api",
+		"user",
+		"--jq",
+		".login"
+	]);
+	if (view.code !== 0 || user.code !== 0) throw new Error(`gh failed: ${(view.stderr || user.stderr).slice(-300)}`);
+	const author = JSON.parse(view.stdout).author.login;
+	const own = author === user.stdout.trim();
+	if (own && !input.fresh) return {
+		state: {
+			route: "FEEDBACK",
+			review: false,
+			own
+		},
+		output: "FEEDBACK (the PR author is the signed-in user)"
+	};
+	const reason = own ? "fresh review of own PR" : `PR by ${author}`;
+	return {
+		state: {
+			route: "REVIEW",
+			review: true,
+			own
+		},
+		output: `REVIEW (${reason})`
+	};
+};
+function untrackedDiff(file, text) {
+	const lines = text.replace(/\r\n/g, "\n").replace(/\n$/, "").split("\n");
+	return `diff --git a/${file} b/${file}\nnew file mode 100644\n--- /dev/null\n+++ b/${file}\n@@ -0,0 +1,${lines.length} @@\n${lines.map((l) => `+${l}`).join("\n")}\n`;
+}
+async function localDiff(exec, root, base) {
+	if (!/^[\w./-]+$/.test(base)) throw new Error(`base ${base} is not a git ref`);
+	const mergeBase = await exec("git", [
+		"-C",
+		root,
+		"merge-base",
+		base,
+		"HEAD"
+	]);
+	if (mergeBase.code !== 0) throw new Error(`git merge-base ${base} HEAD failed: ${mergeBase.stderr.slice(-300)}`);
+	const tracked = await exec("git", [
+		"-C",
+		root,
+		"diff",
+		mergeBase.stdout.trim()
+	]);
+	const untracked = await exec("git", [
+		"-C",
+		root,
+		"ls-files",
+		"--others",
+		"--exclude-standard"
+	]);
+	if (tracked.code !== 0 || untracked.code !== 0) throw new Error(`git diff failed: ${(tracked.stderr || untracked.stderr).slice(-300)}`);
+	const added = untracked.stdout.split(/\r?\n/).filter(Boolean).map((f) => untrackedDiff(f, fs.readFileSync(path.join(root, f), "utf8")));
+	return {
+		files: splitDiff(tracked.stdout + added.join("")),
+		added: added.length,
+		mergeBase: mergeBase.stdout.trim()
+	};
+}
+async function localScope(input, exec, exclude, root) {
+	const base = String(input.base);
+	const diff = await localDiff(exec, root, base);
+	const isExcluded = (p) => exclude.some((re) => re.test(p));
+	const files = diff.files.filter((f) => !isExcluded(f.path));
+	const excluded = diff.files.filter((f) => isExcluded(f.path)).map((f) => f.path);
+	if (files.length === 0) throw new Error(`no local change against ${base} to review`);
+	return {
+		state: {
+			base,
+			repo: "",
+			title: `local changes against ${base}`,
+			body: (input.criteria ?? "").trim(),
+			head: "working tree",
+			files,
+			excluded,
+			stale: false
+		},
+		metrics: {
+			files: files.length,
+			excluded: excluded.length,
+			stale: 0
+		},
+		output: `Local diff against ${base}: ${files.length} files (${diff.added} new). Not sent to lenses: ${excluded.join(", ") || "none"}.`
+	};
+}
+var prScope = async ({ input, exec, args, cwd }) => {
+	if (input.base) {
+		if (!exec) throw new Error("github.prScope needs the host exec tool");
+		return localScope(input, exec, stringList(args.exclude ?? [], "with.exclude").map((p) => new RegExp(p)), path.resolve(cwd ?? "."));
+	}
+	const pr = input.pr;
+	const repo = input.repo ?? "";
+	if (pr === void 0 || !Number.isInteger(pr) || !/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error("input needs repo owner/name and an integer pr");
+	if (!exec) throw new Error("github.prScope needs the host exec tool");
+	const exclude = stringList(args.exclude ?? [], "with.exclude").map((p) => new RegExp(p));
+	const view = await exec("gh", [
+		"pr",
+		"view",
+		String(pr),
+		"--repo",
+		repo,
+		"--json",
+		"title,body,headRefName,author"
+	]);
+	const diff = await exec("gh", [
+		"pr",
+		"diff",
+		String(pr),
+		"--repo",
+		repo
+	]);
+	if (view.code !== 0 || diff.code !== 0) throw new Error(`gh failed: ${(view.stderr || diff.stderr).slice(-300)}`);
+	const branch = await exec("git", [
+		"-C",
+		cwd ?? ".",
+		"branch",
+		"--show-current"
+	]);
+	const meta = JSON.parse(view.stdout);
+	const all = splitDiff(diff.stdout);
+	const isExcluded = (p) => exclude.some((re) => re.test(p));
+	const files = all.filter((f) => !isExcluded(f.path));
+	const excluded = all.filter((f) => isExcluded(f.path)).map((f) => f.path);
+	if (files.length === 0) throw new Error("no diff to review");
+	const stale = branch.code !== 0 || branch.stdout.trim() !== meta.headRefName;
+	return {
+		state: {
+			pr,
+			repo,
+			title: meta.title,
+			body: meta.body || "",
+			head: meta.headRefName,
+			files,
+			excluded,
+			stale
+		},
+		metrics: {
+			files: files.length,
+			excluded: excluded.length,
+			stale: stale ? 1 : 0
+		},
+		output: `PR #${pr} "${meta.title}" (${meta.headRefName}): ${files.length} files, ${diff.stdout.length} characters of diff. Not sent to lenses: ${excluded.join(", ") || "none"}. Working tree ${stale ? "is not the PR head: lenses judge changed lines from the hunks only" : "is the PR head"}.`
+	};
+};
+var detectLenses = async ({ state, args }) => {
+	const scope = stateOf(state, "scope");
+	const files = scope.files;
+	const always = args.always;
+	const stacks = args.stacks ?? [];
+	const requirements = args.requirements;
+	if (!always?.id || !always.agent) throw new Error("with.always needs id and agent");
+	const lenses = [{
+		id: always.id,
+		agentName: always.agent,
+		role: "lens",
+		paths: files.map((f) => f.path),
+		files
+	}];
+	for (const stack of stacks) {
+		const extensions = stringList(stack.extensions ?? [], `with.stacks.${stack.id}.extensions`);
+		const matched = files.filter((f) => extensions.some((ext) => f.path.endsWith(ext)));
+		if (matched.length) lenses.push({
+			id: stack.id,
+			agentName: stack.agent,
+			role: "lens",
+			paths: matched.map((f) => f.path),
+			files: matched
+		});
+	}
+	const covered = new Set(lenses.slice(1).flatMap((l) => l.paths ?? []));
+	const onlyAlways = [...new Set(files.map((f) => f.path).filter((p) => !covered.has(p)).map((p) => p.match(/\.[^./]+$/)?.[0] ?? "(no extension)"))];
+	const criteria = scope.body.trim();
+	if (requirements?.id && requirements.agent && criteria) lenses.push({
+		id: requirements.id,
+		agentName: requirements.agent,
+		role: "lens",
+		paths: files.map((f) => f.path),
+		files,
+		criteria,
+		mode: "code"
+	});
+	return {
+		state: {
+			lenses,
+			bugsOnlyTypes: onlyAlways,
+			criteria: criteria ? "PR description" : "none"
+		},
+		metrics: { lenses: lenses.length },
+		output: `Lenses: ${lenses.map((l) => `${l.agentName} (${l.paths?.length} files)`).join(", ")}. File types reviewed only by ${always.agent}: ${onlyAlways.join(", ") || "none"}. Acceptance criteria: ${criteria ? "PR description" : "none, requirements lens skipped"}.`
+	};
+};
+function memoryLists(text) {
+	const counts = /* @__PURE__ */ new Map();
+	for (const line of text.split(/\r?\n/)) {
+		const match = line.trim().replace(/^[-*]\s+/, "").match(/^(confirmed|rejected):(\S+)/);
+		if (!match?.[1] || !match[2]) continue;
+		const entry = counts.get(match[2]) ?? {
+			confirmed: 0,
+			rejected: 0
+		};
+		entry[match[1]] += 1;
+		counts.set(match[2], entry);
+	}
+	return {
+		suppress: [...counts].filter(([, c]) => c.rejected >= 2).map(([p]) => p),
+		prioritize: [...counts].filter(([, c]) => c.confirmed >= 1).map(([p]) => p)
+	};
+}
+function memoryFile(cwd, agent) {
+	if (typeof agent !== "string" || !/^[a-z0-9-]+$/.test(agent)) throw new Error("with.agent must name the agent that owns the memory block");
+	return path.join(cwd ?? process.cwd(), ".opencode", "memory", `${agent}.md`);
+}
+var memoryLoad = async ({ args, cwd }) => {
+	const file = memoryFile(cwd, args.agent);
+	if (!fs.existsSync(file)) return {
+		state: {
+			loaded: false,
+			file,
+			suppressText: "none",
+			prioritizeText: "none"
+		},
+		metrics: {
+			loaded: 0,
+			suppress: 0,
+			prioritize: 0
+		},
+		output: `Memory block ${file} does not exist.`
+	};
+	const { suppress, prioritize } = memoryLists(fs.readFileSync(file, "utf8"));
+	return {
+		state: {
+			loaded: true,
+			file,
+			suppress,
+			prioritize,
+			suppressText: suppress.join(", ") || "none",
+			prioritizeText: prioritize.join(", ") || "none"
+		},
+		metrics: {
+			loaded: 1,
+			suppress: suppress.length,
+			prioritize: prioritize.length
+		},
+		output: `Memory loaded from ${file}: ${suppress.length} suppressed, ${prioritize.length} prioritized patterns.`
+	};
+};
+function nodeArg(args, key, fallback) {
+	const value = args[key] ?? fallback;
+	if (typeof value !== "string") throw new Error(`with.${key} must name a node`);
+	return value;
+}
+var mergeFindings = async ({ state, args }) => {
+	const byKey = /* @__PURE__ */ new Map();
+	const lensResults = state[nodeArg(args, "from", "lenses")] ?? {};
+	for (const [lens, findings] of Object.entries(lensResults)) for (const f of findings) {
+		const key = `${f.location}|${f.ruleId}`;
+		const current = byKey.get(key);
+		if (!current || TIERS.indexOf(tierOf$1(f)) < TIERS.indexOf(tierOf$1(current))) byKey.set(key, {
+			...f,
+			lens
+		});
+	}
+	const findings = [...byKey.values()];
+	return {
+		state: { findings },
+		metrics: { findings: findings.length },
+		output: findings.length ? findings.map((f) => f.line).join("\n") : "No findings from the lenses."
+	};
+};
+var confirmFindings = async ({ state, args }) => {
+	const findings = stateOf(state, nodeArg(args, "findings", "merge")).findings;
+	const verifyNode = nodeArg(args, "verdicts", "verify");
+	const verdicts = state[verifyNode]?.[verifyNode] ?? [];
+	const confirmed = [];
+	const dropped = [];
+	findings.forEach((f, i) => {
+		const v = verdicts[i];
+		if (v && v.verdict !== "REJECTED") confirmed.push({
+			...f,
+			unchecked: v.verdict === "CONFIRMED-UNCHECKED"
+		});
+		else dropped.push({
+			...f,
+			reason: v ? (v.rest.split("|").at(-1) ?? "").trim() : "no verdict returned"
+		});
+	});
+	return {
+		state: {
+			confirmed,
+			dropped,
+			count: confirmed.length
+		},
+		metrics: {
+			confirmed: confirmed.length,
+			dropped: dropped.length
+		},
+		output: `${confirmed.length} confirmed, ${dropped.length} dropped by the verifier.`
+	};
+};
+function parseRulesCheck(text) {
+	const lines = String(text).split("\n").map(cleanLine).filter(Boolean);
+	const result = {
+		noStore: lines.some((l) => /^no-store$/i.test(l)),
+		violations: [],
+		verdicts: []
+	};
+	for (const line of lines) {
+		if (/^violation\s*\|/.test(line)) result.violations.push(line.replace(/^violation\s*\|\s*/, ""));
+		const verdict = line.match(/^(keep|drop|ask)\s*\|\s*(.+)\|\s*([^|]+)$/);
+		if (verdict?.[1] && verdict[2] && verdict[3]) result.verdicts.push({
+			verdict: verdict[1],
+			finding: verdict[2].trim(),
+			cite: verdict[3].trim()
+		});
+	}
+	return result;
+}
+var mergeRules = async ({ state, args }) => {
+	const confirmed = stateOf(state, nodeArg(args, "confirmed", "confirm")).confirmed;
+	const check = Object.values(state[nodeArg(args, "check", "rules-check")] ?? {})[0];
+	if (!check) throw new Error("rules-check returned nothing");
+	if (check.noStore) return {
+		state: {
+			kept: confirmed,
+			dropped: [],
+			decide: [],
+			violations: [],
+			noStore: true
+		},
+		metrics: {
+			noStore: 1,
+			decide: 0,
+			violations: 0,
+			dropped: 0
+		},
+		output: "Project rules check: no-store (no ADR or rule directory). Skipped."
+	};
+	const kept = [];
+	const dropped = [];
+	const decide = [];
+	confirmed.forEach((f, i) => {
+		const v = check.verdicts[i];
+		if (v?.verdict === "drop") dropped.push({
+			line: f.line,
+			cite: v.cite
+		});
+		else if (v?.verdict === "ask") decide.push({
+			kind: "ask",
+			line: f.line,
+			cite: v.cite
+		});
+		else kept.push(f);
+	});
+	return {
+		state: {
+			kept,
+			dropped,
+			decide,
+			violations: check.violations,
+			noStore: false
+		},
+		metrics: {
+			noStore: 0,
+			decide: decide.length,
+			violations: check.violations.length,
+			dropped: dropped.length
+		},
+		output: `Project rules check: ${check.violations.length} violations, ${dropped.length} findings dropped by the store, ${decide.length} to decide.`
+	};
+};
+var addViolations = async ({ state, args }) => {
+	const rules = stateOf(state, nodeArg(args, "rules", "rules-merge"));
+	const verifyNode = nodeArg(args, "verdicts", "verify-violations");
+	const verdicts = state[verifyNode]?.[verifyNode] ?? [];
+	const confirmed = rules.violations.filter((_, i) => verdicts[i] && verdicts[i].verdict !== "REJECTED");
+	const decide = [...rules.decide, ...confirmed.map((line) => ({
+		kind: "violation",
+		line,
+		cite: line.split("|").slice(-2).join("|").trim()
+	}))];
+	return {
+		state: { decide },
+		metrics: {
+			decide: decide.length,
+			violations: confirmed.length
+		},
+		output: `${confirmed.length} store violations confirmed by the verifier.`
+	};
+};
+var listNext = async ({ state, args, nodeId }) => {
+	if (typeof args.over !== "string") throw new Error("with.over must be a state path");
+	const list = args.over.split(".").reduce((value, key) => value && typeof value === "object" ? value[key] : void 0, state);
+	if (!Array.isArray(list)) throw new Error(`state.${args.over} is not a list`);
+	const previous = nodeId ? state[nodeId] : void 0;
+	const index = previous?.index === void 0 || previous.done ? 0 : previous.index + 1;
+	const done = index >= list.length;
+	return {
+		state: {
+			index,
+			number: index + 1,
+			total: list.length,
+			item: done ? null : list[index],
+			done
+		},
+		metrics: {
+			index,
+			total: list.length
+		},
+		output: done ? `All ${list.length} items handled.` : `Item ${index + 1} of ${list.length}.`
+	};
+};
+var rankFindings = async ({ state, answers }) => {
+	const scope = stateOf(state, "scope");
+	const detect = stateOf(state, "detect");
+	const confirm = stateOf(state, "confirm");
+	const rules = stateOf(state, "rules-merge");
+	const decide = state["rules-violations"]?.decide ?? state["rules-merge"].decide;
+	const memory = state.memory;
+	const decided = decide.map((d, i) => ({
+		...d,
+		answer: answers?.[`q-rule-${i}`] ?? "unanswered"
+	}));
+	const kept = [...rules.kept];
+	for (const d of decided) if (d.answer !== "store") kept.push({
+		location: d.line.split("|")[0]?.trim() ?? "",
+		ruleId: d.kind === "violation" ? "repo.store" : "repo.ask",
+		sev: "bug",
+		problem: d.line,
+		fix: "",
+		line: d.line,
+		unchecked: false
+	});
+	kept.sort((a, b) => TIERS.indexOf(tierOf$1(a)) - TIERS.indexOf(tierOf$1(b)));
+	const totals = TIERS.map((t) => `${t}: ${kept.filter((f) => tierOf$1(f) === t).length}`).join(", ");
+	const lines = [
+		scope.pr === void 0 ? `Review of ${scope.title}` : `Review of PR #${scope.pr}: ${scope.title}`,
+		"",
+		...kept.length ? kept.map((f) => `${f.line}${f.unchecked ? " (rule unchecked)" : ""}`) : ["No confirmed findings."],
+		"",
+		`Totals: ${totals}`,
+		`Lenses run: ${detect.lenses.map((l) => l.agentName).join(", ")}`,
+		`Acceptance criteria: ${detect.criteria}`,
+		`File types reviewed only by the always-on lens: ${detect.bugsOnlyTypes.join(", ") || "none"}`,
+		`Not reviewed (excluded): ${scope.excluded.join(", ") || "none"}`,
+		`Dropped by the verifier: ${confirm.dropped.length}`,
+		...confirm.dropped.map((f) => `  - ${f.line} | ${f.reason}`),
+		`Project rules check: ${rules.noStore ? "no-store, skipped" : `${rules.dropped.length} dropped by the store`}`,
+		...rules.dropped.map((d) => `  - ${d.line} | ${d.cite}`),
+		...decided.map((d) => `Decided (${d.kind}): ${d.line} -> ${d.answer === "store" ? "store entry holds" : "finding holds"}`),
+		`Memory: ${memory?.loaded ? "loaded" : "not loaded (the user chose to continue without it)"}`
+	];
+	return {
+		state: {
+			kept,
+			count: kept.length
+		},
+		metrics: { kept: kept.length },
+		output: lines.join("\n")
+	};
+};
+var postComment = async ({ state, exec, args }) => {
+	if (!exec) throw new Error("github.postComment needs the host exec tool");
+	if (typeof args.from !== "string") throw new Error("with.from must name the list node");
+	const scope = stateOf(state, "scope");
+	const item = state[args.from]?.item;
+	if (!item) throw new Error(`state.${args.from}.item is not set`);
+	const result = await exec("gh", [
+		"pr",
+		"comment",
+		String(scope.pr),
+		"--repo",
+		scope.repo,
+		"--body",
+		item.line
+	]);
+	if (result.code !== 0) throw new Error(`gh pr comment failed: ${result.stderr.slice(-300)}`);
+	return {
+		state: { posted: item.line },
+		metrics: { posted: 1 },
+		output: `Posted on PR #${scope.pr}: ${item.line}`
+	};
+};
+function memoryDecisionLines(kept, answers, prefix) {
+	return kept.flatMap((f, i) => {
+		const answer = answers[`${prefix}${i}`];
+		if (answer === "post") return [`confirmed:${f.ruleId}`];
+		if (answer === "skip") return [`rejected:${f.ruleId}`];
+		return [];
+	});
+}
+var memoryPersist = async ({ state, answers, args }) => {
+	const memory = state.memory;
+	if (!memory?.loaded || !memory.file) return {
+		state: { written: 0 },
+		metrics: { written: 0 },
+		output: "Learning skipped: the memory block was not loaded."
+	};
+	const kept = stateOf(state, "rank").kept;
+	const lines = memoryDecisionLines(kept, answers ?? {}, typeof args.questionPrefix === "string" ? args.questionPrefix : "q-post-");
+	if (lines.length) fs.appendFileSync(memory.file, `${lines.join("\n")}\n`);
+	return {
+		state: { written: lines.length },
+		metrics: { written: lines.length },
+		output: lines.length ? `Memory: ${lines.length} decisions recorded in ${memory.file}.` : "Memory: nothing durable happened."
+	};
+};
+var planRead = async ({ input, cwd }) => {
+	const root = path.resolve(cwd ?? process.cwd());
+	const file = path.resolve(root, input.plan ?? "");
+	if (!input.plan || file !== root && !file.startsWith(root + path.sep)) throw new Error("input.plan must be a file inside the workspace");
+	if (!fs.existsSync(file)) throw new Error(`plan file ${input.plan} does not exist in ${root}`);
+	const text = fs.readFileSync(file, "utf8");
+	const criteria = (input.criteria ?? "").trim();
+	return {
+		state: {
+			path: input.plan,
+			text,
+			criteria: criteria || "none"
+		},
+		metrics: {
+			characters: text.length,
+			criteria: criteria ? 1 : 0
+		},
+		output: `Plan ${input.plan}: ${text.length} characters. Acceptance criteria: ${criteria ? "given" : "none (design rules only)"}.`
+	};
+};
+function decisions(state, answers, violationsNode, rulesNode, prefix) {
+	return (state[violationsNode]?.decide ?? state[rulesNode]?.decide ?? []).map((d, i) => ({
+		...d,
+		answer: answers?.[`${prefix}${i}`] ?? "unanswered"
+	}));
+}
+var planReport = async ({ state, answers }) => {
+	const plan = stateOf(state, "plan-read");
+	const confirm = stateOf(state, "plan-confirm");
+	const rules = stateOf(state, "plan-rules-merge");
+	const asPlanLine = (line) => line.startsWith("plan:") ? line : `plan: ${line}`;
+	const lines = [
+		`Plan review of ${plan.path}`,
+		"",
+		...rules.kept.length ? rules.kept.map((f) => `${asPlanLine(f.line)}${f.unchecked ? " (rule unchecked)" : ""}`) : ["No confirmed findings."],
+		"",
+		`Totals: ${TIERS.map((t) => `${t}: ${rules.kept.filter((f) => tierOf$1(f) === t).length}`).join(", ")}`,
+		`Acceptance criteria: ${plan.criteria === "none" ? "none, design rules only" : "given"}`,
+		`Dropped by the verifier: ${confirm.dropped.length}`,
+		...confirm.dropped.map((f) => `  - ${f.line} | ${f.reason}`),
+		`Project rules check: ${rules.noStore ? "no-store, skipped" : `${rules.dropped.length} dropped by the store`}`,
+		...rules.dropped.map((d) => `  - ${d.line} | ${d.cite}`),
+		...decisions(state, answers, "plan-rules-violations", "plan-rules-merge", "q-plan-rule-").map((d) => `Decided (${d.kind}): ${d.line} -> ${d.answer === "store" ? "store entry holds" : d.answer === "finding" ? "finding holds" : "not decided"}`)
+	];
+	return {
+		state: {
+			kept: rules.kept,
+			count: rules.kept.length
+		},
+		metrics: { kept: rules.kept.length },
+		output: lines.join("\n")
+	};
+};
+function groupComments(comments, nearbyLines = 3) {
+	const items = [];
+	for (const comment of comments) {
+		const near = comment.path ? items.find((i) => i.path === comment.path && i.line !== null && comment.line !== null && Math.abs(i.line - comment.line) <= nearbyLines) : void 0;
+		if (near) near.comments.push(comment);
+		else items.push({
+			index: items.length,
+			path: comment.path,
+			line: comment.line,
+			comments: [comment]
+		});
+	}
+	return items;
+}
+var prFeedback = async ({ input, exec, cwd }) => {
+	if (!exec) throw new Error("github.prFeedback needs the host exec tool");
+	const repo = input.repo ?? "";
+	const [owner, name] = repo.split("/");
+	if (!owner || !name || input.pr === void 0) throw new Error("github.prFeedback needs repo and pr");
+	const view = await exec("gh", [
+		"pr",
+		"view",
+		String(input.pr),
+		"--repo",
+		repo,
+		"--json",
+		"headRefName,author,comments"
+	]);
+	if (view.code !== 0) throw new Error(`gh pr view failed: ${view.stderr.slice(-300)}`);
+	const meta = JSON.parse(view.stdout);
+	const branch = await exec("git", [
+		"-C",
+		cwd ?? ".",
+		"branch",
+		"--show-current"
+	]);
+	if (branch.code !== 0 || branch.stdout.trim() !== meta.headRefName) throw new Error(`the local branch (${branch.stdout.trim() || "unknown"}) is not the PR head branch ${meta.headRefName}: check out ${meta.headRefName} first`);
+	const checks = await exec("gh", [
+		"pr",
+		"checks",
+		String(input.pr),
+		"--repo",
+		repo,
+		"--json",
+		"name,state"
+	]);
+	const checkList = checks.code === 0 && checks.stdout.trim() ? JSON.parse(checks.stdout) : [];
+	const threads = await exec("gh", [
+		"api",
+		"graphql",
+		"-f",
+		`query=${`query { repository(owner: "${owner}", name: "${name}") { pullRequest(number: ${input.pr}) { reviewThreads(first: 100) { nodes { id isResolved isOutdated comments(first: 1) { nodes { author { login } path line body url } } } } } } }`}`
+	]);
+	if (threads.code !== 0) throw new Error(`gh api graphql failed: ${threads.stderr.slice(-300)}`);
+	const comments = [...JSON.parse(threads.stdout).data.repository.pullRequest.reviewThreads.nodes.filter((t) => !t.isResolved && !t.isOutdated && t.comments.nodes[0]).map((t) => {
+		const c = t.comments.nodes[0];
+		return {
+			id: t.id,
+			kind: "thread",
+			author: c.author?.login ?? "unknown",
+			path: c.path,
+			line: c.line,
+			body: c.body,
+			url: c.url
+		};
+	}), ...meta.comments.filter((c) => c.author?.login !== meta.author.login).map((c) => ({
+		id: c.id,
+		kind: "comment",
+		author: c.author?.login ?? "unknown",
+		path: null,
+		line: null,
+		body: c.body,
+		url: c.url
+	}))];
+	const items = groupComments(comments);
+	const ci = checkList.length ? checkList.map((c) => `${c.name}: ${c.state}`).join(", ") : "no checks";
+	return {
+		state: {
+			head: meta.headRefName,
+			checks: checkList,
+			ci,
+			comments,
+			items
+		},
+		metrics: {
+			checks: checkList.length,
+			comments: comments.length,
+			items: items.length
+		},
+		output: `CI: ${ci}. Unresolved comments: ${comments.length} in ${items.length} items.`
+	};
+};
+var feedbackPlan = async ({ state, answers }) => {
+	const decided = stateOf(state, "fb-check").items.map((item) => ({
+		...item,
+		decision: answers?.[`q-feedback-${item.index}`] ?? "skip"
+	}));
+	const count = (d) => decided.filter((i) => i.decision === d).length;
+	const replies = decided.filter((i) => i.decision === "wont-fix" || i.decision === "question");
+	return {
+		state: {
+			decided,
+			replies,
+			fixes: count("fix")
+		},
+		metrics: {
+			fixes: count("fix"),
+			wontFix: count("wont-fix"),
+			questions: count("question"),
+			skipped: count("skip"),
+			replies: replies.length
+		},
+		output: `Plan: ${count("fix")} fix, ${count("wont-fix")} won't fix, ${count("question")} question, ${count("skip")} skipped.`
+	};
+};
+var postReply = async ({ state, exec, input, args }) => {
+	if (!exec) throw new Error("github.postReply needs the host exec tool");
+	const from = nodeArg(args, "from", "fb-reply-next");
+	const draftNode = nodeArg(args, "draft", "fb-draft");
+	const item = state[from]?.item;
+	const draft = Object.values(state[draftNode] ?? {})[0];
+	if (!item || !draft) throw new Error("no reply to post");
+	const first = item.comments[0];
+	const result = first.kind === "thread" ? await exec("gh", [
+		"api",
+		"graphql",
+		"-f",
+		`query=mutation { addPullRequestReviewThreadReply(input: { pullRequestReviewThreadId: "${first.id}", body: ${JSON.stringify(draft)} }) { comment { url } } }`
+	]) : await exec("gh", [
+		"pr",
+		"comment",
+		String(input.pr),
+		"--repo",
+		input.repo ?? "",
+		"--body",
+		draft
+	]);
+	if (result.code !== 0) throw new Error(`posting the reply failed: ${result.stderr.slice(-300)}`);
+	return {
+		state: { posted: first.url },
+		metrics: { posted: 1 },
+		output: `Reply posted to ${first.url}`
+	};
+};
+var feedbackReport = async ({ state, answers }) => {
+	const check = stateOf(state, "fb-check");
+	const plan = stateOf(state, "fb-plan");
+	const implement = answers?.["q-feedback-implement"];
+	return {
+		state: { done: true },
+		output: [
+			`CI: ${check.ci}`,
+			`Unresolved comments: ${check.comments.length}`,
+			...plan.decided.map((i) => `  - ${i.path ?? "PR"}${i.line ? `:${i.line}` : ""} (${i.comments.length} comments): ${i.decision}`),
+			`Implementation: ${implement === "yes" ? "approved" : implement === "no" ? "declined" : "nothing to implement"}`
+		].join("\n")
+	};
+};
+var MARKETPLACE_FALLBACK = "C:\\Users\\Inny\\Documents\\Git\\marketplace";
+var SEMVER_LINE = /^version:\s*["']?(\d+\.\d+\.\d+)["']?\s*$/m;
+var CLASSIFICATIONS = [
+	"identical",
+	"local-only",
+	"marketplace-only",
+	"project-adapter-only",
+	"adapter-candidate",
+	"portable-local-change",
+	"conflict"
+];
+var ADOPT = [
+	"adopt-patch",
+	"adopt-minor",
+	"adopt-major"
+];
+function readJson$1(file) {
+	return JSON.parse(fs.readFileSync(file, "utf8"));
+}
+function marketplaceRoot(state) {
+	return stateOf(state, "resolve-path").path;
+}
+var resolveMarketplacePath = async ({ input, exec, cwd }) => {
+	if (!exec) throw new Error("sync.resolvePath needs the host exec tool");
+	const adapterFile = path.join(cwd ?? ".", ".opencode", "marketplace-path.local.json");
+	const adapter = fs.existsSync(adapterFile) ? readJson$1(adapterFile).marketplacePath : void 0;
+	const [source, target] = input.marketplace ? ["input", input.marketplace] : process.env.MARKETPLACE_PATH ? ["MARKETPLACE_PATH", process.env.MARKETPLACE_PATH] : adapter ? ["project adapter", adapter] : ["fallback", MARKETPLACE_FALLBACK];
+	if (!fs.existsSync(path.resolve(target))) throw new Error(`marketplace path ${path.resolve(target)} (${source}) does not exist`);
+	const resolved = fs.realpathSync.native(path.resolve(target));
+	const repo = await exec("git", [
+		"-C",
+		resolved,
+		"rev-parse",
+		"--is-inside-work-tree"
+	]);
+	if (repo.code !== 0 || repo.stdout.trim() !== "true") throw new Error(`marketplace path ${resolved} (${source}) is not a Git repository`);
+	return {
+		state: {
+			path: resolved,
+			source,
+			fallback: source === "fallback"
+		},
+		metrics: { fallback: source === "fallback" ? 1 : 0 },
+		output: `Marketplace (${source}): ${resolved}`
+	};
+};
+var safeSource = async ({ state, exec, answers, args, input }) => {
+	if (!exec) throw new Error("sync.safeSource needs the host exec tool");
+	const root = typeof args.path === "string" ? String(args.path.split(".").reduce((v, k) => v && typeof v === "object" ? v[k] : void 0, state) ?? "") : input.path ?? marketplaceRoot(state);
+	if (!root) throw new Error(`with.path ${String(args.path)} is not set in state`);
+	const switchQuestion = typeof args.question === "string" ? args.question : "q-marketplace-main";
+	const git = (...args) => exec("git", [
+		"-C",
+		root,
+		...args
+	]);
+	const label = input.label ?? "Marketplace";
+	const stop = (reason, detail, clean) => ({
+		state: {
+			ok: false,
+			reason,
+			detail
+		},
+		metrics: {
+			clean,
+			ok: 0
+		},
+		output: `${label} not safe: ${detail}`
+	});
+	const status = await git("status", "--porcelain");
+	if (status.code !== 0) return stop("status", status.stderr.trim(), 0);
+	if (status.stdout.trim()) return stop("dirty", `the worktree of ${root} has local changes`, 0);
+	let branch = (await git("branch", "--show-current")).stdout.trim();
+	if (branch !== "main") {
+		if (answers?.[switchQuestion] !== "switch") return {
+			state: {
+				ok: false,
+				reason: "not-main",
+				detail: branch || "detached HEAD",
+				branch
+			},
+			metrics: {
+				clean: 1,
+				ok: 0
+			},
+			output: `Marketplace is on ${branch || "a detached HEAD"}, not main.`
+		};
+		const checkout = await git("checkout", "main");
+		if (checkout.code !== 0) return stop("checkout", checkout.stderr.trim(), 1);
+		branch = "main";
+	}
+	if ((await git("remote", "get-url", "origin")).code !== 0) return stop("no-remote", `${root} has no origin remote`, 1);
+	const fetch = await git("fetch", "origin", "main");
+	if (fetch.code !== 0) return stop("fetch", fetch.stderr.trim(), 1);
+	const pull = await git("pull", "--ff-only", "origin", "main");
+	if (pull.code !== 0) return stop("pull", pull.stderr.trim(), 1);
+	const head = (await git("rev-parse", "HEAD")).stdout.trim();
+	return {
+		state: {
+			ok: true,
+			reason: "ok",
+			branch,
+			head
+		},
+		metrics: {
+			clean: 1,
+			ok: 1
+		},
+		output: `Marketplace ${root} is clean on main at ${head.slice(0, 12)}, fast-forwarded to origin/main.`
+	};
+};
+function frontmatterVersion(file) {
+	return fs.existsSync(file) ? fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n").match(SEMVER_LINE)?.[1] ?? "none" : "none";
+}
+function skillDirIn(root, name) {
+	const skills = path.join(root, "skills");
+	if (!fs.existsSync(skills)) return void 0;
+	return fs.readdirSync(skills).map((c) => path.join(skills, c, name)).find((d) => fs.existsSync(path.join(d, "SKILL.md")));
+}
+function manifestVersion(file, key, name) {
+	if (!fs.existsSync(file)) return "none";
+	return (readJson$1(file)[key]?.find((e) => e.name === name))?.version ?? "none";
+}
+var discoverArtifacts = async ({ input, state, cwd }) => {
+	const project = path.resolve(cwd ?? ".");
+	const root = marketplaceRoot(state);
+	const skillsDir = path.join(project, ".agents", "skills");
+	const agentsDir = path.join(project, ".opencode", "agents");
+	const localSkills = fs.existsSync(skillsDir) ? fs.readdirSync(skillsDir).filter((n) => fs.existsSync(path.join(skillsDir, n, "SKILL.md"))) : [];
+	const localAgents = fs.existsSync(agentsDir) ? fs.readdirSync(agentsDir).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)) : [];
+	const wanted = input.artifacts;
+	if (wanted) {
+		const missing = wanted.filter((n) => !localSkills.includes(n) && !localAgents.includes(n));
+		if (missing.length) throw new Error(`input.artifacts not found in ${project}: ${missing.join(", ")}`);
+	}
+	const pick = (names) => wanted ? names.filter((n) => wanted.includes(n)) : names;
+	const skills = pick(localSkills).map((name) => {
+		const dir = skillDirIn(root, name);
+		return {
+			id: name,
+			type: "skill",
+			name,
+			localPath: path.join(skillsDir, name),
+			marketplacePath: dir ?? "none",
+			manifestPath: path.join(root, "registry.json"),
+			marketplaceVersion: manifestVersion(path.join(root, "registry.json"), "skills", name),
+			localVersion: frontmatterVersion(path.join(skillsDir, name, "SKILL.md"))
+		};
+	});
+	const agents = pick(localAgents).map((name) => {
+		const file = path.join(root, "agents", "opencode", `${name}.md`);
+		return {
+			id: name,
+			type: "agent",
+			name,
+			localPath: path.join(agentsDir, `${name}.md`),
+			marketplacePath: fs.existsSync(file) ? file : "none",
+			manifestPath: path.join(root, "agents", "opencode", "index.json"),
+			marketplaceVersion: manifestVersion(path.join(root, "agents", "opencode", "index.json"), "agents", name),
+			localVersion: manifestVersion(path.join(agentsDir, "index.json"), "agents", name)
+		};
+	});
+	const compare = [...skills, ...agents];
+	return {
+		state: {
+			project,
+			skills,
+			agents,
+			compare
+		},
+		metrics: {
+			artifacts: compare.length,
+			skills: skills.length,
+			agents: agents.length
+		},
+		output: `Discovered ${skills.length} local skills and ${agents.length} local agents to compare in ${project}.`
+	};
+};
+var checkSkillVersions = async ({ state }) => {
+	const skills = stateOf(state, "discover").skills;
+	const missing = skills.filter((s) => frontmatterVersion(path.join(s.localPath, "SKILL.md")) === "none").map((s) => s.name);
+	if (missing.length) throw new Error(`olko-adapt-to-marketplace --local-only left no SemVer version in SKILL.md of: ${missing.join(", ")}. The sync stops here; check these skills and run again.`);
+	const versions = skills.map((s) => `${s.name} ${frontmatterVersion(path.join(s.localPath, "SKILL.md"))}`);
+	return {
+		state: { versions },
+		metrics: { skills: skills.length },
+		output: versions.length ? `Local skill versions: ${versions.join(", ")}.` : "No local skills to version."
+	};
+};
+function parseComparison(text) {
+	const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.startsWith("result |"));
+	if (!line) throw new Error("comparator report has no 'result |' line");
+	const [, classification = "", marketplaceVersion = "none", bump = "none", nextVersion = "none", action = ""] = line.split("|").map((p) => p.trim());
+	if (!CLASSIFICATIONS.includes(classification)) throw new Error(`comparator returned unknown classification '${classification}'`);
+	return {
+		classification,
+		marketplaceVersion,
+		bump,
+		nextVersion,
+		action,
+		report: String(text).trim()
+	};
+}
+function syncOptions(classification) {
+	if (classification === "local-only") return [
+		"create",
+		"reject",
+		"leave"
+	];
+	if (classification === "adapter-candidate") return [
+		"move-to-adapter",
+		...ADOPT,
+		"revert-local",
+		"leave"
+	];
+	return [
+		...ADOPT,
+		"revert-local",
+		"leave"
+	];
+}
+var syncRows = async ({ state }) => {
+	const discovered = stateOf(state, "discover").compare;
+	const compared = stateOf(state, "compare");
+	const rows = discovered.map((a) => {
+		const c = compared[a.id];
+		if (!c) throw new Error(`no comparison for ${a.type} ${a.name}`);
+		const candidate = c.classification === "local-only" ? a.localVersion !== "none" ? a.localVersion : "1.0.0" : c.nextVersion;
+		const line = `${a.type} ${a.name}: ${c.classification}; marketplace ${c.marketplaceVersion}; bump ${c.bump}; proposed ${candidate}; recommended ${c.action || "none"}`;
+		return {
+			type: a.type,
+			name: a.name,
+			classification: c.classification,
+			marketplaceVersion: c.marketplaceVersion,
+			bump: c.bump,
+			nextVersion: candidate,
+			action: c.action,
+			line,
+			options: syncOptions(c.classification)
+		};
+	});
+	const decide = rows.filter((r) => r.classification !== "identical");
+	return {
+		state: {
+			rows,
+			decide,
+			table: rows.map((r) => r.line).join("\n")
+		},
+		metrics: {
+			rows: rows.length,
+			decide: decide.length
+		},
+		output: `${rows.length} artifacts compared, ${decide.length} need a decision.`
+	};
+};
+function bumpVersion(version, bump) {
+	const match = version.match(/^(\d+)\.(\d+)\.(\d+)$/);
+	if (!match) return "1.0.0";
+	const [major, minor, patch] = match.slice(1).map(Number);
+	if (bump === "major") return `${major + 1}.0.0`;
+	if (bump === "minor") return `${major}.${minor + 1}.0`;
+	return `${major}.${minor}.${patch + 1}`;
+}
+var KEEP_LOCAL = "Keep project adapters, secrets, local paths, credentials and runtime settings out of the marketplace.";
+function applyInstruction(row, root, version) {
+	const adapt = path.join(root, "skills", "marketplace", "olko-adapt-to-marketplace", "SKILL.md");
+	if (row.decision === "create" && row.type === "skill") return `Create the marketplace skill ${row.name} from the local skill ${row.localPath}. Read ${adapt} and meet its validation requirements before you add the registry entry. Put it in the fitting category under ${path.join(root, "skills")}, set version ${version} in its SKILL.md frontmatter and add its entry to ${path.join(root, "registry.json")} at version ${version}. ${KEEP_LOCAL}`;
+	if (row.decision === "create") return `Create the marketplace agent ${row.name}: copy the local definition ${row.localPath} to ${path.join(root, "agents", "opencode", `${row.name}.md`)} and add a valid entry for it to ${path.join(root, "agents", "opencode", "index.json")} at version ${version}, with its stack, role and declared skills taken from the definition. ${KEEP_LOCAL}`;
+	if (row.type === "skill") return `Update only the marketplace skill directory ${row.marketplacePath} with the portable changes of the local skill ${row.localPath}. Set version ${version} in its SKILL.md frontmatter and in its entry in ${path.join(root, "registry.json")}. ${KEEP_LOCAL}`;
+	return `Update only ${row.marketplacePath} with the portable changes of the local agent ${row.localPath}, and set version ${version} on its entry in ${path.join(root, "agents", "opencode", "index.json")}. Keep its permissions, declared skills and delegates unless they are the approved change. ${KEEP_LOCAL}`;
+}
+function acceptedRoute(decision) {
+	if (decision === "revert-local") return "revert";
+	if (decision === "move-to-adapter") return "adapter";
+	return "change";
+}
+var syncPlanApply = async ({ state, answers }) => {
+	const { rows, decide } = stateOf(state, "rows");
+	const discovered = stateOf(state, "discover").compare;
+	const root = marketplaceRoot(state);
+	const decisionOf = (name) => {
+		const index = decide.findIndex((d) => d.name === name);
+		return index < 0 ? "none" : answers?.[`q-sync-${index}`] ?? "unanswered";
+	};
+	const decided = rows.map((r) => ({
+		...r,
+		decision: decisionOf(r.name)
+	}));
+	const accepted = decided.filter((r) => ![
+		"none",
+		"leave",
+		"reject",
+		"unanswered"
+	].includes(r.decision)).map((r) => {
+		const artifact = discovered.find((a) => a.name === r.name);
+		const version = r.decision.startsWith("adopt-") ? bumpVersion(r.marketplaceVersion, r.decision.slice(6)) : r.decision === "create" ? r.nextVersion : r.marketplaceVersion;
+		const row = {
+			...r,
+			localPath: artifact.localPath,
+			marketplacePath: artifact.marketplacePath
+		};
+		return {
+			...row,
+			route: acceptedRoute(r.decision),
+			version,
+			instruction: applyInstruction(row, root, version)
+		};
+	});
+	return {
+		state: {
+			decided,
+			accepted
+		},
+		metrics: { accepted: accepted.length },
+		output: accepted.length ? `${accepted.length} accepted decisions to apply: ${accepted.map((a) => `${a.name} ${a.decision}`).join(", ")}.` : "No accepted decisions: nothing to apply, publish or install."
+	};
+};
+function copyDir(from, to, keep) {
+	for (const entry of fs.existsSync(to) ? fs.readdirSync(to) : []) if (!keep.includes(entry)) fs.rmSync(path.join(to, entry), {
+		recursive: true,
+		force: true
+	});
+	fs.cpSync(from, to, {
+		recursive: true,
+		force: true
+	});
+}
+var revertLocal = async ({ state }) => {
+	const row = stateOf(state, "apply-next").item;
+	if (row.marketplacePath === "none" || !fs.existsSync(row.marketplacePath)) throw new Error(`${row.type} ${row.name} has no marketplace counterpart to revert to`);
+	if (row.type === "skill") copyDir(row.marketplacePath, row.localPath, ["project.md"]);
+	else fs.copyFileSync(row.marketplacePath, row.localPath);
+	return {
+		state: { reverted: row.name },
+		metrics: { reverted: 1 },
+		output: `Local ${row.type} ${row.name} replaced with ${row.marketplacePath}.`
+	};
+};
+var validateMarketplace = async ({ state, exec }) => {
+	if (!exec) throw new Error("sync.validate needs the host exec tool");
+	const root = marketplaceRoot(state);
+	const accepted = stateOf(state, "plan").accepted.filter((a) => a.route !== "revert");
+	const results = [];
+	let failed = 0;
+	const run = async (label, command, args, cwd = root) => {
+		const res = await exec(command, args, { cwd });
+		if (res.code !== 0) failed += 1;
+		results.push(`${label}: ${res.code === 0 ? "pass" : `FAIL ${(res.stderr || res.stdout).trim().split(/\r?\n/).slice(-3).join(" ")}`}`);
+	};
+	if (accepted.some((a) => a.type === "skill")) await run("registry --fix", "node", ["scripts/registry.mjs", "--fix"]);
+	for (const agent of accepted.filter((a) => a.type === "agent")) {
+		const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "factory-agent-check-"));
+		await run(`install-opencode-agents ${agent.name}`, "node", [
+			"scripts/install-opencode-agents.mjs",
+			"--project",
+			scratch,
+			"--agent",
+			agent.name
+		]);
+		fs.rmSync(scratch, {
+			recursive: true,
+			force: true
+		});
+	}
+	if (accepted.length) await run("node tests", "node", [
+		"--test",
+		"scripts/registry.test.mjs",
+		"scripts/install-opencode-agents.test.mjs",
+		"scripts/readme.test.mjs"
+	]);
+	const status = (await exec("git", [
+		"-C",
+		root,
+		"status",
+		"--porcelain",
+		"--untracked-files=all"
+	])).stdout.trim();
+	const diffStat = (await exec("git", [
+		"-C",
+		root,
+		"diff",
+		"--stat"
+	])).stdout.trim();
+	const versions = accepted.map((a) => `${a.type} ${a.name} ${a.decision} -> ${a.version}`).join("\n");
+	return {
+		state: {
+			changed: status ? 1 : 0,
+			status,
+			diffStat,
+			versions,
+			summary: results.join("; ") || "nothing to validate",
+			failed
+		},
+		metrics: {
+			changed: status ? status.split(/\r?\n/).length : 0,
+			failed
+		},
+		output: `Validation: ${results.join("; ") || "nothing to validate"}.`
+	};
+};
+function parseApplied(text) {
+	const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => /^(applied|blocked) \|/.test(l));
+	if (!line) throw new Error("apply output has no 'applied |' line");
+	const [status, files = "", version = ""] = line.split("|").map((p) => p.trim());
+	if (status === "blocked") throw new Error(`apply blocked: ${line}`);
+	return {
+		files: files.split(",").map((f) => f.trim()).filter(Boolean),
+		version
+	};
+}
+function parsePrLine(text) {
+	const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.startsWith("pr |"));
+	if (!line) throw new Error("publish output has no 'pr |' line");
+	const [, url = "", branch = "", commit = ""] = line.split("|").map((p) => p.trim());
+	if (!/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/.test(url)) throw new Error(`publish output has no PR URL: ${line}`);
+	if (branch === "main") throw new Error("publish pushed to main; the sync requires a feature branch");
+	return {
+		url,
+		branch,
+		commit
+	};
+}
+var waitForChecks = async ({ state, exec, nodeId, input }) => {
+	if (!exec) throw new Error("sync.waitChecks needs the host exec tool");
+	const res = await exec("gh", [
+		"pr",
+		"checks",
+		(input.prUrl ? { url: input.prUrl } : stateOf(state, "publish-pr").publish).url,
+		"--watch",
+		"--fail-fast"
+	]);
+	const round = ((nodeId ? state[nodeId]?.round : 0) ?? 0) + 1;
+	return {
+		state: {
+			round,
+			passed: res.code === 0
+		},
+		metrics: {
+			round,
+			passed: res.code === 0 ? 1 : 0
+		},
+		output: `CI checks ${res.code === 0 ? "passed" : "did not pass"}: ${(res.stdout || res.stderr).trim().split(/\r?\n/).slice(-3).join(" ")}`
+	};
+};
+var prOf = async ({ state }) => {
+	const parsed = stateOf(state, "publish");
+	const pr = Object.values(parsed)[0];
+	if (!pr) throw new Error("publish returned no PR");
+	return {
+		state: { publish: pr },
+		metrics: { prs: 1 },
+		output: `PR ${pr.url} on branch ${pr.branch}.`
+	};
+};
+var squashMerge = async ({ state, exec, args, input }) => {
+	if (!exec) throw new Error("sync.merge needs the host exec tool");
+	const root = typeof args.path === "string" ? String(args.path.split(".").reduce((v, k) => v && typeof v === "object" ? v[k] : void 0, state) ?? "") : input.path ?? marketplaceRoot(state);
+	const pr = input.prUrl ? {
+		url: input.prUrl,
+		branch: input.prBranch ?? ""
+	} : stateOf(state, "publish-pr").publish;
+	if (JSON.parse((await exec("gh", [
+		"pr",
+		"view",
+		pr.url,
+		"--json",
+		"isDraft"
+	])).stdout || "{}").isDraft) {
+		const ready = await exec("gh", [
+			"pr",
+			"ready",
+			pr.url
+		]);
+		if (ready.code !== 0) throw new Error(`gh pr ready failed: ${(ready.stderr || ready.stdout).trim()}`);
+	}
+	const merge = await exec("gh", [
+		"pr",
+		"merge",
+		pr.url,
+		"--squash",
+		"--delete-branch"
+	], { cwd: root });
+	if (merge.code !== 0) throw new Error(`squash merge failed: ${(merge.stderr || merge.stdout).trim()}`);
+	const commit = JSON.parse((await exec("gh", [
+		"pr",
+		"view",
+		pr.url,
+		"--json",
+		"mergeCommit"
+	])).stdout || "{}").mergeCommit?.oid;
+	if (!commit) throw new Error(`no merge commit for ${pr.url}`);
+	for (const args of [["checkout", "main"], [
+		"pull",
+		"--ff-only",
+		"origin",
+		"main"
+	]]) {
+		const res = await exec("git", [
+			"-C",
+			root,
+			...args
+		]);
+		if (res.code !== 0) throw new Error(`git ${args.join(" ")} failed: ${res.stderr.trim()}`);
+	}
+	await exec("git", [
+		"-C",
+		root,
+		"branch",
+		"-D",
+		pr.branch
+	]);
+	if ((await exec("git", [
+		"-C",
+		root,
+		"merge-base",
+		"--is-ancestor",
+		commit,
+		"origin/main"
+	])).code !== 0) throw new Error(`merge commit ${commit} is not on origin/main`);
+	return {
+		state: { commit },
+		metrics: { merged: 1 },
+		output: `Squash merged ${pr.url} as ${commit.slice(0, 12)}; local main updated, branch ${pr.branch} deleted.`
+	};
+};
+async function openskillsCommand(exec) {
+	if (process.env.OPENSKILLS_CLI) return ["node", [process.env.OPENSKILLS_CLI]];
+	if ((await exec("openskills", ["--help"])).code === 0) return ["openskills", []];
+	for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+		const cli = path.join(dir, "node_modules", "openskills", "dist", "cli.js");
+		if (fs.existsSync(path.join(dir, "openskills.cmd")) && fs.existsSync(cli)) return ["node", [cli]];
+	}
+	throw new Error("OpenSkills CLI not found: install openskills or set OPENSKILLS_CLI to its dist/cli.js");
+}
+var installArtifacts = async ({ state, exec, cwd }) => {
+	if (!exec) throw new Error("sync.install needs the host exec tool");
+	const root = marketplaceRoot(state);
+	const project = path.resolve(cwd ?? ".");
+	const accepted = stateOf(state, "plan").accepted.filter((a) => a.route !== "revert");
+	const origin = (await exec("git", [
+		"-C",
+		root,
+		"remote",
+		"get-url",
+		"origin"
+	])).stdout.trim();
+	const repo = origin.match(/github\.com[:/]([\w.-]+\/[\w.-]+?)(\.git)?$/)?.[1];
+	if (!repo) throw new Error(`marketplace origin ${origin} is not a GitHub repository`);
+	const [command, prefix] = await openskillsCommand(exec);
+	const help = await exec(command, [
+		...prefix,
+		"install",
+		"--help"
+	]);
+	if (help.code !== 0 || !/--universal/.test(help.stdout) || !/--yes/.test(help.stdout)) throw new Error("the installed OpenSkills CLI has no install --universal --yes");
+	const lines = [];
+	let failed = 0;
+	for (const skill of accepted.filter((a) => a.type === "skill")) {
+		const dir = skillDirIn(root, skill.name);
+		if (!dir) throw new Error(`skill ${skill.name} is not in ${root} after the merge`);
+		const subpath = path.relative(root, dir).split(path.sep).join("/");
+		const res = await exec(command, [
+			...prefix,
+			"install",
+			`${repo}/${subpath}`,
+			"--universal",
+			"--yes"
+		], { cwd: project });
+		const installed = path.join(project, ".agent", "skills", skill.name);
+		if (res.code === 0 && fs.existsSync(installed)) {
+			fs.cpSync(installed, path.join(project, ".agents", "skills", skill.name), {
+				recursive: true,
+				force: true
+			});
+			fs.rmSync(installed, {
+				recursive: true,
+				force: true
+			});
+		}
+		const same = fs.existsSync(path.join(project, ".agents", "skills", skill.name, "SKILL.md")) && fs.readFileSync(path.join(project, ".agents", "skills", skill.name, "SKILL.md"), "utf8") === (await exec("git", [
+			"-C",
+			root,
+			"show",
+			`origin/main:${subpath}/SKILL.md`
+		])).stdout;
+		if (res.code !== 0 || !same) failed += 1;
+		lines.push(`skill ${skill.name}: ${res.code !== 0 ? `FAIL ${res.stderr.trim().slice(-200)}` : same ? "installed, matches origin/main" : "installed, DIFFERS from origin/main"}`);
+	}
+	for (const agent of accepted.filter((a) => a.type === "agent")) {
+		const res = await exec("node", [
+			path.join(root, "scripts", "install-opencode-agents.mjs"),
+			"--project",
+			project,
+			"--agent",
+			agent.name,
+			"--force"
+		]);
+		const local = path.join(project, ".opencode", "agents", `${agent.name}.md`);
+		const same = fs.existsSync(local) && fs.readFileSync(local, "utf8") === (await exec("git", [
+			"-C",
+			root,
+			"show",
+			`origin/main:agents/opencode/${agent.name}.md`
+		])).stdout;
+		if (res.code !== 0 || !same) failed += 1;
+		lines.push(`agent ${agent.name}: ${res.code !== 0 ? `FAIL ${res.stderr.trim().slice(-200)}` : same ? "installed, matches origin/main" : "installed, DIFFERS from origin/main"}`);
+	}
+	return {
+		state: {
+			lines,
+			failed
+		},
+		metrics: {
+			installed: lines.length - failed,
+			failed
+		},
+		output: `Install: ${lines.join("; ")}.`
+	};
+};
+var syncMemorySave = async ({ state }) => {
+	const memory = state.memory;
+	const install = stateOf(state, "install");
+	if (!memory?.file || install.failed) return {
+		state: { written: 0 },
+		metrics: { written: 0 },
+		output: "Memory: nothing verified to record."
+	};
+	const lines = stateOf(state, "plan").accepted.filter((a) => a.route !== "revert").map((a) => `confirmed:sync ${a.decision} ${a.type} ${a.name} ${a.version} installed and verified`);
+	fs.mkdirSync(path.dirname(memory.file), { recursive: true });
+	fs.appendFileSync(memory.file, `${lines.join("\n")}\n`);
+	return {
+		state: { written: lines.length },
+		metrics: { written: lines.length },
+		output: `Memory: ${lines.length} verified sync decisions recorded in ${memory.file}.`
+	};
+};
+var syncReport = async ({ state }) => {
+	const plan = stateOf(state, "plan");
+	const source = state.safe?.["safe-source"] ?? state["safe-source"] ?? {};
+	const lines = plan.decided.map((r) => `${r.type} ${r.name}: ${r.classification} -> ${r.decision}`);
+	const validate = state.validate;
+	const pr = state["publish-pr"]?.publish;
+	const merged = state.merge ?? state.pr?.merge;
+	const install = state.install;
+	const outcome = !validate ? "Marketplace, branches and installs: unchanged." : !validate.changed ? "Marketplace unchanged; local reverts only. Nothing to publish." : !pr ? `Marketplace changes applied in the working tree of ${marketplaceRoot(state)} and not published. Validation: ${validate.summary}.` : !merged ? `Published as ${pr.url}; not merged, nothing installed.` : `Published as ${pr.url}, squash merged as ${merged.commit?.slice(0, 12)}. Install: ${install?.lines?.join("; ") ?? "not run"}.`;
+	return {
+		state: { lines },
+		metrics: { rows: lines.length },
+		output: [
+			`Marketplace sync report (marketplace ${marketplaceRoot(state)} at ${source.head?.slice(0, 12) ?? "unknown"})`,
+			...lines,
+			outcome
+		].join("\n")
+	};
+};
+var DIRECTIONS = [
+	["target", "target->olko"],
+	["olko", "olko->user"],
+	["user", "user->olko"]
+];
+var BUMPS = [
+	"patch",
+	"minor",
+	"major"
+];
+var VERDICT_ACTIONS = {
+	"target-only": [
+		"port-to-olko",
+		"exclude",
+		"leave"
+	],
+	"olko-only": [
+		"install-user",
+		"reject",
+		"exclude",
+		"leave"
+	],
+	"user-only": [
+		"publish-to-olko",
+		"exclude",
+		"leave"
+	],
+	"target-ahead": [
+		...BUMPS.map((b) => `port-to-olko-${b}`),
+		"exclude",
+		"leave"
+	],
+	"olko-ahead": [
+		"update-user",
+		"exclude",
+		"leave"
+	],
+	"user-ahead": [
+		...BUMPS.map((b) => `publish-to-olko-${b}`),
+		"revert-user",
+		"exclude",
+		"leave"
+	],
+	diverged: [
+		"take-target",
+		"take-olko",
+		"exclude",
+		"leave"
+	],
+	"platform-delta-only": ["leave", "exclude"]
+};
+function syncStateScript() {
+	return path.join(marketplaceDir(), "plugins", "olko-sync", "skills", "olko-sync-state", "scripts", "sync-state.mjs");
+}
+async function syncState(exec, stateDir, args) {
+	const res = await exec("node", [
+		syncStateScript(),
+		...args,
+		"--state-dir",
+		stateDir
+	]);
+	if (res.code !== 0) throw new Error(`sync-state ${args.slice(0, 2).join(" ")} failed: ${(res.stderr || res.stdout).trim()}`);
+	return res.stdout;
+}
+function longPathOf(p) {
+	const resolved = path.resolve(p);
+	return fs.existsSync(resolved) ? fs.realpathSync.native(resolved) : resolved;
+}
+var claudeSyncState = async ({ input, exec }) => {
+	if (!exec) throw new Error("csync.state needs the host exec tool");
+	const stateDir = longPathOf(input.stateDir ?? process.env.OLKO_SYNC_HOME ?? path.join(os.homedir(), ".olko-sync"));
+	await syncState(exec, stateDir, ["init"]);
+	if (input.olko) await syncState(exec, stateDir, [
+		"target",
+		"set-olko",
+		"--path",
+		longPathOf(input.olko)
+	]);
+	if (input.target) {
+		if (!input.targetName || !/^[a-z0-9-]+$/.test(input.targetName)) throw new Error("input.targetName must be a kebab-case name for the Claude marketplace in input.target");
+		await syncState(exec, stateDir, [
+			"target",
+			"set",
+			"--name",
+			input.targetName,
+			"--path",
+			longPathOf(input.target)
+		]);
+	}
+	const targets = JSON.parse(await syncState(exec, stateDir, ["target", "get"]));
+	const name = input.targetName ?? targets.default;
+	const target = name ? targets.targets[name]?.path : void 0;
+	if (!targets.olko?.path) throw new Error("no Olko checkout: give input.olko (the Olko marketplace checkout path)");
+	if (!target) throw new Error("no Claude marketplace target: give input.target and input.targetName");
+	const user = longPathOf(input.user ?? path.join(os.homedir(), ".claude"));
+	const stores = [
+		{
+			id: "target",
+			path: target,
+			layout: "plugins/*/skills/*/SKILL.md and plugins/*/agents/*.md"
+		},
+		{
+			id: "olko",
+			path: targets.olko.path,
+			layout: "skills/*/*/SKILL.md, plugins/*/skills/*/SKILL.md, agents/opencode/*.md (versions in agents/opencode/index.json), plugins/*/agents/*.md (version in plugin.json)"
+		},
+		{
+			id: "user",
+			path: user,
+			layout: "skills/*/SKILL.md and agents/*.md"
+		}
+	];
+	return {
+		state: {
+			stateDir,
+			olko: targets.olko.path,
+			target,
+			user,
+			stores,
+			leakTerms: targets.leakTerms,
+			leakTermsText: targets.leakTerms.length ? `${targets.leakTerms.length} saved` : "none saved",
+			script: syncStateScript()
+		},
+		metrics: { leakTerms: targets.leakTerms.length },
+		output: `Sync state ready in ${stateDir}: Olko ${targets.olko.path}, user store ${user}, target set (name and path stay out of logs).`
+	};
+};
+var claudeSyncLeakSave = async ({ state, exec, answers }) => {
+	if (!exec) throw new Error("csync.leakSave needs the host exec tool");
+	const { stateDir } = stateOf(state, "state");
+	const answer = (answers?.["q-claude-sync-leak"] ?? "none").trim();
+	const terms = /^none$/i.test(answer) ? [] : answer.split(",").map((t) => t.trim()).filter(Boolean);
+	for (const term of terms) await syncState(exec, stateDir, [
+		"target",
+		"add-leak-term",
+		"--term",
+		term
+	]);
+	return {
+		state: { added: terms.length },
+		metrics: { added: terms.length },
+		output: terms.length ? `${terms.length} leak terms added.` : "No leak terms added."
+	};
+};
+function lastJsonBlock(text) {
+	const raw = [...String(text).matchAll(/```json\s*([\s\S]*?)```/g)].at(-1)?.[1];
+	if (!raw) throw new Error("matcher output has no ```json block");
+	return JSON.parse(raw);
+}
+function parseCapabilities(text) {
+	const data = lastJsonBlock(text);
+	if (!Array.isArray(data.capabilities)) throw new Error("matcher JSON has no capabilities list");
+	for (const c of data.capabilities) if (!c.id || !["skill", "agent"].includes(c.kind) || typeof c.copies !== "object") throw new Error(`matcher capability is malformed: ${JSON.stringify(c).slice(0, 200)}`);
+	return {
+		capabilities: data.capabilities,
+		probable: data.probable ?? []
+	};
+}
+function normalizeName(name) {
+	return name.toLowerCase().replace(/^[a-z0-9-]+:/, "").replace(/^olko-/, "");
+}
+function parseInventory(text) {
+	const data = lastJsonBlock(text);
+	if (!Array.isArray(data.rows)) throw new Error("inventory JSON has no rows list");
+	const rows = data.rows.filter((r) => r && (r.kind === "skill" || r.kind === "agent") && typeof r.name === "string" && typeof r.path === "string");
+	if (rows.length !== data.rows.length) throw new Error(`inventory JSON has ${data.rows.length - rows.length} malformed rows`);
+	return { rows };
+}
+var STORES = [
+	"target",
+	"olko",
+	"user"
+];
+var claudeSyncInventories = async ({ state }) => {
+	const inventory = stateOf(state, "inventory");
+	const texts = Object.fromEntries(STORES.map((store) => [store, JSON.stringify(inventory[store]?.rows ?? [])]));
+	const counts = Object.fromEntries(STORES.map((store) => [store, inventory[store]?.rows.length ?? 0]));
+	return {
+		state: {
+			...texts,
+			counts
+		},
+		metrics: counts,
+		output: `Inventory: ${STORES.map((st) => `${st} ${counts[st]}`).join(", ")} artifacts.`
+	};
+};
+function buildCapabilities(inventory, roots, linked) {
+	const absolute = (store, p) => path.isAbsolute(p) ? p : path.join(roots[store], p);
+	const key = (store, kind, name) => `${store}|${kind}|${name}`;
+	const rowsByKey = /* @__PURE__ */ new Map();
+	for (const store of STORES) for (const row of inventory[store]?.rows ?? []) rowsByKey.set(key(store, row.kind, row.name), {
+		...row,
+		store
+	});
+	const used = /* @__PURE__ */ new Set();
+	const copyOf = (store, row) => ({
+		name: row.name,
+		path: absolute(store, row.path),
+		...row.version ? { version: row.version } : {},
+		...row.hash ? { hash: row.hash } : {}
+	});
+	const result = [];
+	for (const c of linked) {
+		const copies = {};
+		for (const store of STORES) {
+			const copy = c.copies[store];
+			if (!copy) continue;
+			const row = rowsByKey.get(key(store, c.kind, copy.name));
+			if (!row || used.has(key(store, c.kind, copy.name))) continue;
+			used.add(key(store, c.kind, copy.name));
+			copies[store] = copyOf(store, row);
+		}
+		if (Object.keys(copies).length) result.push({
+			...c,
+			copies
+		});
+	}
+	const byName = /* @__PURE__ */ new Map();
+	for (const [k, row] of rowsByKey) {
+		if (used.has(k)) continue;
+		const name = `${row.kind}|${normalizeName(row.name)}`;
+		byName.set(name, [...byName.get(name) ?? [], row]);
+	}
+	for (const [name, rows] of byName) {
+		const copies = {};
+		for (const row of rows) if (!copies[row.store]) copies[row.store] = copyOf(row.store, row);
+		const stores = Object.keys(copies).length;
+		result.push({
+			id: name.split("|")[1],
+			basis: stores > 1 ? "name" : "single",
+			kind: rows[0].kind,
+			copies
+		});
+	}
+	return result;
+}
+var claudeSyncCapabilities = async ({ state }) => {
+	const parsed = Object.values(stateOf(state, "match"))[0];
+	if (!parsed) throw new Error("the matcher returned nothing");
+	const { target, olko, user } = stateOf(state, "state");
+	const capabilities = buildCapabilities(stateOf(state, "inventory"), {
+		target,
+		olko,
+		user
+	}, parsed.capabilities);
+	const linked = capabilities.filter((c) => Object.keys(c.copies).length > 1).length;
+	return {
+		state: {
+			capabilities,
+			probable: parsed.probable
+		},
+		metrics: {
+			capabilities: capabilities.length,
+			linked,
+			probable: parsed.probable.length
+		},
+		output: `${capabilities.length} capabilities (${linked} across stores), ${parsed.probable.length} probable links.`
+	};
+};
+var claudeSyncSelect = async ({ state, input }) => {
+	const { capabilities, probable } = stateOf(state, "capabilities");
+	const wanted = input.artifacts?.map(normalizeName);
+	const matches = (c) => !wanted || [c.id, ...Object.values(c.copies).map((copy) => copy?.name ?? "")].some((n) => wanted.includes(normalizeName(n)));
+	const selected = capabilities.filter(matches);
+	if (wanted) {
+		const missing = input.artifacts.filter((a) => !selected.some((c) => [c.id, ...Object.values(c.copies).map((copy) => copy?.name ?? "")].some((n) => normalizeName(n) === normalizeName(a))));
+		if (missing.length) throw new Error(`input.artifacts not found in any store: ${missing.join(", ")}`);
+	}
+	const ask = probable.filter((p) => selected.some((c) => c.id === p.id));
+	return {
+		state: {
+			selected,
+			probable: ask
+		},
+		metrics: {
+			selected: selected.length,
+			probable: ask.length
+		},
+		output: `${selected.length} capabilities selected${wanted ? ` from input.artifacts` : ""}; ${ask.length} probable links to confirm.`
+	};
+};
+var claudeSyncExclusions = async ({ state, exec, answers }) => {
+	if (!exec) throw new Error("csync.exclusions needs the host exec tool");
+	const { stateDir } = stateOf(state, "state");
+	const { selected, probable } = stateOf(state, "select");
+	const split = new Set(probable.filter((_, i) => answers?.[`q-claude-sync-probable-${i}`] === "split").map((p) => p.id));
+	const capabilities = selected.flatMap((c) => split.has(c.id) ? Object.entries(c.copies).map(([store, copy]) => ({
+		...c,
+		id: `${c.id}@${store}`,
+		basis: "split",
+		copies: { [store]: copy }
+	})) : [c]);
+	const compare = [];
+	const excluded = [];
+	for (const c of capabilities) {
+		const checks = [];
+		for (const [store, direction] of DIRECTIONS) {
+			const copy = c.copies[store];
+			if (!copy) continue;
+			const out = await syncState(exec, stateDir, [
+				"exclusion",
+				"check",
+				"--artifact",
+				`${c.kind}:${copy.name}`,
+				"--direction",
+				direction,
+				...copy.version && copy.version !== "—" ? ["--version", copy.version] : []
+			]);
+			checks.push(JSON.parse(out));
+		}
+		if (checks.length && checks.every((x) => x.status === "excluded")) excluded.push({
+			id: c.id,
+			reason: checks[0]?.reason ?? "excluded"
+		});
+		else compare.push({
+			...c,
+			copiesText: Object.entries(c.copies).map(([store, copy]) => `${store}: ${copy?.name} ${copy?.path} version ${copy?.version ?? "—"} hash ${copy?.hash ?? "—"}`).join("\n")
+		});
+	}
+	return {
+		state: {
+			compare,
+			excluded
+		},
+		metrics: {
+			compare: compare.length,
+			excluded: excluded.length
+		},
+		output: `${compare.length} capabilities to compare, ${excluded.length} excluded.`
+	};
+};
+function parseVerdict(text) {
+	const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.startsWith("result |"));
+	if (!line) throw new Error("comparator report has no 'result |' line");
+	const [, verdict = "", bump = "none", nextVersion = "none", action = ""] = line.split("|").map((p) => p.trim());
+	if (verdict !== "identical" && !VERDICT_ACTIONS[verdict]) throw new Error(`comparator returned unknown verdict '${verdict}'`);
+	return {
+		verdict,
+		bump,
+		nextVersion,
+		action,
+		report: String(text).trim()
+	};
+}
+function claudeSyncActions(verdict) {
+	return VERDICT_ACTIONS[verdict] ?? [];
+}
+var claudeSyncRows = async ({ state }) => {
+	const { compare, excluded } = stateOf(state, "exclusions");
+	const verdicts = state.compare ?? {};
+	const rows = compare.map((c) => {
+		const v = verdicts[c.id];
+		if (!v) throw new Error(`no verdict for capability ${c.id}`);
+		const copies = Object.entries(c.copies).map(([store, copy]) => `${store} ${copy?.version ?? "—"}`).join(", ");
+		return {
+			id: c.id,
+			kind: c.kind,
+			verdict: v.verdict,
+			bump: v.bump,
+			nextVersion: v.nextVersion,
+			action: v.action,
+			options: claudeSyncActions(v.verdict),
+			line: `${c.kind} ${c.id}: ${v.verdict}; copies ${copies}; recommended ${v.action || "none"}; proposed Olko version ${v.nextVersion}`
+		};
+	});
+	const decide = rows.filter((r) => r.verdict !== "identical");
+	return {
+		state: {
+			rows,
+			decide,
+			excluded,
+			table: [...rows.map((r) => r.line), ...excluded.map((e) => `${e.id}: excluded (${e.reason})`)].join("\n")
+		},
+		metrics: {
+			rows: rows.length,
+			decide: decide.length
+		},
+		output: `${rows.length} capabilities compared, ${decide.length} need a decision, ${excluded.length} excluded.`
+	};
+};
+var claudeSyncPlan = async ({ state, answers }) => {
+	const { rows, decide } = stateOf(state, "rows");
+	const decided = rows.map((r) => {
+		const index = decide.findIndex((d) => d.id === r.id);
+		return {
+			...r,
+			decision: index < 0 ? "none" : answers?.[`q-claude-sync-${index}`] ?? "unanswered"
+		};
+	});
+	const records = decided.filter((r) => r.decision === "exclude");
+	const rejects = decided.filter((r) => r.decision === "reject");
+	const changes = decided.filter((r) => ![
+		"none",
+		"leave",
+		"exclude",
+		"reject",
+		"unanswered"
+	].includes(r.decision));
+	return {
+		state: {
+			decided,
+			records,
+			rejects,
+			changes
+		},
+		metrics: {
+			records: records.length,
+			rejects: rejects.length,
+			changes: changes.length
+		},
+		output: `${changes.length} rows to apply, ${records.length} exclusions and ${rejects.length} rejections to record.`
+	};
+};
+var claudeSyncRecord = async ({ state, exec, answers }) => {
+	if (!exec) throw new Error("csync.record needs the host exec tool");
+	const { stateDir } = stateOf(state, "state");
+	const { compare } = stateOf(state, "exclusions");
+	const { records, rejects } = stateOf(state, "plan");
+	const lines = [];
+	for (const [i, r] of [...records, ...rejects].entries()) {
+		const c = compare.find((x) => x.id === r.id);
+		const source = c.copies.target ?? c.copies.olko ?? c.copies.user;
+		const artifact = `${r.kind}:${source?.name}`;
+		if (r.decision === "reject") await syncState(exec, stateDir, [
+			"exclusion",
+			"add",
+			"--artifact",
+			artifact,
+			"--reason",
+			"rejected new artifact",
+			"--kind",
+			"rejected-new",
+			"--version",
+			c.copies.olko?.version ?? "0.0.0"
+		]);
+		else {
+			const scope = answers?.[`q-claude-sync-scope-${i}`] ?? "all";
+			await syncState(exec, stateDir, [
+				"exclusion",
+				"add",
+				"--artifact",
+				artifact,
+				"--reason",
+				answers?.[`q-claude-sync-reason-${i}`] ?? "excluded by the user",
+				...scope === "all" ? [] : ["--scope", scope]
+			]);
+		}
+		lines.push(`${artifact} ${r.decision}`);
+	}
+	return {
+		state: { lines },
+		metrics: { recorded: lines.length },
+		output: lines.length ? `Recorded: ${lines.join(", ")}.` : "Nothing to record."
+	};
+};
+var claudeSyncReport = async ({ state }) => {
+	const plan = stateOf(state, "plan");
+	const { excluded } = stateOf(state, "exclusions");
+	const lines = [...plan.decided.map((r) => `row | ${r.id} | ${r.verdict} | ${r.decision}`), ...excluded.map((e) => `row | ${e.id} | excluded | excluded`)];
+	const changes = plan.decided.filter((r) => ![
+		"none",
+		"leave",
+		"exclude",
+		"reject",
+		"unanswered"
+	].includes(r.decision)).length;
+	const applied = state["apply-record"]?.applied ?? [];
+	const pr = state["publish-pr"]?.publish;
+	const merged = state.merge ?? state.pr?.merge;
+	const olkoChanged = state["apply-record"]?.olkoChanged;
+	const published = pr ? merged ? `Published as ${pr.url}, squash merged as ${merged.commit?.slice(0, 12)}.` : `Published as draft ${pr.url}, not merged.` : olkoChanged ? "Olko changes are in the working tree and not published." : "No Olko change to publish.";
+	const outcome = changes ? `Applied ${applied.length} of ${changes} rows: ${applied.join(", ") || "none"}. ${published}` : "Olko, the target and the user scope: unchanged.";
+	const consolidation = state["consolidation-record"];
+	const consolidated = consolidation ? `Consolidation: ${consolidation.accepted} accepted (plan ${consolidation.planFile}), ${consolidation.rejected} rejected.` : "Consolidation: skipped.";
+	return {
+		state: { lines },
+		metrics: { rows: lines.length },
+		output: [
+			"Claude sync report",
+			...lines,
+			outcome,
+			consolidated
+		].join("\n")
+	};
+};
+function directionOf(decision) {
+	if (decision.startsWith("port-to-olko") || decision === "take-target") return {
+		direction: "to-olko",
+		from: "target",
+		overwrite: decision === "take-target"
+	};
+	if (decision.startsWith("publish-to-olko")) return {
+		direction: "to-olko",
+		from: "user",
+		overwrite: false
+	};
+	return {
+		direction: "to-user",
+		from: "olko",
+		overwrite: decision === "take-olko" || decision === "revert-user"
+	};
+}
+var claudeSyncStagePlan = async ({ state, answers, nodeId }) => {
+	const { changes } = stateOf(state, "plan");
+	const { compare } = stateOf(state, "exclusions");
+	const rows = stateOf(state, "rows").rows;
+	const previous = nodeId ? state[nodeId] : void 0;
+	const round = (previous?.round ?? 0) + 1;
+	const added = (state.findings?.missing ?? []).filter((_, i) => answers?.[`q-claude-sync-missing-${previous?.round ?? 0}-${i}`] === "install-user");
+	const items = [];
+	const add = (row) => items.push({
+		...row,
+		stageDir: fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "factory-stage-")))
+	});
+	if (round === 1) for (const change of changes) {
+		const c = compare.find((x) => x.id === change.id);
+		const { direction, from, overwrite } = directionOf(change.decision);
+		const source = c.copies[from];
+		if (!source) throw new Error(`${change.decision} for ${change.id} needs a ${from} copy`);
+		const existing = direction === "to-olko" ? c.copies.olko?.path : c.copies.user?.path;
+		const bump = change.decision.match(/-(patch|minor|major)$/)?.[1];
+		const version = direction === "to-user" ? c.copies.olko?.version ?? "none" : bump ? bumpVersion(c.copies.olko?.version ?? "0.0.0", bump) : rows.find((r) => r.id === change.id)?.nextVersion ?? "1.0.0";
+		add({
+			id: change.id,
+			rowId: change.id,
+			kind: c.kind,
+			decision: change.decision,
+			direction,
+			source: source.path,
+			sourceStore: from,
+			existing: existing ?? "none",
+			overwrite,
+			version: direction === "to-user" || /^\d+\.\d+\.\d+$/.test(version) ? version : "1.0.0"
+		});
+	}
+	else for (const m of added) add({
+		id: `${m.kind}-${m.name}`,
+		rowId: m.id,
+		kind: m.kind,
+		decision: "install-user",
+		direction: "to-user",
+		source: m.olkoPath,
+		sourceStore: "olko",
+		existing: "none",
+		overwrite: false,
+		version: "none"
+	});
+	return {
+		state: {
+			items: [...previous?.items ?? [], ...items],
+			wave: items,
+			round
+		},
+		metrics: {
+			staged: items.length,
+			round
+		},
+		output: `Wave C round ${round}: ${items.length} rows to stage.`
+	};
+};
+function parseStaged(text) {
+	const data = lastJsonBlock(text);
+	if (typeof data.name !== "string" || typeof data.stagedPath !== "string") throw new Error("porter JSON needs name and stagedPath");
+	return {
+		name: data.name,
+		stagedPath: data.stagedPath,
+		findings: data.findings ?? [],
+		missing: data.missing ?? [],
+		entry: data.entry ?? null,
+		category: data.category ?? null,
+		blockers: data.blockers ?? []
+	};
+}
+var claudeSyncFindings = async ({ state }) => {
+	const { wave: items, items: all, round } = stateOf(state, "stage-plan");
+	const staged = stateOf(state, "stage");
+	const olko = stateOf(state, "state").olko;
+	const blocked = items.filter((i) => staged[i.id]?.blockers.length).map((i) => `${i.id}: ${staged[i.id].blockers.join("; ")}`);
+	if (blocked.length) throw new Error(`porter blockers, nothing applied: ${blocked.join(" | ")}`);
+	const findings = items.flatMap((i) => (staged[i.id]?.findings ?? []).map((f) => ({
+		item: i.id,
+		...f,
+		line: `${i.id} ${f.file}:${f.line} — ${f.category} — proposed: ${f.replacement}`
+	})));
+	const missing = items.filter((i) => i.direction === "to-user").flatMap((i) => (staged[i.id]?.missing ?? []).map((ref) => {
+		const [kind, name] = ref.split(":");
+		const olkoPath = kind === "agent" ? path.join(olko, "agents", "opencode", `${name}.md`) : skillDirIn(olko, name) ?? "none";
+		return {
+			id: `${kind}:${name}`,
+			kind,
+			name,
+			olkoPath,
+			for: i.id,
+			line: `${kind} ${name}, needed by ${i.id}`
+		};
+	})).filter((m, i, list) => m.olkoPath !== "none" && list.findIndex((x) => x.id === m.id) === i && !all.some((it) => it.id === `${m.kind}-${m.name}`));
+	return {
+		state: {
+			findings,
+			missing,
+			round
+		},
+		metrics: {
+			findings: findings.length,
+			missing: missing.length
+		},
+		output: `${findings.length} sanitize findings to decide, ${missing.length} missing dependencies.`
+	};
+};
+var claudeSyncFixes = async ({ state, answers, nodeId }) => {
+	const { findings, round } = stateOf(state, "findings");
+	const previous = nodeId ? state[nodeId] : void 0;
+	const decided = findings.map((f, i) => ({
+		...f,
+		decision: answers?.[`q-claude-sync-finding-${round}-${i}`] ?? "skip-row"
+	}));
+	const skipped = [.../* @__PURE__ */ new Set([...previous?.skipped ?? [], ...decided.filter((d) => d.decision === "skip-row").map((d) => d.item)])];
+	const byItem = /* @__PURE__ */ new Map();
+	for (const d of decided.filter((d) => d.decision === "replace" || d.decision === "delete")) byItem.set(d.item, [...byItem.get(d.item) ?? [], `${d.decision}: ${d.line}`]);
+	const { items, wave } = stateOf(state, "stage-plan");
+	const fixes = wave.filter((i) => byItem.has(i.id) && !skipped.includes(i.id)).map((i) => ({
+		...i,
+		decisions: byItem.get(i.id).join("\n")
+	}));
+	const ready = items.filter((i) => !skipped.includes(i.id));
+	return {
+		state: {
+			fixes,
+			ready,
+			skipped
+		},
+		metrics: {
+			fixes: fixes.length,
+			ready: ready.length,
+			skipped: skipped.length
+		},
+		output: `${ready.length} rows ready, ${fixes.length} need staged fixes, ${skipped.length} skipped by a finding.`
+	};
+};
+function olkoCategories(olko) {
+	const skills = path.join(olko, "skills");
+	return fs.existsSync(skills) ? fs.readdirSync(skills).filter((c) => fs.statSync(path.join(skills, c)).isDirectory()).sort() : [];
+}
+var claudeSyncMoreDeps = async ({ state, answers }) => {
+	const { missing, round } = stateOf(state, "findings");
+	const more = round < 2 ? missing.filter((_, i) => answers?.[`q-claude-sync-missing-${round}-${i}`] === "install-user").length : 0;
+	return {
+		state: { more },
+		metrics: { more },
+		output: more ? `${more} missing dependencies to stage in the next wave.` : "No more dependencies to stage."
+	};
+};
+var claudeSyncApplyPlan = async ({ state }) => {
+	const { ready } = stateOf(state, "fixes");
+	const staged = stateOf(state, "stage");
+	const olko = stateOf(state, "state").olko;
+	const categories = olkoCategories(olko);
+	const rows = ready.map((i) => {
+		const s = staged[i.id];
+		const newSkill = i.direction === "to-olko" && i.kind === "skill" && i.existing === "none";
+		const diffFile = path.join(i.stageDir, "diff.patch");
+		const diff = fs.existsSync(diffFile) ? fs.readFileSync(diffFile, "utf8").slice(0, 6e3) : "new file, no existing copy";
+		return {
+			...i,
+			name: s.name,
+			stagedPath: s.stagedPath,
+			needsCategory: newSkill,
+			categories: s.category && categories.includes(s.category) ? [s.category, ...categories.filter((c) => c !== s.category)] : categories,
+			diff
+		};
+	});
+	return {
+		state: { rows },
+		metrics: { rows: rows.length },
+		output: `${rows.length} rows to apply one at a time.`
+	};
+};
+async function contentHash(exec, stateDir, target) {
+	return (await syncState(exec, stateDir, [
+		"hash",
+		"--path",
+		target
+	])).trim().split(/\s+/).at(-1) ?? "";
+}
+async function recordLineage(exec, stateDir, capability, store, target, sourceStore, source) {
+	const hash = await contentHash(exec, stateDir, target);
+	const sourceHash = await contentHash(exec, stateDir, source);
+	await syncState(exec, stateDir, [
+		"lineage",
+		"set",
+		"--capability",
+		capability.replace(/[^a-z0-9-]/g, "-"),
+		"--store",
+		store,
+		"--path",
+		target,
+		"--hash",
+		hash,
+		"--ported-from",
+		`${sourceStore}@${sourceHash}`
+	]);
+	return hash;
+}
+function upsertEntry(file, key, entry) {
+	const json = JSON.parse(fs.readFileSync(file, "utf8"));
+	const list = json[key];
+	const index = list.findIndex((e) => e.name === entry.name);
+	if (index >= 0) list[index] = {
+		...list[index],
+		...entry
+	};
+	else list.push(entry);
+	fs.writeFileSync(file, `${JSON.stringify(json, null, 2)}\n`);
+}
+var claudeSyncApplyOlko = async ({ state, exec, answers }) => {
+	if (!exec) throw new Error("csync.applyOlko needs the host exec tool");
+	const { item, index } = stateOf(state, "apply-next");
+	const { olko, stateDir } = stateOf(state, "state");
+	const staged = stateOf(state, "stage")[item.id];
+	if (item.overwrite && answers?.[`q-claude-sync-overwrite-${index}`] !== "overwrite") return {
+		state: { applied: false },
+		metrics: {
+			applied: 0,
+			failed: 0
+		},
+		output: `${item.id}: overwrite not confirmed, nothing written.`
+	};
+	const results = [];
+	let target;
+	if (item.kind === "skill") {
+		const category = item.needsCategory ? answers?.[`q-claude-sync-category-${index}`] : path.basename(path.dirname(item.existing));
+		if (!category) throw new Error(`no category for ${item.name}`);
+		target = item.existing !== "none" ? item.existing : path.join(olko, "skills", category, item.name);
+		fs.mkdirSync(target, { recursive: true });
+		fs.cpSync(item.stagedPath, target, {
+			recursive: true,
+			force: true,
+			filter: (f) => path.basename(f) !== "diff.patch"
+		});
+		upsertEntry(path.join(olko, "registry.json"), "skills", {
+			...staged.entry ?? {},
+			name: item.name,
+			category,
+			version: item.version
+		});
+		for (const args of [["scripts/registry.mjs", "--fix"], ["scripts/registry.mjs"]]) {
+			const res = await exec("node", args, { cwd: olko });
+			results.push(`${args.join(" ")}: ${res.code === 0 ? "pass" : `FAIL ${(res.stderr || res.stdout).trim().split(/\r?\n/).slice(-2).join(" ")}`}`);
+		}
+	} else {
+		target = path.join(olko, "agents", "opencode", `${item.name}.md`);
+		fs.copyFileSync(fs.statSync(item.stagedPath).isDirectory() ? path.join(item.stagedPath, `${item.name}.md`) : item.stagedPath, target);
+		upsertEntry(path.join(olko, "agents", "opencode", "index.json"), "agents", {
+			...staged.entry ?? {},
+			name: item.name,
+			version: item.version,
+			file: `${item.name}.md`
+		});
+		const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "factory-agent-check-"));
+		const res = await exec("node", [
+			"scripts/install-opencode-agents.mjs",
+			"--project",
+			scratch,
+			"--agent",
+			item.name
+		], { cwd: olko });
+		fs.rmSync(scratch, {
+			recursive: true,
+			force: true
+		});
+		results.push(`install-opencode-agents ${item.name}: ${res.code === 0 ? "pass" : `FAIL ${(res.stderr || res.stdout).trim().split(/\r?\n/).slice(-2).join(" ")}`}`);
+	}
+	await recordLineage(exec, stateDir, item.id, "olko", target, item.sourceStore, item.source);
+	const failed = results.filter((r) => r.includes("FAIL")).length;
+	return {
+		state: {
+			applied: true,
+			target,
+			results,
+			failed
+		},
+		metrics: {
+			applied: 1,
+			failed
+		},
+		output: `${item.id} -> Olko ${path.relative(olko, target)} at ${item.version}. ${results.join("; ")}`
+	};
+};
+var claudeSyncApplyUser = async ({ state, exec, answers }) => {
+	if (!exec) throw new Error("csync.applyUser needs the host exec tool");
+	const { item, index } = stateOf(state, "apply-next");
+	const { user, stateDir } = stateOf(state, "state");
+	if (answers?.[`q-claude-sync-write-${index}`] !== "write") return {
+		state: { applied: false },
+		metrics: { applied: 0 },
+		output: `${item.id}: write to the user scope declined.`
+	};
+	const target = item.kind === "skill" ? path.join(user, "skills", item.name) : path.join(user, "agents", `${item.name}.md`);
+	if (item.kind === "skill") {
+		fs.mkdirSync(target, { recursive: true });
+		fs.cpSync(item.stagedPath, target, {
+			recursive: true,
+			force: true,
+			filter: (f) => path.basename(f) !== "diff.patch"
+		});
+	} else fs.copyFileSync(fs.statSync(item.stagedPath).isDirectory() ? path.join(item.stagedPath, `${item.name}.md`) : item.stagedPath, target);
+	await recordLineage(exec, stateDir, item.id, "user", target, "olko", item.source);
+	return {
+		state: {
+			applied: true,
+			target
+		},
+		metrics: { applied: 1 },
+		output: `${item.id} -> user scope ${target}.`
+	};
+};
+var claudeSyncApplyRecord = async ({ state, nodeId }) => {
+	const previous = nodeId ? state[nodeId] : void 0;
+	const { item } = stateOf(state, "apply-next");
+	const result = item.direction === "to-olko" ? state["apply-olko"] : state["apply-user"];
+	const applied = [...previous?.applied ?? [], ...result?.applied ? [`${item.id} ${item.direction}`] : []];
+	const failed = (previous?.failed ?? 0) + (result?.failed ?? 0);
+	return {
+		state: {
+			applied,
+			failed,
+			olkoChanged: applied.some((a) => a.endsWith("to-olko"))
+		},
+		metrics: {
+			applied: applied.length,
+			failed
+		},
+		output: `${applied.length} rows applied so far.`
+	};
+};
+var claudeSyncOlkoTests = async ({ state, exec }) => {
+	if (!exec) throw new Error("csync.olkoTests needs the host exec tool");
+	const { olko } = stateOf(state, "state");
+	const res = await exec("node", ["--test", "scripts/*.test.mjs"], { cwd: olko });
+	const summary = (res.stdout.match(/^ℹ (pass|fail) \d+$/gm) ?? []).join(", ");
+	return {
+		state: {
+			passed: res.code === 0,
+			summary
+		},
+		metrics: { failed: res.code === 0 ? 0 : 1 },
+		output: `Olko node tests: ${res.code === 0 ? "pass" : "FAIL"} (${summary || (res.stderr || res.stdout).trim().split(/\r?\n/).slice(-2).join(" ")}).`
+	};
+};
+var claudeSyncLeakCheck = async ({ state, exec, input }) => {
+	if (!exec) throw new Error("csync.leakCheck needs the host exec tool");
+	const { olko, target, leakTerms } = stateOf(state, "state");
+	const plugins = fs.existsSync(path.join(target, "plugins")) ? fs.readdirSync(path.join(target, "plugins")) : [];
+	const portedPlugins = new Set(stateOf(state, "apply-plan").rows.filter((r) => r.sourceStore === "target").map((r) => path.relative(path.join(target, "plugins"), r.source).split(path.sep)[0]));
+	const terms = [
+		...leakTerms,
+		input.targetName ?? "",
+		target,
+		path.basename(target),
+		...plugins.filter((p) => !portedPlugins.has(p))
+	].filter((t) => t.length > 2).map((t) => t.toLowerCase());
+	const changed = (await exec("git", [
+		"-C",
+		olko,
+		"status",
+		"--porcelain",
+		"--untracked-files=all"
+	])).stdout.split(/\r?\n/).filter(Boolean).map((l) => l.slice(3).trim());
+	const hits = [];
+	for (const file of changed) {
+		const full = path.join(olko, file);
+		if (!fs.existsSync(full) || fs.statSync(full).isDirectory()) continue;
+		const added = file.endsWith(".json") ? (await exec("git", [
+			"-C",
+			olko,
+			"diff",
+			"--",
+			file
+		])).stdout.split(/\r?\n/).filter((l) => l.startsWith("+")).join("\n") : fs.readFileSync(full, "utf8");
+		terms.forEach((t, n) => {
+			if (added.toLowerCase().includes(t)) hits.push(`${file}: leak term #${n + 1}`);
+		});
+	}
+	if (hits.length) throw new Error(`leak check failed, nothing published: ${hits.join("; ")}`);
+	return {
+		state: {
+			changed,
+			files: changed.join("\n")
+		},
+		metrics: {
+			leaks: 0,
+			changed: changed.length
+		},
+		output: `Leak check passed on ${changed.length} changed Olko files.`
+	};
+};
+var claudeSyncPublish = async ({ state, exec }) => {
+	if (!exec) throw new Error("csync.publish needs the host exec tool");
+	const { olko } = stateOf(state, "state");
+	const { changed } = stateOf(state, "leak-check");
+	const rows = stateOf(state, "apply-plan").rows.filter((r) => !r.decision.includes("user"));
+	const tests = stateOf(state, "olko-tests");
+	const branch = `feat/claude-sync-${rows.map((r) => r.name.replace(/^olko-/, "")).join("-").slice(0, 40).replace(/-+$/, "")}`;
+	const git = async (...args) => {
+		const res = await exec("git", [
+			"-C",
+			olko,
+			...args
+		]);
+		if (res.code !== 0) throw new Error(`git ${args[0]} failed: ${(res.stderr || res.stdout).trim()}`);
+		return res.stdout.trim();
+	};
+	await git("checkout", "-b", branch);
+	await git("add", "--", ...changed);
+	const subject = `feat(sync): port ${rows.map((r) => `${r.name} ${r.version}`).join(", ")}`;
+	await git("commit", "-m", subject);
+	await git("push", "-u", "origin", branch);
+	const pr = await exec("gh", [
+		"pr",
+		"create",
+		"--draft",
+		"--head",
+		branch,
+		"--base",
+		"main",
+		"--title",
+		subject,
+		"--body",
+		[`Artifacts: ${rows.map((r) => `${r.name} ${r.version} (${r.decision})`).join(", ")}`, `Validation: ${tests.passed ? "node tests pass" : "node tests FAIL"} ${tests.summary}`].join("\n\n")
+	], { cwd: olko });
+	if (pr.code !== 0) throw new Error(`gh pr create failed: ${(pr.stderr || pr.stdout).trim()}`);
+	const url = pr.stdout.trim().split(/\r?\n/).at(-1);
+	return {
+		state: { publish: {
+			url,
+			branch,
+			commit: await git("rev-parse", "HEAD")
+		} },
+		metrics: { prs: 1 },
+		output: `Draft PR ${url} on ${branch}.`
+	};
+};
+var claudeSyncConsolidationRecord = async ({ state, exec, answers }) => {
+	if (!exec) throw new Error("csync.consolidationRecord needs the host exec tool");
+	const { stateDir } = stateOf(state, "state");
+	const suggestions = Object.values(stateOf(state, "consolidate"))[0]?.suggestions ?? [];
+	const accepted = [];
+	const rejected = [];
+	for (const [i, s] of suggestions.entries()) {
+		const answer = answers?.[`q-claude-sync-suggestion-${i}`];
+		if (answer === "reject") {
+			await syncState(exec, stateDir, [
+				"rejection",
+				"add",
+				"--items",
+				s.items.join(","),
+				"--suggestion",
+				s.verdict,
+				"--reason",
+				answers?.[`q-claude-sync-suggestion-reason-${i}`] ?? "declined"
+			]);
+			rejected.push(s.items.join(","));
+		} else if (answer === "accept") accepted.push(`- ${s.verdict}: ${s.items.join(", ")}\n  evidence: ${s.evidence}\n  loses: ${s.loses}`);
+	}
+	const planFile = path.join(stateDir, `consolidation-plan-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.md`);
+	if (accepted.length) fs.appendFileSync(planFile, `${accepted.join("\n")}\n`);
+	return {
+		state: {
+			accepted: accepted.length,
+			rejected: rejected.length,
+			planFile: accepted.length ? planFile : "none"
+		},
+		metrics: {
+			accepted: accepted.length,
+			rejected: rejected.length
+		},
+		output: `Consolidation: ${accepted.length} accepted${accepted.length ? ` (plan ${planFile})` : ""}, ${rejected.length} rejected.`
+	};
+};
+function parseSuggestions(text) {
+	return { suggestions: (lastJsonBlock(text).suggestions ?? []).filter((s) => [
+		"merge",
+		"remove",
+		"extend"
+	].includes(s.verdict) && Array.isArray(s.items) && s.items.length >= 2).map((s, i) => ({
+		...s,
+		line: `${i + 1}. ${s.verdict}: ${s.items.join(" + ")} — ${s.evidence} — loses: ${s.loses}`
+	})) };
+}
+function parseDraft(text) {
+	const data = lastJsonBlock(text);
+	return {
+		questions: (data.questions ?? []).filter((q) => typeof q === "string" && q.trim()),
+		feature: data.feature ?? null,
+		tasks: data.tasks ?? [],
+		text: String(data.text ?? "")
+	};
+}
+function parseGrill(text) {
+	const questions = lastJsonBlock(text).questions ?? [];
+	for (const q of questions) if (!q.problem || !Array.isArray(q.options) || q.options.length !== 3) throw new Error(`grill question needs a problem and exactly 3 options: ${JSON.stringify(q).slice(0, 200)}`);
+	return { questions };
+}
+function parseVerdictLine(prefix) {
+	return (text) => {
+		const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.startsWith(`${prefix} |`));
+		if (!line) throw new Error(`output has no '${prefix} |' line`);
+		const [, verdict = "", count = "0", detail = ""] = line.split("|").map((p) => p.trim());
+		return {
+			pass: verdict === "pass" || verdict === "yes" || verdict === "none",
+			count: Number(count) || 0,
+			detail
+		};
+	};
+}
+var planRoute = async ({ input, answers }) => {
+	const route = input.route ?? answers?.["q-plan-route"];
+	if (route && ![
+		"discovery",
+		"planning",
+		"both"
+	].includes(route)) throw new Error(`input.route must be discovery, planning or both, not ${route}`);
+	return {
+		state: { route: route ?? "ask" },
+		metrics: {},
+		output: `Route: ${route ?? "ask the user"}.`
+	};
+};
+var planDraftCheck = async ({ state, answers, nodeId }) => {
+	const draft = Object.values(stateOf(state, "draft"))[0];
+	const previous = nodeId ? state[nodeId] : void 0;
+	const round = (previous?.round ?? 0) + 1;
+	const answer = previous ? answers?.[`q-plan-questions-${previous.round}`] ?? answers?.[`q-plan-revise-${previous.round}`] : void 0;
+	const answered = [previous?.answered, answer].filter(Boolean).join("\n\n");
+	const ask = draft.questions.length > 0 && round <= 3;
+	return {
+		state: {
+			round,
+			ask,
+			questions: draft.questions.map((q, i) => `${i + 1}. ${q}`).join("\n"),
+			answered: answered || "none yet",
+			draft
+		},
+		metrics: {
+			questions: draft.questions.length,
+			round
+		},
+		output: ask ? `Draft round ${round}: ${draft.questions.length} open questions.` : `Draft ready: ${draft.tasks.length} Tasks.`
+	};
+};
+var planFeature = async ({ state, input, cwd }) => {
+	const fromTracker = state["tracker-context/context"];
+	const draft = (fromTracker && Object.values(fromTracker)[0]) ?? state["draft-check"]?.draft;
+	if (!draft) throw new Error("no Feature context: give input.route planning with the tracker on, or run the discovery draft first");
+	const missing = draft.tasks.filter((t) => !t.criteria?.length).map((t) => t.id);
+	if (!draft.tasks.length) throw new Error("entry gate: the Feature has no child Tasks; route to the backlog writer draft first");
+	if (missing.length) throw new Error(`entry gate: Tasks without acceptance criteria: ${missing.join(", ")}; never plan from a guessed criterion`);
+	const featureId = input.featureId ?? (draft.feature?.title ?? "feature").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+	const featureDir = `plans/features/${featureId}`;
+	fs.mkdirSync(path.join(cwd ?? ".", featureDir, "tasks"), { recursive: true });
+	const tasks = draft.tasks.map((t) => `- ${t.id}: ${t.title}\n${t.criteria.map((c) => `  - ${c}`).join("\n")}`).join("\n");
+	const criteria = [...draft.feature?.criteria ?? [], ...draft.tasks.flatMap((t) => t.criteria)].join("\n");
+	return {
+		state: {
+			featureId,
+			featureDir,
+			text: draft.text,
+			tasks,
+			taskIds: draft.tasks.map((t) => t.id),
+			criteria
+		},
+		metrics: { tasks: draft.tasks.length },
+		output: `Feature ${featureId}: ${draft.tasks.length} Tasks with acceptance criteria; plan folder ${featureDir}.`
+	};
+};
+var AUDITORS = [
+	[/\.net|c#|csproj|asp\.net/i, "olko-dotnet-auditor"],
+	[/kotlin|android/i, "olko-mobile-auditor"],
+	[/react native|expo/i, "olko-react-native-auditor"],
+	[/\breact\b(?! native)/i, "olko-react-auditor"],
+	[/army python|python army/i, "olko-army-python-auditor"]
+];
+var planAuditors = async ({ state, cwd }) => {
+	const { featureDir } = stateOf(state, "feature");
+	const file = path.join(cwd ?? ".", featureDir, "implementation.md");
+	const text = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+	const scope = text.split(/^## /m).find((s) => /^(implementation scope|scope|technical scope)/i.test(s)) ?? text;
+	const agents = AUDITORS.filter(([re]) => re.test(scope)).map(([, agent]) => ({
+		id: agent.replace(/^olko-|-auditor$/g, ""),
+		agentName: agent
+	}));
+	return {
+		state: { agents },
+		metrics: { auditors: agents.length },
+		output: agents.length ? `Auditors for the planned technologies: ${agents.map((a) => a.agentName).join(", ")}.` : "No stack auditor matches the planned technologies; audits skipped."
+	};
+};
+var planFindings = async ({ state, args }) => {
+	const from = String(args.from);
+	const results = Object.entries(state[from] ?? {});
+	const total = results.reduce((sum, [, r]) => sum + r.count, 0);
+	return {
+		state: {
+			total,
+			text: results.filter(([, r]) => r.count > 0).map(([id, r]) => `${id}: ${r.detail}`).join("\n") || "none"
+		},
+		metrics: { findings: total },
+		output: total ? `${total} findings to fold from ${from}.` : `No findings from ${from}.`
+	};
+};
+var planFiles = async ({ state, cwd }) => {
+	const { featureDir, criteria } = stateOf(state, "feature");
+	const root = path.join(cwd ?? ".", featureDir);
+	const tasks = fs.existsSync(path.join(root, "tasks")) ? fs.readdirSync(path.join(root, "tasks")).filter((f) => f.endsWith("-implementation.md")).sort().map((f) => `${featureDir}/tasks/${f}`) : [];
+	const files = [`${featureDir}/implementation.md`, ...tasks].map((p) => ({
+		path: p,
+		criteria
+	}));
+	return {
+		state: { files },
+		metrics: { files: files.length },
+		output: `${files.length} plan files to review.`
+	};
+};
+var planReviewCollect = async ({ state, nodeId }) => {
+	const previous = nodeId ? state[nodeId] : void 0;
+	const report = state["plan-review"]?.["plan-report"];
+	const file = state["plan-next"]?.item?.path ?? "?";
+	const lines = (report?.kept ?? []).map((f) => f.line);
+	const reports = [...previous?.reports ?? [], ...lines.map((l) => `${file}: ${l}`)];
+	return {
+		state: {
+			reports,
+			confirmed: reports.length,
+			text: reports.join("\n") || "none"
+		},
+		metrics: { confirmed: reports.length },
+		output: `${lines.length} confirmed plan findings for ${file}.`
+	};
+};
+var planGrillQuestions = async ({ state, nodeId }) => {
+	const parsed = Object.values(stateOf(state, "grill"))[0];
+	const round = ((nodeId ? state[nodeId] : void 0)?.round ?? 0) + 1;
+	const questions = parsed.questions.map((q, i) => ({
+		index: i,
+		text: [
+			`Problem: ${q.problem}`,
+			`Why I am asking: ${q.why}`,
+			...q.options.map((o, n) => `${n + 1}. ${o.label}${n === 0 ? " (recommended)" : ""}\n   Business: ${o.business}\n   Change scope: ${o.scope}`),
+			q.glossary ? `Glossary: ${q.glossary}` : ""
+		].filter(Boolean).join("\n")
+	}));
+	const count = round <= 3 ? questions.length : 0;
+	return {
+		state: {
+			round,
+			questions,
+			count
+		},
+		metrics: {
+			questions: questions.length,
+			round
+		},
+		output: count ? `Grill round ${round}: ${count} questions as one batch.` : `Grill round ${round}: no open question${questions.length ? " (round limit reached; the rest stays in Open items)" : ""}.`
+	};
+};
+var planAnswers = async ({ state, answers, args }) => {
+	const from = String(args.from);
+	const prefix = String(args.prefix);
+	const source = stateOf(state, from);
+	const lines = source.questions.map((q) => `Question ${q.index + 1}:\n${q.text}\nAnswer: ${answers?.[`${prefix}${source.round}-${q.index}`] ?? "unanswered"}`);
+	return {
+		state: {
+			text: lines.join("\n\n") || "none",
+			count: lines.length
+		},
+		metrics: { answers: lines.length },
+		output: `${lines.length} answers collected.`
+	};
+};
+var planReadiness = async ({ state, nodeId }) => {
+	const parsed = Object.values(stateOf(state, "readiness"))[0];
+	const round = ((nodeId ? state[nodeId] : void 0)?.round ?? 0) + 1;
+	const questions = parsed.questions.map((q, i) => ({
+		index: i,
+		text: [
+			`Blocker: ${q.problem}`,
+			`Why I am asking: ${q.why}`,
+			...q.options.map((o, n) => `${n + 1}. ${o.label}${n === 0 ? " (recommended)" : ""}\n   Business: ${o.business}\n   Change scope: ${o.scope}`)
+		].join("\n")
+	}));
+	return {
+		state: {
+			round,
+			questions,
+			count: round <= 3 ? questions.length : 0
+		},
+		metrics: {
+			blockers: questions.length,
+			round
+		},
+		output: questions.length ? `Readiness round ${round}: ${questions.length} blockers.` : "Ready for implementation: no blockers."
+	};
+};
+var planOpenEditor = async ({ state, exec, cwd }) => {
+	const { featureDir } = stateOf(state, "feature");
+	const res = exec ? await exec("code", ["-n", featureDir], { cwd: cwd ?? "." }) : {
+		code: -1,
+		stdout: "",
+		stderr: "no exec"
+	};
+	return {
+		state: { opened: res.code === 0 },
+		metrics: { opened: res.code === 0 ? 1 : 0 },
+		output: res.code === 0 ? `Opened ${featureDir} in VS Code.` : `Could not open VS Code; run: code -n ${featureDir}`
+	};
+};
+var planScopeCheck = async ({ state, exec, cwd }) => {
+	if (!exec) throw new Error("plan.scopeCheck needs the host exec tool");
+	const { featureDir } = stateOf(state, "feature");
+	const status = (await exec("git", [
+		"-C",
+		cwd ?? ".",
+		"status",
+		"--porcelain",
+		"--untracked-files=all"
+	])).stdout.split(/\r?\n/).filter(Boolean).map((l) => l.slice(3).trim());
+	const allowed = (p) => p.startsWith(`${featureDir}/`) || p === ".opencode/memory/olko-plan-documentation-orchestrator.md";
+	const outside = status.filter((p) => !allowed(p));
+	if (outside.length) throw new Error(`planning changed files outside the plan folder: ${outside.join(", ")}`);
+	return {
+		state: { changed: status },
+		metrics: { changed: status.length },
+		output: `Plan scope check passed: ${status.length} changed files, all under ${featureDir}.`
+	};
+};
+var planFeatureReport = async ({ state, cwd }) => {
+	const { featureDir, featureId } = stateOf(state, "feature");
+	const root = path.join(cwd ?? ".", featureDir);
+	const tasks = fs.existsSync(path.join(root, "tasks")) ? fs.readdirSync(path.join(root, "tasks")).filter((f) => f.endsWith("-implementation.md")) : [];
+	const ready = fs.existsSync(path.join(root, "implementation.md")) ? fs.readFileSync(path.join(root, "implementation.md"), "utf8").match(/Ready for implementation:\s*(yes|no)/i)?.[1] ?? "missing" : "missing";
+	const auditors = state.auditors?.agents?.map((a) => a.agentName) ?? [];
+	const review = state["plan-collect"]?.confirmed ?? 0;
+	return {
+		state: { ready },
+		metrics: { tasks: tasks.length },
+		output: [
+			`Feature plan ${featureId}`,
+			`Files: ${[
+				"business.md",
+				"implementation.md",
+				"stack.md",
+				"tracker.md"
+			].map((f) => `${featureDir}/${f}`).join(", ")}`,
+			`Task plans: ${tasks.map((t) => `${featureDir}/tasks/${t}`).join(", ") || "none"}`,
+			`Ready for implementation: ${ready}`,
+			`Auditors: ${auditors.join(", ") || "none (no matching technology)"}`,
+			`Plan review: ${review} confirmed findings folded`,
+			"Domain changes: write-free recommendation in business.md; vault changes stay approval-gated after implementation."
+		].join("\n")
+	};
+};
+var OPERATIONS = {
+	...IMPL_OPERATIONS,
+	...WFSYNC_OPERATIONS,
+	"builtin.pass": pass,
+	"builtin.count": async ({ state, nodeId }) => {
+		const count = ((nodeId ? state[nodeId]?.count : 0) ?? 0) + 1;
+		return {
+			state: { count },
+			metrics: { count },
+			output: `Round ${count}.`
+		};
+	},
+	"builtin.stop": async ({ args }) => {
+		throw new Error(String(args.reason ?? "stopped by the user"));
+	},
+	"plan.route": planRoute,
+	"plan.draftCheck": planDraftCheck,
+	"plan.feature": planFeature,
+	"plan.auditors": planAuditors,
+	"plan.findings": planFindings,
+	"plan.files": planFiles,
+	"plan.reviewCollect": planReviewCollect,
+	"plan.grillQuestions": planGrillQuestions,
+	"plan.answers": planAnswers,
+	"plan.readiness": planReadiness,
+	"plan.openEditor": planOpenEditor,
+	"plan.scopeCheck": planScopeCheck,
+	"plan.report": planFeatureReport,
+	"builtin.values": async ({ args }) => {
+		if (!Array.isArray(args.values)) throw new Error("with.values must be a list");
+		return {
+			state: { values: args.values },
+			metrics: { values: args.values.length },
+			output: `${args.values.length} values.`
+		};
+	},
+	"builtin.gate": async ({ state, input, args }) => {
+		const when = String(args.when);
+		const enabled = evaluateWhen(when, {
+			...state,
+			input,
+			switches: input.switches ?? {}
+		});
+		return {
+			state: { enabled },
+			metrics: { enabled: enabled ? 1 : 0 },
+			output: enabled ? `Subgraph ${String(args.subgraph)} runs (${when}).` : `Subgraph ${String(args.subgraph)} skipped: switch off (${when} is false).`
+		};
+	},
+	"github.prScope": prScope,
+	"github.postComment": postComment,
+	"list.next": listNext,
+	"plan.read": planRead,
+	"review.planReport": planReport,
+	"github.prFeedback": prFeedback,
+	"github.postReply": postReply,
+	"feedback.plan": feedbackPlan,
+	"feedback.report": feedbackReport,
+	"feedback.fixNotAvailable": async () => {
+		throw new Error("Fixing code from review comments needs write-capable agents in the factory (docs/yaml-migration-plan.md, E9). The decisions are recorded in this run; nothing was changed.");
+	},
+	"memory.load": memoryLoad,
+	"memory.persist": memoryPersist,
+	"review.route": reviewRoute,
+	"review.detectLenses": detectLenses,
+	"review.mergeFindings": mergeFindings,
+	"review.confirmFindings": confirmFindings,
+	"review.mergeRules": mergeRules,
+	"review.addViolations": addViolations,
+	"review.rankFindings": rankFindings,
+	"sync.resolvePath": resolveMarketplacePath,
+	"sync.safeSource": safeSource,
+	"sync.discover": discoverArtifacts,
+	"sync.checkVersions": checkSkillVersions,
+	"sync.rows": syncRows,
+	"sync.plan": syncPlanApply,
+	"sync.revertLocal": revertLocal,
+	"sync.validate": validateMarketplace,
+	"sync.prOf": prOf,
+	"sync.waitChecks": waitForChecks,
+	"sync.merge": squashMerge,
+	"sync.install": installArtifacts,
+	"sync.memorySave": syncMemorySave,
+	"csync.state": claudeSyncState,
+	"csync.leakSave": claudeSyncLeakSave,
+	"csync.inventories": claudeSyncInventories,
+	"csync.capabilities": claudeSyncCapabilities,
+	"csync.select": claudeSyncSelect,
+	"csync.exclusions": claudeSyncExclusions,
+	"csync.rows": claudeSyncRows,
+	"csync.plan": claudeSyncPlan,
+	"csync.record": claudeSyncRecord,
+	"csync.report": claudeSyncReport,
+	"csync.stagePlan": claudeSyncStagePlan,
+	"csync.findings": claudeSyncFindings,
+	"csync.fixes": claudeSyncFixes,
+	"csync.applyPlan": claudeSyncApplyPlan,
+	"csync.moreDeps": claudeSyncMoreDeps,
+	"csync.applyOlko": claudeSyncApplyOlko,
+	"csync.applyUser": claudeSyncApplyUser,
+	"csync.applyRecord": claudeSyncApplyRecord,
+	"csync.olkoTests": claudeSyncOlkoTests,
+	"csync.leakCheck": claudeSyncLeakCheck,
+	"csync.publish": claudeSyncPublish,
+	"csync.consolidationRecord": claudeSyncConsolidationRecord,
+	"sync.report": syncReport,
+	"sync.stopUnsafe": async ({ state, args, input }) => {
+		const source = stateOf(state, typeof args.from === "string" ? args.from : "safe-source");
+		throw new Error(`Sync stopped before any comparison: ${input.label ?? "the marketplace"} checkout is not safe: ${source.detail ?? "unknown reason"}.`);
+	}
+};
+var PARSERS = {
+	...IMPL_PARSERS,
+	"wfsync.mapping": parseLine("mapping"),
+	"wfsync.verify": parseLine("verify"),
+	"text.raw": (text) => String(text).trim(),
+	"review.findings": parseFindings,
+	"review.verdicts": parseVerdicts,
+	"review.rulesCheck": parseRulesCheck,
+	"sync.comparison": parseComparison,
+	"sync.prLine": parsePrLine,
+	"sync.applied": parseApplied,
+	"csync.capabilities": parseCapabilities,
+	"csync.inventory": parseInventory,
+	"csync.verdict": parseVerdict,
+	"csync.staged": parseStaged,
+	"plan.draft": parseDraft,
+	"plan.grill": parseGrill,
+	"plan.consistency": parseVerdictLine("consistency"),
+	"plan.findings": parseVerdictLine("findings"),
+	"csync.suggestions": parseSuggestions
+};
 // src/workflow-yaml.ts
 mustache.escape = (text) => text;
 var CONDITION = /^([a-zA-Z0-9_./-]+)\s*(==|!=|>=|<=|>|<)\s*(.+)$/;
@@ -18834,7 +19277,7 @@ function loadWorkflowSpecs(dir) {
 }
 // src/config.ts
 function configFile() {
-	return process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR$1, "config", "factory.yaml");
+	return process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR$2, "config", "factory.yaml");
 }
 function loadFactoryConfig(file = configFile()) {
 	const raw = (0, import_dist$1.parse)(fs.readFileSync(file, "utf8"));
@@ -18913,7 +19356,7 @@ function parseCli(value) {
 }
 var workflows;
 function workflowsDir() {
-	return process.env.FACTORY_WORKFLOWS_DIR ?? path.join(FACTORY_DIR$1, "workflows");
+	return process.env.FACTORY_WORKFLOWS_DIR ?? path.join(FACTORY_DIR$2, "workflows");
 }
 function loadedWorkflows() {
 	workflows ??= loadWorkflowDir(workflowsDir());
@@ -20240,6 +20683,7 @@ function standaloneNames(specs, marketplace) {
 	for (const spec of specs) for (const node of spec.nodes) if (node.workflow && owner.get(node.workflow) !== null && owner.get(node.workflow) === owner.get(spec.name)) inner.add(node.workflow);
 	return new Set(specs.filter((s) => {
 		const agent = owner.get(s.name);
+		if (s.source?.startsWith("factory ") && !specs.some((o) => o.nodes.some((n) => n.workflow === s.name))) return true;
 		return agent !== null && agent !== void 0 && !inner.has(s.name) && invokable(agent, marketplace);
 	}).map((s) => s.name));
 }
@@ -20266,83 +20710,6 @@ function workflowsThatRan(specs, root, startedNodes) {
 		if (name) ran.add(name);
 	}
 	return [...ran].sort();
-}
-// src/sources-lock.ts
-var FACTORY_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-var LOCK_FILE = path.join(FACTORY_DIR, "workflows.lock.json");
-var SOURCE_FILE = /agents\/opencode\/[a-z0-9-]+\.md|plugins\/[a-z0-9-]+\/agents\/[a-z0-9-]+\.md|skills\/(?:\*|[a-z0-9-]+)\/[a-z0-9-]+(?:\/SKILL\.md)?/g;
-function resolveSkill(ref, marketplace) {
-	if (ref.endsWith(".md")) return ref;
-	const name = ref.split("/").pop();
-	const category = ref.split("/")[1];
-	const skills = path.join(marketplace, "skills");
-	const found = (category === "*" ? fs.existsSync(skills) ? fs.readdirSync(skills) : [] : [category]).find((c) => fs.existsSync(path.join(skills, c, name, "SKILL.md")));
-	return found ? `skills/${found}/${name}/SKILL.md` : `skills/${category}/${name}/SKILL.md`;
-}
-function sourceFiles(spec, marketplace) {
-	const refs = spec.source?.match(SOURCE_FILE) ?? [];
-	return [...new Set(refs.map((r) => r.startsWith("skills/") ? resolveSkill(r, marketplace) : r))].sort();
-}
-function fileHash(file) {
-	if (!fs.existsSync(file)) return null;
-	return crypto.createHash("sha256").update(fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n")).digest("hex").slice(0, 16);
-}
-function buildLock(specs, marketplace) {
-	const lock = {};
-	for (const spec of [...specs].sort((a, b) => a.name.localeCompare(b.name))) {
-		const files = sourceFiles(spec, marketplace);
-		if (files.length) lock[spec.name] = Object.fromEntries(files.map((f) => [f, fileHash(path.join(marketplace, f)) ?? "missing"]));
-	}
-	return lock;
-}
-function readLock(file = LOCK_FILE) {
-	return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
-}
-function staleWorkflows(lock, marketplace) {
-	return Object.entries(lock).flatMap(([workflow, files]) => {
-		const changed = [];
-		const missing = [];
-		for (const [file, hash] of Object.entries(files)) {
-			const now = fileHash(path.join(marketplace, file));
-			if (now === null) missing.push(file);
-			else if (now !== hash) changed.push(file);
-		}
-		return changed.length || missing.length ? [{
-			workflow,
-			changed,
-			missing
-		}] : [];
-	});
-}
-async function updateMarketplace(exec, marketplace) {
-	const git = async (...args) => {
-		const result = await exec("git", [
-			"-C",
-			marketplace,
-			...args
-		]);
-		if (result.code !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr.trim().slice(-300)}`);
-		return result.stdout.trim();
-	};
-	const branch = await git("branch", "--show-current");
-	if (branch !== "main") throw new Error(`${marketplace} is on '${branch || "a detached HEAD"}', not main; nothing was pulled. Switch it to main yourself or point FACTORY_MARKETPLACE_DIR at a main checkout.`);
-	if (await git("status", "--porcelain", "--untracked-files=no")) throw new Error(`${marketplace} has uncommitted changes; nothing was pulled.`);
-	const before = await git("rev-parse", "HEAD");
-	await git("fetch", "--quiet", "origin", "main");
-	await git("merge", "--ff-only", "origin/main");
-	const after = await git("rev-parse", "HEAD");
-	return {
-		marketplace,
-		before,
-		after,
-		changedFiles: before === after ? [] : (await git("diff", "--name-only", before, after)).split(/\r?\n/).filter(Boolean)
-	};
-}
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-	const marketplace = marketplaceDir();
-	const lock = buildLock(loadWorkflowSpecs(path.join(FACTORY_DIR, "workflows")), marketplace);
-	fs.writeFileSync(LOCK_FILE, `${JSON.stringify(lock, null, 2)}\n`);
-	console.log(`${Object.keys(lock).length} workflows locked against ${marketplace} in ${LOCK_FILE}`);
 }
 // app/data.ts
 var RUN_ID = /^r-[a-f0-9]{8}$/;
@@ -20473,20 +20840,30 @@ function createDataApi({ factoryDir, dataDir, configFile, demo }) {
 			};
 		},
 		stale() {
-			const marketplace = marketplaceDir();
-			return {
-				marketplace,
-				stale: staleWorkflows(readLock(), marketplace)
-			};
+			return scan(factoryDir);
 		},
 		async update() {
-			const marketplace = marketplaceDir();
 			return {
-				...await updateMarketplace(hostExec, marketplace),
-				stale: staleWorkflows(readLock(), marketplace)
+				...await updateMarketplace(hostExec, marketplaceDir()),
+				...scan(factoryDir)
 			};
 		}
 	};
+}
+function scan(factoryDir) {
+	const marketplace = marketplaceDir();
+	let head = "";
+	try {
+		head = execFileSync("git", [
+			"-C",
+			marketplace,
+			"rev-parse",
+			"HEAD"
+		], { encoding: "utf8" }).trim();
+	} catch {
+		head = "";
+	}
+	return scanMarketplace(loadWorkflowSpecs(path.join(factoryDir, "workflows")), readLock(), marketplace, head, (name) => describeAgent(name) !== null);
 }
 function apiMiddleware(api) {
 	return async (req, res, next) => {
@@ -20598,4 +20975,4 @@ function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHost
 		return true;
 	};
 }
-export { viewerOptions as _, hostExec as a, parseBackend as c, require_ajv as d, DEFAULT_VIEWER_PORT as f, registerDataSource as g, defaultDataDir as h, cliExecutor as i, parseCli as l, VIEWER_HEALTH as m, viewerHandler as n, Factory as o, FACTORY_DIR$1 as p, viewerUrlFor as r, errorMessage as s, allowedHostsFor as t, require_dist as u, __toESM as v };
+export { viewerOptions as _, hostExec as a, parseBackend as c, require_ajv as d, DEFAULT_VIEWER_PORT as f, registerDataSource as g, defaultDataDir as h, cliExecutor as i, parseCli as l, VIEWER_HEALTH as m, viewerHandler as n, Factory as o, FACTORY_DIR$2 as p, viewerUrlFor as r, errorMessage as s, allowedHostsFor as t, require_dist as u, __toESM as v };

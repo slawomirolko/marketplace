@@ -26,6 +26,7 @@ export function standaloneNames(specs: WorkflowSpec[], marketplace: string): Set
   }
   return new Set(specs.filter((s) => {
     const agent = owner.get(s.name);
+    if (s.source?.startsWith("factory ") && !specs.some((o) => o.nodes.some((n) => n.workflow === s.name))) return true;
     return agent !== null && agent !== undefined && !inner.has(s.name) && invokable(agent, marketplace);
   }).map((s) => s.name));
 }
