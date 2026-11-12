@@ -8,7 +8,7 @@ import type { ViewerState } from "./context.ts";
 import { Details } from "./Details.tsx";
 import { layoutGraph } from "./layout.ts";
 import { nodeAriaLabel, nodeTypes } from "./nodes.tsx";
-import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost, disabledKeys, configDisabledKeys, liveAncestors, liveState, LIVE_STATUSES, mainAgentOf } from "./tree.ts";
+import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost, disabledKeys, configDisabledKeys, liveAncestors, liveState, LIVE_STATUSES, mainAgentOf, containedWorkflows } from "./tree.ts";
 import type { AgentInfo, Bounds, FactoryConfig, FlowEdge, FlowNode, Item, Level, RunDetail, RunIndex, RunListItem, Workflow } from "./types.ts";
 
 const API = `${import.meta.env.BASE_URL}api`;
@@ -39,6 +39,21 @@ function FitToBounds({ bounds }: { bounds: Bounds | null }) {
   return null;
 }
 
+function WorkflowOptions({ workflows }: { workflows: Workflow[] }) {
+  const option = (w: Workflow) => (
+    <option key={w.name} value={w.name}>
+      {w.name} · {w.version} · {w.nodes.length} nodes
+    </option>
+  );
+  return (
+    <>
+      <optgroup label="Standalone (started by a primary agent)">{workflows.filter((w) => w.standalone).map(option)}</optgroup>
+      <hr />
+      <optgroup label="Parts (inlined or called by another workflow)">{workflows.filter((w) => !w.standalone).map(option)}</optgroup>
+    </>
+  );
+}
+
 function Viewer() {
   const [workflows, setWorkflows] = useState<Workflow[] | null>(null);
   const [config, setConfig] = useState<FactoryConfig | null>(null);
@@ -49,6 +64,7 @@ function Viewer() {
   const [mode, setMode] = useState<"runs" | "workflows">(params.get("mode") === "workflows" ? "workflows" : "runs");
   const [workflowName, setWorkflowName] = useState(params.get("workflow") ?? "olko-review");
   const [requestedRun] = useState(params.get("run"));
+  const [runFilter, setRunFilter] = useState(params.get("contains") ?? "");
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [selected, setSelected] = useState<Item | null>(null);
@@ -78,9 +94,20 @@ function Viewer() {
 
   useEffect(() => {
     const url = new URL(window.location.href);
-    url.search = mode === "workflows" ? `?mode=workflows&workflow=${encodeURIComponent(workflowName)}` : runId ? `?run=${encodeURIComponent(runId)}` : "";
+    const query = new URLSearchParams(mode === "workflows" ? { mode: "workflows", workflow: workflowName } : { ...(runFilter ? { contains: runFilter } : {}), ...(runId ? { run: runId } : {}) });
+    url.search = query.size ? `?${query.toString()}` : "";
     window.history.replaceState(null, "", url);
-  }, [mode, workflowName, runId]);
+  }, [mode, workflowName, runId, runFilter]);
+
+  const shownRuns = useMemo(() => {
+    if (!runFilter || !workflows) return runs;
+    return runs.filter((r) => r.workflow && containedWorkflows(workflows, r.workflow).has(runFilter));
+  }, [runs, runFilter, workflows]);
+  useEffect(() => {
+    if (mode !== "runs" || !runsLoaded) return;
+    if (!runId || shownRuns.some((r) => r.runId === runId)) return;
+    setRunId(shownRuns[0]?.runId ?? "");
+  }, [mode, runsLoaded, shownRuns, runId]);
 
   useEffect(() => {
     setSelected(null);
@@ -190,21 +217,17 @@ function Viewer() {
             <label>
               Workflow{" "}
               <select value={workflowName} onChange={(e) => setWorkflowName(e.target.value)}>
-                <optgroup label="Standalone (started by a primary agent)">
-                  {(workflows ?? []).filter((w) => w.standalone).map((w) => (
-                    <option key={w.name} value={w.name}>
-                      {w.name} · {w.version} · {w.nodes.length} nodes
-                    </option>
-                  ))}
-                </optgroup>
+                <WorkflowOptions workflows={workflows ?? []} />
+              </select>
+            </label>
+          )}
+          {mode === "runs" && (
+            <label>
+              Workflow{" "}
+              <select value={runFilter} onChange={(e) => setRunFilter(e.target.value)}>
+                <option value="">all workflows</option>
                 <hr />
-                <optgroup label="Parts (inlined or called by another workflow)">
-                  {(workflows ?? []).filter((w) => !w.standalone).map((w) => (
-                    <option key={w.name} value={w.name}>
-                      {w.name} · {w.version} · {w.nodes.length} nodes
-                    </option>
-                  ))}
-                </optgroup>
+                <WorkflowOptions workflows={workflows ?? []} />
               </select>
             </label>
           )}
@@ -213,7 +236,8 @@ function Viewer() {
             Run{" "}
             <select value={runId} onChange={(e) => setRunId(e.target.value)}>
               <option value="">no run (structure only)</option>
-              {runs.map((r) => (
+              {shownRuns.length === 0 && runFilter && <option value="" disabled>no run contains {runFilter}</option>}
+              {shownRuns.map((r) => (
                 <option key={r.runId} value={r.runId}>
                   {r.runId} · {r.status} · {r.harness ?? "?"} · {(r.usedModels.length ? r.usedModels : r.requestedModels).join(", ")}{r.usedModels.length ? "" : " (requested, none ran)"} · {formatAmount(r.costUsd, r.coverage)} · {r.goal}{r.synthetic ? " · fake model" : ""}{r.source && r.source !== "main" ? ` · ${r.source}` : ""}
                 </option>

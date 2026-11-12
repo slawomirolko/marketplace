@@ -153,6 +153,17 @@ export function costOf(item: Item, report: RunReport | null): Cost | null {
   return byNode[item.key] ?? null;
 }
 
+export function containedWorkflows(workflows: Workflow[], root: string): Set<string> {
+  const found = new Set<string>();
+  const visit = (name: string) => {
+    if (found.has(name)) return;
+    found.add(name);
+    for (const node of workflows.find((w) => w.name === name)?.nodes ?? []) if (node.workflow) visit(node.workflow);
+  };
+  visit(root);
+  return found;
+}
+
 export function mainAgentOf(workflow: Workflow | null): string | null {
   return workflow?.source?.match(/agents\/opencode\/([a-z0-9-]+)\.md/)?.[1] ?? null;
 }

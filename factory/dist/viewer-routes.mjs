@@ -20097,6 +20097,7 @@ function createDataApi({ factoryDir, dataDir, configFile, demo }) {
 				source,
 				runId: run.runId,
 				goal: run.goal,
+				workflow: report.workflow.split("@")[0] ?? report.workflow,
 				status: run.status,
 				createdAt: run.events[0]?.at ?? null,
 				costUsd: report.cost.costUsd,

@@ -77,3 +77,18 @@ test("a step counts as run only when it started; an agent only when it worked", 
   assert.equal(mainAgentOf({ source: "agents/opencode/olko-implementation-orchestrator.md (steps 1-11)" } as never), "olko-implementation-orchestrator");
   assert.equal(mainAgentOf({ source: "skills/*/olko-plan-editor" } as never), null);
 });
+
+test("a run contains its own workflow and every part it inlines or calls, at any depth", async () => {
+  const { containedWorkflows } = await import("../app/src/tree.ts");
+  const workflows = [
+    { name: "impl", nodes: [{ id: "review", kind: "call", workflow: "review" }, { id: "entry", kind: "group", workflow: "impl-entry" }] },
+    { name: "impl-entry", nodes: [{ id: "plan", kind: "call", workflow: "plan" }] },
+    { name: "plan", nodes: [{ id: "gate", kind: "call", workflow: "plan-gate" }] },
+    { name: "plan-gate", nodes: [] },
+    { name: "review", nodes: [] },
+    { name: "sync", nodes: [] },
+  ];
+  const inside = containedWorkflows(workflows as never, "impl");
+  assert.deepEqual([...inside].sort(), ["impl", "impl-entry", "plan", "plan-gate", "review"]);
+  assert.equal(containedWorkflows(workflows as never, "sync").has("review"), false);
+});
