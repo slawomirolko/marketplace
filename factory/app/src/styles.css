@@ -89,6 +89,14 @@ pre { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line
 .terminal { width: 100%; height: 100%; display: grid; place-items: center; border-radius: 20px; background: var(--fg); color: var(--bg); font-weight: 600; font-size: 12px; }
 .react-flow__edge-text { font-size: 11px; }
 
+@keyframes live-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(47, 111, 235, 0.55); } 50% { box-shadow: 0 0 0 8px rgba(47, 111, 235, 0); } }
+.card.live, .group.live { outline: 3px solid var(--accent); outline-offset: 2px; animation: live-pulse 1.6s ease-in-out infinite; }
+.card.waiting, .group.waiting { outline-color: #d97706; }
+.live-label { color: var(--accent); font-weight: 600; }
+.waiting .live-label { color: #d97706; }
+.live-bar { display: inline-flex; gap: 8px; align-items: center; font-size: 0.9em; }
+.live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); animation: live-pulse 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .card.live, .group.live, .live-dot { animation: none; } }
 .disabled { opacity: 0.45; filter: grayscale(1); border-style: dashed; }
 .disabled .card-title { text-decoration: line-through; }
 .off-label { font-style: italic; }

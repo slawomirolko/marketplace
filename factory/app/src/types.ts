@@ -169,6 +169,7 @@ export interface RunEvent {
   at: string;
   type: string;
   node?: string;
+  agentId?: string;
   error?: unknown;
   result?: string;
 }
@@ -187,7 +188,8 @@ export interface RunData {
   answers?: Record<string, string>;
   ledger: LedgerRecord[];
   events: RunEvent[];
-  pendingQuestion?: WorkflowQuestion | null;
+  pendingQuestion?: (WorkflowQuestion & { node?: string }) | null;
+  pendingWorkItems?: { nodePath: string; agentId: string }[];
 }
 
 export interface RunDetail {

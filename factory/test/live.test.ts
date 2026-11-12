@@ -1,0 +1,53 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { isLive, liveState } from "../app/src/tree.ts";
+import type { Item, RunData } from "../app/src/types.ts";
+
+function run(status: string, events: RunData["events"], extra: Partial<RunData> = {}): RunData {
+  return { runId: "r-1", goal: "g", status, ledger: [], events, ...extra };
+}
+
+const at = "2026-11-12T00:00:00Z";
+
+test("a running run shows the started node and only the agents that have not finished", () => {
+  const live = liveState(run("running", [
+    { at, type: "node_started", node: "wf/task" },
+    { at, type: "node_completed", node: "wf/task" },
+    { at, type: "node_started", node: "wf/workers" },
+    { at, type: "agent_started", node: "wf/workers", agentId: "flow" },
+    { at, type: "agent_started", node: "wf/workers", agentId: "test" },
+    { at, type: "agent_completed", node: "wf/workers", agentId: "flow" },
+  ]));
+  assert.deepEqual(live, { node: "wf/workers", agents: ["wf/workers#test"], waiting: null });
+});
+
+test("a finished run shows nothing as live", () => {
+  const live = liveState(run("done", [{ at, type: "node_started", node: "wf/task" }]));
+  assert.deepEqual(live, { node: null, agents: [], waiting: null });
+});
+
+test("a run waiting for the user points at the question node", () => {
+  const live = liveState(run("waiting_for_user", [{ at, type: "node_started", node: "wf/ask-commit" }], { pendingQuestion: { id: "q-impl-commit", text: "?", node: "wf/ask-commit" } }));
+  assert.equal(live.node, "wf/ask-commit");
+  assert.equal(live.waiting, "wf/ask-commit");
+});
+
+test("delegate work items count as working agents", () => {
+  const live = liveState(run("waiting_for_client", [{ at, type: "node_started", node: "wf/audit" }], { pendingWorkItems: [{ nodePath: "wf/audit", agentId: "dotnet" }] }));
+  assert.deepEqual(live.agents, ["wf/audit#dotnet"]);
+});
+
+test("a call is live while a node inside it runs, and an agent card only when it works", () => {
+  const live = liveState(run("running", [
+    { at, type: "node_started", node: "wf/review/review-scope" },
+    { at, type: "agent_started", node: "wf/review/lenses", agentId: "bugs" },
+  ]));
+  const call = { key: "wf/review", kind: "subgraph", node: { id: "review", kind: "call", workflow: "olko-review" }, inner: { items: [], edges: [] } } as unknown as Item;
+  const other = { key: "wf/scope-gate", kind: "node", node: { id: "scope-gate", kind: "script" } } as unknown as Item;
+  const bugs = { key: "wf/review/lenses#bugs", kind: "agent", nodePath: "wf/review/lenses", agent: { id: "bugs", role: "lens" } } as unknown as Item;
+  const idle = { key: "wf/review/lenses#dotnet", kind: "agent", nodePath: "wf/review/lenses", agent: { id: "dotnet", role: "lens" } } as unknown as Item;
+  assert.equal(isLive(call, live), true);
+  assert.equal(isLive(other, live), false);
+  assert.equal(isLive(bugs, live), true);
+  assert.equal(isLive(idle, live), false);
+});

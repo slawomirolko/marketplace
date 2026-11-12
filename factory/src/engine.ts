@@ -159,7 +159,10 @@ export class Factory {
   }
 
   checkpoint(run: Run): void {
-    fs.writeFileSync(path.join(this.dataDir, "runs", `${run.runId}.json`), JSON.stringify(run, null, 2));
+    const file = path.join(this.dataDir, "runs", `${run.runId}.json`);
+    const temp = `${file}.${process.pid}.tmp`;
+    fs.writeFileSync(temp, JSON.stringify(run, null, 2));
+    fs.renameSync(temp, file);
     if (run.status !== "running") this.notify(run);
   }
 
@@ -642,6 +645,7 @@ export class Factory {
         const tier = tierOf(config, agent);
         const model = config.tiers[tier];
         this.event(run, "agent_started", { node: node.path, agentId: agent.id, tier });
+        this.checkpoint(run);
         const result = await executor({ model, prompt: this.prompt(run, node, agent), agent: agent.agentName, cwd: workspace(run), configDir: run.input?.agentConfigDir, tools: node.tools ?? ["read"], dirs: this.dirs(run, node, agent) });
         run.steps += 1;
         if (!result.ok) {
@@ -677,6 +681,7 @@ export class Factory {
         }
         this.storeParsed(run, node, agent.id, result.text ?? "");
         this.event(run, "agent_completed", { node: node.path, agentId: agent.id, backend: `cli:${cli}` });
+        this.checkpoint(run);
       }));
     }
     if (failures.length) {

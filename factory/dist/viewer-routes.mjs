@@ -7664,7 +7664,7 @@ var implTask = async ({ input, state, nodeId }) => {
 	const pick = input.taskId ? tasks.find((f) => f.startsWith(input.taskId)) : tasks[0];
 	const taskFile = pick ? path.join(tasksDir, pick) : "";
 	const text = taskFile ? fs.readFileSync(taskFile, "utf8") : "";
-	const criteria = section(text, /acceptance criteria/i);
+	const criteria = section(text, /acceptance/i);
 	const ready = /ready for implementation:\s*\**\s*yes/i.test(text);
 	const reason = !featureId ? "no featureId in the input" : !pick ? `no approved Task plan in ${path.relative(root, tasksDir)}` : !criteria ? `${pick} has no acceptance criteria` : !ready ? `${pick} does not say Ready for implementation: yes` : "";
 	const ok = reason === "";
@@ -7962,12 +7962,18 @@ var implChecks = async ({ state, input, nodeId }) => {
 	const pass = failures.length === 0 && style.length > 0 && tests.length > 0;
 	const text = failures.map((f) => `${f.kind} ${f.id}: ${f.verdict} | ${f.detail}`).join("\n");
 	appendJournal(task.taskFile, `checks round ${round}: ${pass ? "style and tests pass" : text}`);
+	const inTests = (f) => f.kind === "style" && /Tests?\.(cs|ts|tsx|kt|py)\b|(^|[\s`(/])tests?\/|\.(test|spec)\.|test_\w+\.py/i.test(f.detail);
+	const testFailures = failures.filter(inTests);
+	const codeFailures = failures.filter((f) => !inTests(f));
+	const next = pass ? "pass" : round >= 4 ? "stop" : testFailures.length ? "fix-tests" : "fix";
+	const lineOf = (f) => `${f.kind} ${f.id}: ${f.verdict} | ${f.detail}`;
 	return {
 		state: {
 			round,
 			pass,
-			next: pass ? "pass" : round < 3 ? "fix" : "stop",
-			failures: text || "none",
+			next,
+			failures: codeFailures.map(lineOf).join("\n") || "none",
+			testFailures: testFailures.map(lineOf).join("\n") || "none",
 			reason: `style or tests still fail after ${round} rounds:\n${text}`
 		},
 		metrics: {
@@ -18959,7 +18965,10 @@ var Factory = class {
 		}
 	}
 	checkpoint(run) {
-		fs.writeFileSync(path.join(this.dataDir, "runs", `${run.runId}.json`), JSON.stringify(run, null, 2));
+		const file = path.join(this.dataDir, "runs", `${run.runId}.json`);
+		const temp = `${file}.${process.pid}.tmp`;
+		fs.writeFileSync(temp, JSON.stringify(run, null, 2));
+		fs.renameSync(temp, file);
 		if (run.status !== "running") this.notify(run);
 	}
 	notify(run) {
@@ -19572,7 +19581,7 @@ var Factory = class {
 					} : {},
 					tools: node.tools ?? ["read"],
 					dirs: this.dirs(run, node, agent),
-					cwd: workspace(run)
+					...run.workspace ? { cwd: run.workspace } : {}
 				};
 			});
 			run.pendingWorkItems = items;
@@ -19639,6 +19648,7 @@ var Factory = class {
 				agentId: agent.id,
 				tier
 			});
+			this.checkpoint(run);
 			const result = await executor({
 				model,
 				prompt: this.prompt(run, node, agent),
@@ -19690,6 +19700,7 @@ var Factory = class {
 				agentId: agent.id,
 				backend: `cli:${cli}`
 			});
+			this.checkpoint(run);
 		}));
 		if (failures.length) {
 			run.status = "failed";

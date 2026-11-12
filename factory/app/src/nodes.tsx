@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Handle, Position } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import { useViewer } from "./context.ts";
-import { formatTokens, formatUsd, isDisabled, isGroup } from "./tree.ts";
+import { formatTokens, formatUsd, isDisabled, isGroup, isLive } from "./tree.ts";
 import type { CardFlowNode, ClusterFlowNode, Item, RunIndexEntry, RunReport, TerminalFlowNode } from "./types.ts";
 
 const EMPTY_ENTRY: RunIndexEntry = { cost: null, tier: null, model: null, failure: null };
@@ -85,14 +85,23 @@ function useOff(item: Item): boolean {
   return isDisabled(item.key, useViewer().disabled);
 }
 
+function useLive(item: Item): { className: string; label: string | null } {
+  const { live } = useViewer();
+  if (item.kind === "terminal" || !isLive(item, live)) return { className: "", label: null };
+  const waiting = live.waiting !== null && (live.waiting === item.key || (item.kind !== "agent" && isLive(item, { node: live.waiting, agents: [], waiting: live.waiting })));
+  return { className: waiting ? "live waiting" : "live", label: waiting ? "waiting for your answer" : "running now" };
+}
+
 export function CardNode({ data, selected }: NodeProps<CardFlowNode>) {
   const { item } = data;
   const { tier, model } = useEntry(item);
   const off = useOff(item);
+  const live = useLive(item);
   return (
-    <div className={`card tier-${tier ?? "none"} kind-${item.kind} ${selected ? "selected" : ""} ${off ? "disabled" : ""}`} title={off ? "switched off in this run" : undefined}>
+    <div className={`card tier-${tier ?? "none"} kind-${item.kind} ${selected ? "selected" : ""} ${off ? "disabled" : ""} ${live.className}`} title={off ? "switched off in this run" : undefined}>
       <Handles />
       <div className="card-title">{title(item)}</div>
+      {live.label && <div className="card-sub live-label">● {live.label}</div>}
       {off && <div className="card-sub off-label">switched off</div>}
       <div className="card-sub">{subtitle(item)}</div>
       {item.kind !== "terminal" && item.kind !== "agent" && item.node.description && <div className="card-desc">{item.node.description}</div>}
@@ -106,11 +115,13 @@ export function CardNode({ data, selected }: NodeProps<CardFlowNode>) {
 export function GroupNode({ data, selected }: NodeProps<ClusterFlowNode>) {
   const { item } = data;
   const off = useOff(item);
+  const live = useLive(item);
   return (
-    <div className={`group kind-${item.kind} ${selected ? "selected" : ""} ${off ? "disabled" : ""}`} title={off ? "switched off in this run" : undefined}>
+    <div className={`group kind-${item.kind} ${selected ? "selected" : ""} ${off ? "disabled" : ""} ${live.className}`} title={off ? "switched off in this run" : undefined}>
       <Handles />
       <div className="group-header">
         <span className="card-title">{title(item)}</span>
+        {live.label && <span className="card-sub live-label"> ● {live.label}</span>}
         {off && <span className="card-sub off-label"> switched off</span>}
         <span className="card-sub"> {subtitle(item)}</span>
         {item.kind !== "terminal" && item.kind !== "agent" && item.node.description && <div className="card-desc">{item.node.description}</div>}

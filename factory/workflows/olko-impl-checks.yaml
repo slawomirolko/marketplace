@@ -19,7 +19,7 @@ nodes:
     role: runner
     skill: olko-commit-style
     tools: [read, bash]
-    maxVisits: 3
+    maxVisits: 4
     parse: impl.style
     prompt: |
       Check coding style of the files changed in this worktree against branch {{input.base}} (git diff {{input.base}}... and new files). Report only; do not change files, commit or push.
@@ -30,16 +30,16 @@ nodes:
     role: runner
     agentsFrom: state.stacks.runners
     tools: [read, bash]
-    maxVisits: 3
+    maxVisits: 4
     parse: impl.tests
     prompt: |
       Run the affected {{agent.id}} test scope for the changes in this worktree against branch {{input.base}}. Task plan: {{input.plan}}. Do not change any file.
       End with one line: `tests | <pass|fail> | <command and first actionable failure, or none>`
   - id: check
-    description: "Collects style and test results and decides: pass, fix, or stop after three rounds."
+    description: "Collects style and test results and decides: pass, style problems in test files to the test author, other failures to the implementers, or stop after four rounds."
     kind: script
     op: impl.checks
-    maxVisits: 3
+    maxVisits: 4
   - id: fix
     description: "The stack implementers fix the reported failures without touching the failing-test-first files."
     kind: llm
@@ -51,6 +51,17 @@ nodes:
     prompt: |
       Fix only these {{agent.id}} style or test failures in this worktree (Task plan {{input.plan}}). Do not change the failing-test-first tests, do not add comments or plan ids to code, do not touch CI/CD workflow files. When a failing test looks wrong, report `Test dispute:` instead of changing it.
       {{state.check.failures}}
+  - id: fix-tests
+    description: "olko-test-first-author fixes style problems in the test files without changing what the tests prove; implementers never touch tests."
+    kind: llm
+    role: implementer
+    agent: olko-test-first-author
+    tools: [read, edit, bash]
+    maxVisits: 2
+    parse: text.raw
+    prompt: |
+      Mode: style fix of your own tests. Task plan {{input.plan}}. Fix only these style problems in the test files of this worktree; keep every test proving the same criterion, never weaken an assertion, add no comments, change no production code, and run the changed tests.
+      {{state.check.testFailures}}
   - id: stop-checks
     description: "Stops: failures are reported, never waived."
     kind: script
@@ -61,6 +72,8 @@ edges:
   - { from: style, to: runners }
   - { from: runners, to: check }
   - { from: check, to: END, when: 'check.next == "pass"', description: "style and tests pass" }
-  - { from: check, to: fix, when: 'check.next == "fix"', description: "a check failed and fix rounds are left" }
-  - { from: check, to: stop-checks, description: "still failing after three rounds" }
+  - { from: check, to: fix-tests, when: 'check.next == "fix-tests"', description: "style problems in test files" }
+  - { from: check, to: fix, when: 'check.next == "fix"', description: "production code or tests fail" }
+  - { from: check, to: stop-checks, description: "still failing after four rounds" }
+  - { from: fix-tests, to: style }
   - { from: fix, to: style }

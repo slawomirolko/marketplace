@@ -278,8 +278,12 @@ const implChecks: Operation = async ({ state, input, nodeId }) => {
   const pass = failures.length === 0 && style.length > 0 && tests.length > 0;
   const text = failures.map((f) => `${f.kind} ${f.id}: ${f.verdict} | ${f.detail}`).join("\n");
   appendJournal(task.taskFile, `checks round ${round}: ${pass ? "style and tests pass" : text}`);
-  const next = pass ? "pass" : round < 3 ? "fix" : "stop";
-  return { state: { round, pass, next, failures: text || "none", reason: `style or tests still fail after ${round} rounds:\n${text}` }, metrics: { failures: failures.length, round }, output: pass ? "Style and affected tests pass." : `Round ${round}: ${failures.length} failing checks.\n${text}` };
+  const inTests = (f: { kind: string; detail: string }) => f.kind === "style" && /Tests?\.(cs|ts|tsx|kt|py)\b|(^|[\s`(/])tests?\/|\.(test|spec)\.|test_\w+\.py/i.test(f.detail);
+  const testFailures = failures.filter(inTests);
+  const codeFailures = failures.filter((f) => !inTests(f));
+  const next = pass ? "pass" : round >= 4 ? "stop" : testFailures.length ? "fix-tests" : "fix";
+  const lineOf = (f: { kind: string; id: string; verdict: string; detail: string }) => `${f.kind} ${f.id}: ${f.verdict} | ${f.detail}`;
+  return { state: { round, pass, next, failures: codeFailures.map(lineOf).join("\n") || "none", testFailures: testFailures.map(lineOf).join("\n") || "none", reason: `style or tests still fail after ${round} rounds:\n${text}` }, metrics: { failures: failures.length, round }, output: pass ? "Style and affected tests pass." : `Round ${round}: ${failures.length} failing checks.\n${text}` };
 };
 
 const implDocker: Operation = async ({ state, input }) => {
