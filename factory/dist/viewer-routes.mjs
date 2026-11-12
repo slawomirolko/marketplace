@@ -20003,6 +20003,30 @@ function standaloneNames(specs, marketplace) {
 		return agent !== null && agent !== void 0 && !inner.has(s.name) && invokable(agent, marketplace);
 	}).map((s) => s.name));
 }
+function workflowOfPaths(specs, root) {
+	const byName = new Map(specs.map((s) => [s.name, s]));
+	const paths = /* @__PURE__ */ new Map();
+	const walk = (name, prefix, stack) => {
+		const spec = byName.get(name);
+		if (!spec) return;
+		for (const node of spec.nodes) {
+			const key = `${prefix}/${node.id}`;
+			paths.set(key, name);
+			if (node.workflow && !stack.includes(node.workflow)) walk(node.workflow, node.kind === "group" ? prefix : key, [...stack, node.workflow]);
+		}
+	};
+	walk(root, root, [root]);
+	return paths;
+}
+function workflowsThatRan(specs, root, startedNodes) {
+	const paths = workflowOfPaths(specs, root);
+	const ran = /* @__PURE__ */ new Set();
+	for (const node of startedNodes) {
+		const name = paths.get(node);
+		if (name) ran.add(name);
+	}
+	return [...ran].sort();
+}
 // app/data.ts
 var RUN_ID = /^r-[a-f0-9]{8}$/;
 function readJson(file) {
@@ -20080,6 +20104,7 @@ function createDataApi({ factoryDir, dataDir, configFile, demo }) {
 			return /\.ya?ml$/i.test(configFile) ? (0, import_dist$1.parse)(text) : JSON.parse(text);
 		},
 		runs() {
+			const specs = loadWorkflowSpecs(path.join(factoryDir, "workflows"));
 			return allRunFiles().flatMap(({ file, source }) => {
 				try {
 					return [{
@@ -20098,6 +20123,7 @@ function createDataApi({ factoryDir, dataDir, configFile, demo }) {
 				runId: run.runId,
 				goal: run.goal,
 				workflow: report.workflow.split("@")[0] ?? report.workflow,
+				ran: workflowsThatRan(specs, report.workflow.split("@")[0] ?? report.workflow, run.events.filter((e) => e.type === "node_started" && typeof e.node === "string").map((e) => String(e.node))),
 				status: run.status,
 				createdAt: run.events[0]?.at ?? null,
 				costUsd: report.cost.costUsd,

@@ -201,6 +201,7 @@ export interface RunDetail {
 export interface RunListItem {
   source?: string;
   workflow?: string;
+  ran?: string[];
   runId: string;
   goal: string;
   status: string;

@@ -5,7 +5,7 @@ import { parse as parseYaml } from "yaml";
 import { Factory, errorMessage, runReport } from "../src/engine.ts";
 import { homeDataDir, readSources } from "../src/paths.ts";
 import { describeAgent, marketplaceDir } from "../src/marketplace-agents.ts";
-import { standaloneNames } from "../src/standalone.ts";
+import { standaloneNames, workflowsThatRan } from "../src/standalone.ts";
 import type { AgentInfo } from "../src/marketplace-agents.ts";
 import type { Coverage, FactoryConfigFile, Report, Run, WorkflowSpec } from "../src/types.ts";
 
@@ -31,6 +31,7 @@ export interface RunListItem {
   usedModels: string[];
   source: string;
   workflow: string;
+  ran: string[];
 }
 
 export interface RunDetail {
@@ -139,6 +140,7 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo }: DataApi
     },
 
     runs() {
+      const specs = loadWorkflowSpecs(path.join(factoryDir, "workflows"));
       return allRunFiles()
         .flatMap(({ file, source }) => {
           try {
@@ -153,6 +155,7 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo }: DataApi
           runId: run.runId,
           goal: run.goal,
           workflow: report.workflow.split("@")[0] ?? report.workflow,
+          ran: workflowsThatRan(specs, report.workflow.split("@")[0] ?? report.workflow, run.events.filter((e) => e.type === "node_started" && typeof e.node === "string").map((e) => String(e.node))),
           status: run.status,
           createdAt: run.events[0]?.at ?? null,
           costUsd: report.cost.costUsd,

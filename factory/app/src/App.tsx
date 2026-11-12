@@ -65,6 +65,7 @@ function Viewer() {
   const [workflowName, setWorkflowName] = useState(params.get("workflow") ?? "olko-review");
   const [requestedRun] = useState(params.get("run"));
   const [runFilter, setRunFilter] = useState(params.get("contains") ?? "");
+  const [onlyRan, setOnlyRan] = useState(params.get("ran") === "1");
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [selected, setSelected] = useState<Item | null>(null);
@@ -94,15 +95,15 @@ function Viewer() {
 
   useEffect(() => {
     const url = new URL(window.location.href);
-    const query = new URLSearchParams(mode === "workflows" ? { mode: "workflows", workflow: workflowName } : { ...(runFilter ? { contains: runFilter } : {}), ...(runId ? { run: runId } : {}) });
+    const query = new URLSearchParams(mode === "workflows" ? { mode: "workflows", workflow: workflowName } : { ...(runFilter ? { contains: runFilter } : {}), ...(runFilter && onlyRan ? { ran: "1" } : {}), ...(runId ? { run: runId } : {}) });
     url.search = query.size ? `?${query.toString()}` : "";
     window.history.replaceState(null, "", url);
-  }, [mode, workflowName, runId, runFilter]);
+  }, [mode, workflowName, runId, runFilter, onlyRan]);
 
   const shownRuns = useMemo(() => {
     if (!runFilter || !workflows) return runs;
-    return runs.filter((r) => r.workflow && containedWorkflows(workflows, r.workflow).has(runFilter));
-  }, [runs, runFilter, workflows]);
+    return runs.filter((r) => (onlyRan ? (r.ran ?? []).includes(runFilter) : Boolean(r.workflow) && containedWorkflows(workflows, r.workflow ?? "").has(runFilter)));
+  }, [runs, runFilter, onlyRan, workflows]);
   useEffect(() => {
     if (mode !== "runs" || !runsLoaded) return;
     if (!runId || shownRuns.some((r) => r.runId === runId)) return;
@@ -231,12 +232,17 @@ function Viewer() {
               </select>
             </label>
           )}
+          {mode === "runs" && runFilter && (
+            <label title="Off: every run whose workflow contains it. On: only runs in which at least one of its steps started.">
+              <input type="checkbox" checked={onlyRan} onChange={(e) => setOnlyRan(e.target.checked)} /> only where it ran
+            </label>
+          )}
           {mode === "runs" && (
           <label>
             Run{" "}
             <select value={runId} onChange={(e) => setRunId(e.target.value)}>
               <option value="">no run (structure only)</option>
-              {shownRuns.length === 0 && runFilter && <option value="" disabled>no run contains {runFilter}</option>}
+              {shownRuns.length === 0 && runFilter && <option value="" disabled>{onlyRan ? `no run where ${runFilter} ran` : `no run contains ${runFilter}`}</option>}
               {shownRuns.map((r) => (
                 <option key={r.runId} value={r.runId}>
                   {r.runId} · {r.status} · {r.harness ?? "?"} · {(r.usedModels.length ? r.usedModels : r.requestedModels).join(", ")}{r.usedModels.length ? "" : " (requested, none ran)"} · {formatAmount(r.costUsd, r.coverage)} · {r.goal}{r.synthetic ? " · fake model" : ""}{r.source && r.source !== "main" ? ` · ${r.source}` : ""}

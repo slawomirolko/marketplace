@@ -29,3 +29,29 @@ export function standaloneNames(specs: WorkflowSpec[], marketplace: string): Set
     return agent !== null && agent !== undefined && !inner.has(s.name) && invokable(agent, marketplace);
   }).map((s) => s.name));
 }
+
+export function workflowOfPaths(specs: WorkflowSpec[], root: string): Map<string, string> {
+  const byName = new Map(specs.map((s) => [s.name, s]));
+  const paths = new Map<string, string>();
+  const walk = (name: string, prefix: string, stack: string[]) => {
+    const spec = byName.get(name);
+    if (!spec) return;
+    for (const node of spec.nodes) {
+      const key = `${prefix}/${node.id}`;
+      paths.set(key, name);
+      if (node.workflow && !stack.includes(node.workflow)) walk(node.workflow, node.kind === "group" ? prefix : key, [...stack, node.workflow]);
+    }
+  };
+  walk(root, root, [root]);
+  return paths;
+}
+
+export function workflowsThatRan(specs: WorkflowSpec[], root: string, startedNodes: string[]): string[] {
+  const paths = workflowOfPaths(specs, root);
+  const ran = new Set<string>();
+  for (const node of startedNodes) {
+    const name = paths.get(node);
+    if (name) ran.add(name);
+  }
+  return [...ran].sort();
+}
