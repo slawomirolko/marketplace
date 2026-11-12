@@ -14,6 +14,10 @@
   --neutral: #eceff1;
   --neutral-line: #607d8b;
   --unknown: #b00020;
+  --scroll: #f6ecd2;
+  --scroll-roll: #e2cf9f;
+  --scroll-shine: #fbf4df;
+  --scroll-line: #a8864a;
   color-scheme: light;
 }
 
@@ -33,6 +37,10 @@
     --high-line: #ef7a7a;
     --neutral: #23272c;
     --neutral-line: #90a4ae;
+    --scroll: #2e2718;
+    --scroll-roll: #4a3d22;
+    --scroll-shine: #66553a;
+    --scroll-line: #b8975a;
     --unknown: #ff6b81;
     color-scheme: dark;
   }
@@ -76,6 +84,13 @@ pre { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line
 .card.tier-high { background: var(--high); border-color: var(--high-line); }
 .card.tier-mixed { background: linear-gradient(135deg, var(--medium), var(--low)); border-color: var(--medium-line); }
 .card.kind-missing { border-style: dashed; }
+.card.node-script {
+  background: linear-gradient(to bottom, var(--scroll-roll) 0, var(--scroll-shine) 4px, var(--scroll-roll) 8px, var(--scroll-line) 9px, var(--scroll) 10px, var(--scroll) calc(100% - 10px), var(--scroll-line) calc(100% - 9px), var(--scroll-roll) calc(100% - 8px), var(--scroll-shine) calc(100% - 4px), var(--scroll-roll) 100%);
+  border-color: var(--scroll-line);
+  border-radius: 14px / 6px;
+  padding: 13px 14px 12px;
+}
+.card.node-script .card-title::before { content: "\1F4DC\00a0"; }
 .card.selected, .group.selected { outline: 3px solid var(--accent); outline-offset: 2px; }
 .card-title { font-weight: 600; }
 .card-sub { color: var(--muted); font-size: 12px; }

@@ -102,7 +102,7 @@ export function CardNode({ data, selected }: NodeProps<CardFlowNode>) {
   const off = useOff(item);
   const live = useLive(item);
   return (
-    <div className={`card tier-${tier ?? "none"} kind-${item.kind} ${selected ? "selected" : ""} ${off ? "disabled" : ""} ${live.className}`} title={off ? "switched off in this run" : undefined}>
+    <div className={`card tier-${tier ?? "none"} kind-${item.kind} ${item.kind === "step" ? `node-${item.node.kind}` : ""} ${selected ? "selected" : ""} ${off ? "disabled" : ""} ${live.className}`} title={off ? "switched off in this run" : undefined}>
       <Handles />
       <div className="card-title">{title(item)}</div>
       {live.label && <div className="card-sub live-label">● {live.label}</div>}
