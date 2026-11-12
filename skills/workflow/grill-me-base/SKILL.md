@@ -17,12 +17,21 @@ Interview the user about a plan, design, or decision until both sides share the 
 3. Apply precedence: Configuration > Project Adapter > AGENTS.md > Marketplace Skill.
 4. Run with the defaults below when no higher-priority layer overrides them.
 
+## Language and decision recording
+
+- Read `userResponseLanguage` from `.agents/skill-config.md`. Use that language for every question, explanation, and user-facing response in the grill. If the user explicitly requests another language for the current conversation, that request overrides the configured default for that conversation.
+- When recording a user answer in a repository plan/tracker, use `userDecisionRecordLanguage` and `userDecisionRecordStyle`. Translate the decision into a concise, faithful statement in the configured language; preserve identifiers and any exact wording whose meaning or approval depends on the original. Do not add interpretation or change the decision while compressing it.
+- Defaults when unset: response language = detect from the user's current message; decision record language = repository documentation language; record style = concise translation.
+
 Recognized configuration keys:
 
 - `projectAdapter`: default `true`; controls loading the project adapter.
 - `conventionDiscovery`: default `false`; when `true`, inspect the repository to answer questions that the code can answer.
 - `grillQuestionMode`: default `single`; ask exactly one question per turn.
 - `grillExploration`: default `code-when-answerable`; inspect code instead of asking when the answer is discoverable and allowed.
+- `userResponseLanguage`: language for questions and user-facing grill responses; default `auto-detect`.
+- `userDecisionRecordLanguage`: language for concise tracker records of user decisions; default repository documentation language.
+- `userDecisionRecordStyle`: how to record user decisions; default `concise-translation`.
 
 ## Workflow
 

@@ -5,7 +5,7 @@
       "name": "grill-me-base",
       "category": "workflow",
       "origin": "vendored",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "description": "Interview the user one question at a time to stress-test a plan, design, or decision tree until shared understanding is reached. Minimal domain-agnostic vendored variant; reads project adapters when available and does not auto-load documentation skills. Triggers: 'grill', 'grill me', 'stress-test plan', 'challenge this design', 'grill-me-base'.",
       "tags": [
         "workflow",
@@ -25,7 +25,7 @@
       "name": "grill-with-docs",
       "category": "workflow",
       "origin": "vendored",
-      "version": "1.3.0",
+      "version": "1.5.0",
       "description": "A grilling session that stress-tests a plan against the project's documented domain model — sharpens fuzzy terminology, challenges it against the existing glossary, cross-references it with the code, and updates documentation (CONTEXT.md, ADRs) inline as decisions crystallize. The domain-aware variant of grill-me — use this instead when the repo has (or should have) a CONTEXT.md glossary or docs/adr/ decision records. Triggers include \"grill with docs\", \"stress-test this against our domain model\", \"does this match our language\", \"check this against our glossary\", \"grill this and update the docs\", or any time a non-trivial plan needs to be reconciled with the project's documented decisions.",
       "tags": [
         "workflow",
@@ -85,7 +85,7 @@
     {
       "name": "olko-feature-planner",
       "category": "workflow",
-      "version": "1.6.0",
+      "version": "1.7.0",
       "description": "Turn broad product outcomes into an Epic with business value and progress by Feature, then define user-facing Features and independently testable, one-PR Tasks. For implementation planning, return the complete accepted Feature/Task hierarchy to the orchestrator, which creates every Task plan in the same session.",
       "tags": [
         "workflow",
@@ -185,8 +185,8 @@
     {
       "name": "olko-implementation-closure",
       "category": "workflow",
-      "version": "1.0.0",
-      "description": "Post-merge steps 11, 11a, and 11b of olko-implementation-orchestrator: main-stack verification, Task plan removal, Feature completion audit, and Feature plan cleanup.",
+      "version": "1.1.0",
+      "description": "Post-merge steps 11, 12, 13, 12a, and 12b of olko-implementation-orchestrator: post-merge acceptance E2E, main-stack runtime verification, worktree cleanup, Task plan removal, Feature completion audit, and Feature plan cleanup.",
       "tags": [
         "workflow",
         "implementation"
@@ -203,7 +203,7 @@
     {
       "name": "olko-implementation-journal",
       "category": "workflow",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Implementation journal template and resume procedure for olko-implementation-orchestrator; load when creating the journal or resuming a Task.",
       "tags": [
         "workflow",
@@ -272,7 +272,7 @@
     {
       "name": "olko-plan-backlog-discovery",
       "category": "workflow",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Epic/Feature/Task discovery path of olko-plan-documentation-orchestrator: draft, one content review, approval-gated publish to YouTrack, and read-back.",
       "tags": [
         "workflow",
@@ -308,7 +308,7 @@
     {
       "name": "olko-plan-editor",
       "category": "workflow",
-      "version": "1.9.0",
+      "version": "1.11.0",
       "description": "Plan an accepted Feature in one session: create its business and technical plan plus one implementation plan file for every child Task; later implementation remains per Task. Also supports Epic plans and scoped Task-plan revisions.",
       "tags": [
         "workflow",

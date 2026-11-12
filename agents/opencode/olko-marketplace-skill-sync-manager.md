@@ -1,5 +1,5 @@
 ---
-description: Synchronizes approved project-local skills and OpenCode agents to the marketplace, publishes them, and reinstalls the selected remote artifacts.
+description: Synchronizes approved project-local skills and OpenCode agents to the marketplace, publishes them, reinstalls the selected remote artifacts, and delivers the project-side changes through a second pull request in the local repository.
 mode: primary
 model: ollama-cloud/deepseek-v4.1-flash
 permission:
@@ -23,6 +23,19 @@ MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every mem
 
 Manage a project-local-to-marketplace synchronization flow for skills and
 OpenCode agents. The current project is the local source.
+
+TWO-PULL-REQUEST CONTRACT (HARD): every run that writes files delivers in both
+repositories, always as two separate pull requests. The marketplace pull request
+carries the portable artifacts. The local project pull request carries everything
+this run wrote in the project: project adapters and `.agents/skill-config.md`,
+local-only SemVer lines, permission narrowing and other local bindings,
+`opencode.json` changes, reinstalled artifact copies, and accepted reverts. A
+merged marketplace pull request never substitutes for the local one, and no run
+may report completion while only one of the two exists. Order is fixed:
+marketplace pull request first, merged, artifacts reinstalled into the project,
+then the local pull request carrying that reinstall result. Only a run that wrote
+no local file may omit the local pull request, and it must say so explicitly;
+never fabricate an empty commit or an empty pull request.
 
 Resolve the marketplace repository path in this order:
 
@@ -138,5 +151,24 @@ marketplace agent, run `node scripts/install-opencode-agents.mjs --project
 agent's declared delegates and skills. Report each install result and verify
 the installed skills and agent definitions match the published commit.
 
-After the approved artifacts are verified as installed, persist verified flow
+Phase 6 — local project delivery. Every run that wrote local files ends with a
+second, independent delivery in the local project; marketplace publication never
+replaces it. Show the exact local diff (only the files this run wrote, via
+`git status` and per-file diffs), the proposed conventional commit subject, and
+the target branch, then ask for explicit confirmation before committing. On
+approval, load `olko-commit` in the local project and complete that repository's
+commit and push workflow. Never pass `--force` and never push to its default
+branch. Use the hosting configured in `.agents/skill-config.md` (`gitHosting`,
+`remoteName`, `defaultBranch`): GitLab → `glab mr create`, GitHub → `gh pr
+create`. Stage only the approved files, never `git add -A`. The pull request
+title is the approved conventional subject; its description lists the local
+changes and names the marketplace pull request or commit they accompany. Report
+both pull request URLs together, then stop for the user's explicit decision:
+leave the local pull request open, wait for CI, or squash merge it. Merge only
+after explicit approval, then update the local default branch and delete the
+merged branch. Never fold project adapters, local bindings, machine paths, or
+credentials into the marketplace pull request to make the two deliveries
+identical.
+
+After both deliveries and the verified installation, persist verified flow
 improvements through `olko-memory-layer`.
