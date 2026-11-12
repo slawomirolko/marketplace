@@ -266,3 +266,36 @@ edges:
   assert.equal(negateWhen("a.b != 3"), "a.b == 3");
   assert.throws(() => negateWhen("a.b > 3"), /== or !=/);
 });
+
+test("a group inlines another YAML file with its node ids unchanged and rejects an id used twice", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-yaml-"));
+  fs.writeFileSync(path.join(dir, "questions.yaml"), `
+name: questions
+version: 1.0.0
+entry: ask
+nodes:
+  - { id: ask, kind: interrupt, question: { id: q-a, text: "A?", allowed: [yes, no] } }
+  - { id: record, kind: script, op: builtin.pass }
+edges:
+  - { from: ask, to: record, when: 'ask.answer == "yes"' }
+  - { from: ask, to: END }
+  - { from: record, to: END }
+`);
+  fs.writeFileSync(path.join(dir, "main.yaml"), `
+name: main
+version: 1.0.0
+entry: intake
+nodes:
+  - { id: intake, kind: group, workflow: questions }
+  - { id: next, kind: script, op: builtin.pass }
+edges:
+  - { from: intake, to: next }
+  - { from: next, to: END }
+`);
+  const main = loadWorkflowDir(dir).get("main")!;
+  assert.equal(main.entry, "ask");
+  assert.deepEqual(main.nodes.map((n) => n.id).sort(), ["ask", "next", "record"]);
+  assert.deepEqual(main.edges.filter((e) => e.to === "next").map((e) => e.from).sort(), ["ask", "record"]);
+  fs.writeFileSync(path.join(dir, "main.yaml"), fs.readFileSync(path.join(dir, "main.yaml"), "utf8").replace("  - { id: next, kind: script, op: builtin.pass }", "  - { id: record, kind: script, op: builtin.pass }").replace(/next/g, "record"));
+  assert.throws(() => loadWorkflowDir(dir), /node id record is used twice/);
+});

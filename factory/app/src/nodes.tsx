@@ -32,7 +32,7 @@ function subtitle(item: Item): string {
   if (item.kind === "team") return `llm · ${item.inner.items.length} agents`;
   if (item.node.agentsFrom) return `llm · agents from ${item.node.agentsFrom}`;
   if (item.node.agent) return `llm · ${item.node.agent}`;
-  if (item.kind === "subgraph") return `${item.node.kind === "call" ? "call" : "subgraph"} · ${item.node.workflow}${item.node.enabledWhen ? ` · when ${item.node.enabledWhen}` : ""}`;
+  if (item.kind === "subgraph") return `${item.node.kind === "call" ? "call" : item.node.kind === "group" ? "group" : "subgraph"} · ${item.node.workflow}${item.node.enabledWhen ? ` · when ${item.node.enabledWhen}` : ""}`;
   if (item.node.skill) return `llm · skill ${item.node.skill}`;
   if (item.kind === "missing") return `subgraph · ${item.node.workflow} (not found)`;
   return item.node.role ? `${item.node.kind} · ${item.node.role}` : item.node.kind;

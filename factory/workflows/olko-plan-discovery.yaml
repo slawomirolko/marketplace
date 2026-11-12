@@ -1,0 +1,62 @@
+name: olko-plan-discovery
+version: 0.1.0
+source: "agents/opencode/olko-plan-documentation-orchestrator.md (DISCOVERY: backlog writer draft with question batches, one draft review, approval-gated tracker publish)"
+roles:
+  backlog: medium
+entry: draft
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: draft
+    kind: llm
+    role: backlog
+    agent: olko-feature-backlog-writer
+    maxVisits: 4
+    parse: plan.draft
+    prompt: |
+      Mode: draft. Do not write to the tracker. Idea: {{input.idea}}
+      Project: {{input.project}} (use its repository evidence to establish what exists and what should change).
+      Answers so far: {{state.draft-check.answered}}
+
+      When decisions remain open, return all currently answerable questions together. When the draft is ready, return no questions.
+      End with one ```json block: {"questions": ["<question>"], "feature": {"title": "", "goal": "", "criteria": [""]}, "tasks": [{"id": "T1", "title": "", "criteria": [""]}], "text": "<the Epic/Feature/Task hierarchy as markdown>"}
+  - id: draft-check
+    kind: script
+    op: plan.draftCheck
+    maxVisits: 4
+  - id: ask-questions
+    kind: interrupt
+    maxVisits: 3
+    question:
+      id: "q-plan-questions-{{state.draft-check.round}}"
+      text: "The backlog writer needs these answers, as one batch:\n{{state.draft-check.questions}}"
+  - id: ask-draft
+    kind: interrupt
+    maxVisits: 3
+    question:
+      id: "q-plan-draft-review-{{state.draft-check.round}}"
+      text: "Review the draft once:\n{{state.draft-check.draft.text}}"
+      allowed: [approve, revise]
+  - id: ask-revise
+    kind: interrupt
+    maxVisits: 3
+    question:
+      id: "q-plan-revise-{{state.draft-check.round}}"
+      text: "What should change in the draft?"
+  - id: tracker-publish
+    kind: subgraph
+    workflow: olko-plan-tracker-publish
+    enabledWhen: "switches.tracker == true"
+  - id: after-discovery
+    kind: script
+    op: builtin.pass
+edges:
+  - { from: draft, to: draft-check }
+  - { from: draft-check, to: ask-questions, when: "draft-check.ask == true" }
+  - { from: draft-check, to: ask-draft }
+  - { from: ask-questions, to: draft }
+  - { from: ask-draft, to: tracker-publish, when: 'ask-draft.answer == "approve"' }
+  - { from: ask-draft, to: ask-revise }
+  - { from: ask-revise, to: draft }
+  - { from: tracker-publish, to: after-discovery }
+  - { from: after-discovery, to: END }

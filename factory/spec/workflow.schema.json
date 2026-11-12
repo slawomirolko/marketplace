@@ -122,6 +122,7 @@
         "kind": {
           "enum": [
             "call",
+            "group",
             "interrupt",
             "llm",
             "map",
@@ -139,7 +140,8 @@
           "pattern": "^[a-z0-9-]+$"
         },
         "workflow": {
-          "$ref": "#/$defs/id"
+          "$ref": "#/$defs/id",
+          "description": "subgraph, call and group: the workflow to include. A group inlines it with its node ids unchanged (one shared state); a subgraph prefixes its ids; a call runs it with its own input and state."
         },
         "over": {
           "type": "string",
@@ -324,6 +326,20 @@
             "properties": {
               "kind": {
                 "const": "call"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "workflow"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "group"
               }
             }
           },

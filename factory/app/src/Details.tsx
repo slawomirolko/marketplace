@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useViewer } from "./context.ts";
 import { costOf, failureOf, formatAmount, formatTokens, formatUsd, ledgerOf, runFailure, tierOf } from "./tree.ts";
-import type { Item, LedgerRecord, TeamItem, WorkflowAgent, WorkflowItem } from "./types.ts";
+import type { Item, LedgerRecord, TeamItem, Workflow, WorkflowAgent, WorkflowItem } from "./types.ts";
 
 function kindLabel(item: WorkflowItem): string {
   if (item.kind === "team") return `llm, ${item.inner.items.length} agents`;
@@ -106,14 +106,26 @@ function group<T>(entries: [string, T][], format: (value: T, key: string) => Rea
   return entries.map(([k, v]) => <Row key={k} label={k} value={format(v, k)} />);
 }
 
+function allNodes(workflow: Workflow, workflows: Workflow[], prefix = "", seen: string[] = []): (Workflow["nodes"][number] & { at: string })[] {
+  return workflow.nodes.flatMap((n) => {
+    const here = { ...n, at: `${prefix}${n.id}` };
+    const inner = n.workflow ? workflows.find((w) => w.name === n.workflow) : undefined;
+    if (!inner || seen.includes(inner.name)) return [here];
+    return [here, ...allNodes(inner, workflows, n.kind === "group" ? prefix : `${prefix}${n.id}/`, [...seen, workflow.name])];
+  });
+}
+
 function WorkflowSummary() {
-  const { workflow, config } = useViewer();
+  const { workflow, config, workflows } = useViewer();
   if (!workflow) return <p className="muted">No workflow selected.</p>;
   const kinds = workflow.nodes.reduce<Record<string, number>>((acc, n) => ({ ...acc, [n.kind]: (acc[n.kind] ?? 0) + 1 }), {});
-  const agents = [...new Set(workflow.nodes.flatMap((n) => [n.agent, n.skill ? `skill ${n.skill}` : undefined, ...(n.agents ?? []).map((a) => (a as { agent?: string }).agent)]).filter((a): a is string => Boolean(a)))];
-  const loops = workflow.nodes.filter((n) => n.maxVisits).map((n) => `${n.id} (max ${n.maxVisits})`);
-  const switched = workflow.nodes.filter((n) => n.enabledWhen).map((n) => `${n.id}: ${n.enabledWhen}`);
-  const writers = workflow.nodes.filter((n) => n.tools?.some((t) => t !== "read")).map((n) => `${n.id}: ${n.tools!.join(", ")}`);
+  const nodes = allNodes(workflow, workflows);
+  const agents = [...new Set(nodes.flatMap((n) => [n.agent, n.skill ? `skill ${n.skill}` : undefined, ...(n.agents ?? []).map((a) => (a as { agent?: string }).agent)]).filter((a): a is string => Boolean(a)))];
+  const loops = nodes.filter((n) => n.maxVisits).map((n) => `${n.at} (max ${n.maxVisits})`);
+  const switched = nodes.filter((n) => n.enabledWhen).map((n) => `${n.at}: ${n.enabledWhen}`);
+  const writers = nodes.filter((n) => n.tools?.some((t) => t !== "read")).map((n) => `${n.at}: ${n.tools!.join(", ")}`);
+  const steps = nodes.filter((n) => !["group", "subgraph", "call"].includes(n.kind)).length;
+  const roles = Object.fromEntries(nodes.flatMap((n) => [n.role, ...(n.agents ?? []).map((a) => (a as { role?: string }).role)]).filter((r): r is string => Boolean(r)).map((r) => [r, r]));
   return (
     <section>
       <h2>{workflow.name}</h2>
@@ -121,10 +133,11 @@ function WorkflowSummary() {
       <Row label="Version" value={workflow.version} />
       {workflow.source && <Row label="Source" value={workflow.source} />}
       <Row label="Entry" value={workflow.entry} />
-      <Row label="Nodes" value={Object.entries(kinds).map(([k, v]) => `${v} ${k}`).join(", ")} />
+      <Row label="Nodes on this level" value={Object.entries(kinds).map(([k, v]) => `${v} ${k}`).join(", ")} />
+      <Row label="Steps in total (groups, subgraphs and calls expanded)" value={steps} />
       <Row label="Edges" value={workflow.edges.length} />
       <h3>Roles → tier</h3>
-      {Object.entries(workflow.roles ?? {}).map(([role, tier]) => <Row key={role} label={role} value={config?.roles?.[role] ?? `${tier} (workflow default)`} />)}
+      {Object.keys(roles).length ? Object.keys(roles).sort().map((role) => <Row key={role} label={role} value={config?.roles?.[role] ?? `${workflow.roles?.[role] ?? "?"} (workflow default)`} />) : <p className="muted">No LLM step.</p>}
       <h3>Agents and skills</h3>
       {agents.length ? agents.map((a) => <Row key={a} label={a} value="" />) : <p className="muted">None.</p>}
       <h3>Write access</h3>

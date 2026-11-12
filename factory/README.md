@@ -127,6 +127,9 @@ Every workflow is a YAML file in `workflows/` (`FACTORY_WORKFLOWS_DIR` changes t
 | `script` | `op` (a named operation), `with` (its arguments) | runs the operation, stores its result in `state.<node id>` |
 | `interrupt` | `question` (`id`, `text`, `allowed` or `allowedFrom: state.<path>`) | stops the run and asks the user; the answer goes to `state.<node id>.answer` |
 | `subgraph` | `workflow` | inlines that workflow; its node paths are `<workflow>/<node>/<sub-node>` |
+| `subgraph` with `enabledWhen` | `workflow`, `enabledWhen: switches.<name> == true` | a gate: the run enters the subgraph only when the switch holds, else goes straight to its exits; switches come from `config/factory.yaml` and run input `switches` |
+| `group` | `workflow` | inlines that workflow with its node ids unchanged (one shared state), so a long workflow can be split into phase files; the viewer shows each group as one expandable block |
+| `call` | `workflow`, `input` (Mustache) | runs that workflow with its own input, state and question ids (`<call>#<n>:`), once per visit, for example once per item of a loop |
 
 An edge has `from`, `to` (a node id or `END`) and an optional `when`: `<state path> <operator> <value>` with `==`, `!=`, `>`, `<`, `>=`, `<=`; a list compares by its length. The first edge whose condition holds is taken. A node that would run more often than `maxCycleIterations` fails the run.
 

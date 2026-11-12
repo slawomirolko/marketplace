@@ -1,0 +1,17 @@
+name: olko-plan-entry
+version: 0.1.0
+source: "agents/opencode/olko-plan-documentation-orchestrator.md (PLANNING entry gate: Feature context from the tracker or the approved draft; every Task needs acceptance criteria)"
+entry: tracker-context
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: tracker-context
+    kind: subgraph
+    workflow: olko-plan-tracker-context
+    enabledWhen: "switches.tracker == true"
+  - id: feature
+    kind: script
+    op: plan.feature
+edges:
+  - { from: tracker-context, to: feature }
+  - { from: feature, to: END }

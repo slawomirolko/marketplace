@@ -11,9 +11,10 @@ export interface ViewerState {
   disabled: string[];
   mode: "runs" | "workflows";
   workflow: Workflow | null;
+  workflows: Workflow[];
 }
 
-export const ViewerContext = createContext<ViewerState>({ config: null, report: null, run: null, toggle: () => {}, focusKey: null, index: null, disabled: [], mode: "runs", workflow: null });
+export const ViewerContext = createContext<ViewerState>({ config: null, report: null, run: null, toggle: () => {}, focusKey: null, index: null, disabled: [], mode: "runs", workflow: null, workflows: [] });
 
 export function useViewer(): ViewerState {
   return useContext(ViewerContext);

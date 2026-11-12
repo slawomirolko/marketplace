@@ -137,8 +137,29 @@ function expandSubgraphs(spec: WorkflowSpec, specs: Map<string, WorkflowSpec>, s
   let entry = spec.entry;
   const roles = { ...(spec.roles ?? {}) };
   for (const node of spec.nodes) {
-    if (node.kind !== "subgraph" && node.kind !== "call") {
+    if (node.kind !== "subgraph" && node.kind !== "call" && node.kind !== "group") {
       nodes.push(node);
+      continue;
+    }
+    if (node.kind === "group") {
+      const groupSpec = node.workflow ? specs.get(node.workflow) : undefined;
+      if (!groupSpec) throw new Error(`node ${node.id}: unknown group workflow ${node.workflow}`);
+      const group = expandSubgraphs(groupSpec, specs, [...seen, spec.name]);
+      const clash = group.nodes.find((n) => spec.nodes.some((o) => o.id === n.id) || nodes.some((o) => o.id === n.id));
+      if (clash) throw new Error(`group ${node.id}: node id ${clash.id} is used twice; a group keeps its node ids`);
+      nodes = nodes.concat(group.nodes);
+      for (const [role, tier] of Object.entries(group.roles ?? {})) roles[role] ??= tier;
+      const exits = edges.filter((e) => e.from === node.id);
+      const inner = group.edges.flatMap((e) => {
+        if (e.to !== "END") return [e];
+        return exits.map((x) => {
+          if (e.when && x.when) throw new Error(`group ${node.id}: both the inner edge from ${e.from} and the outer edge to ${x.to} have a condition`);
+          const when = e.when ?? x.when;
+          return { from: e.from, to: x.to, ...(when ? { when } : {}) };
+        });
+      });
+      edges = edges.filter((e) => e.from !== node.id).map((e) => (e.to === node.id ? { ...e, to: group.entry } : e)).concat(inner);
+      if (entry === node.id) entry = group.entry;
       continue;
     }
     const subSpec = node.workflow ? specs.get(node.workflow) : undefined;

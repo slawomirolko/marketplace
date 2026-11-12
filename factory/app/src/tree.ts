@@ -13,11 +13,11 @@ export function buildLevel(workflows: Workflow[], name: string, prefix = name, s
   const isRoot = stack.length === 1;
   const items: Item[] = workflow.nodes.map((node): Item => {
     const key = `${prefix}/${node.id}`;
-    if (node.kind === "subgraph" || node.kind === "map" || node.kind === "call") {
+    if (node.kind === "subgraph" || node.kind === "map" || node.kind === "call" || node.kind === "group") {
       const inner = node.workflow;
       const known = inner !== undefined && workflows.some((w) => w.name === inner) && !stack.includes(inner);
       if (!known) return { key, kind: "missing", node };
-      return { key, kind: "subgraph", node, inner: buildLevel(workflows, inner, key, [...stack, inner], report) };
+      return { key, kind: "subgraph", node, inner: buildLevel(workflows, inner, node.kind === "group" ? prefix : key, [...stack, inner], report) };
     }
     const declared: WorkflowAgent[] = node.agents ?? (node.agentsFrom ? Object.keys(report?.byNode?.[key]?.byAgent ?? {}).map((id) => ({ id })) : []);
     if (declared.length > 1 || (node.agentsFrom && declared.length > 0)) {
@@ -35,6 +35,12 @@ export function buildLevel(workflows: Workflow[], name: string, prefix = name, s
     edges.unshift({ from: START_KEY, to: `${prefix}/${workflow.entry}`, label: null });
   }
   return { items, edges };
+}
+
+export function descendantKeys(item: Item): string[] {
+  if (!isGroup(item)) return [item.key];
+  if (item.kind === "subgraph" && item.node.kind !== "group") return [item.key];
+  return item.inner.items.flatMap((i) => (i.kind === "terminal" ? [] : descendantKeys(i)));
 }
 
 export function disabledKeys(run: RunData | null): string[] {
@@ -69,7 +75,8 @@ export function costOf(item: Item, report: RunReport | null): Cost | null {
   const byNode = report?.byNode ?? {};
   if (item.kind === "agent") return byNode[item.nodePath]?.byAgent?.[item.agent.id] ?? null;
   if (item.kind === "subgraph") {
-    const parts = Object.entries(byNode).filter(([p]) => p.startsWith(`${item.key}/`)).map(([, c]) => c);
+    const inside = descendantKeys(item);
+    const parts = Object.entries(byNode).filter(([p]) => inside.some((k) => p === k || p.startsWith(`${k}/`))).map(([, c]) => c);
     if (parts.length === 0) return null;
     const sources = new Set(parts.map((c) => c.costSource));
     return {
@@ -96,7 +103,10 @@ export function tierOf(item: Item, config: FactoryConfig | null, report: RunRepo
 export function ledgerOf(item: Item, run: RunData | null): LedgerRecord[] {
   if (!run) return [];
   if (item.kind === "agent") return run.ledger.filter((r) => r.nodePath === item.nodePath && r.agentId === item.agent.id);
-  if (item.kind === "subgraph") return run.ledger.filter((r) => r.nodePath.startsWith(`${item.key}/`));
+  if (item.kind === "subgraph") {
+    const inside = descendantKeys(item);
+    return run.ledger.filter((r) => inside.some((k) => r.nodePath === k || r.nodePath.startsWith(`${k}/`)));
+  }
   return run.ledger.filter((r) => r.nodePath === item.key);
 }
 

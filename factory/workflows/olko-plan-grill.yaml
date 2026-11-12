@@ -1,0 +1,99 @@
+name: olko-plan-grill
+version: 0.1.0
+source: "agents/opencode/olko-plan-documentation-orchestrator.md (Step 7: grill-with-docs question batches, answers applied together, re-validation by the workers, consistency gate)"
+roles:
+  plan-worker: medium
+  planner: high
+entry: grill
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: grill
+    kind: llm
+    role: planner
+    skill: grill-with-docs
+    maxVisits: 4
+    parse: plan.grill
+    prompt: |
+      Grill the plan package {{state.feature.featureDir}} (business.md, implementation.md, stack.md and the Task files) in the project {{input.project}} against the project's docs and code. Read only.
+      Answers already given: {{state.grill-answers.text}}
+      Gather every currently answerable question (business scope, mechanism, delivery, risks, non-goals, acceptance criteria, assumptions) as ONE batch; on a later round return only follow-up questions the answers raised, or none. Do not ask the user yourself.
+      End with one ```json block: {"questions": [{"problem": "", "why": "", "options": [{"label": "<recommended>", "business": "", "scope": ""}, {"label": "", "business": "", "scope": ""}, {"label": "", "business": "", "scope": ""}], "glossary": ""}]}
+  - id: grill-questions
+    kind: script
+    op: plan.grillQuestions
+    maxVisits: 4
+  - id: grill-next
+    kind: script
+    op: list.next
+    maxVisits: 100
+    with: { over: grill-questions.questions }
+  - id: ask-grill
+    kind: interrupt
+    maxVisits: 100
+    question:
+      id: "q-plan-grill-{{state.grill-questions.round}}-{{state.grill-next.index}}"
+      text: "Grill question {{state.grill-next.number}} of {{state.grill-next.total}} (the whole batch is answered before anything changes):\n{{state.grill-next.item.text}}"
+      allowed: ["1", "2", "3"]
+  - id: grill-answers
+    kind: script
+    op: plan.answers
+    maxVisits: 4
+    with: { from: grill-questions, prefix: q-plan-grill- }
+  - id: grill-apply
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    maxVisits: 4
+    parse: text.raw
+    prompt: |
+      Apply ALL these grill answers together to the plan package {{state.feature.featureDir}} (project {{input.project}}) and record the batch, its answers and its closure in tracker.md. Edit only that folder.
+      {{state.grill-answers.text}}
+  - id: revalidate
+    kind: llm
+    role: plan-worker
+    maxVisits: 4
+    agents:
+      - { id: flow, agent: olko-investigation-flow-worker }
+      - { id: runtime, agent: olko-investigation-runtime-worker }
+      - { id: test, agent: olko-investigation-test-worker }
+      - { id: readiness, agent: olko-investigation-readiness-worker }
+    parse: plan.findings
+    prompt: |
+      Re-validation after decisions: verify every new or changed claim in {{state.feature.featureDir}} (project {{input.project}}) against the codebase with file:line evidence. Read only.
+      End with one line: `findings | <none|found> | <count> | <unverified or false claims, semicolon separated>`.
+  - id: reval-findings
+    kind: script
+    op: plan.findings
+    maxVisits: 4
+    with: { from: revalidate }
+  - id: fold-reval
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    maxVisits: 4
+    parse: text.raw
+    prompt: |
+      Fold only these verified re-validation findings into {{state.feature.featureDir}} (project {{input.project}}); edit only that folder.
+      {{state.reval-findings.text}}
+  - id: gate-grill
+    kind: call
+    workflow: olko-plan-gate
+    maxVisits: 4
+    input: { featureDir: "{{state.feature.featureDir}}" }
+edges:
+  - { from: grill, to: grill-questions }
+  - { from: grill-questions, to: grill-next, when: "grill-questions.count > 0" }
+  - { from: grill-questions, to: END }
+  - { from: grill-next, to: ask-grill, when: "grill-next.done == false" }
+  - { from: grill-next, to: grill-answers }
+  - { from: ask-grill, to: grill-next }
+  - { from: grill-answers, to: grill-apply }
+  - { from: grill-apply, to: revalidate }
+  - { from: revalidate, to: reval-findings }
+  - { from: reval-findings, to: fold-reval, when: "reval-findings.total > 0" }
+  - { from: reval-findings, to: gate-grill }
+  - { from: fold-reval, to: gate-grill }
+  - { from: gate-grill, to: grill }

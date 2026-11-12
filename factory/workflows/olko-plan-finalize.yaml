@@ -1,0 +1,56 @@
+name: olko-plan-finalize
+version: 0.1.0
+source: "agents/opencode/olko-plan-documentation-orchestrator.md (Steps 8c-11: tracker triage, Domain changes recommendation, memory, editor, scope check, completion report)"
+roles:
+  plan-gate: medium
+  plan-worker: medium
+entry: tracker-triage
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: tracker-triage
+    kind: subgraph
+    workflow: olko-plan-tracker-triage
+    enabledWhen: "switches.tracker == true"
+  - id: knowledge-final
+    kind: llm
+    role: plan-worker
+    agent: olko-obsidian-knowledge-manager
+    parse: text.raw
+    prompt: |
+      Write-free post-implementation Obsidian recommendation for the approved plan {{state.feature.featureDir}} (project {{input.project}}): list the affected note paths, whether each needs creation or an update, and the related mechanism. Do not change the vault.
+  - id: domain
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    tools: [read, edit]
+    parse: text.raw
+    prompt: |
+      Do only step 9 of olko-plan-finalization: add or replace the `## Domain changes` section of {{state.feature.featureDir}}/business.md (project {{input.project}}) from this verified recommendation, stating that vault changes stay separately approval-gated after implementation. Edit only that section.
+      {{state.knowledge-final.knowledge-final}}
+  - id: memory
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    tools: [read, edit]
+    parse: text.raw
+    prompt: |
+      Do only step 10 of olko-plan-finalization in the project {{input.project}}: append verified flow improvements from this planning run to your own memory block .opencode/memory/olko-plan-documentation-orchestrator.md (create it when missing), then update the gate status in {{state.feature.featureDir}}/tracker.md. Edit only those two files.
+  - id: editor
+    kind: subgraph
+    workflow: olko-plan-editor-open
+    enabledWhen: "switches.editor == true"
+  - id: scope-check
+    kind: script
+    op: plan.scopeCheck
+  - id: report
+    kind: script
+    op: plan.report
+edges:
+  - { from: tracker-triage, to: knowledge-final }
+  - { from: knowledge-final, to: domain }
+  - { from: domain, to: memory }
+  - { from: memory, to: editor }
+  - { from: editor, to: scope-check }
+  - { from: scope-check, to: report }
+  - { from: report, to: END }

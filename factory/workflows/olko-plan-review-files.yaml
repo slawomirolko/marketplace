@@ -1,0 +1,48 @@
+name: olko-plan-review-files
+version: 0.1.0
+source: "agents/opencode/olko-plan-documentation-orchestrator.md (Step 6a: olko-review PLAN route once per plan file, confirmed findings folded, consistency gate)"
+roles:
+  planner: high
+entry: plan-files
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: plan-files
+    kind: script
+    op: plan.files
+  - id: plan-next
+    kind: script
+    op: list.next
+    maxVisits: 50
+    with: { over: plan-files.files }
+  - id: plan-review
+    kind: call
+    workflow: olko-review
+    maxVisits: 50
+    input: { plan: "{{state.plan-next.item.path}}", criteria: "{{state.plan-next.item.criteria}}" }
+  - id: plan-collect
+    kind: script
+    op: plan.reviewCollect
+    maxVisits: 50
+  - id: fold-review
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    parse: text.raw
+    prompt: |
+      Fold every confirmed plan review finding below into the plan files it names (project {{input.project}}, folder {{state.feature.featureDir}}), and record the review result in tracker.md. Edit only that folder.
+      {{state.plan-collect.text}}
+  - id: gate-review
+    kind: call
+    workflow: olko-plan-gate
+    input: { featureDir: "{{state.feature.featureDir}}" }
+edges:
+  - { from: plan-files, to: plan-next }
+  - { from: plan-next, to: plan-review, when: "plan-next.done == false" }
+  - { from: plan-next, to: fold-review, when: "plan-collect.confirmed > 0" }
+  - { from: plan-next, to: END }
+  - { from: plan-review, to: plan-collect }
+  - { from: plan-collect, to: plan-next }
+  - { from: fold-review, to: gate-review }
+  - { from: gate-review, to: END }

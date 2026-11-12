@@ -1,0 +1,80 @@
+name: olko-plan-readiness
+version: 0.1.0
+source: "agents/opencode/olko-plan-documentation-orchestrator.md (Steps 8-8b: cleanup, consistency gate, blocker batches until every plan is ready)"
+roles:
+  plan-gate: medium
+  planner: high
+entry: cleanup
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: cleanup
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    parse: text.raw
+    prompt: |
+      Step 8 cleanup of {{state.feature.featureDir}}/implementation.md and the Task files (project {{input.project}}): remove denied, rejected, superseded or unchosen options only after checking their approved replacement is concrete; keep scope, ordered actions, validation, acceptance criteria and blockers. Update tracker.md with the final decisions. Edit only that folder.
+  - id: gate-cleanup
+    kind: call
+    workflow: olko-plan-gate
+    input: { featureDir: "{{state.feature.featureDir}}" }
+  - id: readiness
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    maxVisits: 4
+    parse: plan.grill
+    prompt: |
+      Do only the read of step 8b for {{state.feature.featureDir}} (project {{input.project}}): read `## Implementation readiness` and `## Open items` of implementation.md and every Task file. Read only; do not delegate or ask.
+      Return every BLOCKING item as a question with exactly 3 options (the first recommended); return no questions when every plan says `Ready for implementation: yes`.
+      End with one ```json block: {"questions": [{"problem": "", "why": "", "options": [{"label": "", "business": "", "scope": ""}, {"label": "", "business": "", "scope": ""}, {"label": "", "business": "", "scope": ""}]}]}
+  - id: readiness-check
+    kind: script
+    op: plan.readiness
+    maxVisits: 4
+  - id: blocker-next
+    kind: script
+    op: list.next
+    maxVisits: 100
+    with: { over: readiness-check.questions }
+  - id: ask-blocker
+    kind: interrupt
+    maxVisits: 100
+    question:
+      id: "q-plan-blocker-{{state.readiness-check.round}}-{{state.blocker-next.index}}"
+      text: "Blocker {{state.blocker-next.number}} of {{state.blocker-next.total}}:\n{{state.blocker-next.item.text}}"
+      allowed: ["1", "2", "3"]
+  - id: blocker-answers
+    kind: script
+    op: plan.answers
+    maxVisits: 4
+    with: { from: readiness-check, prefix: q-plan-blocker- }
+  - id: blocker-apply
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    maxVisits: 4
+    parse: text.raw
+    prompt: |
+      Apply ALL these blocker decisions together to {{state.feature.featureDir}} (project {{input.project}}), refresh `## Implementation readiness`, and record them as locked decisions in tracker.md. Edit only that folder.
+      {{state.blocker-answers.text}}
+  - id: gate-blocker
+    kind: call
+    workflow: olko-plan-gate
+    maxVisits: 4
+    input: { featureDir: "{{state.feature.featureDir}}" }
+edges:
+  - { from: cleanup, to: gate-cleanup }
+  - { from: gate-cleanup, to: readiness }
+  - { from: readiness, to: readiness-check }
+  - { from: readiness-check, to: blocker-next, when: "readiness-check.count > 0" }
+  - { from: readiness-check, to: END }
+  - { from: blocker-next, to: ask-blocker, when: "blocker-next.done == false" }
+  - { from: blocker-next, to: blocker-answers }
+  - { from: ask-blocker, to: blocker-next }
+  - { from: blocker-answers, to: blocker-apply }
+  - { from: blocker-apply, to: gate-blocker }
+  - { from: gate-blocker, to: readiness }
