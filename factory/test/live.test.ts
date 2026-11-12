@@ -51,3 +51,16 @@ test("a call is live while a node inside it runs, and an agent card only when it
   assert.equal(isLive(bugs, live), true);
   assert.equal(isLive(idle, live), false);
 });
+
+test("a group's cost includes its multi-agent nodes", async () => {
+  const { buildLevel, costOf } = await import("../app/src/tree.ts");
+  const cost = (costUsd: number) => ({ costUsd, tokens: 10, cacheTokens: 0, steps: 1, llmSteps: 1, unknownSteps: 0, costSource: "measured", byAgent: {} });
+  const workflows = [
+    { name: "root", version: "1", entry: "phase", nodes: [{ id: "phase", kind: "group", workflow: "inner" }], edges: [{ from: "phase", to: "END" }] },
+    { name: "inner", version: "1", entry: "workers", nodes: [{ id: "workers", kind: "llm", agents: [{ id: "flow" }, { id: "test" }] }, { id: "gate", kind: "script" }], edges: [{ from: "workers", to: "gate" }, { from: "gate", to: "END" }] },
+  ];
+  const report = { byNode: { "root/workers": cost(0.25), "root/gate": cost(0) } };
+  const level = buildLevel(workflows as never, "root", "root", ["root"], report as never);
+  const phase = level.items.find((i) => i.key === "root/phase")!;
+  assert.equal(costOf(phase, report as never)?.costUsd, 0.25);
+});

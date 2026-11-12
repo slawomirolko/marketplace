@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Handle, Position } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import { useViewer } from "./context.ts";
-import { formatTokens, formatUsd, isDisabled, isGroup, isLive } from "./tree.ts";
+import { formatTokens, formatUsd, isDisabled, isGroup, isLive, ranIn } from "./tree.ts";
 import type { CardFlowNode, ClusterFlowNode, Item, RunIndexEntry, RunReport, TerminalFlowNode } from "./types.ts";
 
 const EMPTY_ENTRY: RunIndexEntry = { cost: null, tier: null, model: null, failure: null };
@@ -45,10 +45,14 @@ export function nodeAriaLabel(item: Item, report: RunReport | null, entry: RunIn
 }
 
 function CostLine({ item }: { item: Item }) {
-  const { report } = useViewer();
+  const { report, run } = useViewer();
   const { cost, failure } = useEntry(item);
   if (!report) return null;
   if (failure) return <div className="cost cost-unknown">failed: {failure.slice(0, 90)}</div>;
+  if (!cost && ranIn(item, run)) return <div className="cost muted">ran · no model cost</div>;
+  if (cost && item.kind === "step" && (item.node.kind === "script" || item.node.kind === "interrupt") && cost.costUsd === 0) {
+    return <div className="cost muted">{item.node.kind === "interrupt" ? "question" : "script"} · no model cost</div>;
+  }
   return (
     <div className={`cost ${cost?.costSource === "unknown" ? "cost-unknown" : ""}`}>
       <strong>{formatUsd(cost)}</strong>

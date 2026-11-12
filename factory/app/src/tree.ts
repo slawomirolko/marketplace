@@ -46,7 +46,7 @@ export function buildLevel(workflows: Workflow[], name: string, prefix = name, s
 }
 
 export function descendantKeys(item: Item): string[] {
-  if (!isGroup(item)) return [item.key];
+  if (!isGroup(item) || item.kind === "team") return [item.key];
   if (item.kind === "subgraph" && item.node.kind !== "group") return [item.key];
   return item.inner.items.flatMap((i) => (i.kind === "terminal" ? [] : descendantKeys(i)));
 }
@@ -151,6 +151,12 @@ export function costOf(item: Item, report: RunReport | null): Cost | null {
     };
   }
   return byNode[item.key] ?? null;
+}
+
+export function ranIn(item: Item, run: RunData | null): boolean {
+  if (!run || item.kind === "terminal") return false;
+  const keys = item.kind === "agent" ? [item.nodePath] : [item.key, ...descendantKeys(item)];
+  return run.events.some((e) => e.type === "node_started" && typeof e.node === "string" && keys.some((k) => e.node === k || e.node!.startsWith(`${k}/`)));
 }
 
 export function tierOf(item: Item, config: FactoryConfig | null, report: RunReport | null): string | null {

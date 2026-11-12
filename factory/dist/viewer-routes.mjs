@@ -7840,7 +7840,7 @@ var implTestsFirst = async ({ state, input, answers, nodeId, exec, cwd }) => {
 		for (const file of await changed(exec, cwd, baseOf(state, input))) if (TEST_PATH.test(file.path)) testFiles[file.path] = hashFile(path.join(cwd, file.path));
 	}
 	appendJournal(task.taskFile, `failing tests first, round ${round}: ${count} tests written (${Object.keys(testFiles).join(", ") || "no test file changed"}); open items: ${open.length}`);
-	const next = open.length === 0 ? "done" : round < 2 ? "ask" : "stop";
+	const next = open.length === 0 ? "done" : round < 3 ? "ask" : "stop";
 	return {
 		state: {
 			round,
