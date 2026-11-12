@@ -83,9 +83,42 @@
       }
     },
     {
+      "name": "olko-feature-plan-workflow",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Feature/Epic implementation planning lifecycle: Feature pair plus one plan per child Task, batched revalidation, plan review, E2E matrix authoring, and readiness gates.",
+      "tags": [
+        "workflow",
+        "plan",
+        "feature"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.plan.feature-workflow"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
       "name": "olko-feature-planner",
       "category": "workflow",
-      "version": "1.7.0",
+      "version": "1.8.0",
       "description": "Turn broad product outcomes into an Epic with business value and progress by Feature, then define user-facing Features and independently testable, one-PR Tasks. For implementation planning, return the complete accepted Feature/Task hierarchy to the orchestrator, which creates every Task plan in the same session.",
       "tags": [
         "workflow",
@@ -308,7 +341,7 @@
     {
       "name": "olko-plan-editor",
       "category": "workflow",
-      "version": "1.11.0",
+      "version": "1.11.1",
       "description": "Plan an accepted Feature in one session: create its business and technical plan plus one implementation plan file for every child Task; later implementation remains per Task. Also supports Epic plans and scoped Task-plan revisions.",
       "tags": [
         "workflow",
@@ -421,6 +454,39 @@
       "capabilities": [
         "workflow",
         "workflow.summary"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
+      "name": "olko-task-implementation-workflow",
+      "category": "workflow",
+      "version": "1.0.0",
+      "description": "Ordered single-Task implementation contract: baseline E2E, preflight, failing tests first, exclusive chunks, verification, PR, merge, post-merge E2E, and closure.",
+      "tags": [
+        "workflow",
+        "implementation",
+        "task"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.implementation.task"
       ],
       "cost": 1,
       "files": [
