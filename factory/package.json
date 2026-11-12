@@ -10,7 +10,8 @@
   "scripts": {
     "server": "node src/server.ts",
     "typecheck": "tsc -p tsconfig.json && tsc -p app/tsconfig.json",
-    "test": "node --test test/*.test.ts",
+    "test": "node --test test/*[!n].test.ts",
+    "test:integration": "node --test test/*_integration.test.ts",
     "test:scenario": "node test/scenario.ts",
     "viewer": "pnpm --dir app run dev",
     "viewer:build": "pnpm --dir app run build",

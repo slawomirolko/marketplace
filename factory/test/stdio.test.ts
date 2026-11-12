@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -10,7 +11,12 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 const factoryDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const entry = path.resolve(factoryDir, process.env.FACTORY_STDIO_ENTRY ?? "dist/stdio.mjs");
-const port = 7351;
+const port = await new Promise<number>((resolve) => {
+  const probe = net.createServer().listen(0, "127.0.0.1", () => {
+    const { port: free } = probe.address() as net.AddressInfo;
+    probe.close(() => resolve(free));
+  });
+});
 
 type Payload = Record<string, unknown> & { runId?: string; status?: string; viewerUrl?: string; pendingQuestion?: { id: string } };
 

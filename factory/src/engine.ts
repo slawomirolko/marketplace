@@ -596,7 +596,7 @@ export class Factory {
           ...(definition ? { agentName: definition.name, agentDescription: definition.description, agentInstructions: definition.prompt } : {}),
           tools: node.tools ?? ["read"],
           dirs: this.dirs(run, node, agent),
-          cwd: workspace(run),
+          ...(run.workspace ? { cwd: run.workspace } : {}),
         };
       });
       run.pendingWorkItems = items;

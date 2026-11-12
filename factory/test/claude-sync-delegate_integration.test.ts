@@ -125,7 +125,7 @@ test("a harness drives the YAML claude sync over stdio in delegate mode: three i
         const items = status.pendingWorkItems as Payload[];
         for (const work of items) assert.ok(work.agentName && work.agentInstructions && Array.isArray(work.tools) && Array.isArray(work.dirs), `pendingWork for ${work.nodePath} carries agent, tools and dirs`);
         batches.push(items);
-        const results = await Promise.all(items.map((w) => runSubagent(w, olko)));
+        const results = await Promise.all(items.map((w) => runSubagent(w, (w.cwd as string | undefined) ?? olko)));
         for (const [i, work] of items.entries()) {
           const result = results[i]!;
           submitted.push({ agentName: work.agentName, usage: result.usage });

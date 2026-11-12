@@ -122,7 +122,7 @@ const implTask: Operation = async ({ input, state, nodeId }) => {
   const pick = input.taskId ? tasks.find((f) => f.startsWith(input.taskId!)) : tasks[0];
   const taskFile = pick ? path.join(tasksDir, pick) : "";
   const text = taskFile ? fs.readFileSync(taskFile, "utf8") : "";
-  const criteria = section(text, /acceptance criteria/i);
+  const criteria = section(text, /acceptance/i);
   const ready = /ready for implementation:\s*\**\s*yes/i.test(text);
   const reason = !featureId ? "no featureId in the input" : !pick ? `no approved Task plan in ${path.relative(root, tasksDir)}` : !criteria ? `${pick} has no acceptance criteria` : !ready ? `${pick} does not say Ready for implementation: yes` : "";
   const ok = reason === "";

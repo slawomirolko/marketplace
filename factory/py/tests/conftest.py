@@ -394,3 +394,127 @@ async def plan_doc_run(factory_server) -> ReviewRun:
     run.stores_after = {"head": git(project, "rev-parse", "HEAD")}
     print(json.dumps({"runId": run.run_id, "changed": run.changed_files, "costUsd": run.report["cost"]["costUsd"], "viewerUrl": run.viewer_url}))
     return run
+
+
+IMPL_REPO = os.environ.get("FACTORY_IMPL_REPO", "slawomirolko/healthCasePlatform")
+IMPL_FEATURE_ID = "health-liveness"
+IMPL_FEATURE_PLAN = """# Feature health-liveness: liveness endpoint
+
+> Draft written as the test input of the implementation workflow, in the layout the plan documentation workflow produces.
+
+## Scope
+
+.NET 10 ASP.NET Core minimal API (`src/HealthCasePlatform.Api/Program.cs`) and its xUnit integration tests (`tests/HealthCasePlatform.Api.Tests.Integration`, Testcontainers SQL Server, Shouldly).
+
+## Tasks
+
+- T1: liveness endpoint that does not touch the database.
+
+Ready for implementation: yes
+"""
+IMPL_TASK_PLAN = """# Task T1: liveness endpoint
+
+## Links
+
+- Feature: [`../implementation.md`](../implementation.md)
+
+## Verifiable outcome
+
+- `GET /health/live` answers 200 with the body `Healthy` and runs none of the registered health checks. Application startup (migrations) is unchanged; the endpoint only skips the checks once the app runs.
+- `GET /health` keeps its current behavior: it runs the `AppDbContext` check and answers 200 `Healthy` when the database is up.
+
+## Scope
+
+- `src/HealthCasePlatform.Api/Program.cs`: map `/health/live` with `HealthCheckOptions { Predicate = _ => false }` next to the existing `app.MapHealthChecks("/health")` (Program.cs, the `MapHealthChecks` line).
+- `tests/HealthCasePlatform.Api.Tests.Integration/HealthEndpointTests.cs`: one new test for `/health/live`; the existing test stays unchanged.
+
+## Non-goals
+
+- No change to the database check, `/health`, Docker Compose or CI.
+
+## Estimated paths
+
+- Code and tests: 2.
+
+## Acceptance
+
+- AC1: `GET /health/live` returns 200 with the body `Healthy` without running any registered health check.
+- AC2: `GET /health` still returns 200 with the body `Healthy` and still runs the `AppDbContext` check.
+
+## Tests
+
+| Test | File | Criterion |
+|------|------|-----------|
+| `HealthLive_WhenAppRunning_Returns200AndHealthyWithoutChecks` | `tests/HealthCasePlatform.Api.Tests.Integration/HealthEndpointTests.cs` | AC1 |
+| existing `Health_WhenAppRunning_Returns200AndHealthy`, unchanged | same file | AC2 |
+
+## Implementation steps
+
+1. Add the failing test for AC1.
+2. Map `/health/live` in `Program.cs` with a predicate that selects no check.
+3. Run the integration tests of `HealthEndpointTests`.
+
+## Implementation readiness
+
+1. Domain models: none touched.
+2. Owner: `src/HealthCasePlatform.Api/Program.cs` (verified: `app.MapHealthChecks("/health")`).
+3. Dependencies: none new; `Microsoft.AspNetCore.Diagnostics.HealthChecks` is part of the shared framework.
+4. Runtime contract: the integration tests with Testcontainers are the verification.
+
+Ready for implementation: yes
+
+## Open items
+
+None.
+"""
+
+
+def impl_answer(question: dict) -> str:
+    qid, allowed = question["id"], question.get("allowed") or []
+    if qid == "q-impl-commit":
+        return "no"
+    if qid.startswith("q-impl-unclear-"):
+        return "Follow the Task plan literally; keep the existing /health test unchanged."
+    if qid.startswith("q-impl-dispute-"):
+        return "test-holds"
+    if qid == "q-impl-context":
+        return "skip"
+    if qid == "q-impl-scope":
+        return "stop"
+    if qid.startswith("q-impl-preflight-"):
+        return "Decision: /health/live only skips the registered checks once the app runs; startup with MigrateAsync stays as it is and is out of scope. Add the missing using if the code needs it. Record this and close the open items it settles."
+    if "continue" in allowed:
+        return "continue"
+    if allowed == ["1", "2", "3"]:
+        return "1"
+    if "finding" in allowed:
+        return "finding"
+    return allowed[0] if allowed else "Use your recommendation."
+
+
+@pytest.fixture(scope="session")
+async def impl_run(factory_server) -> ReviewRun:
+    root = Path(os.path.realpath(tempfile.mkdtemp(prefix="factory-impl-")))
+    project = root / "project"
+    subprocess.run(["gh", "repo", "clone", IMPL_REPO, str(project), "--", "--depth", "20"], check=True, capture_output=True)
+    feature = project / "plans" / "features" / IMPL_FEATURE_ID
+    (feature / "tasks").mkdir(parents=True)
+    (feature / "implementation.md").write_text(IMPL_FEATURE_PLAN, encoding="utf-8")
+    (feature / "tasks" / "T1-implementation.md").write_text(IMPL_TASK_PLAN, encoding="utf-8")
+    before = {"head": git(project, "rev-parse", "HEAD"), "tracked": git(project, "status", "--porcelain", "--untracked-files=no")}
+    run = await run_workflow(
+        url=f"{factory_server['url']}/mcp",
+        token=factory_server["token"],
+        workflow="olko-implementation",
+        goal="Implement Task T1 of the health-liveness Feature",
+        workflow_input={"project": str(project), "featureId": IMPL_FEATURE_ID, "taskId": "T1", "switches": {"tracker": False, "docker": False, "obsidian": False, "editor": False, "adopt": False}},
+        answer=impl_answer,
+    )
+    worktree = project.parent / f"{project.name}-worktrees" / "t1"
+    run.stores = {"project": project, "worktree": worktree, "task": feature / "tasks" / "T1-implementation.md"}
+    run.stores_before = before
+    run.stores_after = {"head": git(project, "rev-parse", "HEAD"), "tracked": git(project, "status", "--porcelain", "--untracked-files=no")}
+    porcelain = subprocess.run(["git", "-C", str(worktree), "status", "--porcelain", "--untracked-files=all"], check=True, capture_output=True, text=True).stdout if worktree.exists() else ""
+    run.changed_files = [line[3:] for line in porcelain.splitlines() if line.strip()]
+    print(json.dumps({"runId": run.run_id, "changed": run.changed_files, "costUsd": run.report["cost"]["costUsd"], "status": run.report["status"], "viewerUrl": run.viewer_url}))
+    return run
