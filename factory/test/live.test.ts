@@ -64,3 +64,16 @@ test("a group's cost includes its multi-agent nodes", async () => {
   const phase = level.items.find((i) => i.key === "root/phase")!;
   assert.equal(costOf(phase, report as never)?.costUsd, 0.25);
 });
+
+test("a step counts as run only when it started; an agent only when it worked", async () => {
+  const { ranIn, mainAgentOf } = await import("../app/src/tree.ts");
+  const data = run("done", [{ at, type: "node_started", node: "wf/workers" }, { at, type: "agent_started", node: "wf/workers", agentId: "flow" }]);
+  const step = (key: string) => ({ key, kind: "step", node: { id: key, kind: "script" } }) as unknown as Item;
+  const agent = (id: string) => ({ key: `wf/workers#${id}`, kind: "agent", nodePath: "wf/workers", agent: { id, role: "plan-worker" } }) as unknown as Item;
+  assert.equal(ranIn(step("wf/workers"), data), true);
+  assert.equal(ranIn(step("wf/stop-preflight"), data), false);
+  assert.equal(ranIn(agent("flow"), data), true);
+  assert.equal(ranIn(agent("test"), data), false);
+  assert.equal(mainAgentOf({ source: "agents/opencode/olko-implementation-orchestrator.md (steps 1-11)" } as never), "olko-implementation-orchestrator");
+  assert.equal(mainAgentOf({ source: "skills/*/olko-plan-editor" } as never), null);
+});

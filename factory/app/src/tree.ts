@@ -153,9 +153,16 @@ export function costOf(item: Item, report: RunReport | null): Cost | null {
   return byNode[item.key] ?? null;
 }
 
+export function mainAgentOf(workflow: Workflow | null): string | null {
+  return workflow?.source?.match(/agents\/opencode\/([a-z0-9-]+)\.md/)?.[1] ?? null;
+}
+
 export function ranIn(item: Item, run: RunData | null): boolean {
   if (!run || item.kind === "terminal") return false;
-  const keys = item.kind === "agent" ? [item.nodePath] : [item.key, ...descendantKeys(item)];
+  if (item.kind === "agent") {
+    return run.ledger.some((r) => r.nodePath === item.nodePath && r.agentId === item.agent.id) || run.events.some((e) => e.type === "agent_started" && e.node === item.nodePath && e.agentId === item.agent.id);
+  }
+  const keys = [item.key, ...descendantKeys(item)];
   return run.events.some((e) => e.type === "node_started" && typeof e.node === "string" && keys.some((k) => e.node === k || e.node!.startsWith(`${k}/`)));
 }
 

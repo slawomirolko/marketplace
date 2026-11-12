@@ -26,7 +26,7 @@ function title(item: Item): string {
   return item.node.id;
 }
 
-function subtitle(item: Item): string {
+function subtitle(item: Item, mainAgent: string | null = null): string {
   if (item.kind === "terminal") return item.label;
   if (item.kind === "agent") return `agent · ${item.agent.role}`;
   if (item.kind === "team") return `llm · ${item.inner.items.length} agents`;
@@ -35,6 +35,7 @@ function subtitle(item: Item): string {
   if (item.kind === "subgraph") return `${item.node.kind === "call" ? "call" : item.node.kind === "group" ? "group" : "subgraph"} · ${item.node.workflow}${item.node.enabledWhen ? ` · when ${item.node.enabledWhen}` : ""}`;
   if (item.node.skill) return `llm · skill ${item.node.skill}`;
   if (item.kind === "missing") return `subgraph · ${item.node.workflow} (not found)`;
+  if (item.node.kind === "script") return mainAgent ? `script · run for ${mainAgent}` : "script · run by the factory";
   return item.node.role ? `${item.node.kind} · ${item.node.role}` : item.node.kind;
 }
 
@@ -89,6 +90,11 @@ function useOff(item: Item): boolean {
   return isDisabled(item.key, useViewer().disabled);
 }
 
+function useNotRun(item: Item): boolean {
+  const { run, mode } = useViewer();
+  return mode === "runs" && run !== null && item.kind !== "terminal" && !ranIn(item, run);
+}
+
 function useLive(item: Item): { className: string; label: string | null } {
   const { live } = useViewer();
   if (item.kind === "terminal" || !isLive(item, live)) return { className: "", label: null };
@@ -101,13 +107,15 @@ export function CardNode({ data, selected }: NodeProps<CardFlowNode>) {
   const { tier, model } = useEntry(item);
   const off = useOff(item);
   const live = useLive(item);
+  const notRun = useNotRun(item) && !off;
+  const { mainAgent } = useViewer();
   return (
-    <div className={`card tier-${tier ?? "none"} kind-${item.kind} ${item.kind === "step" ? `node-${item.node.kind}` : ""} ${selected ? "selected" : ""} ${off ? "disabled" : ""} ${live.className}`} title={off ? "switched off in this run" : undefined}>
+    <div className={`${notRun ? "not-run " : ""}card tier-${tier ?? "none"} kind-${item.kind} ${item.kind === "step" ? `node-${item.node.kind}` : ""} ${selected ? "selected" : ""} ${off ? "disabled" : ""} ${live.className}`} title={off ? "switched off in this run" : undefined}>
       <Handles />
       <div className="card-title">{title(item)}</div>
       {live.label && <div className="card-sub live-label">● {live.label}</div>}
       {off && <div className="card-sub off-label">switched off</div>}
-      <div className="card-sub">{subtitle(item)}</div>
+      <div className="card-sub">{subtitle(item, mainAgent)}</div>
       {item.kind !== "terminal" && item.kind !== "agent" && item.node.description && <div className="card-desc">{item.node.description}</div>}
       {tier && <div className="card-sub">{tier}{model ? ` · ${model}` : ""}</div>}
       <CostLine item={item} />
@@ -120,14 +128,16 @@ export function GroupNode({ data, selected }: NodeProps<ClusterFlowNode>) {
   const { item } = data;
   const off = useOff(item);
   const live = useLive(item);
+  const notRun = useNotRun(item) && !off;
+  const { mainAgent } = useViewer();
   return (
-    <div className={`group kind-${item.kind} ${selected ? "selected" : ""} ${off ? "disabled" : ""} ${live.className}`} title={off ? "switched off in this run" : undefined}>
+    <div className={`${notRun ? "not-run " : ""}group kind-${item.kind} ${selected ? "selected" : ""} ${off ? "disabled" : ""} ${live.className}`} title={off ? "switched off in this run" : undefined}>
       <Handles />
       <div className="group-header">
         <span className="card-title">{title(item)}</span>
         {live.label && <span className="card-sub live-label"> ● {live.label}</span>}
         {off && <span className="card-sub off-label"> switched off</span>}
-        <span className="card-sub"> {subtitle(item)}</span>
+        <span className="card-sub"> {subtitle(item, mainAgent)}</span>
         {item.kind !== "terminal" && item.kind !== "agent" && item.node.description && <div className="card-desc">{item.node.description}</div>}
         <CostLine item={item} />
         <Toggle item={item} expanded />
