@@ -127,9 +127,14 @@ test("installs the implementation orchestrator with delegation-only permissions"
     assert.match(agent, new RegExp(`${skill}: allow`));
     assert.ok(fs.existsSync(path.join(project, ".agents", "skills", skill, "SKILL.md")));
   }
-  assert.match(agent, /maintain one shared, persistent `?<mainRepoPath>\/plans\/features\/<feature-id>\/feature-tracker\.md/);
-  assert.match(agent, /## Implementation/);
-  assert.match(agent, /Never assign two editing agents the same file/);
+  assert.match(agent, /olko-task-implementation-workflow: allow/);
+  const workflow = fs.readFileSync(
+    path.join(project, ".agents", "skills", "olko-task-implementation-workflow", "workflow.md"),
+    "utf8",
+  );
+  assert.match(workflow, /feature-tracker\.md/);
+  assert.match(workflow, /## Implementation/);
+  assert.match(workflow, /Never assign two editing agents the same file/);
   for (const child of [
     "olko-marketplace-skill-bootstrapper",
     "olko-dotnet-auditor",
@@ -177,14 +182,17 @@ test("installs the plan documentation orchestrator with review-only stack delega
   assert.match(agent, /olko-react-native-auditor: allow/);
   assert.match(agent, /olko-army-python-auditor: allow/);
   assert.match(agent, /olko-investigation-readiness-worker: allow/);
-  assert.match(agent, /instruction to review only/);
-  assert.match(agent, /consistency gate immediately after every invocation/);
-  assert.match(agent, /Implementation readiness/);
-  assert.match(agent, /Every business purpose, mechanism, scope boundary, non-goal, risk, and/);
+  assert.match(agent, /question: deny/);
+  assert.match(agent, /USER QUESTION GATE/);
+  assert.match(agent, /Load `olko-feature-plan-workflow`/);
+  assert.match(agent, /olko-feature-plan-workflow: allow/);
+  assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-feature-plan-workflow", "SKILL.md")));
+  assert.match(agent, /olko-e2e-matrix-author: allow/);
+  assert.match(agent, /olko-e2e-acceptance-runner: allow/);
   assert.match(agent, /olko-plan-editor: allow/);
   assert.match(agent, /olko-investigate-existing: allow/);
   assert.match(agent, /grill-with-docs: allow/);
-  assert.match(agent, /Load `grill-with-docs` through the `skill` tool/);
+  assert.match(agent, /FULL FEATURE\/Epic PLAN PROCEDURE/);
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-plan-editor", "SKILL.md")));
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-investigate-existing", "SKILL.md")));
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "grill-with-docs", "SKILL.md")));

@@ -3486,6 +3486,37 @@
       ]
     },
     {
+      "name": "olko-feature-plan-workflow",
+      "category": "workflow",
+      "text": "olko-feature-plan-workflow workflow Feature/Epic implementation planning lifecycle: Feature pair plus one plan per child Task, batched revalidation, plan review, E2E matrix authoring, and readiness gates. workflow plan feature workflow workflow.plan.feature-workflow",
+      "tokens": [
+        "olko",
+        "feature",
+        "plan",
+        "workflow",
+        "epic",
+        "implementation",
+        "planning",
+        "lifecycle",
+        "pair",
+        "plus",
+        "one",
+        "per",
+        "child",
+        "task",
+        "batched",
+        "revalidation",
+        "review",
+        "e2e",
+        "matrix",
+        "authoring",
+        "and",
+        "readiness",
+        "gates.",
+        "workflow.plan.feature"
+      ]
+    },
+    {
       "name": "olko-feature-planner",
       "category": "workflow",
       "text": "olko-feature-planner workflow Turn broad product outcomes into an Epic with business value and progress by Feature, then define user-facing Features and independently testable, one-PR Tasks. For implementation planning, return the complete accepted Feature/Task hierarchy to the orchestrator, which creates every Task plan in the same session. workflow feature planner workflow workflow.feature.planner",
@@ -4056,6 +4087,35 @@
         "up",
         ".",
         "workflow.summary"
+      ]
+    },
+    {
+      "name": "olko-task-implementation-workflow",
+      "category": "workflow",
+      "text": "olko-task-implementation-workflow workflow Ordered single-Task implementation contract: baseline E2E, preflight, failing tests first, exclusive chunks, verification, PR, merge, post-merge E2E, and closure. workflow implementation task workflow workflow.implementation.task",
+      "tokens": [
+        "olko",
+        "task",
+        "implementation",
+        "workflow",
+        "ordered",
+        "single",
+        "contract",
+        "baseline",
+        "e2e",
+        "preflight",
+        "failing",
+        "tests",
+        "first",
+        "exclusive",
+        "chunks",
+        "verification",
+        "pr",
+        "merge",
+        "post",
+        "and",
+        "closure.",
+        "workflow.implementation.task"
       ]
     },
     {

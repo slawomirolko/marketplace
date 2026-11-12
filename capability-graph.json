@@ -804,6 +804,7 @@
         "grill-me-base",
         "grill-with-docs",
         "olko-design-rules",
+        "olko-feature-plan-workflow",
         "olko-feature-planner",
         "olko-implement-current-code",
         "olko-implement-new",
@@ -818,6 +819,7 @@
         "olko-research-new-functionality",
         "olko-ste100-skill-adapter",
         "olko-summary",
+        "olko-task-implementation-workflow",
         "olko-task-scope-gates",
         "olko-worktree-compose-isolation"
       ],
@@ -922,6 +924,16 @@
       "prerequisites": []
     },
     {
+      "id": "workflow.implementation.task",
+      "skills": [
+        "olko-task-implementation-workflow"
+      ],
+      "related": [
+        "workflow"
+      ],
+      "prerequisites": []
+    },
+    {
       "id": "workflow.investigate.existing",
       "skills": [
         "olko-investigate-existing"
@@ -955,6 +967,16 @@
       "id": "workflow.plan.editor",
       "skills": [
         "olko-plan-editor"
+      ],
+      "related": [
+        "workflow"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "workflow.plan.feature-workflow",
+      "skills": [
+        "olko-feature-plan-workflow"
       ],
       "related": [
         "workflow"
