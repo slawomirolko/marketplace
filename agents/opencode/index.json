@@ -169,7 +169,7 @@
     },
     {
       "name": "olko-plan-documentation-orchestrator",
-      "version": "2.7.0",
+      "version": "2.8.0",
       "file": "olko-plan-documentation-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -198,7 +198,8 @@
         "olko-army-python-auditor",
         "olko-obsidian-knowledge-manager",
         "olko-task-scope-impact-reviewer",
-        "olko-review-orchestrator"
+        "olko-review-orchestrator",
+        "olko-e2e-matrix-author"
       ]
     },
     {
