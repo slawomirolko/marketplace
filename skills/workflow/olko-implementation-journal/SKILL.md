@@ -1,6 +1,6 @@
 ---
 name: olko-implementation-journal
-version: 1.1.0
+version: 1.2.0
 description: "Implementation journal template and resume procedure for olko-implementation-orchestrator; load when creating the journal or resuming a Task."
 ---
 
@@ -52,9 +52,9 @@ Journal template:
 - [ ] 10 — Retain Task plan through post-merge verification
 - [ ] 11 — Post-merge acceptance E2E (screenshots, evidence upload, cleanup proof)
 - [ ] 12 — Rebuild from main and verify runtime
-- [ ] 13 — Remove disposable checkout, Task worktree, and this Task plan
 - [ ] 12a — Final Feature technical audit (after last Task)
 - [ ] 12b — Ask whether to remove the Feature plan files (last Task, after a passing Feature audit)
+- [ ] 13 — Finalize tracker/memory, remove this Task plan, relocate the session to the main checkout, then remove the disposable checkout and Task worktree (last filesystem action)
 
 ### Changed files
 - `<path>` — <agent or primary agent>; <purpose>; <status>
