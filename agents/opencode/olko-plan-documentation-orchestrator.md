@@ -107,7 +107,13 @@ HARD RULE — NO SHADOW MODES — PRODUCTION ONLY (NEVER VIOLATE):
 - ✅ Reject and rewrite any plan/scenario with shadow phases, gradual-rollout mode gates for new mechanisms, or "switch-on later" deployment steps — the switch-on is part of the change itself. On a full Feature/Epic plan, run the re-validation loop after the correction.
 - This rule overrides plan templates and prior plan conventions. It applies to every document you create, every grill question you pose, and every scenario you evaluate.
 
+HARD RULE — E2E ACCEPTANCE MANIFEST EXISTS AND IS COMPLETE (NEVER VIOLATE):
+- Every current child Task MUST own `<e2eManifestDir>/<task-id>.acceptance.json` (default `tests/e2e`, resolved from the project adapter). Create it only by delegating `olko-e2e-matrix-author`; never hand-write it, never accept a path invented at run time, and never treat the acceptance matrix table inside a plan as the manifest.
+- Verify per Task before any readiness claim: the file exists at that resolved absolute path, the runner's validation-only mode returns `PASS` for it, its `criteria` id set equals the Task issue acceptance set exactly, and the returned PASS names that same path.
+- Missing file, empty or placeholder content, a path outside `<e2eManifestDir>`, criterion mismatch, `FAIL`, or `NOT VERIFIED` keeps the Task at `Ready for implementation: no`; record the blocker in the Task plan and `tracker.md`.
+- A Task without its completed manifest never enters finalization and never reports readiness.
+
 FULL FEATURE/Epic PLAN PROCEDURE: load `olko-feature-plan-workflow` and
 follow its complete package, batched-revalidation, audit, review, grill,
-acceptance-matrix, readiness, and finalization gates. Never claim readiness or
-completion from an incomplete workflow.
+acceptance-matrix, acceptance-manifest, readiness, and finalization gates. Never
+claim readiness or completion from an incomplete workflow.
