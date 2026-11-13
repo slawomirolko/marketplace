@@ -1,0 +1,28 @@
+name: olko-skill-sync-prepare
+version: 0.1.0
+description: "Loads the manager memory and lets the bootstrapper install registry skills missing from the project."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (startup)"
+roles:
+  bootstrap: low
+entry: memory
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: memory
+    description: "Loads the sync manager memory block."
+    kind: script
+    op: memory.load
+    with: { agent: olko-marketplace-skill-sync-manager }
+  - id: bootstrap
+    description: "The bootstrapper installs registry skills missing from the project (read and bash)."
+    kind: llm
+    role: bootstrap
+    agent: olko-marketplace-skill-bootstrapper
+    tools: [read, bash]
+    parse: text.raw
+    prompt: |
+      Project: {{input.project}}
+      Install the registry skills that are missing from .agents/skills/ of this project, as your instructions say. Report the present, installed and failed skill lists.
+edges:
+  - { from: memory, to: bootstrap }
+  - { from: bootstrap, to: END }

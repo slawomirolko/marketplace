@@ -1,0 +1,32 @@
+name: olko-impl-entry
+version: 0.1.0
+description: "Entry gate: start only from a Task with acceptance criteria and an approved implementation plan; a missing plan routes to plan documentation once, then the gate runs again."
+source: "agents/opencode/olko-implementation-orchestrator.md (ENTRY GATE)"
+entry: tracker-task
+nodes:
+  - id: tracker-task
+    description: "Reads the Task and its acceptance criteria from the tracker; skipped when switches.tracker is off."
+    kind: subgraph
+    workflow: olko-impl-tracker-task
+    enabledWhen: "switches.tracker == true"
+  - id: task
+    description: "Finds the Task plan under plans/features/<featureId>/tasks and requires acceptance criteria and Ready for implementation: yes."
+    kind: script
+    op: impl.task
+    maxVisits: 2
+  - id: plan
+    description: "No approved plan: runs plan documentation (discovery and planning) for input.idea, once."
+    kind: call
+    workflow: olko-plan-documentation
+    input: { route: "both" }
+  - id: stop-no-plan
+    description: "Stops: never implement from a guessed criterion or without an approved plan."
+    kind: script
+    op: impl.stop
+    with: { from: task }
+edges:
+  - { from: tracker-task, to: task }
+  - { from: task, to: END, when: "task.ok == true", description: "the Task plan is approved and has acceptance criteria" }
+  - { from: task, to: plan, when: "task.canPlan == true", description: "no approved plan yet and input.idea is given: plan it first" }
+  - { from: task, to: stop-no-plan, description: "still no approved plan" }
+  - { from: plan, to: task }

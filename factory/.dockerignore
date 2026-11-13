@@ -1,0 +1,14 @@
+.viewer-data
+node_modules
+app/node_modules
+app/src
+app/index.html
+app/vite.config.ts
+app/tsconfig.json
+host
+viewer
+docs
+*.md
+py/.venv
+py/.pytest_cache
+**/__pycache__

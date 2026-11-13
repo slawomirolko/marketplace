@@ -1,0 +1,56 @@
+name: olko-review-review
+version: 0.1.0
+description: "REVIEW route: a read-only review of someone else's PR or a fresh review of your own, from scope to posted comments. On the LOCAL route (a working tree against input.base) the ranked findings go back to the caller and nothing is posted."
+source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE)"
+entry: review-scope
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: review-scope
+    description: "Reads the PR (title, body, diff) and picks the lenses: bugs, one stack lens per changed stack, requirements when the PR states criteria."
+    kind: group
+    workflow: olko-review-scope
+  - id: memory
+    description: "Loads the review memory: patterns to suppress (rejected twice) and to prioritize (confirmed once)."
+    kind: script
+    op: memory.load
+    with: { agent: olko-review-orchestrator }
+  - id: ask-memory
+    description: "Asks whether to continue without a memory block."
+    kind: interrupt
+    question:
+      id: q-memory-missing
+      text: "The review memory block {{state.memory.file}} does not exist. Fix: install the agent memory with `node scripts/install-opencode-agents.mjs --project <project> --agent olko-review-orchestrator`. Continue this review without memory, or stop?"
+      allowed: [continue, stop]
+  - id: review-findings
+    description: "Runs the lenses in parallel on the diff, merges their findings and lets the verifier confirm or reject each one."
+    kind: group
+    workflow: olko-review-findings
+  - id: review-rules
+    description: "Checks the confirmed findings against the project rule store, verifies new violations and asks the user one question per conflict between a finding and the store."
+    kind: group
+    workflow: olko-review-rules
+  - id: after-rules
+    description: "Branches on the route: a local working tree returns its findings, a PR posts them."
+    kind: script
+    op: builtin.pass
+  - id: local-rank
+    description: "LOCAL route only: ranks the kept findings by severity tier and returns them to the caller."
+    kind: script
+    op: review.rankFindings
+  - id: review-post
+    description: "Ranks the kept findings, asks post or skip for each one, posts one PR comment per post and records the decisions in the lens memory."
+    kind: group
+    workflow: olko-review-post
+edges:
+  - { from: review-scope, to: memory }
+  - { from: memory, to: review-findings, when: "memory.loaded == true", description: "memory block loaded" }
+  - { from: memory, to: ask-memory, when: "memory.loaded == false", description: "no memory block yet" }
+  - { from: ask-memory, to: review-findings, when: 'ask-memory.answer == "continue"', description: "you chose continue without memory" }
+  - { from: ask-memory, to: END, when: 'ask-memory.answer == "stop"', description: "you chose stop" }
+  - { from: review-findings, to: review-rules }
+  - { from: review-rules, to: after-rules }
+  - { from: after-rules, to: local-rank, when: 'route.route == "LOCAL"', description: "local working tree: nothing to post" }
+  - { from: after-rules, to: review-post, description: "a PR: post the findings" }
+  - { from: local-rank, to: END }
+  - { from: review-post, to: END }

@@ -1,0 +1,19 @@
+name: olko-skill-sync-install
+version: 0.1.0
+description: "Installs the merged artifacts from origin/main into the project and records the verified decisions in memory."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 5, install and memory)"
+entry: install
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: install
+    description: "Installs the merged skills (openskills) and agents from origin/main into the project."
+    kind: script
+    op: sync.install
+  - id: memory-save
+    description: "Records the verified decisions in the sync memory."
+    kind: script
+    op: sync.memorySave
+edges:
+  - { from: install, to: memory-save }
+  - { from: memory-save, to: END }

@@ -1,0 +1,21 @@
+name: olko-claude-sync-sources
+version: 0.1.0
+description: "Phase 1: both marketplaces must be clean and current before anything is compared."
+source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 1)"
+entry: safe-olko
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: safe-olko
+    description: "Calls the shared safe-source step for the Olko checkout."
+    kind: call
+    workflow: olko-safe-source
+    input: { path: "{{state.state.olko}}", label: "Olko" }
+  - id: safe-target
+    description: "Calls the shared safe-source step for the target marketplace checkout."
+    kind: call
+    workflow: olko-safe-source
+    input: { path: "{{state.state.target}}", label: "target marketplace" }
+edges:
+  - { from: safe-olko, to: safe-target }
+  - { from: safe-target, to: END }

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "usage-record.schema.json",
+  "title": "Ledger usage record",
+  "description": "One line in the ledger per model turn or script step. The ledger is the single source of truth for steps, tokens and cost.",
+  "type": "object",
+  "required": ["runId", "workflow", "nodePath", "kind", "backend", "turn", "tokens", "costUsd", "costSource", "at"],
+  "additionalProperties": false,
+  "properties": {
+    "runId": { "type": "string", "minLength": 1 },
+    "workflow": { "type": "string", "pattern": "^[a-z][a-z0-9-]*@\\d+\\.\\d+\\.\\d+$" },
+    "nodePath": { "type": "string", "pattern": "^[a-z][a-z0-9-]*(/[a-z][a-z0-9-]*)*$" },
+    "kind": { "enum": ["llm", "script"] },
+    "tier": { "type": ["string", "null"] },
+    "model": { "type": ["string", "null"] },
+    "backend": { "type": "string", "minLength": 1 },
+    "turn": { "type": "integer", "minimum": 1 },
+    "attempt": { "type": "integer", "minimum": 1, "default": 1 },
+    "tokens": {
+      "type": "object",
+      "required": ["input", "output"],
+      "additionalProperties": false,
+      "properties": {
+        "input": { "type": ["integer", "null"], "minimum": 0 },
+        "output": { "type": ["integer", "null"], "minimum": 0 },
+        "cacheRead": { "type": "integer", "minimum": 0 },
+        "cacheWrite": { "type": "integer", "minimum": 0 },
+        "reasoning": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0, "description": "Set when only a total is known (for example a Claude Code subagent notification)." }
+      }
+    },
+    "costUsd": { "type": ["number", "null"], "minimum": 0 },
+    "costSource": {
+      "description": "measured: factory computed it from provider token counts and its price table. reported: a harness supplied it. estimated: computed from partial data (for example total tokens only). unknown: no basis; costUsd is null.",
+      "enum": ["measured", "reported", "estimated", "unknown"]
+    },
+    "at": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    { "if": { "properties": { "costSource": { "const": "unknown" } } }, "then": { "properties": { "costUsd": { "type": "null" } } } },
+    { "if": { "properties": { "kind": { "const": "script" } } }, "then": { "properties": { "costUsd": { "const": 0 }, "costSource": { "const": "measured" } } } }
+  ]
+}

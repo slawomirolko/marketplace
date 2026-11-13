@@ -1,0 +1,44 @@
+name: olko-review-feedback
+version: 0.1.0
+description: "FEEDBACK route: works through CI state and review comments on your own PR, decides each item with the user and drafts replies."
+source: "agents/opencode/olko-review-orchestrator.md (FEEDBACK ROUTE)"
+entry: fb-items
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: fb-items
+    description: "Reads CI state and unresolved review comments of your own PR, assesses each item and asks one decision per item."
+    kind: group
+    workflow: olko-review-feedback-items
+  - id: fb-plan
+    description: "Collects the fixes and the replies to draft."
+    kind: script
+    op: feedback.plan
+  - id: fb-implement
+    description: "Asks whether to implement the fixes now."
+    kind: interrupt
+    question:
+      id: q-feedback-implement
+      text: "{{state.fb-plan.fixes}} items have the decision fix. Implement them now?"
+      allowed: ["yes", "no"]
+  - id: fb-fix
+    description: "Stops: fixing code from comments needs write-capable agents in this route."
+    kind: script
+    op: feedback.fixNotAvailable
+  - id: fb-replies
+    description: "Drafts one reply per wont-fix or question item and posts it only after the user says post."
+    kind: group
+    workflow: olko-review-feedback-replies
+  - id: fb-report
+    description: "Reports CI state, decisions and posted replies."
+    kind: script
+    op: feedback.report
+edges:
+  - { from: fb-items, to: fb-plan }
+  - { from: fb-plan, to: fb-implement, when: "fb-plan.fixes > 0", description: "some items are fix" }
+  - { from: fb-plan, to: fb-replies, when: "fb-plan.fixes == 0", description: "nothing to fix" }
+  - { from: fb-implement, to: fb-fix, when: 'fb-implement.answer == "yes"', description: "you chose to implement now" }
+  - { from: fb-implement, to: fb-replies, when: 'fb-implement.answer == "no"', description: "you chose not now" }
+  - { from: fb-fix, to: END }
+  - { from: fb-replies, to: fb-report }
+  - { from: fb-report, to: END }

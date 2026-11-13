@@ -1,0 +1,56 @@
+name: olko-claude-sync-decide
+version: 0.1.0
+description: "Phase 3: one decision per non-identical row; exclusions ask for their scope and reason."
+source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 3)"
+entry: decide-next
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: decide-next
+    description: "Takes the next non-identical row."
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: rows.decide }
+  - id: decide
+    description: "Asks your decision for this row (port, install, publish, exclude, leave...)."
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-{{state.decide-next.index}}"
+      text: "Row {{state.decide-next.number}} of {{state.decide-next.total}} needs a decision.\n{{state.decide-next.item.line}}\n\nAll rows:\n{{state.rows.table}}\n\nNothing changes until you decide. take-* and revert-user overwrite a copy after one more confirmation."
+      allowedFrom: state.decide-next.item.options
+  - id: plan
+    description: "Splits the decisions into changes, exclusions and rejections."
+    kind: script
+    op: csync.plan
+  - id: record-next
+    description: "Takes the next exclusion."
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: plan.records }
+  - id: ask-scope
+    description: "Asks the exclusion scope: all or one direction."
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-scope-{{state.record-next.index}}"
+      text: "Exclude {{state.record-next.item.kind}} {{state.record-next.item.id}} for all directions or one?"
+      allowed: [all, "target->olko", "olko->user", "user->olko"]
+  - id: ask-reason
+    description: "Asks the reason for the exclusion."
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-reason-{{state.record-next.index}}"
+      text: "Why exclude {{state.record-next.item.kind}} {{state.record-next.item.id}}? One line."
+edges:
+  - { from: decide-next, to: decide, when: "decide-next.done == false", description: "a non-identical row is left" }
+  - { from: decide-next, to: plan, when: "decide-next.done == true", description: "all rows decided" }
+  - { from: decide, to: decide-next }
+  - { from: plan, to: record-next }
+  - { from: record-next, to: ask-scope, when: 'record-next.done == false', description: "an exclusion is left" }
+  - { from: record-next, to: END, when: "record-next.done == true", description: "all exclusions described" }
+  - { from: ask-scope, to: ask-reason }
+  - { from: ask-reason, to: record-next }

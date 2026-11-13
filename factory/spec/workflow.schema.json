@@ -1,0 +1,426 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "workflow.schema.json",
+  "title": "Factory workflow",
+  "description": "A graph owned by the factory, written in YAML (workflows/*.yaml). Clients never send it; they name it at most.",
+  "type": "object",
+  "required": [
+    "name",
+    "version",
+    "entry",
+    "nodes",
+    "edges"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "$ref": "#/$defs/id"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "entry": {
+      "$ref": "#/$defs/id"
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/node"
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/edge"
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxCycleIterations": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 3
+        },
+        "maxTurnsPerNode": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 20
+        }
+      }
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The marketplace agent or document this workflow implements."
+    },
+    "roles": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/id"
+      },
+      "additionalProperties": {
+        "enum": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "description": "Role-to-tier defaults of this workflow; the user can change them at confirmation."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What this workflow or phase group does, in one or two sentences."
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "question": {
+      "type": "object",
+      "required": [
+        "id",
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^q-[a-z0-9{}.-]+$"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "allowed": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "allowedFrom": {
+          "type": "string",
+          "pattern": "^state\\.[a-zA-Z0-9_.-]+$",
+          "description": "State path of a list of allowed answers, read when the question is asked."
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "call",
+            "group",
+            "interrupt",
+            "llm",
+            "map",
+            "script",
+            "subgraph"
+          ]
+        },
+        "role": {
+          "$ref": "#/$defs/id"
+        },
+        "skill": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Skill the agent of this llm node follows instead of a marketplace agent; the skill text becomes the agent instructions.",
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "workflow": {
+          "$ref": "#/$defs/id",
+          "description": "subgraph, call and group: the workflow to include. A group inlines it with its node ids unchanged (one shared state); a subgraph prefixes its ids; a call runs it with its own input and state."
+        },
+        "over": {
+          "type": "string",
+          "pattern": "^state\\.[a-zA-Z0-9_.]+$"
+        },
+        "question": {
+          "$ref": "#/$defs/question"
+        },
+        "outputSchema": {
+          "type": "string",
+          "minLength": 1
+        },
+        "maxTurns": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "agents": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/agent"
+          },
+          "description": "Agents that run this node one after another; each one is priced on its own. role overrides the node role."
+        },
+        "agent": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "Harness agent that runs this node, for example an OpenCode agent from agents/opencode."
+        },
+        "agentsFrom": {
+          "type": "string",
+          "pattern": "^state\\.[a-zA-Z0-9_.-]+$",
+          "description": "Agents chosen at run time from state; each one is priced on its own."
+        },
+        "op": {
+          "type": "string",
+          "pattern": "^[a-z][a-zA-Z0-9]*.[a-z][a-zA-Z0-9]*$",
+          "description": "Named factory operation that a script node runs."
+        },
+        "with": {
+          "type": "object",
+          "description": "Arguments for the operation."
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Mustache template. Context: goal, input, state, agent, answer, steps."
+        },
+        "parse": {
+          "type": "string",
+          "pattern": "^[a-z][a-zA-Z0-9]*.[a-z][a-zA-Z0-9]*$",
+          "description": "Named parser that turns the agent output into state."
+        },
+        "turns": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Model turns of the node for the fake test model."
+        },
+        "askAfterTurn": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxVisits": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How often this node may run in one run; overrides limits.maxCycleIterations (for loops over a list)."
+        },
+        "parallel": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many agents of this node run at the same time (default 10)."
+        },
+        "tools": {
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "read",
+              "edit",
+              "bash"
+            ]
+          },
+          "description": "Tools the agent of this node may use (default read). The cli backend allows only these; delegate passes them in pendingWork."
+        },
+        "dirs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Mustache templates of extra directories the agent may read or write besides the run workspace."
+        },
+        "enabledWhen": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Subgraph only: a condition on switches, input or state (for example switches.tracker == true). When it is false the run skips the subgraph and goes to its exits."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Switched subgraph only: the source agent says this step must never be skipped. The switch stays (for tests), but a run that switches it off is marked with a warning."
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Call only: input of the called workflow, as Mustache templates over the caller's goal, input and state."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What this step does, in one sentence."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "llm"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "role",
+              "prompt"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "script"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "op"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "interrupt"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "question"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "subgraph"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "workflow"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "map"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "over",
+              "workflow"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "call"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "workflow"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "group"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "workflow"
+            ]
+          }
+        }
+      ]
+    },
+    "edge": {
+      "type": "object",
+      "required": [
+        "from",
+        "to"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/id"
+        },
+        "to": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "const": "END"
+            },
+            {
+              "const": "FINISH"
+            }
+          ],
+          "description": "A node id, END (leave this workflow; inside a group or subgraph: leave the group) or FINISH (end the whole run, even from inside a group or subgraph; inside a call it ends the call)."
+        },
+        "when": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Condition over validated state fields only, never over prose."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why the run takes this edge, in plain words (shown with the condition in the viewer)."
+        }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "role": {
+          "$ref": "#/$defs/id"
+        },
+        "agent": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "Marketplace agent that runs this agent slot."
+        }
+      }
+    }
+  }
+}

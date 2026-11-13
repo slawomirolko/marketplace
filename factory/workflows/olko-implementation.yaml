@@ -1,0 +1,64 @@
+name: olko-implementation
+version: 0.1.0
+description: "Implements one approved Task: entry gate (plans it first when no plan exists), worktree and journal, compatibility preflight, failing tests first, chunked implementation with child-result checks, style and tests, isolated runtime verification, context-file optimization, scope gate, local Task review, then commit, PR, gates, merge and closure after explicit approvals."
+source: agents/opencode/olko-implementation-orchestrator.md (steps 1-11; each phase is a group file; tracker, Docker, Obsidian, editor and adoption sit behind switches)
+entry: entry
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: entry
+    description: "Entry gate: an approved Task plan with acceptance criteria; without one, plan documentation runs first."
+    kind: group
+    workflow: olko-impl-entry
+  - id: workspace
+    description: "Creates or resumes the Task worktree, adopts existing changes when asked, and starts the journal and Feature tracker."
+    kind: group
+    workflow: olko-impl-workspace
+  - id: preflight-phase
+    description: "Step 2: four read-only investigation workers check the plan against current code; only four PASS results allow implementation."
+    kind: group
+    workflow: olko-impl-preflight
+  - id: tests-first
+    description: "Step 3a: one failing test per acceptance criterion, per stack, before any production code."
+    kind: group
+    workflow: olko-impl-tests-first
+  - id: build
+    description: "Step 3b: the Task is split into small chunks; one stack implementer per chunk, with child-result checks, test disputes, edge cases and blocked decisions."
+    kind: group
+    workflow: olko-impl-build
+  - id: verify
+    description: "Steps 4-7: style and affected tests until they pass, then the isolated Docker rebuild and runtime evidence."
+    kind: group
+    workflow: olko-impl-verify
+  - id: context
+    description: "Step 7a: agent-context files the Task changed are optimized after your confirmation."
+    kind: group
+    workflow: olko-impl-context
+  - id: scope
+    description: "Step 7b: counts code paths against the 15-path budget."
+    kind: group
+    workflow: olko-impl-scope
+  - id: review-phase
+    description: "Step 7c: olko-review on the local Task diff; blocking findings are fixed and re-reviewed."
+    kind: group
+    workflow: olko-impl-review
+  - id: deliver
+    description: "Steps 8-11: commit and draft PR only after your yes, PR check, Obsidian and editor gates, merge, cleanup and post-merge closure."
+    kind: group
+    workflow: olko-impl-deliver
+  - id: report
+    description: "Writes the run report into the journal."
+    kind: script
+    op: impl.report
+edges:
+  - { from: entry, to: workspace }
+  - { from: workspace, to: preflight-phase }
+  - { from: preflight-phase, to: tests-first }
+  - { from: tests-first, to: build }
+  - { from: build, to: verify }
+  - { from: verify, to: context }
+  - { from: context, to: scope }
+  - { from: scope, to: review-phase }
+  - { from: review-phase, to: deliver }
+  - { from: deliver, to: report }
+  - { from: report, to: END }

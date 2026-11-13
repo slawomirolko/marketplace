@@ -1,0 +1,26 @@
+name: olko-skill-sync-decide
+version: 0.1.0
+description: "Phase 3: one decision per non-identical artifact, with the actions its classification allows."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 3)"
+entry: decide-next
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: decide-next
+    description: "Takes the next non-identical artifact."
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: rows.decide }
+  - id: decide
+    description: "Asks your decision for this artifact (create, adopt, revert-local, move-to-adapter, leave...)."
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-sync-{{state.decide-next.index}}"
+      text: "Artifact {{state.decide-next.number}} of {{state.decide-next.total}} needs a decision.\n{{state.decide-next.item.line}}\n\nAll artifacts:\n{{state.rows.table}}\n\nNothing changes until you decide. revert-local overwrites the local copy."
+      allowedFrom: state.decide-next.item.options
+edges:
+  - { from: decide-next, to: decide, when: "decide-next.done == false", description: "a non-identical artifact is left" }
+  - { from: decide-next, to: END, when: "decide-next.done == true", description: "all decided" }
+  - { from: decide, to: decide-next }

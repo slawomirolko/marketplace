@@ -1,0 +1,52 @@
+name: olko-review-feedback-items
+version: 0.1.0
+description: "Reads CI state and unresolved review comments of your own PR, assesses each item and asks one decision per item."
+source: "agents/opencode/olko-review-orchestrator.md (FEEDBACK ROUTE, assessment and decisions)"
+roles:
+  feedback: medium
+entry: fb-check
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: fb-check
+    description: "Reads CI checks and unresolved review threads and comments of your own PR."
+    kind: script
+    op: github.prFeedback
+  - id: fb-next
+    description: "Takes the next review item."
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: fb-check.items }
+  - id: fb-assess
+    description: "The feedback handler restates the comment, checks it against the code and recommends fix, wont-fix or question."
+    kind: llm
+    role: feedback
+    agent: olko-review-feedback-handler
+    maxVisits: 200
+    parse: text.raw
+    prompt: |
+      Do only step 4 of your workflow for this one item, and do not change any file: the factory owns the other steps and asks the user.
+      PR #{{input.pr}} in {{input.repo}}, item {{state.fb-next.number}} of {{state.fb-next.total}}{{#state.fb-next.item.path}}, {{state.fb-next.item.path}}:{{state.fb-next.item.line}}{{/state.fb-next.item.path}}.
+
+      Comments:
+      {{#state.fb-next.item.comments}}
+      - {{author}} ({{url}}): {{body}}
+      {{/state.fb-next.item.comments}}
+
+      Restate the request in your own words, verify it against the code, and recommend fix, wont-fix (with technical reasoning) or question.
+      Reply with one line: `recommend | <fix|wont-fix|question> | <restatement> | <reasoning>`
+  - id: fb-decide
+    description: "Asks your decision for this item: fix, wont-fix, question or skip."
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-feedback-{{state.fb-next.index}}"
+      text: "Review comment {{state.fb-next.number}} of {{state.fb-next.total}}{{#state.fb-next.item.path}} on {{state.fb-next.item.path}}:{{state.fb-next.item.line}}{{/state.fb-next.item.path}}.\nAssessment: {{state.fb-assess.fb-assess}}\nYour decision?"
+      allowed: [fix, wont-fix, question, skip]
+edges:
+  - { from: fb-check, to: fb-next }
+  - { from: fb-next, to: fb-assess, when: "fb-next.done == false", description: "an item is left" }
+  - { from: fb-next, to: END, when: "fb-next.done == true", description: "all items decided" }
+  - { from: fb-assess, to: fb-decide }
+  - { from: fb-decide, to: fb-next }

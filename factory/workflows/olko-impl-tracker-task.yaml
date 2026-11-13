@@ -1,0 +1,18 @@
+name: olko-impl-tracker-task
+version: 0.1.0
+description: "Reads the YouTrack Task: it must exist and carry acceptance criteria."
+source: "agents/opencode/olko-implementation-orchestrator.md (ENTRY GATE: existing YouTrack Task with acceptance criteria)"
+roles:
+  backlog: medium
+entry: read-task
+nodes:
+  - id: read-task
+    description: "Backlog writer reads the Task and its acceptance criteria from YouTrack (read only)."
+    kind: llm
+    role: backlog
+    agent: olko-feature-backlog-writer
+    parse: text.raw
+    prompt: |
+      Read only: read YouTrack Task {{input.taskId}} of Feature {{input.featureId}}. Return its title, state and acceptance criteria. Do not create, edit or comment on any issue.
+edges:
+  - { from: read-task, to: END }

@@ -1,0 +1,24 @@
+name: olko-skill-sync-path
+version: 0.1.0
+description: "Finds the marketplace checkout (input, MARKETPLACE_PATH, project adapter, fallback) and asks before using the built-in fallback."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (marketplace path)"
+entry: resolve-path
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: resolve-path
+    description: "Finds the marketplace checkout: input, MARKETPLACE_PATH, project adapter, or the built-in fallback."
+    kind: script
+    op: sync.resolvePath
+  - id: ask-fallback
+    description: "Asks before using the built-in fallback path."
+    kind: interrupt
+    question:
+      id: q-marketplace-fallback
+      text: "The marketplace path comes from the built-in fallback: {{state.resolve-path.path}}. Use it?"
+      allowed: [continue, stop]
+edges:
+  - { from: resolve-path, to: ask-fallback, when: "resolve-path.fallback == true", description: "only the built-in fallback path was found" }
+  - { from: resolve-path, to: END, when: "resolve-path.fallback == false", description: "path from input, environment or adapter" }
+  - { from: ask-fallback, to: END, when: 'ask-fallback.answer == "continue"', description: "you chose continue with the fallback path" }
+  - { from: ask-fallback, to: FINISH, when: 'ask-fallback.answer == "stop"', description: "you chose stop" }

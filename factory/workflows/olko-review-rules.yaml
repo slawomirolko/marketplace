@@ -1,0 +1,88 @@
+name: olko-review-rules
+version: 0.1.0
+description: "Checks the confirmed findings against the project rule store, verifies new violations and asks the user one question per conflict between a finding and the store."
+source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE, project rules check)"
+roles:
+  rules: medium
+  verifier: medium
+entry: rules-check
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: rules-check
+    description: "Checks the confirmed findings against the project rule store (ADRs, rule files)."
+    kind: llm
+    role: rules
+    agent: olko-project-rules-check
+    parse: review.rulesCheck
+    prompt: |
+      Mode: code
+      {{#state.scope.pr}}PR #{{state.scope.pr}}: {{/state.scope.pr}}{{state.scope.title}}
+
+      Changed paths:
+      {{#state.scope.files}}
+      - {{path}}
+      {{/state.scope.files}}
+
+      Confirmed findings ({{state.confirm.confirmed.length}}), one per line:
+      {{#state.confirm.confirmed}}
+      {{line}}
+      {{/state.confirm.confirmed}}
+
+      Diff hunks:
+      {{#state.scope.files}}
+      {{diff}}
+      {{/state.scope.files}}
+  - id: rules-merge
+    description: "Splits the result into kept, dropped by the store, new violations and conflicts to decide."
+    kind: script
+    op: review.mergeRules
+  - id: verify-violations
+    description: "The verifier checks the new rule violations."
+    kind: llm
+    role: verifier
+    agent: olko-review-verifier
+    parse: review.verdicts
+    prompt: |
+      {{#state.scope.pr}}PR #{{state.scope.pr}}: {{/state.scope.pr}}{{state.scope.title}}
+
+      Findings ({{state.rules-merge.violations.length}}), one per line:
+      {{#state.rules-merge.violations}}
+      {{.}}
+      {{/state.rules-merge.violations}}
+  - id: rules-violations
+    description: "Adds the confirmed violations to the findings."
+    kind: script
+    op: review.addViolations
+  - id: next-decision
+    description: "Takes the next conflict between a finding and the store (after violations)."
+    kind: script
+    op: list.next
+    maxVisits: 100
+    with: { over: rules-violations.decide }
+  - id: next-decision-ask
+    description: "Takes the next conflict between a finding and the store (no new violations)."
+    kind: script
+    op: list.next
+    maxVisits: 100
+    with: { over: rules-merge.decide }
+  - id: ask-rule
+    description: "Asks which holds: the finding or the store entry."
+    kind: interrupt
+    maxVisits: 100
+    question:
+      id: "q-rule-{{state.next-decision.index}}{{state.next-decision-ask.index}}"
+      text: "The project store and a finding disagree. Which holds?\n{{state.next-decision.item.line}}{{state.next-decision-ask.item.line}}\nStore entry: {{state.next-decision.item.cite}}{{state.next-decision-ask.item.cite}}"
+      allowed: [finding, store]
+edges:
+  - { from: rules-check, to: rules-merge }
+  - { from: rules-merge, to: verify-violations, when: "rules-merge.violations > 0", description: "the store check found new violations" }
+  - { from: rules-merge, to: next-decision-ask, when: "rules-merge.violations == 0", description: "no new violation" }
+  - { from: verify-violations, to: rules-violations }
+  - { from: rules-violations, to: next-decision }
+  - { from: next-decision, to: ask-rule, when: "next-decision.done == false", description: "a conflict is left" }
+  - { from: next-decision, to: END, when: "next-decision.done == true", description: "all conflicts decided" }
+  - { from: next-decision-ask, to: ask-rule, when: "next-decision-ask.done == false", description: "a conflict is left" }
+  - { from: next-decision-ask, to: END, when: "next-decision-ask.done == true", description: "all conflicts decided" }
+  - { from: ask-rule, to: next-decision, when: "rules-merge.violations > 0", description: "store violations exist: next violation" }
+  - { from: ask-rule, to: next-decision-ask, when: "rules-merge.violations == 0", description: "no store violation: next question" }

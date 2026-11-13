@@ -1,0 +1,77 @@
+name: olko-claude-sync-inventories
+version: 0.1.0
+description: "Phase 2: three inventory workers list every skill and agent per store, the matcher links copies into capabilities, probable links are confirmed and exclusions checked."
+source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 2, inventory and match)"
+roles:
+  sync-worker: low
+entry: inventory
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: inventory
+    description: "Three inventory workers list every skill and agent of target, Olko and user scope, in parallel."
+    kind: llm
+    role: sync-worker
+    agent: olko-claude-sync-inventory
+    agentsFrom: state.state.stores
+    tools: [read, bash]
+    dirs: ["{{state.state.target}}", "{{state.state.olko}}", "{{state.state.user}}", "{{state.state.stateDir}}"]
+    parse: csync.inventory
+    prompt: |
+      Store: {{agent.id}}
+      Store path: {{agent.path}}
+      Discover in: {{agent.layout}} (relative to the store path)
+      Sync state directory: {{state.state.stateDir}} (pass --state-dir with it to sync-state.mjs)
+
+      Give your report as one ```json block and nothing else after it, one row per artifact, every artifact you found:
+      {"rows": [{"kind": "skill|agent", "name": "<name>", "path": "<path relative to the store path>", "version": "<version or —>", "description": "<first 200 characters>", "triggers": "<trigger phrases>", "hash": "<content hash>", "portedFrom": "<marker or —>"}], "unreadable": ["<path>"]}
+  - id: inventories
+    description: "Turns the three inventories into the matcher input."
+    kind: script
+    op: csync.inventories
+  - id: match
+    description: "The matcher links copies across stores into capabilities and proposes probable links."
+    kind: llm
+    role: sync-worker
+    agent: olko-claude-sync-matcher
+    dirs: ["{{state.state.target}}", "{{state.state.olko}}", "{{state.state.user}}", "{{state.state.stateDir}}"]
+    parse: csync.capabilities
+    prompt: |
+      Lineage file: {{state.state.stateDir}}/lineage.json
+
+      Inventory of store target (JSON rows):
+      {{state.inventories.target}}
+
+      Inventory of store olko (JSON rows):
+      {{state.inventories.olko}}
+
+      Inventory of store user (JSON rows):
+      {{state.inventories.user}}
+
+      End with one ```json block that lists only the links: capabilities with copies in two or more stores, and your probable links. The factory adds every artifact you do not list as its own single-store capability.
+      {"capabilities": [{"id": "<capability id>", "basis": "lineage|marker|name|probable", "kind": "skill|agent", "copies": {"target": {"name": "<name as in the inventory>"}, "olko": {"name": "..."}, "user": {"name": "..."}}}], "probable": [{"id": "<capability id>", "evidence": "<one line>"}]}
+      Leave out a store key when the capability has no copy there.
+  - id: capabilities
+    description: "Adds name links and single-store artifacts the matcher did not list."
+    kind: script
+    op: csync.capabilities
+  - id: select
+    description: "Keeps the capabilities named in input artifacts (all when not set)."
+    kind: script
+    op: csync.select
+  - id: probable-loop
+    description: "Asks the user to confirm or split every probable link the matcher proposed."
+    kind: group
+    workflow: olko-claude-sync-probable
+  - id: exclusions
+    description: "Skips capabilities excluded in the sync state."
+    kind: script
+    op: csync.exclusions
+edges:
+  - { from: inventory, to: inventories }
+  - { from: inventories, to: match }
+  - { from: match, to: capabilities }
+  - { from: capabilities, to: select }
+  - { from: select, to: probable-loop }
+  - { from: probable-loop, to: exclusions }
+  - { from: exclusions, to: END }

@@ -1,0 +1,36 @@
+name: olko-review
+version: 0.4.0
+description: "Code review of a PR, a local diff or a plan: REVIEW for someone else's PR (or a fresh review of your own), LOCAL for a working tree against a base branch, PLAN for a plan file, FEEDBACK for comments and CI on your own PR."
+source: agents/opencode/olko-review-orchestrator.md (REVIEW, PLAN and FEEDBACK routes)
+roles:
+  lens: medium
+  verifier: medium
+  rules: medium
+  feedback: medium
+entry: route
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: route
+    description: "Picks the route: input plan -> PLAN; input base -> LOCAL; your own PR without fresh -> FEEDBACK; otherwise REVIEW."
+    kind: script
+    op: review.route
+  - id: review
+    description: "REVIEW and LOCAL routes: a read-only review of someone else's PR, a fresh review of your own, or a local working tree; PR findings are posted, local findings go back to the caller."
+    kind: group
+    workflow: olko-review-review
+  - id: plan
+    description: "PLAN route: reviews a plan file against its acceptance criteria and the project rules before implementation; no memory."
+    kind: group
+    workflow: olko-review-plan
+  - id: feedback
+    description: "FEEDBACK route: works through CI state and review comments on your own PR, decides each item with the user and drafts replies."
+    kind: group
+    workflow: olko-review-feedback
+edges:
+  - { from: route, to: review, when: 'route.review == true', description: "someone else's PR, or fresh: true, or input base is set (a local working tree, nothing posted)" }
+  - { from: route, to: plan, when: 'route.route == "PLAN"', description: "input plan is set" }
+  - { from: route, to: feedback, when: 'route.route == "FEEDBACK"', description: "your own PR without fresh" }
+  - { from: plan, to: END }
+  - { from: feedback, to: END }
+  - { from: review, to: END }

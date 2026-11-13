@@ -1,0 +1,131 @@
+name: olko-impl-build
+version: 0.1.0
+description: "Step 3b: the Task is split into small ordered chunks with exclusive files; each chunk goes to its stack implementer, and every result is checked on the real diff (no comments, no ids in code, no CI files, failing-test-first files untouched). Test disputes, edge cases and blocked decisions are resolved before the next chunk."
+source: "agents/opencode/olko-implementation-orchestrator.md (step 3b, CHUNKED DELEGATION, TEST DISPUTE, EDGE CASES, BLOCKED DECISIONS, child-result hard rules)"
+roles:
+  planner: high
+  implementer: medium
+entry: chunker
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: chunker
+    description: "Splits the Task plan into small chunks (one phase, mechanism or file slice each) with exclusive file ownership."
+    kind: llm
+    role: planner
+    agent: olko-implementation-orchestrator
+    dirs: ["{{state.task.featureDir}}"]
+    parse: impl.chunks
+    prompt: |
+      Do only the chunking, read only; do not delegate, edit or ask. Task plan: {{state.task.taskFile}}; stacks: {{state.stacks.stacks}}.
+      Split the implementation into small ordered chunks that a child finishes in a few tool calls: one phase, mechanism or file slice per chunk. Give each file to exactly one chunk. Production code only; the failing tests already exist.
+      End with one ```json block: {"chunks": [{"stack": "<one of the stacks>", "title": "", "files": ["path"], "brief": "what to change, without asking for comments"}]}
+  - id: chunk-plan
+    description: "Maps each chunk to its stack implementer and removes shared files from later chunks."
+    kind: script
+    op: impl.chunkPlan
+  - id: chunk-next
+    description: "Takes the next chunk."
+    kind: script
+    op: list.next
+    maxVisits: 60
+    with: { over: chunk-plan.chunks }
+  - id: implement
+    description: "The stack implementer changes production code for this chunk until the failing tests pass; never writes or changes tests."
+    kind: llm
+    role: implementer
+    agentsFrom: state.chunk-next.item.agents
+    tools: [read, edit, bash]
+    maxVisits: 60
+    dirs: ["{{state.task.featureDir}}"]
+    parse: impl.chunk
+    prompt: |
+      Chunk {{state.chunk-next.number}} of {{state.chunk-next.total}} of Task {{state.task.taskName}}: {{state.chunk-next.item.title}}
+      Files you own: {{state.chunk-next.item.files}}
+      Brief: {{state.chunk-next.item.brief}}
+      Approved Task plan: {{state.task.taskFile}}. The failing-test-first files are read-only input: {{state.tests-check.testList}}
+      Rules: no explanatory or inline comments; no acceptance-criterion, plan or PR ids in code; do not write new tests or change the given tests; no CI/CD workflow files; never choose a new dependency or convention alone.
+      {{#state.child-check.violations}}Fix these rule violations first:
+      {{state.child-check.violations}}
+      {{/state.child-check.violations}}{{#state.ask-blocked.answer}}Your blocked question was decided: option {{state.ask-blocked.answer}}.
+      {{/state.ask-blocked.answer}}{{#state.ask-dispute.answer}}Test dispute decision: {{state.ask-dispute.answer}} ({{state.dispute-check.detail}}).
+      {{/state.ask-dispute.answer}}
+      Report changed files and test results. Use `Blocked:` with 2-3 options, `Test dispute:` or `Edge cases:` sections when they apply.
+      End with one line: `chunk | <done|blocked|dispute|edge-cases> | <one-line summary>`
+  - id: child-check
+    description: "Checks the chunk result against the hard rules on the real diff and records it in the journal."
+    kind: script
+    op: impl.childCheck
+    maxVisits: 60
+  - id: ask-blocked
+    description: "A child is blocked on a dependency or convention: you choose one of its options."
+    kind: interrupt
+    maxVisits: 20
+    question:
+      id: "q-impl-blocked-{{state.child-check.chunk}}-{{state.child-check.attempts}}"
+      text: "Chunk {{state.chunk-next.number}} is blocked:\n{{state.child-check.report}}\nWhich option (1 is the implementer's recommendation)?"
+      allowed: ["1", "2", "3"]
+  - id: dispute
+    description: "olko-test-first-author (mode dispute) fixes the disputed test or justifies it."
+    kind: llm
+    role: implementer
+    agent: olko-test-first-author
+    tools: [read, edit, bash]
+    maxVisits: 20
+    dirs: ["{{state.task.featureDir}}"]
+    parse: impl.dispute
+    prompt: |
+      Mode: dispute. Task {{state.task.taskName}}, Task plan {{state.task.taskFile}}. The implementer objects to a test:
+      {{state.child-check.report}}
+      Either fix the test or keep it and justify in two or three sentences, citing the criterion. Never weaken a test only to make it pass.
+      End with one line: `dispute | <fixed|justified> | <reason>`
+  - id: dispute-check
+    description: "Reads the author's answer: a fixed test goes back to the implementer, a justified one to you."
+    kind: script
+    op: impl.dispute
+    maxVisits: 20
+  - id: ask-dispute
+    description: "Shows both positions; you decide which holds."
+    kind: interrupt
+    maxVisits: 20
+    question:
+      id: "q-impl-dispute-{{state.child-check.chunk}}-{{state.child-check.attempts}}"
+      text: "Test dispute in chunk {{state.chunk-next.number}}.\nImplementer:\n{{state.child-check.report}}\nTest author: {{state.dispute-check.detail}}\nWhich position holds?"
+      allowed: [test-holds, implementer-holds]
+  - id: edge-tests
+    description: "olko-test-first-author (mode edge-cases) adds one test per edge case; runs once per Task."
+    kind: llm
+    role: implementer
+    agent: olko-test-first-author
+    tools: [read, edit, bash]
+    maxVisits: 1
+    dirs: ["{{state.task.featureDir}}"]
+    parse: impl.tests
+    prompt: |
+      Mode: edge-cases. Task {{state.task.taskName}}, Task plan {{state.task.taskFile}}. The implementer described these edge cases:
+      {{state.child-check.report}}
+      Add one test per edge case, run them, and report which pass and which fail. No comments in tests.
+      End with one line: `tests | <number of tests added> | unclear: none | blocked: none`
+  - id: stop-chunk
+    description: "Stops: a child kept breaking the hard rules."
+    kind: script
+    op: impl.stop
+    with: { from: child-check }
+edges:
+  - { from: chunker, to: chunk-plan }
+  - { from: chunk-plan, to: chunk-next }
+  - { from: chunk-next, to: implement, when: "chunk-next.done == false", description: "a chunk is left" }
+  - { from: chunk-next, to: END, description: "every chunk is done" }
+  - { from: implement, to: child-check }
+  - { from: child-check, to: implement, when: 'child-check.next == "fix"', description: "the result broke a hard rule: same chunk again" }
+  - { from: child-check, to: ask-blocked, when: 'child-check.next == "blocked"', description: "the implementer returned Blocked" }
+  - { from: child-check, to: dispute, when: 'child-check.next == "dispute"', description: "the implementer disputes a test" }
+  - { from: child-check, to: edge-tests, when: 'child-check.next == "edge"', description: "first edge-case report of the Task" }
+  - { from: child-check, to: stop-chunk, when: 'child-check.next == "stop"', description: "rules still broken after three attempts" }
+  - { from: child-check, to: chunk-next, description: "chunk done" }
+  - { from: ask-blocked, to: implement }
+  - { from: dispute, to: dispute-check }
+  - { from: dispute-check, to: ask-dispute, when: 'dispute-check.next == "ask"', description: "the author keeps the test" }
+  - { from: dispute-check, to: implement, description: "the author fixed the test" }
+  - { from: ask-dispute, to: implement }
+  - { from: edge-tests, to: implement }

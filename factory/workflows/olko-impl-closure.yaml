@@ -1,0 +1,51 @@
+name: olko-impl-closure
+version: 0.1.0
+description: "Steps 9-11b after the merge: the worktree and branch are cleaned up, post-merge verification runs in the main checkout, the Feature audit runs after the last Task, and Feature plan files are deleted only after your approval of the exact paths."
+source: "agents/opencode/olko-implementation-orchestrator.md (steps 9-11b) and skills/*/olko-implementation-closure"
+roles:
+  publisher: medium
+  reviewer: medium
+entry: cleanup
+nodes:
+  - id: cleanup
+    description: "Worktree lifecycle manager removes the merged worktree and branch and updates the main checkout."
+    kind: llm
+    role: publisher
+    agent: olko-worktree-lifecycle-manager
+    tools: [read, bash]
+    parse: text.raw
+    prompt: |
+      The PR of branch {{state.worktree.branch}} is merged. Remove the worktree {{state.worktree.path}} and its local branch, and fast-forward the main checkout {{input.project}} on {{state.worktree.base}}. Do not delete plans.
+  - id: post-merge
+    description: "olko-implementation-closure step 11 and, after the last Task, the Feature completion audit 11a."
+    kind: llm
+    role: reviewer
+    skill: olko-implementation-closure
+    tools: [read, edit, bash]
+    dirs: ["{{state.task.featureDir}}"]
+    parse: text.raw
+    prompt: |
+      Run step 11 (post-merge verification in the main checkout {{input.project}}) for Task {{state.task.taskName}} with the verification contract of {{state.task.taskFile}}, and step 11a (Feature completion audit) only when this was the last Task of Feature {{state.task.featureId}} (tracker {{state.task.tracker}}). Never claim Feature completion without its PASS. Do not delete any file.
+  - id: ask-cleanup
+    description: "Step 11b: asks before deleting Feature-level plan files."
+    kind: interrupt
+    question:
+      id: q-impl-feature-cleanup
+      text: "Post-merge result:\n{{state.post-merge.post-merge}}\nDelete the Feature plan folder {{state.task.featureDir}} now (only after a Feature audit PASS), or keep it?"
+      allowed: [delete, keep]
+  - id: delete-plans
+    description: "Deletes the approved Feature plan folder."
+    kind: llm
+    role: publisher
+    skill: olko-implementation-closure
+    tools: [read, edit, bash]
+    dirs: ["{{state.task.featureDir}}"]
+    parse: text.raw
+    prompt: |
+      The user approved step 11b for exactly this path: {{state.task.featureDir}}. Delete only that folder, and only if the Feature audit in {{state.task.tracker}} says PASS; otherwise report and delete nothing.
+edges:
+  - { from: cleanup, to: post-merge }
+  - { from: post-merge, to: ask-cleanup }
+  - { from: ask-cleanup, to: delete-plans, when: 'ask-cleanup.answer == "delete"', description: "you approved the deletion" }
+  - { from: ask-cleanup, to: END, description: "you kept the files" }
+  - { from: delete-plans, to: END }

@@ -1,0 +1,67 @@
+name: olko-plan-package
+version: 0.1.0
+description: "Steps 1 to 3: verified evidence from the knowledge base and four investigation workers, the business plan, the technical plan per Task, and the consistency gate."
+source: "agents/opencode/olko-plan-documentation-orchestrator.md (Steps 1-3: knowledge and investigation workers, business writer, technical plan per Task, consistency gate)"
+roles:
+  plan-worker: medium
+  planner: high
+  writer: medium
+entry: investigate
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: investigate
+    description: "Knowledge manager and four investigation workers gather verified file:line evidence in parallel (read only)."
+    kind: llm
+    role: plan-worker
+    agents:
+      - { id: knowledge, agent: olko-obsidian-knowledge-manager }
+      - { id: flow, agent: olko-investigation-flow-worker }
+      - { id: runtime, agent: olko-investigation-runtime-worker }
+      - { id: test, agent: olko-investigation-test-worker }
+      - { id: readiness, agent: olko-investigation-readiness-worker }
+    parse: text.raw
+    prompt: |
+      Project: {{input.project}}. Read only; change no file and no vault note.
+      Feature to plan (plan folder {{state.feature.featureDir}}):
+      {{state.feature.text}}
+      Tasks with acceptance criteria:
+      {{state.feature.tasks}}
+      Return your verified findings with file:line evidence for this Feature and every Task.
+  - id: business
+    description: "Business writer writes business.md; the only writer of that file."
+    kind: llm
+    role: writer
+    agent: olko-plan-business-writer
+    tools: [read, edit]
+    parse: text.raw
+    prompt: |
+      Write the business document {{state.feature.featureDir}}/business.md for this Feature in the project {{input.project}}. Edit only that file.
+      {{state.feature.text}}
+      Tasks: {{state.feature.tasks}}
+      Knowledge base context: {{state.investigate.knowledge}}
+  - id: merge
+    description: "Plan editor writes implementation.md and one Task implementation plan per Task from the evidence."
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    parse: text.raw
+    prompt: |
+      Step 2 of the planning cycle in the project {{input.project}}: from the verified evidence below, create {{state.feature.featureDir}}/implementation.md and one {{state.feature.featureDir}}/tasks/<task-id>-implementation.md for EVERY Task ({{state.feature.taskIds}}), with `## Implementation readiness` ending in `Ready for implementation: yes|no` and `## Open items` in each. Keep business.md as the business writer wrote it unless a verified fact requires a correction. Write only inside {{state.feature.featureDir}}; create tracker.md there with the decisions and evidence.
+      Feature: {{state.feature.text}}
+      Tasks: {{state.feature.tasks}}
+      Flow evidence: {{state.investigate.flow}}
+      Runtime evidence: {{state.investigate.runtime}}
+      Test evidence: {{state.investigate.test}}
+      Readiness evidence: {{state.investigate.readiness}}
+  - id: gate-merge
+    description: "Runs stack.md and the business-to-technical consistency gate with its correction loop."
+    kind: call
+    workflow: olko-plan-gate
+    input: { featureDir: "{{state.feature.featureDir}}" }
+edges:
+  - { from: investigate, to: business }
+  - { from: business, to: merge }
+  - { from: merge, to: gate-merge }
+  - { from: gate-merge, to: END }

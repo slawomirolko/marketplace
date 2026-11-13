@@ -1,0 +1,19 @@
+name: olko-impl-verify
+version: 0.1.0
+description: "Steps 4-7: style and affected tests until they pass, then the Docker rebuild in an isolated Compose project with runtime evidence (behind switches.docker)."
+source: "agents/opencode/olko-implementation-orchestrator.md (steps 4-7, WORKTREE COMPOSE ISOLATION)"
+entry: checks
+nodes:
+  - id: checks
+    description: "Calls the shared checks step: style, affected tests and fix rounds."
+    kind: call
+    workflow: olko-impl-checks
+    input: { plan: "{{state.task.taskFile}}", base: "{{state.worktree.base}}" }
+  - id: docker
+    description: "Rebuilds in an isolated Compose project, collects runtime evidence and tears it down; skipped when switches.docker is off."
+    kind: subgraph
+    workflow: olko-impl-docker
+    enabledWhen: "switches.docker == true"
+edges:
+  - { from: checks, to: docker }
+  - { from: docker, to: END }

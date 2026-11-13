@@ -1,0 +1,63 @@
+name: olko-review-plan-findings
+version: 0.1.0
+description: "Reads the plan file, runs the requirements lens in plan mode and lets the verifier confirm each finding against the plan text."
+source: "agents/opencode/olko-review-orchestrator.md (PLAN ROUTE, lens and verification)"
+roles:
+  lens: medium
+  verifier: medium
+entry: plan-read
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: plan-read
+    description: "Reads the plan file from the workspace and the optional acceptance criteria."
+    kind: script
+    op: plan.read
+  - id: plan-lens
+    description: "Runs the requirements lens in plan mode on the plan text."
+    kind: llm
+    role: lens
+    agents:
+      - { id: requirements, agent: olko-review-requirements-lens }
+    parse: review.findings
+    prompt: |
+      Mode: plan
+      Acceptance criteria: {{state.plan-read.criteria}}
+
+      Plan file: {{state.plan-read.path}}
+
+      Plan text:
+      {{state.plan-read.text}}
+  - id: plan-merge
+    description: "Merges the plan findings."
+    kind: script
+    op: review.mergeFindings
+    with: { from: plan-lens }
+  - id: plan-verify
+    description: "The verifier checks the plan findings against the plan text."
+    kind: llm
+    role: verifier
+    agent: olko-review-verifier
+    parse: review.verdicts
+    prompt: |
+      Plan review of {{state.plan-read.path}}. The findings quote plan steps; check them against the plan text below.
+
+      Findings ({{state.plan-merge.findings.length}}), one per line:
+      {{#state.plan-merge.findings}}
+      {{line}}
+      {{/state.plan-merge.findings}}
+
+      Plan text:
+      {{state.plan-read.text}}
+  - id: plan-confirm
+    description: "Keeps the confirmed plan findings."
+    kind: script
+    op: review.confirmFindings
+    with: { findings: plan-merge, verdicts: plan-verify }
+edges:
+  - { from: plan-read, to: plan-lens }
+  - { from: plan-lens, to: plan-merge }
+  - { from: plan-merge, to: plan-verify, when: "plan-merge.findings > 0", description: "the lens found something" }
+  - { from: plan-merge, to: plan-confirm, when: "plan-merge.findings == 0", description: "nothing to verify" }
+  - { from: plan-verify, to: plan-confirm }
+  - { from: plan-confirm, to: END }

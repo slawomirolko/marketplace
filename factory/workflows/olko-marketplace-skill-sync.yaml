@@ -1,0 +1,51 @@
+name: olko-marketplace-skill-sync
+version: 0.2.0
+description: "Synchronizes project-local skills and OpenCode agents with the marketplace: compares every artifact, asks one decision per difference, applies, publishes through a PR and installs after the merge."
+source: agents/opencode/olko-marketplace-skill-sync-manager.md (phases 1-5)
+roles:
+  bootstrap: low
+  adapter: medium
+  comparator: medium
+  sync: medium
+  publisher: medium
+entry: sources
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: sources
+    description: "Prepares both sides: the marketplace path, memory and missing skills, and a safe, current marketplace checkout."
+    kind: group
+    workflow: olko-skill-sync-sources
+  - id: compare-phase
+    description: "Phase 2: discovers local skills and agents, adapts the skills locally, checks their versions and compares every artifact with its marketplace copy in parallel."
+    kind: group
+    workflow: olko-skill-sync-compare
+  - id: decide-phase
+    description: "Phase 3: one decision per non-identical artifact, with the actions its classification allows."
+    kind: group
+    workflow: olko-skill-sync-decide
+  - id: plan
+    description: "Collects the accepted decisions and how each one is applied."
+    kind: script
+    op: sync.plan
+  - id: apply-phase
+    description: "Phase 4: applies one accepted decision at a time: marketplace change, move-to-adapter with draft and approval, or revert-local after a final confirmation."
+    kind: group
+    workflow: olko-skill-sync-apply
+  - id: publish-phase
+    description: "Phase 5: validates the marketplace, publishes through olko-commit after approval, then leave, wait for CI or squash merge, and installs after the merge."
+    kind: group
+    workflow: olko-skill-sync-publish
+  - id: report
+    description: "Reports every artifact with its classification and decision, and what was published or installed."
+    kind: script
+    op: sync.report
+edges:
+  - { from: sources, to: compare-phase }
+  - { from: compare-phase, to: decide-phase }
+  - { from: decide-phase, to: plan }
+  - { from: plan, to: apply-phase, when: "plan.accepted > 0", description: "some decisions change something" }
+  - { from: plan, to: report, when: "plan.accepted == 0", description: "every decision is leave or reject" }
+  - { from: apply-phase, to: publish-phase }
+  - { from: publish-phase, to: report }
+  - { from: report, to: END }

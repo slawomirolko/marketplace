@@ -1,0 +1,68 @@
+name: olko-claude-sync
+version: 0.2.0
+description: "Synchronizes skills and agents between a Claude Code plugin marketplace (target), the Olko marketplace and your ~/.claude scope: inventory, match, compare, one decision per row, port through stage folders, apply one row at a time, publish a draft PR, optional consolidation."
+source: plugins/olko-sync/agents/olko-claude-sync-manager.md (phases 0-6)
+roles:
+  sync-worker: low
+  sync: medium
+entry: state-phase
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: state-phase
+    description: "Phase 0: prepares the sync state (Olko path, target, user scope) and asks once for leak terms that must never reach Olko."
+    kind: group
+    workflow: olko-claude-sync-state
+  - id: sources
+    description: "Phase 1: both marketplaces must be clean and current before anything is compared."
+    kind: group
+    workflow: olko-claude-sync-sources
+  - id: inventory-phase
+    description: "Phase 2: three inventory workers list every skill and agent per store, the matcher links copies into capabilities, probable links are confirmed and exclusions checked."
+    kind: group
+    workflow: olko-claude-sync-inventories
+  - id: compare-phase
+    description: "Phase 2: one comparator per capability returns a verdict; the rows carry the actions each verdict allows."
+    kind: group
+    workflow: olko-claude-sync-compare
+  - id: decide-phase
+    description: "Phase 3: one decision per non-identical row; exclusions ask for their scope and reason."
+    kind: group
+    workflow: olko-claude-sync-decide
+  - id: record
+    description: "Writes the exclusions and rejections into the sync state."
+    kind: script
+    op: csync.record
+  - id: stage-phase
+    description: "Phase 4 Wave C: one porter per approved row translates it into its own stage folder and runs the sanitize gate; every finding and every missing dependency is decided by the user."
+    kind: group
+    workflow: olko-claude-sync-stage
+  - id: apply-phase
+    description: "Phase 4: applies one staged row at a time into Olko (registry or agent manifest, validation) or into the user scope after a yes, and records lineage."
+    kind: group
+    workflow: olko-claude-sync-apply
+  - id: publish-phase
+    description: "Phase 5: Olko tests and leak check, then a draft PR after approval, and leave, wait for CI or squash merge."
+    kind: group
+    workflow: olko-claude-sync-publish
+  - id: consolidate-phase
+    description: "Phase 6: offers the skill consolidator once; its suggestions are accepted into a plan file or rejected with a reason."
+    kind: group
+    workflow: olko-claude-sync-consolidate
+  - id: report
+    description: "Reports every row with its verdict and decision, what was applied and published, and the consolidation."
+    kind: script
+    op: csync.report
+edges:
+  - { from: state-phase, to: sources }
+  - { from: sources, to: inventory-phase }
+  - { from: inventory-phase, to: compare-phase }
+  - { from: compare-phase, to: decide-phase }
+  - { from: decide-phase, to: record }
+  - { from: record, to: stage-phase, when: "plan.changes > 0", description: "some rows change a store" }
+  - { from: record, to: consolidate-phase, when: "plan.changes == 0", description: "nothing to apply" }
+  - { from: stage-phase, to: apply-phase }
+  - { from: apply-phase, to: publish-phase }
+  - { from: publish-phase, to: consolidate-phase }
+  - { from: consolidate-phase, to: report }
+  - { from: report, to: END }

@@ -1,0 +1,63 @@
+name: olko-claude-sync-consolidate
+version: 0.1.0
+description: "Phase 6: offers the skill consolidator once; its suggestions are accepted into a plan file or rejected with a reason."
+source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 6)"
+roles:
+  sync: medium
+entry: ask-consolidate
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: ask-consolidate
+    description: "Offers the skill consolidator once."
+    kind: interrupt
+    question:
+      id: q-claude-sync-consolidate
+      text: "Run the skill consolidator once over the stores (suggestions only, nothing is edited)?"
+      allowed: [run, skip]
+  - id: consolidate
+    description: "The consolidator suggests merge, remove or extend for overlapping skills (no edits)."
+    kind: llm
+    role: sync
+    skill: olko-skill-consolidator
+    tools: [read, bash]
+    dirs: ["{{state.state.target}}", "{{state.state.olko}}", "{{state.state.user}}", "{{state.state.stateDir}}"]
+    parse: csync.suggestions
+    prompt: |
+      Run steps 1-6 of the skill for the stores user ({{state.state.user}}), olko ({{state.state.olko}}) and target ({{state.state.target}}), with --state-dir {{state.state.stateDir}} for sync-state.mjs. You have no Agent tool: evaluate each candidate yourself. Do not ask the user and do not record anything; the factory asks and records.
+      End with one ```json block: {"suggestions": [{"items": ["<store>:<skill|agent>:<name>", "..."], "verdict": "merge|remove|extend", "evidence": "<file:line pairs>", "loses": "<what would be lost>"}]}
+  - id: suggestion-next
+    description: "Takes the next suggestion."
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: consolidate.consolidate.suggestions }
+  - id: ask-suggestion
+    description: "Asks accept, reject or skip."
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-suggestion-{{state.suggestion-next.index}}"
+      text: "Consolidation suggestion {{state.suggestion-next.number}} of {{state.suggestion-next.total}}:\n{{state.suggestion-next.item.line}}"
+      allowed: [accept, reject, skip]
+  - id: ask-suggestion-reason
+    description: "Asks the reason for a rejection."
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-suggestion-reason-{{state.suggestion-next.index}}"
+      text: "Why reject it? One line."
+  - id: consolidation-record
+    description: "Writes accepted suggestions to a plan file and rejections to the sync state."
+    kind: script
+    op: csync.consolidationRecord
+edges:
+  - { from: ask-consolidate, to: consolidate, when: 'ask-consolidate.answer == "run"', description: "you chose run" }
+  - { from: ask-consolidate, to: END, when: 'ask-consolidate.answer == "skip"', description: "you chose skip" }
+  - { from: consolidate, to: suggestion-next }
+  - { from: suggestion-next, to: ask-suggestion, when: "suggestion-next.done == false", description: "a suggestion is left" }
+  - { from: suggestion-next, to: consolidation-record, when: "suggestion-next.done == true", description: "all suggestions decided" }
+  - { from: ask-suggestion, to: ask-suggestion-reason, when: 'ask-suggestion.answer == "reject"', description: "you rejected it" }
+  - { from: ask-suggestion, to: suggestion-next, description: "suggestion accepted: next suggestion" }
+  - { from: ask-suggestion-reason, to: suggestion-next }
+  - { from: consolidation-record, to: END }

@@ -1,0 +1,51 @@
+name: olko-plan-audit
+version: 0.1.0
+description: "Steps 4 and 5: stack auditors chosen from the technologies the plan implements review the plan; verified findings are folded in and the consistency gate runs again."
+source: "agents/opencode/olko-plan-documentation-orchestrator.md (Steps 4-5: stack auditors chosen by technology, verified findings folded, consistency gate)"
+roles:
+  auditor: medium
+  planner: high
+entry: auditors
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: auditors
+    description: "Chooses the stack auditors from the technologies named in implementation.md."
+    kind: script
+    op: plan.auditors
+  - id: audit
+    description: "Selected auditors review the planned changes (read only)."
+    kind: llm
+    role: auditor
+    agentsFrom: state.auditors.agents
+    parse: plan.findings
+    prompt: |
+      Review only: audit the architecture and style of the planned changes in {{state.feature.featureDir}}/implementation.md and its Task files (project {{input.project}}). Do not edit code, tests, configuration, AGENTS.md, plan documents, agents or skills.
+      Return exact rule and file:line evidence plus corrections to the technical document. End with one line: `findings | <none|found> | <count> | <findings, semicolon separated>`.
+  - id: audit-findings
+    description: "Counts the auditor findings."
+    kind: script
+    op: plan.findings
+    with: { from: audit }
+  - id: fold-audit
+    description: "Plan editor folds the verified auditor findings into the plan."
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    parse: text.raw
+    prompt: |
+      Fold only these verified auditor findings into the plan package {{state.feature.featureDir}} (project {{input.project}}); edit only that folder.
+      {{state.audit-findings.text}}
+  - id: gate-audit
+    description: "Consistency gate after the audit fixes."
+    kind: call
+    workflow: olko-plan-gate
+    input: { featureDir: "{{state.feature.featureDir}}" }
+edges:
+  - { from: auditors, to: audit }
+  - { from: audit, to: audit-findings }
+  - { from: audit-findings, to: fold-audit, when: "audit-findings.total > 0", description: "auditors found something" }
+  - { from: audit-findings, to: END, description: "no auditor finding" }
+  - { from: fold-audit, to: gate-audit }
+  - { from: gate-audit, to: END }

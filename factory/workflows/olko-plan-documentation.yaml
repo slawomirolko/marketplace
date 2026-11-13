@@ -1,0 +1,71 @@
+name: olko-plan-documentation
+version: 0.2.0
+description: "Plans work from an idea or an accepted Feature: discovery drafts the Epic/Feature/Task hierarchy, planning writes the business plan, the technical plan and one implementation plan per Task, then reviews, grills and finalizes them."
+source: agents/opencode/olko-plan-documentation-orchestrator.md (DISCOVERY and IMPLEMENTATION PLANNING; each phase is a group file, tracker steps sit behind switches.tracker)
+entry: route
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: route
+    description: "Reads input.route (discovery, planning or both); without it the user is asked."
+    kind: script
+    op: plan.route
+    maxVisits: 2
+  - id: ask-route
+    description: "Asks the user which deliverable they want when the run input does not say."
+    kind: interrupt
+    question:
+      id: q-plan-route
+      text: "What do you want: discovery (create or refine Epic/Feature/Task issues), planning (implementation plans for an accepted Feature), or both?"
+      allowed: [discovery, planning, both]
+  - id: discovery
+    description: "Drafts and reviews the Epic/Feature/Task hierarchy with the backlog writer."
+    kind: group
+    workflow: olko-plan-discovery
+  - id: discovery-report
+    description: "Ends a discovery-only run after the draft was approved (and published when the tracker is on)."
+    kind: script
+    op: builtin.pass
+  - id: entry
+    description: "Entry gate of planning: the Feature and every Task must have acceptance criteria."
+    kind: group
+    workflow: olko-plan-entry
+  - id: package
+    description: "Builds the first plan package: evidence, business plan, technical plans, consistency gate."
+    kind: group
+    workflow: olko-plan-package
+  - id: audit-phase
+    description: "Checks the plan with the stack auditors of the technologies it touches."
+    kind: group
+    workflow: olko-plan-audit
+  - id: review-phase
+    description: "Reviews every plan file with the olko-review PLAN route."
+    kind: group
+    workflow: olko-plan-review-files
+  - id: grill-phase
+    description: "Asks the user grill questions in batches and re-validates the plan after each batch."
+    kind: group
+    workflow: olko-plan-grill
+  - id: readiness-phase
+    description: "Cleans the plan up and resolves blockers until every plan is ready for implementation."
+    kind: group
+    workflow: olko-plan-readiness
+  - id: finalize
+    description: "Records Domain changes, memory and opens the plan; checks nothing outside the plan folder changed."
+    kind: group
+    workflow: olko-plan-finalize
+edges:
+  - { from: route, to: ask-route, when: 'route.route == "ask"', description: "no route in the run input" }
+  - { from: route, to: entry, when: 'route.route == "planning"', description: "planning only: skip discovery" }
+  - { from: route, to: discovery, description: "discovery or both" }
+  - { from: ask-route, to: route, description: "the answer becomes the route" }
+  - { from: discovery, to: discovery-report, when: 'route.route == "discovery"', description: "only discovery was requested" }
+  - { from: discovery, to: entry, description: "both: plan the approved draft" }
+  - { from: discovery-report, to: END }
+  - { from: entry, to: package }
+  - { from: package, to: audit-phase }
+  - { from: audit-phase, to: review-phase }
+  - { from: review-phase, to: grill-phase }
+  - { from: grill-phase, to: readiness-phase }
+  - { from: readiness-phase, to: finalize }
+  - { from: finalize, to: END }

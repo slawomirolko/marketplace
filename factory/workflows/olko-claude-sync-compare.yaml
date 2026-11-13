@@ -1,0 +1,34 @@
+name: olko-claude-sync-compare
+version: 0.1.0
+description: "Phase 2: one comparator per capability returns a verdict; the rows carry the actions each verdict allows."
+source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 2, compare)"
+roles:
+  sync-worker: low
+entry: compare
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: compare
+    description: "One comparator per capability returns a verdict (identical, target-ahead, diverged...)."
+    kind: llm
+    role: sync-worker
+    agent: olko-claude-sync-comparator
+    agentsFrom: state.exclusions.compare
+    tools: [read, bash]
+    dirs: ["{{state.state.target}}", "{{state.state.olko}}", "{{state.state.user}}", "{{state.state.stateDir}}"]
+    parse: csync.verdict
+    prompt: |
+      Capability: {{agent.id}} ({{agent.kind}}), link basis {{agent.basis}}
+      Copies:
+      {{agent.copiesText}}
+      Lineage: run sync-state.mjs lineage get --capability {{agent.id}} --state-dir {{state.state.stateDir}}
+
+      End your report with exactly one line:
+      result | <identical|platform-delta-only|target-only|olko-only|user-only|target-ahead|olko-ahead|user-ahead|diverged> | <none|patch|minor|major> | <proposed next Olko version or none> | <recommended action>
+  - id: rows
+    description: "Builds the decision table with the actions each verdict allows."
+    kind: script
+    op: csync.rows
+edges:
+  - { from: compare, to: rows }
+  - { from: rows, to: END }

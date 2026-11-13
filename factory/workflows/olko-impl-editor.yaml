@@ -1,0 +1,26 @@
+name: olko-impl-editor
+version: 0.1.0
+description: "Step 8c: opens the worktree in a new VS Code window; you confirm that the editor shows no syntax or structure problem before the merge. Never skipped while the switch is on."
+source: "skills/*/olko-implementation-pr-gates (OBLIGATORY EDITOR VERIFICATION GATE)"
+entry: open
+nodes:
+  - id: open
+    description: "Runs code --new-window on the worktree."
+    kind: script
+    op: impl.openEditor
+  - id: ask-editor
+    description: "Asks for your editor verification."
+    kind: interrupt
+    question:
+      id: q-impl-editor
+      text: "The worktree {{state.worktree.path}} is open in a new VS Code window (or run code --new-window on it). Check the changed files for syntax and structure problems. Verified, or stop?"
+      allowed: [verified, stop]
+  - id: stop-editor
+    description: "Stops before merge: the editor check failed."
+    kind: script
+    op: impl.stop
+    with: { reason: "the editor verification did not pass" }
+edges:
+  - { from: open, to: ask-editor }
+  - { from: ask-editor, to: END, when: 'ask-editor.answer == "verified"', description: "you verified the files" }
+  - { from: ask-editor, to: stop-editor, description: "you chose stop" }

@@ -1,0 +1,25 @@
+name: olko-skill-sync-sources
+version: 0.1.0
+description: "Prepares both sides: the marketplace path, memory and missing skills, and a safe, current marketplace checkout."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (startup and phase 1)"
+entry: path
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: path
+    description: "Finds the marketplace checkout (input, MARKETPLACE_PATH, project adapter, fallback) and asks before using the built-in fallback."
+    kind: group
+    workflow: olko-skill-sync-path
+  - id: prepare
+    description: "Loads the manager memory and lets the bootstrapper install registry skills missing from the project."
+    kind: group
+    workflow: olko-skill-sync-prepare
+  - id: safe
+    description: "Phase 1: calls the shared safe-source step for the marketplace checkout."
+    kind: call
+    workflow: olko-safe-source
+    input: { path: "{{state.resolve-path.path}}", label: "marketplace" }
+edges:
+  - { from: path, to: prepare }
+  - { from: prepare, to: safe }
+  - { from: safe, to: END }

@@ -1,0 +1,82 @@
+name: olko-plan-gate
+version: 0.1.0
+description: "Steps 2a and 3, called after every plan change: refreshes stack.md, runs the bidirectional business-to-technical consistency gate, and corrects the plan up to three times before asking whether to accept the remaining gap."
+source: agents/opencode/olko-plan-documentation-orchestrator.md (steps 2a and 3, stack.md and the bidirectional consistency gate with its correction loop)
+roles:
+  plan-gate: medium
+  planner: high
+entry: stack
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: stack
+    description: "Refreshes stack.md from the verified scope and records dependency evidence."
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    tools: [read, edit]
+    maxVisits: 4
+    parse: text.raw
+    prompt: |
+      Do only step 2a of your workflow for the Feature plan folder {{input.featureDir}} in the project {{input.project}}: create or refresh stack.md from the verified implementation scope and record the dependency evidence in tracker.md. Write only stack.md and tracker.md in that folder. Do not delegate, ask the user, or run commands.
+      Reply with one line: `stack | <new dependencies or none>`.
+  - id: consistency
+    description: "Checks business against technical plan, stack.md and every Task file (read only)."
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    maxVisits: 4
+    parse: plan.consistency
+    prompt: |
+      Do only the check of step 3 of your workflow for the Feature plan folder {{input.featureDir}} in the project {{input.project}}: the bidirectional business-to-technical consistency gate, stack.md against the final scope, and every Task file against its Feature milestone, file estimate, dependencies, parallelism and acceptance. Read only; do not edit anything, do not delegate, do not ask the user.
+      End with exactly one line: `consistency | <pass|fail> | <number of mismatches> | <mismatches, semicolon separated, or none>`.
+  - id: round
+    description: "Counts correction rounds."
+    kind: script
+    op: builtin.count
+    maxVisits: 4
+  - id: fix
+    description: "Plan editor corrects the mismatches."
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    maxVisits: 4
+    parse: text.raw
+    prompt: |
+      Correct the Feature plan package in {{input.featureDir}} (project {{input.project}}) so these consistency mismatches are resolved, then stop. Edit only the files of that folder; leave business.md to its own wording unless a verified fact requires a correction.
+      Mismatches: {{state.consistency.consistency.detail}}
+      Reply with one line: `fixed | <files changed>`.
+  - id: ask-gap
+    description: "After three failed rounds asks whether to accept the remaining mismatches."
+    kind: interrupt
+    question:
+      id: q-plan-gap
+      text: "The consistency gate still fails after {{state.round.count}} correction rounds: {{state.consistency.consistency.detail}}. Accept the remaining mismatches as ACCEPTED-GAP in tracker.md and continue, or stop?"
+      allowed: [accept, stop]
+  - id: record-gap
+    description: "Records the accepted mismatches as ACCEPTED-GAP in tracker.md and the plans."
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    tools: [read, edit]
+    parse: text.raw
+    prompt: |
+      Record in {{input.featureDir}}/tracker.md (and in the `## Open items` of the affected plans as ACCEPTED-GAP) that the user accepted these consistency mismatches: {{state.consistency.consistency.detail}}. Edit only those files.
+      Reply with one line: `recorded | <files>`.
+  - id: stop
+    description: "Stops the run when the user does not accept the gap."
+    kind: script
+    op: builtin.stop
+    with: { reason: "The user stopped planning at the consistency gate." }
+edges:
+  - { from: stack, to: consistency }
+  - { from: consistency, to: END, when: "consistency.consistency.pass == true", description: "plan is consistent" }
+  - { from: consistency, to: round, description: "mismatches found" }
+  - { from: round, to: fix, when: "round.count < 3", description: "fewer than three correction rounds" }
+  - { from: round, to: ask-gap, description: "three rounds did not fix it" }
+  - { from: fix, to: stack }
+  - { from: ask-gap, to: record-gap, when: 'ask-gap.answer == "accept"', description: "you accepted the gap" }
+  - { from: ask-gap, to: stop, when: 'ask-gap.answer == "stop"', description: "you chose stop" }
+  - { from: record-gap, to: END }
+  - { from: stop, to: END }

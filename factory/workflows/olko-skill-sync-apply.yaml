@@ -1,0 +1,101 @@
+name: olko-skill-sync-apply
+version: 0.1.0
+description: "Phase 4: applies one accepted decision at a time: marketplace change, move-to-adapter with draft and approval, or revert-local after a final confirmation."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 4)"
+roles:
+  sync: medium
+entry: apply-next
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: apply-next
+    description: "Takes the next accepted decision."
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: plan.accepted }
+  - id: apply
+    description: "The sync manager makes the marketplace change for this one decision (read and edit)."
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    tools: [read, edit]
+    dirs: ["{{state.resolve-path.path}}"]
+    maxVisits: 200
+    parse: sync.applied
+    prompt: |
+      Do only Phase 4 of your workflow for this one accepted decision. The factory owns every other phase and every question: do not ask, do not commit, push, install, run registry --fix, or touch any other artifact.
+      Decision: {{state.apply-next.item.decision}} for {{state.apply-next.item.type}} {{state.apply-next.item.name}} (classification {{state.apply-next.item.classification}}).
+      Local project: {{state.discover.project}}
+      Marketplace: {{state.resolve-path.path}}
+
+      {{state.apply-next.item.instruction}}
+      The user approved version {{state.apply-next.item.version}}: set it on the manifest entry even when the body has no portable change. Use `blocked` only when a write fails.
+
+      Reply with one line: `applied | <changed files, comma separated> | <version>`, or `blocked | <reason>` when you could not apply it.
+  - id: adapter-draft
+    description: "Drafts the project adapter change for move-to-adapter (no write)."
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    dirs: ["{{state.resolve-path.path}}"]
+    maxVisits: 200
+    parse: text.raw
+    prompt: |
+      Do only step (1) of the move-to-adapter decision in Phase 4 for {{state.apply-next.item.type}} {{state.apply-next.item.name}}, and do not write any file: draft the exact diff for the project's `.agents/skill-config.md` or `.agents/skills/{{state.apply-next.item.name}}/project.md` (every reported project value and every delegated skill in `uses`), and list the keys the marketplace skill does not expose yet (step 2, a marketplace change with at least a minor bump).
+      Local project: {{state.discover.project}}
+      Local path: {{state.apply-next.item.localPath}}
+      Marketplace path: {{state.apply-next.item.marketplacePath}}
+      Reply with the diff and the key list only.
+  - id: ask-adapter
+    description: "Asks before writing the adapter and the marketplace keys."
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-sync-adapter-{{state.apply-next.index}}"
+      text: "Adapter change for {{state.apply-next.item.type}} {{state.apply-next.item.name}}:\n{{state.adapter-draft.adapter-draft}}\n\nWrite the adapter and the marketplace keys?"
+      allowed: [write, skip]
+  - id: adapter-write
+    description: "Writes the approved adapter and marketplace keys."
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    tools: [read, edit]
+    dirs: ["{{state.resolve-path.path}}"]
+    maxVisits: 200
+    parse: sync.applied
+    prompt: |
+      Do only steps (1) and (2) of the move-to-adapter decision in Phase 4 for {{state.apply-next.item.type}} {{state.apply-next.item.name}}, exactly as the approved draft below. Do not replace the local skill body (the factory does step 3 after one more confirmation), do not commit, push or install.
+      Local project: {{state.discover.project}}
+      Marketplace: {{state.resolve-path.path}}
+
+      Approved draft:
+      {{state.adapter-draft.adapter-draft}}
+
+      Reply with one line: `applied | <changed files, comma separated> | <version>`, or `blocked | <reason>` when you could not apply it.
+  - id: ask-revert
+    description: "Final confirmation before the local copy is overwritten."
+    kind: interrupt
+    maxVisits: 200
+    question:
+      id: "q-sync-revert-{{state.apply-next.index}}"
+      text: "Final confirmation: replace the local {{state.apply-next.item.type}} {{state.apply-next.item.localPath}} with its marketplace counterpart {{state.apply-next.item.marketplacePath}}? This overwrites the local copy."
+      allowed: [revert, keep]
+  - id: revert
+    description: "Replaces the local copy with the marketplace version."
+    kind: script
+    op: sync.revertLocal
+    maxVisits: 200
+edges:
+  - { from: apply-next, to: END, when: "apply-next.done == true", description: "all decisions applied" }
+  - { from: apply-next, to: apply, when: 'apply-next.item.route == "change"', description: "adopt or create" }
+  - { from: apply-next, to: ask-revert, when: 'apply-next.item.route == "revert"', description: "revert-local" }
+  - { from: apply-next, to: adapter-draft, when: 'apply-next.item.route == "adapter"', description: "move-to-adapter" }
+  - { from: apply, to: apply-next }
+  - { from: adapter-draft, to: ask-adapter }
+  - { from: ask-adapter, to: adapter-write, when: 'ask-adapter.answer == "write"', description: "you chose write" }
+  - { from: ask-adapter, to: apply-next, when: 'ask-adapter.answer == "skip"', description: "you chose skip" }
+  - { from: adapter-write, to: ask-revert }
+  - { from: ask-revert, to: revert, when: 'ask-revert.answer == "revert"', description: "you confirmed the overwrite" }
+  - { from: ask-revert, to: apply-next, when: 'ask-revert.answer == "keep"', description: "you kept the local copy" }
+  - { from: revert, to: apply-next }

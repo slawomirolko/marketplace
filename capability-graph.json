@@ -779,6 +779,26 @@
       "prerequisites": []
     },
     {
+      "id": "software-factory",
+      "skills": [
+        "olko-factory-workflow-yaml"
+      ],
+      "related": [
+        "software-factory.factory.workflow.yaml"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "software-factory.factory.workflow.yaml",
+      "skills": [
+        "olko-factory-workflow-yaml"
+      ],
+      "related": [
+        "software-factory"
+      ],
+      "prerequisites": []
+    },
+    {
       "id": "testing",
       "skills": [
         "olko-test"

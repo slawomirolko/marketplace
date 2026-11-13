@@ -1,0 +1,20 @@
+name: olko-plan-entry
+version: 0.1.0
+description: "Planning entry: reads the Feature with its Tasks from the tracker (switch on) or takes the approved draft, and stops unless every Task has acceptance criteria."
+source: "agents/opencode/olko-plan-documentation-orchestrator.md (PLANNING entry gate: Feature context from the tracker or the approved draft; every Task needs acceptance criteria)"
+entry: tracker-context
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: tracker-context
+    description: "Reads the Feature, its Epic and every child Task from the tracker; skipped when switches.tracker is off."
+    kind: subgraph
+    workflow: olko-plan-tracker-context
+    enabledWhen: "switches.tracker == true"
+  - id: feature
+    description: "Entry gate: picks the Feature context, requires acceptance criteria on every Task and creates the plan folder."
+    kind: script
+    op: plan.feature
+edges:
+  - { from: tracker-context, to: feature }
+  - { from: feature, to: END }

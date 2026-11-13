@@ -1,0 +1,32 @@
+name: olko-review-scope
+version: 0.1.0
+description: "Reads the PR (title, body, diff) and picks the lenses: bugs, one stack lens per changed stack, requirements when the PR states criteria."
+source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE, scope and lens detection)"
+entry: scope
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: scope
+    description: "Reads the PR title, body and diff with gh, drops generated lockfiles and flags a stale working tree."
+    kind: script
+    op: github.prScope
+    with:
+      exclude:
+        - '(^|/)pnpm-lock\.yaml$'
+        - '(^|/)package-lock\.json$'
+        - '(^|/)yarn\.lock$'
+  - id: detect
+    description: "Chooses the lenses: bugs always, one stack lens per changed stack, requirements when the PR states criteria."
+    kind: script
+    op: review.detectLenses
+    with:
+      always: { id: bugs, agent: olko-review-bugs-lens }
+      requirements: { id: requirements, agent: olko-review-requirements-lens }
+      stacks:
+        - { id: dotnet, agent: olko-review-dotnet-lens, extensions: [".cs", ".csproj", ".props", ".targets"] }
+        - { id: react, agent: olko-review-react-lens, extensions: [".ts", ".tsx"] }
+        - { id: mobile, agent: olko-review-mobile-lens, extensions: [".kt", ".kts"] }
+        - { id: python, agent: olko-review-python-lens, extensions: [".py"] }
+edges:
+  - { from: scope, to: detect }
+  - { from: detect, to: END }

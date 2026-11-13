@@ -1578,6 +1578,26 @@
       ]
     },
     {
+      "name": "olko-factory-workflow-yaml",
+      "category": "software-factory",
+      "version": "0.1.0",
+      "description": "Rules for the Software Factory workflow YAML in factory/workflows: how an Olko agent's steps map to phase groups, nodes, edges and conditions, which engine operations exist, how a workflow names its sources, and how to validate it. Use when you write, update or verify a factory workflow from an Olko agent or skill. Triggers: 'factory workflow', 'map agent to yaml', 'update factory yaml', 'verify factory workflow', 'olko-factory-workflow-yaml'.",
+      "tags": [
+        "software-factory",
+        "factory",
+        "workflow",
+        "yaml"
+      ],
+      "capabilities": [
+        "software-factory",
+        "software-factory.factory.workflow.yaml"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
       "name": "olko-test",
       "category": "testing",
       "version": "2.2.0",

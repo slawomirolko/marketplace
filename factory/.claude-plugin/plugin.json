@@ -1,0 +1,17 @@
+{
+  "name": "skill-factory",
+  "version": "0.2.0",
+  "description": "Software factory over MCP: runs a workflow graph with model tiers, user questions and per-agent cost, and links a local page that shows the whole run",
+  "author": {
+    "name": "Slawomir Olko"
+  },
+  "repository": "https://github.com/slawomirolko/marketplace",
+  "license": "MIT",
+  "keywords": ["mcp", "workflow", "factory", "cost"],
+  "mcpServers": {
+    "factory": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/stdio.mjs"]
+    }
+  }
+}

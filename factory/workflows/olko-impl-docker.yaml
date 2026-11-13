@@ -1,0 +1,53 @@
+name: olko-impl-docker
+version: 0.1.0
+description: "Steps 6-7: the Docker rebuild runs only in an isolated Compose project of the worktree, with proof that the main project stayed untouched; runtime evidence is collected there and recorded in the Feature tracker. No errors without positive execution evidence is NOT VERIFIED."
+source: "agents/opencode/olko-implementation-orchestrator.md (steps 6-7) and skills/*/olko-worktree-compose-isolation"
+roles:
+  publisher: medium
+  implementer: medium
+entry: docker-rebuild
+nodes:
+  - id: docker-rebuild
+    description: "Git delivery manager rebuilds and restarts the affected services in an isolated Compose project and proves the main project was not touched."
+    kind: llm
+    role: publisher
+    agent: olko-git-delivery-manager
+    tools: [read, bash]
+    parse: impl.docker
+    prompt: |
+      Only delivery check 2 (Docker rebuild and restart) for the worktree {{state.worktree.path}}, Task {{state.task.taskName}}, Feature {{state.task.featureId}}, plan {{state.task.taskFile}}. Follow olko-worktree-compose-isolation: an isolated Compose project only, never the main project. Do not commit, push or open a PR.
+      End with one line: `docker | <pass|fail|blocked> | <isolated project name, services, and the proof the main project stayed untouched>`
+  - id: runtime
+    description: "The stack implementers collect positive runtime evidence (logs, traces, database) from the isolated project, read only."
+    kind: llm
+    role: implementer
+    agentsFrom: state.stacks.implementers
+    tools: [read, bash]
+    parse: impl.runtime
+    prompt: |
+      Read only: collect runtime evidence for Task {{state.task.taskName}} from the isolated Compose project of this worktree that the Docker step just started, never from the main stack. Use the verification contract of {{state.task.taskFile}} and {{state.task.featurePlan}}: expected log or trace signature, scan window, errors, warnings, exceptions and timeouts. No errors without positive execution evidence is NOT VERIFIED.
+      End with one line: `runtime | <verified|not-verified> | <environment, time, signature found, errors>`
+  - id: docker-check
+    description: "Records the evidence in the journal and the Feature tracker and decides."
+    kind: script
+    op: impl.docker
+  - id: teardown
+    description: "Tears down only the isolated Compose project."
+    kind: llm
+    role: publisher
+    agent: olko-git-delivery-manager
+    tools: [read, bash]
+    parse: text.raw
+    prompt: |
+      Tear down only the isolated Compose project of the worktree {{state.worktree.path}} that you started for Task {{state.task.taskName}}. Never touch the main project. Report the command and result.
+  - id: stop-runtime
+    description: "Stops: runtime is not verified."
+    kind: script
+    op: impl.stop
+    with: { from: docker-check }
+edges:
+  - { from: docker-rebuild, to: runtime }
+  - { from: runtime, to: docker-check }
+  - { from: docker-check, to: teardown }
+  - { from: teardown, to: END, when: 'docker-check.next == "pass"', description: "runtime VERIFIED" }
+  - { from: teardown, to: stop-runtime, description: "runtime NOT VERIFIED" }
