@@ -1,6 +1,6 @@
 ---
 name: olko-task-implementation-workflow
-version: 1.0.0
+version: 1.1.0
 description: "Ordered single-Task implementation, verification, PR, merge, post-merge E2E, and closure contract for the implementation orchestrator."
 ---
 

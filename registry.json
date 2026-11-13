@@ -820,8 +820,8 @@
     {
       "name": "olko-worktree-merge",
       "category": "git",
-      "version": "1.1.0",
-      "description": "Merge a git worktree branch into the default branch through a GitHub PR, including commit/push handoff, CI and review checks, worktree compose teardown, main checkout update, optional main compose rebuild, and local worktree/branch cleanup. Triggers: 'merge worktree', 'olko-worktree-merge', 'merge this branch to main', 'create PR for this worktree', 'finish worktree', 'close worktree'.",
+      "version": "1.2.0",
+      "description": "Merge a git worktree branch into the default branch through a GitHub PR, including commit/push handoff, CI and review checks, optional mandatory post-merge acceptance E2E, main checkout update, optional main compose rebuild, and session relocation before the final worktree cleanup. Triggers: 'merge worktree', 'olko-worktree-merge', 'merge this branch to main', 'create PR for this worktree', 'finish worktree', 'close worktree'.",
       "tags": [
         "git",
         "worktree",
@@ -1830,8 +1830,8 @@
     {
       "name": "olko-implementation-closure",
       "category": "workflow",
-      "version": "1.1.0",
-      "description": "Post-merge steps 11, 12, 13, 12a, and 12b of olko-implementation-orchestrator: post-merge acceptance E2E, main-stack runtime verification, worktree cleanup, Task plan removal, Feature completion audit, and Feature plan cleanup.",
+      "version": "1.2.0",
+      "description": "Post-merge steps 11, 12, 12a, 12b, and 13 of olko-implementation-orchestrator: post-merge acceptance E2E, main-stack runtime verification, Feature completion audit, Feature plan cleanup, and the final session relocation plus worktree cleanup.",
       "tags": [
         "workflow",
         "implementation"
@@ -1848,7 +1848,7 @@
     {
       "name": "olko-implementation-journal",
       "category": "workflow",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Implementation journal template and resume procedure for olko-implementation-orchestrator; load when creating the journal or resuming a Task.",
       "tags": [
         "workflow",
@@ -2089,8 +2089,8 @@
     {
       "name": "olko-task-implementation-workflow",
       "category": "workflow",
-      "version": "1.0.0",
-      "description": "Ordered single-Task implementation contract: baseline E2E, preflight, failing tests first, exclusive chunks, verification, PR, merge, post-merge E2E, and closure.",
+      "version": "1.1.0",
+      "description": "Ordered single-Task implementation, verification, PR, merge, post-merge E2E, and closure contract for the implementation orchestrator.",
       "tags": [
         "workflow",
         "implementation",
