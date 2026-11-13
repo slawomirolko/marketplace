@@ -3,7 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 import { validate } from "./spec.ts";
-import { loadWorkflowDir } from "./workflow-yaml.ts";
+import { expandWorkflowDir, loadWorkflowDir } from "./workflow-yaml.ts";
+import { stateReferenceErrors } from "./state-refs.ts";
 import { describeAgent } from "./marketplace-agents.ts";
 import type { WorkflowSpec } from "./types.ts";
 
@@ -26,6 +27,7 @@ export function checkWorkflows(dir: string, agentExists: (name: string) => boole
       if (!spec.description) errors.push(`${file}: workflow has no description`);
       for (const node of spec.nodes ?? []) {
         if (!node.description) errors.push(`${file}: node ${node.id} has no description`);
+        if (node.required && !node.enabledWhen) errors.push(`${file}: node ${node.id}: required is only for a switched subgraph (enabledWhen)`);
         for (const name of [node.agent, node.skill, ...(node.agents ?? []).map((a) => a.agent)]) {
           if (typeof name === "string" && !agentExists(name)) errors.push(`${file}: node ${node.id}: agent or skill ${name} is not in the marketplace`);
         }
@@ -41,6 +43,8 @@ export function checkWorkflows(dir: string, agentExists: (name: string) => boole
   }
   try {
     loadWorkflowDir(dir);
+    const inlined = new Set(specs.flatMap((s) => (s.nodes ?? []).filter((n) => n.kind === "group" || n.kind === "subgraph").map((n) => n.workflow)));
+    for (const [name, spec] of expandWorkflowDir(dir)) if (!inlined.has(name)) errors.push(...stateReferenceErrors(spec).map((e) => `state reference: ${e}`));
   } catch (error) {
     errors.push(`load (an unknown operation or parser needs engine work): ${error instanceof Error ? error.message : String(error)}`);
   }

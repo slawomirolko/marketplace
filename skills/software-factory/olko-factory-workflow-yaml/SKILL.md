@@ -17,7 +17,7 @@ Rules for writing and checking Software Factory workflow YAML (`factory/workflow
 ## Node kinds
 - `group`: a phase in its own file, inlined; node ids stay the same, so ids must be unique across the root and all its groups. Leave a group with `END`; end the whole run with `FINISH`.
 - `call`: a reusable step with its own input (`input: { key: "{{state.x.y}}" }`) and its own state; use it for steps shared by workflows (`olko-safe-source`, `olko-pr-merge`, `olko-review`, `olko-impl-checks`).
-- `subgraph` with `enabledWhen: "switches.<name> == true"`: a part the user can switch off (tracker, editor, docker, obsidian, adopt).
+- `subgraph` with `enabledWhen: "switches.<name> == true"`: a part the user can switch off (tracker, editor, docker, obsidian, adopt). Switches are a factory feature the user chose for tests: never remove a switch. When the agent text says the step must never be skipped, keep the switch and add `required: true`; a run that switches it off is then marked with a warning.
 - `llm`: one agent (`agent:`), several (`agents:` list or `agentsFrom: state.<path>`), or a skill as the agent (`skill:`). Give `role:` (a tier key), `tools: [read, edit, bash]` only when the step writes or runs commands, `dirs:` for folders outside the workspace, `parse:` for its last line, and `maxVisits:` when it is in a loop.
 - `script`: a deterministic engine operation (`op:`, arguments in `with:`). Use it for git, counting, gates, file checks and journals.
 - `interrupt`: a question to the user (`question: { id, text, allowed }`); without `allowed` the answer is free text. Its answer is `state.<node>.answer`.
@@ -25,6 +25,12 @@ Rules for writing and checking Software Factory workflow YAML (`factory/workflow
 ## Conditions
 - `when:` is ONE comparison: `<state path> <==|!=|>|<|>=|<=> <value>`; no `&&` or `||`. Join paths with a boolean the operation sets.
 - Every path in a `when:` must exist when the edge is checked, or the run fails. Operations set every field they branch on.
+
+## State contract
+- A step stores state under its id: a question sets `<id>.answer`; an `llm` step with `parse:` sets `<id>.<agent id>.<parser fields>` (one agent: the agent id is the step id, so `state.check.check.pass`); an `llm` step without `parse:` stores nothing; a script sets the fields of its operation.
+- Steps inside a subgraph keep their own ids as state keys; steps inside a `call` read only their own scope.
+- `node factory/src/contract.ts` prints the fields of every parser (and of the operations that declare them) as JSON Schema. Read only fields listed there.
+- The validator checks every `{{state...}}`, `when:`, `agentsFrom` and `allowedFrom` against this contract; fix each `state reference:` error it prints.
 - Edges from one node are checked in order; the last one has no `when:`. Only one unconditional edge per node pair.
 
 ## Engine operations and parsers

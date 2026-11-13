@@ -167,12 +167,16 @@ function expandSubgraphs(spec: WorkflowSpec, specs: Map<string, WorkflowSpec>, s
     const sub = expandSubgraphs(subSpec, specs, [...seen, spec.name]);
     const prefix = (id: string) => `${node.id}/${id}`;
     const scoped = node.kind === "call";
-    nodes = nodes.concat(sub.nodes.map((n) => ({ ...n, id: prefix(n.id), ...(scoped ? { scope: n.scope ? prefix(n.scope) : node.id, localId: n.localId ?? n.id } : {}) })));
+    if (!scoped) {
+      const clash = sub.nodes.find((n) => !n.scope && (spec.nodes.some((o) => o.id === (n.localId ?? n.id)) || nodes.some((o) => !o.scope && (o.localId ?? o.id) === (n.localId ?? n.id))));
+      if (clash) throw new Error(`subgraph ${node.id}: step ${clash.localId ?? clash.id} is used twice; a subgraph shares its state keys with its parent`);
+    }
+    nodes = nodes.concat(sub.nodes.map((n) => ({ ...n, id: prefix(n.id), ...(scoped ? { scope: n.scope ? prefix(n.scope) : node.id } : {}), ...(scoped || !n.scope ? { localId: n.localId ?? n.id } : {}) })));
     for (const [role, tier] of Object.entries(sub.roles ?? {})) roles[role] ??= tier;
     const exits = edges.filter((e) => e.from === node.id);
     if (node.enabledWhen) {
       if (exits.some((x) => x.when)) throw new Error(`subgraph ${node.id}: a switched subgraph (enabledWhen) needs exits without conditions`);
-      nodes.push({ id: node.id, kind: "script", op: "builtin.gate", with: { subgraph: node.workflow, when: node.enabledWhen } });
+      nodes.push({ id: node.id, kind: "script", op: "builtin.gate", with: { subgraph: node.workflow, when: node.enabledWhen, ...(node.required ? { required: true } : {}) } });
     }
     const inner = sub.edges.flatMap((e) => {
       if (e.to === "FINISH" && !scoped) return [{ ...e, from: prefix(e.from) }];
@@ -223,7 +227,7 @@ export function loadWorkflowFile(file: string): Workflow {
   return buildWorkflow(readSpec(file), file);
 }
 
-export function loadWorkflowDir(dir: string): Map<string, Workflow> {
+function readSpecDir(dir: string): { specs: Map<string, WorkflowSpec>; files: Map<string, string> } {
   const specs = new Map<string, WorkflowSpec>();
   const files = new Map<string, string>();
   for (const file of fs.readdirSync(dir).filter((f) => /.ya?ml$/.test(f)).sort()) {
@@ -233,6 +237,16 @@ export function loadWorkflowDir(dir: string): Map<string, Workflow> {
     specs.set(spec.name, spec);
     files.set(spec.name, full);
   }
+  return { specs, files };
+}
+
+export function expandWorkflowDir(dir: string): Map<string, WorkflowSpec> {
+  const { specs } = readSpecDir(dir);
+  return new Map([...specs].map(([name, spec]) => [name, expandSubgraphs(spec, specs)]));
+}
+
+export function loadWorkflowDir(dir: string): Map<string, Workflow> {
+  const { specs, files } = readSpecDir(dir);
   const workflows = new Map<string, Workflow>();
   for (const [name, spec] of specs) workflows.set(name, buildWorkflow(expandSubgraphs(spec, specs), files.get(name) ?? name));
   return workflows;

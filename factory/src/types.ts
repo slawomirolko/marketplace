@@ -394,6 +394,7 @@ export interface WorkflowSpecNode {
   tools?: AgentTool[];
   dirs?: string[];
   enabledWhen?: string;
+  required?: boolean;
   input?: Record<string, string>;
   description?: string;
   scope?: string;

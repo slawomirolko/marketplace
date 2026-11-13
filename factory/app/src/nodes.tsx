@@ -32,7 +32,7 @@ function subtitle(item: Item, mainAgent: string | null = null): string {
   if (item.kind === "team") return `llm · ${item.inner.items.length} agents`;
   if (item.node.agentsFrom) return `llm · agents from ${item.node.agentsFrom}`;
   if (item.node.agent) return `llm · ${item.node.agent}`;
-  if (item.kind === "subgraph") return `${item.node.kind === "call" ? "call" : item.node.kind === "group" ? "group" : "subgraph"} · ${item.node.workflow}${item.node.enabledWhen ? ` · when ${item.node.enabledWhen}` : ""}`;
+  if (item.kind === "subgraph") return `${item.node.kind === "call" ? "call" : item.node.kind === "group" ? "group" : "subgraph"} · ${item.node.workflow}${item.node.enabledWhen ? ` · when ${item.node.enabledWhen}` : ""}${item.node.required ? " · required" : ""}`;
   if (item.node.skill) return `llm · skill ${item.node.skill}`;
   if (item.kind === "missing") return `subgraph · ${item.node.workflow} (not found)`;
   if (item.node.kind === "script") return mainAgent ? `script · run for ${mainAgent}` : "script · run by the factory";
@@ -123,7 +123,7 @@ export function CardNode({ data, selected }: NodeProps<CardFlowNode>) {
       <div className="card-title">{title(item)}</div>
       {live.label && <div className="card-sub live-label">● {live.label}</div>}
       {staleSource && <div className="card-sub stale-label">⚠ source changed</div>}
-      {off && <div className="card-sub off-label">switched off</div>}
+      {off && <div className={`card-sub off-label${item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? " required-off" : ""}`}>{item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? "required step switched off" : "switched off"}</div>}
       <div className="card-sub">{subtitle(item, mainAgent)}</div>
       {item.kind !== "terminal" && item.kind !== "agent" && item.node.description && <div className="card-desc">{item.node.description}</div>}
       {tier && <div className="card-sub">{tier}{model ? ` · ${model}` : ""}</div>}
@@ -147,7 +147,7 @@ export function GroupNode({ data, selected }: NodeProps<ClusterFlowNode>) {
         <span className="card-title">{title(item)}</span>
         {live.label && <span className="card-sub live-label"> ● {live.label}</span>}
         {staleSource && <div className="card-sub stale-label">⚠ source changed since the YAML was written: {staleSource}</div>}
-        {off && <span className="card-sub off-label"> switched off</span>}
+        {off && <span className={`card-sub off-label${item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? " required-off" : ""}`}> {item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? "required step switched off" : "switched off"}</span>}
         <span className="card-sub"> {subtitle(item, mainAgent)}</span>
         {item.kind !== "terminal" && item.kind !== "agent" && item.node.description && <div className="card-desc">{item.node.description}</div>}
         <CostLine item={item} />

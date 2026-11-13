@@ -430,7 +430,7 @@ export class Factory {
   }
 
   view(run: Run, node: WorkflowNode): { state: WorkflowState; input: RunInput; answers: Record<string, string>; prefix: string; key: string } {
-    if (!node.scope) return { state: (run.state ??= {}), input: run.input ?? {}, answers: run.answers, prefix: "", key: node.id };
+    if (!node.scope) return { state: (run.state ??= {}), input: run.input ?? {}, answers: run.answers, prefix: "", key: node.localId ?? node.id };
     const scope = run.scopes?.[node.scope];
     if (!scope) throw new Error(`node ${node.path} runs before its call ${node.scope} entered`);
     const prefix = `${node.scope}#${scope.iteration}:`;
@@ -693,7 +693,7 @@ export class Factory {
     this.advance(run, node);
   }
 
-  footer(run: Pick<Run, "config" | "proposal" | "ledger" | "steps" | "thresholdsHit">): CostFooter {
+  footer(run: Pick<Run, "config" | "proposal" | "ledger" | "steps" | "thresholdsHit"> & { events?: Run["events"] }): CostFooter {
     const t = this.totals(run);
     const max = run.config?.budget.maxCostUsd ?? run.proposal.budget.maxCostUsd;
     const perNode: Record<string, number> = {};
@@ -706,7 +706,7 @@ export class Factory {
       steps: t.steps,
       perNode,
       source: costSourceSummary(run.ledger),
-      warnings: run.thresholdsHit.map((h) => `budget threshold: ${h}`),
+      warnings: [...run.thresholdsHit.map((h) => `budget threshold: ${h}`), ...(run.events ?? []).filter((e) => e.type === "node_completed" && String(e.result ?? "").includes("required step switched off")).map((e) => `required step switched off: ${String(e.node)}`)],
     };
   }
 

@@ -1703,7 +1703,9 @@ export const OPERATIONS: Record<string, Operation> = {
   "builtin.gate": async ({ state, input, args }) => {
     const when = String(args.when);
     const enabled = evaluateWhen(when, { ...state, input, switches: input.switches ?? {} });
-    return { state: { enabled }, metrics: { enabled: enabled ? 1 : 0 }, output: enabled ? `Subgraph ${String(args.subgraph)} runs (${when}).` : `Subgraph ${String(args.subgraph)} skipped: switch off (${when} is false).` };
+    const required = args.required === true;
+    const skipped = `Subgraph ${String(args.subgraph)} skipped: switch off (${when} is false).${required ? " WARNING: required step switched off; the source agent says it must never be skipped." : ""}`;
+    return { state: { enabled, required }, metrics: { enabled: enabled ? 1 : 0, requiredOff: required && !enabled ? 1 : 0 }, output: enabled ? `Subgraph ${String(args.subgraph)} runs (${when}).` : skipped };
   },
   "github.prScope": prScope,
   "github.postComment": postComment,

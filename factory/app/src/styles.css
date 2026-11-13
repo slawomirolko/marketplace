@@ -116,6 +116,7 @@ select hr { border: none; border-top: 3px solid var(--fg); margin: 6px 0; }
 .stale { border-color: #d97706 !important; border-style: dashed; }
 .stale-label, .stale-count { color: #b45309; font-weight: 600; }
 .update { display: inline-flex; gap: 8px; align-items: center; margin-left: auto; font-size: 0.9em; }
+.required-off { color: var(--unknown); font-weight: 600; text-decoration: none; }
 .not-run { opacity: 0.45; filter: grayscale(1); }
 .disabled { opacity: 0.45; filter: grayscale(1); border-style: dashed; }
 .disabled .card-title { text-decoration: line-through; }

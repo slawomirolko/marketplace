@@ -245,6 +245,10 @@
           "minLength": 1,
           "description": "Subgraph only: a condition on switches, input or state (for example switches.tracker == true). When it is false the run skips the subgraph and goes to its exits."
         },
+        "required": {
+          "type": "boolean",
+          "description": "Switched subgraph only: the source agent says this step must never be skipped. The switch stays (for tests), but a run that switches it off is marked with a warning."
+        },
         "input": {
           "type": "object",
           "additionalProperties": {

@@ -34,6 +34,7 @@ export interface WorkflowNode {
   maxTurns?: number;
   question?: WorkflowQuestion;
   enabledWhen?: string;
+  required?: boolean;
   skill?: string;
   tools?: string[];
   dirs?: string[];
