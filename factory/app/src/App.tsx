@@ -6,14 +6,32 @@ import "./styles.css";
 import { ViewerContext } from "./context.ts";
 import type { ViewerState } from "./context.ts";
 import { Details } from "./Details.tsx";
+import { CallsList } from "./Calls.tsx";
 import { layoutGraph } from "./layout.ts";
 import { nodeAriaLabel, nodeTypes } from "./nodes.tsx";
-import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost, disabledKeys, configDisabledKeys, liveAncestors, liveState, LIVE_STATUSES, mainAgentOf, containedWorkflows } from "./tree.ts";
+import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost, disabledKeys, configDisabledKeys, liveAncestors, liveState, LIVE_STATUSES, mainAgentOf, containedWorkflows, findItem, ancestorKeys, allItems } from "./tree.ts";
 import type { StaleWorkflow } from "./types.ts";
 import type { AgentInfo, Bounds, FactoryConfig, FlowEdge, FlowNode, Item, Level, RunDetail, RunIndex, RunListItem, Workflow } from "./types.ts";
 
 const API = `${import.meta.env.BASE_URL}api`;
 const LIVE_REFRESH_MS = 15_000;
+const SHOW_COUNTS_KEY = "factory-viewer.show-numbers";
+
+function readShowCounts(): boolean {
+  try {
+    return window.localStorage.getItem(SHOW_COUNTS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeShowCounts(value: boolean): void {
+  try {
+    window.localStorage.setItem(SHOW_COUNTS_KEY, value ? "1" : "0");
+  } catch {
+    return;
+  }
+}
 
 async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(`${API}${url}`);
@@ -75,6 +93,12 @@ function Viewer() {
   const [marketplace, setMarketplace] = useState("");
   const [updating, setUpdating] = useState(false);
   const [updateNote, setUpdateNote] = useState<string | null>(null);
+  const [showCounts, setShowCounts] = useState(readShowCounts);
+  const [tab, setTab] = useState<"node" | "calls">("node");
+  const changeShowCounts = useCallback((value: boolean) => {
+    setShowCounts(value);
+    writeShowCounts(value);
+  }, []);
   const loadStale = useCallback(() => {
     getJson<{ marketplace: string; stale: StaleWorkflow[] }>("/stale")
       .then((r) => {
@@ -226,10 +250,23 @@ function Viewer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveKey, level !== null]);
 
+  const teamNodes = useMemo(() => new Set(level ? allItems(level).filter((i) => i.kind === "team").map((i) => i.key) : []), [level]);
+  const selectKey = useCallback(
+    (key: string) => {
+      if (!level) return;
+      const item = findItem(level, key) ?? findItem(level, key.split("#")[0] ?? key);
+      if (!item) return;
+      const above = ancestorKeys(level, item.key);
+      if (above.length) setExpanded((current) => new Set([...current, ...above]));
+      setSelected(item);
+    },
+    [level],
+  );
+
   const shown = mode === "workflows" ? null : detail;
   const disabled = useMemo(() => (mode === "workflows" ? configDisabledKeys(level, config) : disabledKeys(detail?.run ?? null)), [mode, level, config, detail]);
   const workflow = useMemo(() => workflows?.find((w) => w.name === rootName) ?? null, [workflows, rootName]);
-  const context = useMemo((): ViewerState => ({ config, report: shown?.report ?? null, run: shown?.run ?? null, toggle, focusKey, index: runIndex, disabled, mode, workflow, workflows: workflows ?? [], agents, live, mainAgent: mainAgentOf(workflow), stale }), [config, shown, toggle, focusKey, runIndex, disabled, mode, workflow, workflows, agents, live, stale]);
+  const context = useMemo((): ViewerState => ({ config, report: shown?.report ?? null, run: shown?.run ?? null, toggle, focusKey, index: runIndex, disabled, mode, workflow, workflows: workflows ?? [], agents, live, mainAgent: mainAgentOf(workflow), stale, showCounts }), [config, shown, toggle, focusKey, runIndex, disabled, mode, workflow, workflows, agents, live, stale, showCounts]);
   const total = detail?.report.cost;
 
   if (error) return <p className="error" role="alert">Could not load factory data: {error}</p>;
@@ -239,6 +276,9 @@ function Viewer() {
     <ViewerContext.Provider value={context}>
       <div className="app">
         <header>
+          <label className="show-numbers" title="Show on every node how many times it ran in the selected run">
+            <input type="checkbox" checked={showCounts} onChange={(e) => changeShowCounts(e.target.checked)} /> Show numbers
+          </label>
           <h1>Factory viewer</h1>
           <div className="mode" role="radiogroup" aria-label="View">
             {(["runs", "workflows"] as const).map((m) => (
@@ -331,7 +371,17 @@ function Viewer() {
             )}
           </div>
           <aside>
-            <Details item={selected} />
+            <div className="tabs" role="tablist" aria-label="Details">
+              <button type="button" role="tab" id="tab-node" aria-selected={tab === "node"} aria-controls="panel-node" className={tab === "node" ? "active" : ""} onClick={() => setTab("node")}>
+                Node
+              </button>
+              <button type="button" role="tab" id="tab-calls" aria-selected={tab === "calls"} aria-controls="panel-calls" className={tab === "calls" ? "active" : ""} onClick={() => setTab("calls")}>
+                All calls
+              </button>
+            </div>
+            <div role="tabpanel" id={tab === "node" ? "panel-node" : "panel-calls"} aria-labelledby={tab === "node" ? "tab-node" : "tab-calls"}>
+              {tab === "node" ? <Details item={selected} /> : <CallsList selectedKey={selected?.key ?? null} teamNodes={teamNodes} onSelect={selectKey} />}
+            </div>
           </aside>
         </main>
       </div>

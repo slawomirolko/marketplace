@@ -5,7 +5,7 @@ import { useViewer } from "./context.ts";
 import { formatTokens, formatUsd, isDisabled, isGroup, isLive, ranIn } from "./tree.ts";
 import type { CardFlowNode, ClusterFlowNode, Item, RunIndexEntry, RunReport, TerminalFlowNode } from "./types.ts";
 
-const EMPTY_ENTRY: RunIndexEntry = { cost: null, tier: null, model: null, failure: null };
+const EMPTY_ENTRY: RunIndexEntry = { cost: null, tier: null, model: null, failure: null, runs: null };
 
 function useEntry(item: Item): RunIndexEntry {
   return useViewer().index?.get(item.key) ?? EMPTY_ENTRY;
@@ -109,6 +109,14 @@ function useLive(item: Item): { className: string; label: string | null } {
   return { className: waiting ? "live waiting" : "live", label: waiting ? "waiting for your answer" : "running now" };
 }
 
+function RunBadge({ item }: { item: Item }) {
+  const { showCounts, mode } = useViewer();
+  const { runs } = useEntry(item);
+  if (!showCounts || mode !== "runs" || runs === null) return null;
+  const label = item.kind === "subgraph" ? `${runs} step runs inside this group` : `ran ${runs} time${runs === 1 ? "" : "s"} in this run`;
+  return <span className={`run-badge${item.kind === "subgraph" ? " run-badge-sum" : ""}`} title={label} aria-label={label}>{runs}</span>;
+}
+
 export function CardNode({ data, selected }: NodeProps<CardFlowNode>) {
   const { item } = data;
   const { tier, model } = useEntry(item);
@@ -118,18 +126,21 @@ export function CardNode({ data, selected }: NodeProps<CardFlowNode>) {
   const { mainAgent } = useViewer();
   const staleSource = useStale(item);
   return (
-    <div className={`${notRun ? "not-run " : ""}${staleSource ? "stale " : ""}card tier-${tier ?? "none"} kind-${item.kind} ${item.kind === "step" ? `node-${item.node.kind}` : ""} ${selected ? "selected" : ""} ${off ? "disabled" : ""} ${live.className}`} title={off ? "switched off in this run" : undefined}>
-      <Handles />
-      <div className="card-title">{title(item)}</div>
-      {live.label && <div className="card-sub live-label">● {live.label}</div>}
-      {staleSource && <div className="card-sub stale-label">⚠ source changed</div>}
-      {off && <div className={`card-sub off-label${item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? " required-off" : ""}`}>{item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? "required step switched off" : "switched off"}</div>}
-      <div className="card-sub">{subtitle(item, mainAgent)}</div>
-      {item.kind !== "terminal" && item.kind !== "agent" && item.node.description && <div className="card-desc">{item.node.description}</div>}
-      {tier && <div className="card-sub">{tier}{model ? ` · ${model}` : ""}</div>}
-      <CostLine item={item} />
-      <Toggle item={item} expanded={false} />
-    </div>
+    <>
+      <div className={`${notRun ? "not-run " : ""}${staleSource ? "stale " : ""}card tier-${tier ?? "none"} kind-${item.kind} ${item.kind === "step" ? `node-${item.node.kind}` : ""} ${selected ? "selected" : ""} ${off ? "disabled" : ""} ${live.className}`} title={off ? "switched off in this run" : undefined}>
+        <Handles />
+        <div className="card-title">{title(item)}</div>
+        {live.label && <div className="card-sub live-label">● {live.label}</div>}
+        {staleSource && <div className="card-sub stale-label">⚠ source changed</div>}
+        {off && <div className={`card-sub off-label${item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? " required-off" : ""}`}>{item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? "required step switched off" : "switched off"}</div>}
+        <div className="card-sub">{subtitle(item, mainAgent)}</div>
+        {item.kind !== "terminal" && item.kind !== "agent" && item.node.description && <div className="card-desc">{item.node.description}</div>}
+        {tier && <div className="card-sub">{tier}{model ? ` · ${model}` : ""}</div>}
+        <CostLine item={item} />
+        <Toggle item={item} expanded={false} />
+      </div>
+      <RunBadge item={item} />
+    </>
   );
 }
 
@@ -141,19 +152,22 @@ export function GroupNode({ data, selected }: NodeProps<ClusterFlowNode>) {
   const { mainAgent } = useViewer();
   const staleSource = useStale(item);
   return (
-    <div className={`${notRun ? "not-run " : ""}${staleSource ? "stale " : ""}group kind-${item.kind} ${selected ? "selected" : ""} ${off ? "disabled" : ""} ${live.className}`} title={off ? "switched off in this run" : undefined}>
-      <Handles />
-      <div className="group-header">
-        <span className="card-title">{title(item)}</span>
-        {live.label && <span className="card-sub live-label"> ● {live.label}</span>}
-        {staleSource && <div className="card-sub stale-label">⚠ source changed since the YAML was written: {staleSource}</div>}
-        {off && <span className={`card-sub off-label${item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? " required-off" : ""}`}> {item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? "required step switched off" : "switched off"}</span>}
-        <span className="card-sub"> {subtitle(item, mainAgent)}</span>
-        {item.kind !== "terminal" && item.kind !== "agent" && item.node.description && <div className="card-desc">{item.node.description}</div>}
-        <CostLine item={item} />
-        <Toggle item={item} expanded />
+    <>
+      <div className={`${notRun ? "not-run " : ""}${staleSource ? "stale " : ""}group kind-${item.kind} ${selected ? "selected" : ""} ${off ? "disabled" : ""} ${live.className}`} title={off ? "switched off in this run" : undefined}>
+        <Handles />
+        <div className="group-header">
+          <span className="card-title">{title(item)}</span>
+          {live.label && <span className="card-sub live-label"> ● {live.label}</span>}
+          {staleSource && <div className="card-sub stale-label">⚠ source changed since the YAML was written: {staleSource}</div>}
+          {off && <span className={`card-sub off-label${item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? " required-off" : ""}`}> {item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? "required step switched off" : "switched off"}</span>}
+          <span className="card-sub"> {subtitle(item, mainAgent)}</span>
+          {item.kind !== "terminal" && item.kind !== "agent" && item.node.description && <div className="card-desc">{item.node.description}</div>}
+          <CostLine item={item} />
+          <Toggle item={item} expanded />
+        </div>
       </div>
-    </div>
+      <RunBadge item={item} />
+    </>
   );
 }
 

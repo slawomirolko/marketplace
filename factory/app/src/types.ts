@@ -169,6 +169,7 @@ export interface LedgerRecord {
   cacheWrite1hTokens?: number | null;
   costUsd: number | null;
   costSource: string;
+  durationMs?: number | null;
   output?: string | null;
   outputPreview?: string;
 }
@@ -178,6 +179,7 @@ export interface RunEvent {
   type: string;
   node?: string;
   agentId?: string;
+  visit?: number;
   error?: unknown;
   result?: string;
 }
@@ -281,6 +283,7 @@ export interface RunIndexEntry {
   tier: string | null;
   model: string | null;
   failure: string | null;
+  runs: number | null;
 }
 
 export type RunIndex = Map<string, RunIndexEntry>;

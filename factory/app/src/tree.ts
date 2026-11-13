@@ -226,7 +226,7 @@ export function runFailure(run: RunData | null): string | null {
   return event ? `${event.node ? `${event.node}: ` : ""}${errorMessage(event.error)}` : null;
 }
 
-function allItems(level: Level): Item[] {
+export function allItems(level: Level): Item[] {
   return level.items.flatMap((item) => [item, ...(isGroup(item) ? allItems(item.inner) : [])]);
 }
 
@@ -235,7 +235,7 @@ export function buildRunIndex(level: Level, config: FactoryConfig | null, report
   for (const item of allItems(level)) {
     const cost = costOf(item, report);
     const tier = tierOf(item, config, report);
-    index.set(item.key, { cost, tier, model: cost?.model ?? (tier ? report?.tierModels?.[tier] ?? null : null), failure: failureOf(item, run) });
+    index.set(item.key, { cost, tier, model: cost?.model ?? (tier ? report?.tierModels?.[tier] ?? null : null), failure: failureOf(item, run), runs: runCount(item, run) });
   }
   return index;
 }
@@ -260,4 +260,144 @@ export function formatUsd(cost: Cost | null | undefined): string {
   if (!cost) return "not run";
   if (cost.costSource === "unknown") return "unknown";
   return formatAmount(cost.costUsd, cost);
+}
+
+export function runCount(item: Item, run: RunData | null): number | null {
+  if (!run || item.kind === "terminal") return null;
+  if (item.kind === "agent") {
+    const started = run.events.filter((e) => e.type === "agent_started" && e.node === item.nodePath && e.agentId === item.agent.id).length;
+    if (started > 0) return started;
+    const id = item.agent.id;
+    return runCalls(run).filter((c) => c.node === item.nodePath && c.agent === id).length;
+  }
+  const keys = item.kind === "subgraph" ? descendantKeys(item) : [item.key];
+  const inside = item.kind === "subgraph";
+  return run.events.filter((e) => e.type === "node_started" && typeof e.node === "string" && keys.some((k) => e.node === k || (inside && e.node!.startsWith(`${k}/`)))).length;
+}
+
+export interface RunCall {
+  node: string;
+  agent: string | null;
+  agentName: string | null;
+  visit: number | null;
+  status: string;
+  startedAt: string;
+  costUsd: number | null;
+  records: number;
+  durationMs: number | null;
+}
+
+interface OpenAgent {
+  id: string;
+  startedAt: string;
+  endedAt: string | null;
+  status: string;
+}
+
+interface OpenCall {
+  node: string;
+  visit: number | null;
+  startedAt: string;
+  endedAt: string | null;
+  status: string;
+  agents: OpenAgent[];
+  records: LedgerRecord[];
+}
+
+function endStatus(type: string, result: unknown): string {
+  if (type === "node_failed" || type === "agent_failed") return "failed";
+  if (type === "node_skipped") return "skipped";
+  if (typeof result === "string" && result.includes("skipped: switch off")) return "switched off";
+  return "done";
+}
+
+function elapsed(from: string, to: string | null): number | null {
+  if (!to) return null;
+  const ms = Date.parse(to) - Date.parse(from);
+  return Number.isFinite(ms) && ms >= 0 ? ms : null;
+}
+
+function summed(records: LedgerRecord[]): { costUsd: number | null; durationMs: number | null } {
+  const costUsd = records.some((r) => r.costUsd == null) ? null : Math.round(records.reduce((s, r) => s + (r.costUsd ?? 0), 0) * 1e6) / 1e6;
+  const timed = records.filter((r) => typeof r.durationMs === "number");
+  return { costUsd, durationMs: timed.length ? timed.reduce((s, r) => s + (r.durationMs ?? 0), 0) : null };
+}
+
+export function runCalls(run: RunData | null): RunCall[] {
+  if (!run) return [];
+  const calls: OpenCall[] = [];
+  const open = new Map<string, OpenCall>();
+  for (const e of run.events) {
+    if (typeof e.node !== "string") continue;
+    if (e.type === "node_started") {
+      const call: OpenCall = { node: e.node, visit: typeof e.visit === "number" ? e.visit : null, startedAt: e.at, endedAt: null, status: "running", agents: [], records: [] };
+      calls.push(call);
+      open.set(e.node, call);
+      continue;
+    }
+    const call = open.get(e.node);
+    if (!call) continue;
+    if (e.type === "agent_started" && e.agentId) call.agents.push({ id: e.agentId, startedAt: e.at, endedAt: null, status: "running" });
+    else if (e.type === "agent_completed" || e.type === "agent_failed") {
+      const agent = call.agents.findLast((a) => a.id === e.agentId && a.endedAt === null);
+      if (agent) Object.assign(agent, { endedAt: e.at, status: endStatus(e.type, null) });
+    } else if (e.type === "node_completed" || e.type === "node_failed" || e.type === "node_skipped") {
+      Object.assign(call, { endedAt: e.at, status: endStatus(e.type, e.result) });
+      open.delete(e.node);
+    }
+  }
+  for (const record of run.ledger) {
+    const call = calls.findLast((c) => c.node === record.nodePath && c.startedAt <= record.at) ?? calls.find((c) => c.node === record.nodePath);
+    call?.records.push(record);
+  }
+  const unfinished = LIVE_STATUSES.includes(run.status) ? "running" : "unfinished";
+  return calls.flatMap((call): RunCall[] => {
+    const status = (s: string) => (s === "running" ? unfinished : s);
+    const recorded = [...new Set(call.records.map((r) => r.agentId).filter((id): id is string => Boolean(id)))];
+    if (call.agents.length === 0 && recorded.length > 1) {
+      return recorded.map((id) => {
+        const records = call.records.filter((r) => r.agentId === id);
+        const total = summed(records);
+        return { node: call.node, agent: id, agentName: records.find((r) => r.agentName)?.agentName ?? null, visit: call.visit, status: status(call.status), startedAt: call.startedAt, costUsd: total.costUsd, records: records.length, durationMs: total.durationMs };
+      });
+    }
+    const agentIds = new Set(call.agents.map((a) => a.id));
+    if (agentIds.size > 1) {
+      return call.agents.map((a) => {
+        const records = call.records.filter((r) => r.agentId === a.id);
+        const total = summed(records);
+        return { node: call.node, agent: a.id, agentName: records.find((r) => r.agentName)?.agentName ?? null, visit: call.visit, status: status(a.status), startedAt: a.startedAt, costUsd: total.costUsd, records: records.length, durationMs: elapsed(a.startedAt, a.endedAt) ?? total.durationMs };
+      });
+    }
+    const total = summed(call.records);
+    const agent = call.agents[0]?.id ?? call.records.find((r) => r.agentId)?.agentId ?? null;
+    return [{ node: call.node, agent, agentName: call.records.find((r) => r.agentName)?.agentName ?? null, visit: call.visit, status: status(call.status), startedAt: call.startedAt, costUsd: total.costUsd, records: call.records.length, durationMs: elapsed(call.startedAt, call.endedAt) ?? total.durationMs }];
+  });
+}
+
+export function findItem(level: Level, key: string): Item | null {
+  return allItems(level).find((i) => i.key === key) ?? null;
+}
+
+export function ancestorKeys(level: Level, key: string): string[] {
+  const found: string[] = [];
+  const walk = (items: Item[], above: string[]): boolean => {
+    for (const item of items) {
+      if (item.key === key) {
+        found.push(...above);
+        return true;
+      }
+      if (isGroup(item) && walk(item.inner.items, [...above, item.key])) return true;
+    }
+    return false;
+  };
+  walk(level.items, []);
+  return found;
+}
+
+export function formatDuration(ms: number | null): string {
+  if (ms == null) return "—";
+  if (ms < 1000) return `${ms} ms`;
+  const s = Math.round(ms / 1000);
+  return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`;
 }

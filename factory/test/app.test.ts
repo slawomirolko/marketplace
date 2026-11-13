@@ -252,3 +252,98 @@ test("run index gives the same cost, tier and failure as the per-node lookups", 
   assert.equal(index.get("hello/build")?.failure, "boom", "a failure inside a subgraph marks the subgraph");
   assert.equal(index.get("hello/review#docs")?.tier, "low");
 });
+
+function ledgerRecord(nodePath: string, at: string, costUsd: number | null, extra: Partial<RunData["ledger"][number]> = {}): RunData["ledger"][number] {
+  return { runId: "r-00000000", workflow: "w@1", at, nodePath, kind: "llm", tier: "low", model: "m", backend: "fake", turn: 1, inputTokens: 1, outputTokens: 1, costUsd, costSource: costUsd === null ? "unknown" : "measured", ...extra };
+}
+
+test("run count: a step in a retry loop counts every visit, a group sums the steps inside it", async () => {
+  const { runCount } = await import("../app/src/tree.ts");
+  const step = (key: string): Item => ({ key, kind: "step", node: { id: key.split("/").at(-1) ?? key, kind: "llm" } });
+  const run = runWithEvents([
+    { at: "1", type: "node_started", node: "w/fix", visit: 1 },
+    { at: "2", type: "node_started", node: "w/fix", visit: 2 },
+    { at: "3", type: "node_started", node: "w/fix", visit: 3 },
+    { at: "4", type: "node_started", node: "w/build/compile", visit: 1 },
+    { at: "5", type: "node_started", node: "w/build/test", visit: 1 },
+    { at: "6", type: "node_started", node: "w/build/test", visit: 2 },
+    { at: "7", type: "node_started", node: "w/review", visit: 1 },
+    { at: "8", type: "agent_started", node: "w/review", agentId: "docs" },
+    { at: "9", type: "agent_started", node: "w/review", agentId: "code" },
+    { at: "10", type: "node_started", node: "w/review", visit: 2 },
+    { at: "11", type: "agent_started", node: "w/review", agentId: "docs" },
+  ]);
+  const group: Item = { key: "w/build", kind: "subgraph", node: { id: "build", kind: "subgraph", workflow: "b" }, inner: { items: [step("w/build/compile"), step("w/build/test")], edges: [] } };
+  const reviewNode = { id: "review", kind: "llm" };
+  const agent = (id: string): Item => ({ key: `w/review#${id}`, kind: "agent", node: reviewNode, agent: { id, role: undefined }, nodePath: "w/review" });
+  const team: Item = { key: "w/review", kind: "team", node: reviewNode, inner: { items: [], edges: [] } };
+  assert.equal(runCount(step("w/fix"), run), 3, "three visits of the retry loop");
+  assert.equal(runCount(step("w/plan"), run), 0, "a step that never started shows 0");
+  assert.equal(runCount(step("w/build"), run), 0, "a plain step does not count paths below its key");
+  assert.equal(runCount(group, run), 3, "a group sums the step runs inside it");
+  assert.equal(runCount(team, run), 2, "a team counts its own visits");
+  assert.equal(runCount(agent("docs"), run), 2, "an agent counts its own starts");
+  assert.equal(runCount(agent("code"), run), 1);
+  assert.equal(runCount({ key: START_KEY, kind: "terminal", label: "start" }, run), null, "terminals have no count");
+  assert.equal(runCount(step("w/fix"), null), null, "no run, no count");
+});
+
+test("run calls: every visit in time order with status, ledger cost and duration", async () => {
+  const { runCalls } = await import("../app/src/tree.ts");
+  const run: RunData = {
+    ...runWithEvents([
+      { at: "2026-01-01T00:00:00.000Z", type: "node_started", node: "w/fix", visit: 1 },
+      { at: "2026-01-01T00:00:02.000Z", type: "node_completed", node: "w/fix", result: "ok" },
+      { at: "2026-01-01T00:00:03.000Z", type: "node_started", node: "w/fix", visit: 2 },
+      { at: "2026-01-01T00:00:08.000Z", type: "node_failed", node: "w/fix", error: "boom" },
+      { at: "2026-01-01T00:00:09.000Z", type: "node_started", node: "w/docs", visit: 1 },
+      { at: "2026-01-01T00:00:09.000Z", type: "node_completed", node: "w/docs", result: "skipped: switch off docs" },
+      { at: "2026-01-01T00:00:10.000Z", type: "node_started", node: "w/review", visit: 1 },
+      { at: "2026-01-01T00:00:10.000Z", type: "agent_started", node: "w/review", agentId: "docs" },
+      { at: "2026-01-01T00:00:10.000Z", type: "agent_started", node: "w/review", agentId: "code" },
+      { at: "2026-01-01T00:00:14.000Z", type: "agent_completed", node: "w/review", agentId: "docs" },
+      { at: "2026-01-01T00:00:20.000Z", type: "node_started", node: "w/last", visit: 1 },
+    ]),
+    ledger: [
+      ledgerRecord("w/fix", "2026-01-01T00:00:01.000Z", 0.25),
+      ledgerRecord("w/fix", "2026-01-01T00:00:07.000Z", 0.5),
+      ledgerRecord("w/fix", "2026-01-01T00:00:07.500Z", null),
+      ledgerRecord("w/review", "2026-01-01T00:00:13.000Z", 0.1, { agentId: "docs", agentName: "docs-writer", durationMs: 3000 }),
+      ledgerRecord("w/review", "2026-01-01T00:00:15.000Z", 0.2, { agentId: "code", durationMs: 5000 }),
+    ],
+  };
+  const calls = runCalls(run);
+  assert.deepEqual(
+    calls.map((c) => [c.node, c.agent, c.visit, c.status, c.costUsd, c.durationMs]),
+    [
+      ["w/fix", null, 1, "done", 0.25, 2000],
+      ["w/fix", null, 2, "failed", null, 5000],
+      ["w/docs", null, 1, "switched off", 0, 0],
+      ["w/review", "docs", 1, "done", 0.1, 4000],
+      ["w/review", "code", 1, "unfinished", 0.2, 5000],
+      ["w/last", null, 1, "unfinished", 0, null],
+    ],
+  );
+  assert.equal(calls[1]?.records, 2, "ledger records go to the visit that was open when they were written");
+  assert.equal(calls[3]?.agentName, "docs-writer");
+  assert.equal(runCalls({ ...run, status: "running" }).at(-1)?.status, "running", "a live run shows open calls as running");
+  assert.deepEqual(runCalls(null), []);
+});
+
+test("demo run: every ledger record lands in one call and the index carries the run counts", async () => {
+  const { allItems, ancestorKeys, buildRunIndex, findItem, runCalls, runCount } = await import("../app/src/tree.ts");
+  const { data, detail } = await demoRun();
+  const calls = runCalls(detail.run);
+  assert.equal(calls.reduce((s, c) => s + c.records, 0), detail.run.ledger.length, "no ledger record is lost or counted twice");
+  assert.deepEqual(calls.map((c) => c.startedAt), [...calls.map((c) => c.startedAt)].sort(), "calls are in time order");
+  const level = buildLevel(data.workflows(), "hello", "hello", ["hello"], detail.report);
+  const index = buildRunIndex(level, data.config(), detail.report, detail.run);
+  for (const item of allItems(level)) assert.equal(index.get(item.key)?.runs, runCount(item, detail.run), `run count of ${item.key}`);
+  assert.equal(index.get("hello/plan")?.runs, 1);
+  assert.equal(index.get("hello/review#docs")?.runs, 1, "an agent with ledger records but no agent_started event still counts its visit");
+  assert.deepEqual(calls.filter((c) => c.node === "hello/review").map((c) => c.agent).sort(), ["docs", "security", "style", "tests"], "a team visit lists one call per agent");
+  assert.equal(findItem(level, "hello/review#docs")?.kind, "agent");
+  assert.deepEqual(ancestorKeys(level, "hello/review#docs"), ["hello/review"]);
+  assert.deepEqual(ancestorKeys(level, "hello/build/verify"), ["hello/build"]);
+  assert.deepEqual(ancestorKeys(level, "hello/plan"), []);
+});

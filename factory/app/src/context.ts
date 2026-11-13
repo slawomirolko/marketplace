@@ -18,9 +18,10 @@ export interface ViewerState {
   live: LiveState;
   mainAgent: string | null;
   stale: Record<string, StaleWorkflow>;
+  showCounts: boolean;
 }
 
-export const ViewerContext = createContext<ViewerState>({ config: null, report: null, run: null, toggle: () => {}, focusKey: null, index: null, disabled: [], mode: "runs", workflow: null, workflows: [], agents: {}, live: { node: null, agents: [], waiting: null }, mainAgent: null, stale: {} });
+export const ViewerContext = createContext<ViewerState>({ config: null, report: null, run: null, toggle: () => {}, focusKey: null, index: null, disabled: [], mode: "runs", workflow: null, workflows: [], agents: {}, live: { node: null, agents: [], waiting: null }, mainAgent: null, stale: {}, showCounts: false });
 
 export function useViewer(): ViewerState {
   return useContext(ViewerContext);
