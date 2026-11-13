@@ -7,6 +7,7 @@ import { ViewerContext } from "./context.ts";
 import type { ViewerState } from "./context.ts";
 import { Details } from "./Details.tsx";
 import { CallsList } from "./Calls.tsx";
+import { SupervisorRing } from "./SupervisorRing.tsx";
 import { layoutGraph } from "./layout.ts";
 import { nodeAriaLabel, nodeTypes } from "./nodes.tsx";
 import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost, disabledKeys, configDisabledKeys, liveAncestors, liveState, LIVE_STATUSES, mainAgentOf, containedWorkflows, findItem, ancestorKeys, allItems } from "./tree.ts";
@@ -349,6 +350,7 @@ function Viewer() {
         </header>
         <main>
           <div className="canvas">
+            <SupervisorRing supervisor={shown?.report.supervisor}>
             {built?.error ? (
               <p className="error" role="alert">Could not draw this run: {built.error}</p>
             ) : (
@@ -369,6 +371,7 @@ function Viewer() {
               <FitToBounds bounds={graph.bounds} />
             </ReactFlow>
             )}
+            </SupervisorRing>
           </div>
           <aside>
             <div className="tabs" role="tablist" aria-label="Details">

@@ -10,6 +10,7 @@ import { toMermaid, escapeLabel } from "../viewer/mermaid.ts";
 import type { DiagramConfig } from "../viewer/mermaid.ts";
 import { loadWorkflows, toHtml } from "../viewer/render.ts";
 import { fakeRunReport } from "../viewer/demo-report.ts";
+import { SUPERVISOR_PATH } from "../src/run-summary.ts";
 
 const factoryDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const workflows = loadWorkflows(path.join(factoryDir, "workflows"));
@@ -43,7 +44,7 @@ test("node costs in the report add up to the run cost", async () => {
 test("diagram of a run shows cost, tier and model on every node", async () => {
   const report = await fakeRunReport();
   const diagram = toMermaid({ workflows, root: "hello", config, report });
-  for (const [nodePath, cost] of Object.entries(report.byNode)) {
+  for (const [nodePath, cost] of Object.entries(report.byNode).filter(([p]) => p !== SUPERVISOR_PATH)) {
     const id = `n_${nodePath.split("/").slice(1).join("__")}`;
     const line = diagram.split("\n").find((l) => l.trim().startsWith(id));
     assert.ok(line, `node ${nodePath} drawn`);

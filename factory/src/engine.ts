@@ -6,11 +6,14 @@ import { evaluateWhen, loadWorkflowDir, readPath } from "./workflow-yaml.ts";
 import { FACTORY_DIR } from "./paths.ts";
 import { loadFactoryConfig } from "./config.ts";
 import { readMarketplaceAgent } from "./marketplace-agents.ts";
+import { SUPERVISOR_PATH, parseSupervisorLine, summarizeRun } from "./run-summary.ts";
+import type { RunSummary } from "./run-summary.ts";
 import Mustache from "mustache";
 import type {
   WorkflowState,
   Agent,
   CliName,
+  CliResult,
   ConfirmOverrides,
   CostFooter,
   CostSource,
@@ -41,6 +44,11 @@ const FAKE_PRICE_PER_MTOK: Record<Tier, { input: number; output: number }> = {
 };
 
 const PARALLEL_AGENTS = 10;
+
+export const SUPERVISOR_AGENT = "olko-factory-supervisor";
+const SUPERVISOR_ID = "supervisor";
+const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
+const SUPERVISOR_HINT = "The run has ended. Run supervisorWork now in its own subagent like a pendingWork item (supervisorWork.prompt, supervisorWork.model, the agent supervisorWork.agentName with supervisorWork.agentInstructions), then call factory_submit with its output, nodePath and agentId. After that, call factory_report and show the user viewerUrl.";
 
 function workspace(run: Run): string {
   return run.workspace ?? run.input?.project ?? run.input?.cwd ?? process.env.FACTORY_WORKSPACE ?? process.cwd();
@@ -138,6 +146,7 @@ export class Factory {
   timers = new Map<string, NodeJS.Timeout>();
   busy = new Set<string>();
   waiters = new Map<string, Set<(run: Run) => void>>();
+  supervising = new Map<string, Promise<void>>();
 
   constructor(dataDir: string, { executors = {}, backend = "delegate", cli }: FactoryOptions = {}) {
     this.dataDir = dataDir;
@@ -155,10 +164,15 @@ export class Factory {
       this.runs.set(run.runId, run);
       if (run.idempotencyKey) this.idempotency.set(run.idempotencyKey, run.runId);
       if (run.status === "running" && !ownedByOtherProcess(run)) this.schedule(run);
+      if (run.supervisor?.status === "running" && !ownedByOtherProcess(run)) {
+        run.supervisor.status = "pending";
+        this.checkpoint(run);
+      }
     }
   }
 
   checkpoint(run: Run): void {
+    if (ENDED.has(run.status) && run.supervisor?.status === "pending") this.supervise(run);
     const file = path.join(this.dataDir, "runs", `${run.runId}.json`);
     const temp = `${file}.${process.pid}.tmp`;
     fs.writeFileSync(temp, JSON.stringify(run, null, 2));
@@ -259,6 +273,7 @@ export class Factory {
       budget: { ...run.proposal.budget, ...(overrides.budget ?? {}) },
     };
     run.status = "running";
+    run.supervisor = { status: "pending", agent: SUPERVISOR_AGENT };
     this.event(run, "run_confirmed", { config: run.config });
     this.checkpoint(run);
     this.schedule(run);
@@ -292,6 +307,7 @@ export class Factory {
 
   submit(runId: string, nodePath: string, output: string, usage: SubmitUsage = {}, agentId: string | undefined = undefined): { run: Run; duplicate: boolean } {
     const run = this.get(runId);
+    if (nodePath === SUPERVISOR_PATH) return this.submitSupervisor(run, output, usage);
     const items = run.pendingWorkItems ?? (run.pendingWork ? [run.pendingWork] : []);
     const work = items.find((w) => w.nodePath === nodePath && (!agentId || w.agentId === agentId));
     if (run.status !== "waiting_for_client" || !work) {
@@ -299,38 +315,8 @@ export class Factory {
       if (done) return { run, duplicate: true };
       throw new Error(`no pending work for node ${nodePath}`);
     }
-    const inputTokens = Number.isInteger(usage.inputTokens) ? usage.inputTokens : undefined;
-    const outputTokens = Number.isInteger(usage.outputTokens) ? usage.outputTokens : undefined;
-    const hasSplit = inputTokens !== undefined && outputTokens !== undefined;
-    const tokens: TokenCounts = {
-      input: hasSplit ? inputTokens : null,
-      output: hasSplit ? outputTokens : null,
-      cacheRead: usage.cacheReadTokens ?? 0,
-      cacheWrite5m: usage.cacheWriteTokens ?? 0,
-      cacheWrite1h: 0,
-    };
-    const priced = hasSplit ? priceUsage(usage.model ?? work.model, tokens, false) : { costUsd: null, costSource: "unknown" };
     run.steps += 1;
-    this.appendLedger(run, {
-      nodePath,
-      agentId: work.agentId,
-      kind: "llm",
-      tier: work.tier,
-      model: usage.model ?? work.model,
-      backend: "delegate",
-      turn: 1,
-      inputTokens: tokens.input,
-      outputTokens: tokens.output,
-      cacheReadTokens: tokens.cacheRead,
-      cacheWrite5mTokens: tokens.cacheWrite5m,
-      cacheWrite1hTokens: 0,
-      totalTokens: usage.totalTokens ?? null,
-      childSessionId: usage.childSessionId ?? null,
-      costUsd: priced.costUsd,
-      costSource: hasSplit ? "reported" : "unknown",
-      outputPreview: String(output ?? "").slice(0, 200),
-      agentName: work.agentName ?? null,
-    });
+    this.appendLedger(run, delegateEntry(work, output, usage));
     const node = nodeAt(run);
     this.storeParsed(run, node, work.agentId, output);
     this.event(run, "agent_completed", { node: node.path, agentId: work.agentId, backend: "delegate" });
@@ -653,32 +639,7 @@ export class Factory {
           this.event(run, "agent_failed", { node: node.path, agentId: agent.id, error: result.error });
           return;
         }
-        for (const u of result.usageByModel ?? []) {
-          const priced = priceUsage(u.model, u.tokens, u.cacheWriteTtlKnown);
-          this.appendLedger(run, {
-            nodePath: node.path,
-            agentId: agent.id,
-            kind: "llm",
-            tier,
-            model: u.model,
-            requestedModel: model,
-            backend: `cli:${cli}`,
-            turn: 1,
-            harnessTurns: result.turns,
-            inputTokens: u.tokens.input,
-            outputTokens: u.tokens.output,
-            cacheReadTokens: u.tokens.cacheRead,
-            cacheWrite5mTokens: u.tokens.cacheWrite5m,
-            cacheWrite1hTokens: u.tokens.cacheWrite1h,
-            costUsd: priced.costUsd,
-            costSource: priced.costSource,
-            harnessCostUsd: u.harnessCostUsd,
-            durationMs: result.durationMs,
-            outputPreview: String(result.text ?? "").slice(0, 200),
-            output: result.text ?? null,
-            agentName: agent.agentName ?? null,
-          });
-        }
+        for (const entry of cliEntries(result, { nodePath: node.path, agentId: agent.id, agentName: agent.agentName ?? null, tier, requestedModel: model, cli: cli as CliName, keepOutput: true })) this.appendLedger(run, entry);
         this.storeParsed(run, node, agent.id, result.text ?? "");
         this.event(run, "agent_completed", { node: node.path, agentId: agent.id, backend: `cli:${cli}` });
         this.checkpoint(run);
@@ -691,6 +652,87 @@ export class Factory {
     }
     this.event(run, "node_completed", { node: node.path, backend: `cli:${cli}` });
     this.advance(run, node);
+  }
+
+  supervise(run: Run): void {
+    const record = run.supervisor;
+    if (!record) return;
+    const config = configOf(run);
+    const tier: Tier = config.roles.supervisor ?? "low";
+    const model = config.tiers[tier];
+    const summary = summarizeRun(run);
+    Object.assign(record, { status: "running", tier, model, startedAt: new Date().toISOString(), summary, error: null });
+    this.event(run, "supervisor_started", { node: SUPERVISOR_PATH, tier, model });
+    try {
+      if (config.backend.kind === "fake") {
+        run.steps += 1;
+        this.appendLedger(run, { nodePath: SUPERVISOR_PATH, agentId: SUPERVISOR_ID, kind: "llm", tier, model, backend: "fake", turn: 1, ...fakeModelTurn(tier, 1), costSource: "measured", agentName: SUPERVISOR_AGENT });
+        this.finishSupervisor(run, fakeSupervisorText(summary));
+        return;
+      }
+      const definition = readMarketplaceAgent(SUPERVISOR_AGENT);
+      const prompt = supervisorPrompt(summary);
+      if (config.backend.kind === "delegate") {
+        record.status = "waiting_for_client";
+        record.work = { nodePath: SUPERVISOR_PATH, agentId: SUPERVISOR_ID, tier, model, prompt, agentName: definition.name, agentDescription: definition.description, agentInstructions: definition.prompt, tools: ["read"], dirs: definition.dirs };
+        this.event(run, "work_offered", { node: SUPERVISOR_PATH, agentId: SUPERVISOR_ID, tier });
+        return;
+      }
+      const job = this.runCliSupervisor(run, prompt, definition.dirs).finally(() => this.supervising.delete(run.runId));
+      this.supervising.set(run.runId, job);
+    } catch (error) {
+      this.failSupervisor(run, error);
+    }
+  }
+
+  async runCliSupervisor(run: Run, prompt: string, dirs: string[]): Promise<void> {
+    const record = run.supervisor as NonNullable<Run["supervisor"]>;
+    const cli = configOf(run).backend.cli;
+    try {
+      const executor = cli ? this.executors[cli] : undefined;
+      if (!cli || !executor) throw new Error(`no executor for cli backend '${cli}' in this factory process`);
+      const result = await executor({ model: record.model as string, prompt, agent: SUPERVISOR_AGENT, tools: ["read"], dirs });
+      run.steps += 1;
+      if (!result.ok) throw new Error(result.error ?? "the supervisor agent failed");
+      for (const entry of cliEntries(result, { nodePath: SUPERVISOR_PATH, agentId: SUPERVISOR_ID, agentName: SUPERVISOR_AGENT, tier: record.tier as Tier, requestedModel: record.model as string, cli, keepOutput: false })) this.appendLedger(run, entry);
+      this.finishSupervisor(run, result.text ?? "");
+    } catch (error) {
+      this.failSupervisor(run, error);
+    }
+    this.checkpoint(run);
+  }
+
+  submitSupervisor(run: Run, output: string, usage: SubmitUsage): { run: Run; duplicate: boolean } {
+    const record = run.supervisor;
+    const work = record?.work;
+    if (record?.status !== "waiting_for_client" || !work) {
+      if (record?.status === "done") return { run, duplicate: true };
+      throw new Error(`no pending work for node ${SUPERVISOR_PATH}`);
+    }
+    run.steps += 1;
+    this.appendLedger(run, { ...delegateEntry(work, output, usage), agentName: SUPERVISOR_AGENT });
+    record.work = null;
+    this.finishSupervisor(run, output);
+    this.checkpoint(run);
+    return { run, duplicate: false };
+  }
+
+  supervisorCost(run: Run): number | null {
+    const records = run.ledger.filter((r) => r.nodePath === SUPERVISOR_PATH);
+    return records.length ? round(records.reduce((s, r) => s + (r.costUsd ?? 0), 0)) : null;
+  }
+
+  finishSupervisor(run: Run, output: string): void {
+    const record = run.supervisor as NonNullable<Run["supervisor"]>;
+    const parsed = parseSupervisorLine(output);
+    Object.assign(record, { status: "done", finishedAt: new Date().toISOString(), output, verdict: parsed?.verdict ?? null, bottleneck: parsed?.bottleneck ?? null, idea: parsed?.idea ?? null, costUsd: this.supervisorCost(run) });
+    this.event(run, "supervisor_completed", { node: SUPERVISOR_PATH, verdict: record.verdict, costUsd: record.costUsd });
+  }
+
+  failSupervisor(run: Run, error: unknown): void {
+    const record = run.supervisor as NonNullable<Run["supervisor"]>;
+    Object.assign(record, { status: "failed", finishedAt: new Date().toISOString(), error: errorMessage(error), work: null, costUsd: this.supervisorCost(run) });
+    this.event(run, "supervisor_failed", { node: SUPERVISOR_PATH, error: record.error });
   }
 
   footer(run: Pick<Run, "config" | "proposal" | "ledger" | "steps" | "thresholdsHit"> & { events?: Run["events"] }): CostFooter {
@@ -712,6 +754,7 @@ export class Factory {
 
   status(run: Run): RunStatusView {
     const node = run.cursor < 0 ? undefined : workflowOf(run).nodes[run.cursor];
+    const supervisorWork = run.supervisor?.status === "waiting_for_client" ? (run.supervisor.work ?? undefined) : undefined;
     return {
       runId: run.runId,
       status: run.status,
@@ -720,9 +763,11 @@ export class Factory {
       pendingWork: run.status === "waiting_for_client" ? run.pendingWork : undefined,
       pendingWorkItems: run.status === "waiting_for_client" ? (run.pendingWorkItems ?? (run.pendingWork ? [run.pendingWork] : [])) : undefined,
       retryAfterMs: run.status === "running" ? 2000 : null,
-      next: nextHint(run),
+      next: supervisorWork ? SUPERVISOR_HINT : nextHint(run),
       proposal: run.status === "needs_confirmation" ? run.proposal : undefined,
       cost: this.footer(run),
+      ...(run.supervisor ? { supervisor: { status: run.supervisor.status, verdict: run.supervisor.verdict ?? null, bottleneck: run.supervisor.bottleneck ?? null, idea: run.supervisor.idea ?? null, costUsd: run.supervisor.costUsd ?? null } } : {}),
+      ...(supervisorWork ? { supervisorWork } : {}),
     };
   }
 
@@ -799,8 +844,9 @@ export class Factory {
       coverage,
       cacheTokens,
       harnessCostUsd: round(harnessCostUsd),
-      result: [...run.ledger].reverse().find((r) => typeof r.output === "string")?.output ?? null,
+      result: [...run.ledger].reverse().find((r) => typeof r.output === "string" && r.nodePath !== SUPERVISOR_PATH)?.output ?? null,
       cost: this.footer(run),
+      ...(run.supervisor ? { supervisor: supervisorView(run.supervisor) } : {}),
     };
   }
 
@@ -819,6 +865,98 @@ export class Factory {
     }
     return lines.join("\n");
   }
+}
+
+function supervisorView(record: NonNullable<Run["supervisor"]>): Omit<NonNullable<Run["supervisor"]>, "work"> {
+  const { work: _work, ...view } = record;
+  return view;
+}
+
+function supervisorPrompt(summary: RunSummary): string {
+  return `Supervise this finished factory run. The JSON below is its summary, made by a script from the run's events and ledger; it is your only data.\n\n\`\`\`json\n${JSON.stringify(summary, null, 2)}\n\`\`\``;
+}
+
+function fakeSupervisorText(summary: RunSummary): string {
+  const bottleneck = summary.top.costNode ?? "none";
+  return [
+    `FACTS: ${summary.run.workflow} ${summary.run.status}, $${summary.totals.costUsd} of $${summary.run.budgetUsd ?? "?"}, ${summary.totals.llmSteps} llm steps, ${summary.loops.length} loops, ${summary.failures.length} failures.`,
+    `BOTTLENECK: ${bottleneck}.`,
+    "IDEAS: none (fake model).",
+    `supervise | ok | ${bottleneck} | none`,
+  ].join("\n");
+}
+
+function delegateEntry(work: PendingWork, output: string, usage: SubmitUsage): LedgerEntry {
+  const inputTokens = Number.isInteger(usage.inputTokens) ? usage.inputTokens : undefined;
+  const outputTokens = Number.isInteger(usage.outputTokens) ? usage.outputTokens : undefined;
+  const hasSplit = inputTokens !== undefined && outputTokens !== undefined;
+  const tokens: TokenCounts = {
+    input: hasSplit ? inputTokens : null,
+    output: hasSplit ? outputTokens : null,
+    cacheRead: usage.cacheReadTokens ?? 0,
+    cacheWrite5m: usage.cacheWriteTokens ?? 0,
+    cacheWrite1h: 0,
+  };
+  const priced = hasSplit ? priceUsage(usage.model ?? work.model, tokens, false) : { costUsd: null };
+  return {
+    nodePath: work.nodePath,
+    agentId: work.agentId,
+    kind: "llm",
+    tier: work.tier,
+    model: usage.model ?? work.model,
+    backend: "delegate",
+    turn: 1,
+    inputTokens: tokens.input,
+    outputTokens: tokens.output,
+    cacheReadTokens: tokens.cacheRead,
+    cacheWrite5mTokens: tokens.cacheWrite5m,
+    cacheWrite1hTokens: 0,
+    totalTokens: usage.totalTokens ?? null,
+    childSessionId: usage.childSessionId ?? null,
+    costUsd: priced.costUsd,
+    costSource: hasSplit ? "reported" : "unknown",
+    outputPreview: String(output ?? "").slice(0, 200),
+    agentName: work.agentName ?? null,
+  };
+}
+
+interface CliEntryContext {
+  nodePath: string;
+  agentId: string;
+  agentName: string | null;
+  tier: Tier;
+  requestedModel: string;
+  cli: CliName;
+  keepOutput: boolean;
+}
+
+function cliEntries(result: CliResult, context: CliEntryContext): LedgerEntry[] {
+  return (result.usageByModel ?? []).map((u) => {
+    const priced = priceUsage(u.model, u.tokens, u.cacheWriteTtlKnown);
+    return {
+      nodePath: context.nodePath,
+      agentId: context.agentId,
+      kind: "llm",
+      tier: context.tier,
+      model: u.model,
+      requestedModel: context.requestedModel,
+      backend: `cli:${context.cli}`,
+      turn: 1,
+      harnessTurns: result.turns,
+      inputTokens: u.tokens.input,
+      outputTokens: u.tokens.output,
+      cacheReadTokens: u.tokens.cacheRead,
+      cacheWrite5mTokens: u.tokens.cacheWrite5m,
+      cacheWrite1hTokens: u.tokens.cacheWrite1h,
+      costUsd: priced.costUsd,
+      costSource: priced.costSource,
+      harnessCostUsd: u.harnessCostUsd,
+      durationMs: result.durationMs,
+      outputPreview: String(result.text ?? "").slice(0, 200),
+      output: context.keepOutput ? (result.text ?? null) : null,
+      agentName: context.agentName,
+    };
+  });
 }
 
 function configOf(run: Run): RunConfig {

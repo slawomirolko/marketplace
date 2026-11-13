@@ -2,6 +2,26 @@
   "registrySchemaVersion": 1,
   "skills": [
     {
+      "name": "olko-factory-run-supervision",
+      "category": "software-factory",
+      "version": "0.1.0",
+      "description": "Rules to read the summary of one finished Software Factory run and find its bottleneck and optimizations: the summary fields, how to rank cost and time, and which changes to propose (cheaper tier, fewer rounds, a script instead of an LLM step, fewer questions). Use when you supervise or review the cost and time of a factory run. Triggers: 'supervise factory run', 'factory run bottleneck', 'optimize factory run', 'olko-factory-run-supervision'.",
+      "tags": [
+        "software-factory",
+        "factory",
+        "run",
+        "supervision"
+      ],
+      "capabilities": [
+        "software-factory",
+        "software-factory.factory.run.supervision"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
       "name": "olko-factory-workflow-yaml",
       "category": "software-factory",
       "version": "0.1.0",

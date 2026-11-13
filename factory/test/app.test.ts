@@ -8,6 +8,7 @@ import { createDataApi, apiMiddleware } from "../app/data.ts";
 import type { DataApi } from "../app/data.ts";
 import type { Run } from "../src/types.ts";
 import type { Cost, Item, Level, RunData } from "../app/src/types.ts";
+import { supervisorRing } from "../app/src/supervisor.ts";
 import { buildLevel, costOf, failureOf, formatTokens, ledgerOf, formatUsd, END_KEY, START_KEY } from "../app/src/tree.ts";
 
 function itemAt(level: Level, key: string): Item {
@@ -346,4 +347,31 @@ test("demo run: every ledger record lands in one call and the index carries the 
   assert.deepEqual(ancestorKeys(level, "hello/review#docs"), ["hello/review"]);
   assert.deepEqual(ancestorKeys(level, "hello/build/verify"), ["hello/build"]);
   assert.deepEqual(ancestorKeys(level, "hello/plan"), []);
+});
+
+test("the run detail carries the supervisor and the ring shows its verdict, cost and full text", async () => {
+  const { detail } = await demoRun();
+  const supervisor = detail.report.supervisor;
+  assert.equal(supervisor?.status, "done");
+  const ring = supervisorRing(supervisor);
+  assert.equal(ring.tone, "ok");
+  assert.equal(ring.status, "ok");
+  assert.match(ring.cost, /^\$0\.\d{6}$/);
+  assert.match(ring.headline, /^bottleneck: hello\/\S+ · idea: none$/);
+  assert.match(ring.text, /^FACTS: /);
+  assert.ok(detail.run.ledger.some((r) => r.nodePath === "@supervisor"), "the supervisor cost is in the run ledger");
+  const { runCalls } = await import("../app/src/tree.ts");
+  const call = runCalls(detail.run).find((c) => c.node === "@supervisor");
+  assert.equal(call?.status, "done", "the supervisor is one call in the calls list");
+  assert.equal(call?.records, 1);
+});
+
+test("the supervisor ring has a state for every supervisor status", () => {
+  assert.equal(supervisorRing(null).tone, "idle");
+  assert.deepEqual(supervisorRing({ status: "running", agent: "olko-factory-supervisor" }), { tone: "busy", status: "analyzing the run", cost: "", headline: "analyzing the run", text: "", agent: "olko-factory-supervisor", model: null });
+  const failed = supervisorRing({ status: "failed", agent: "a", error: "model unavailable", costUsd: 0 });
+  assert.deepEqual([failed.tone, failed.headline, failed.text, failed.cost], ["failed", "model unavailable", "model unavailable", "$0.000000"]);
+  const improve = supervisorRing({ status: "done", agent: "a", verdict: "improve", bottleneck: "w/fix", idea: "low tier", output: "x\nsupervise | improve | w/fix | low tier", costUsd: 0.0123, model: "claude-haiku-5-5" });
+  assert.deepEqual([improve.tone, improve.headline, improve.model], ["improve", "bottleneck: w/fix · idea: low tier", "claude-haiku-5-5"]);
+  assert.equal(supervisorRing({ status: "done", agent: "a", output: "free text\nlast line" }).headline, "last line", "no parseable line: the last line");
 });

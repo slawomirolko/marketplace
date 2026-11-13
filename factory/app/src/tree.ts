@@ -305,7 +305,7 @@ interface OpenCall {
 }
 
 function endStatus(type: string, result: unknown): string {
-  if (type === "node_failed" || type === "agent_failed") return "failed";
+  if (type === "node_failed" || type === "agent_failed" || type === "supervisor_failed") return "failed";
   if (type === "node_skipped") return "skipped";
   if (typeof result === "string" && result.includes("skipped: switch off")) return "switched off";
   return "done";
@@ -329,7 +329,7 @@ export function runCalls(run: RunData | null): RunCall[] {
   const open = new Map<string, OpenCall>();
   for (const e of run.events) {
     if (typeof e.node !== "string") continue;
-    if (e.type === "node_started") {
+    if (e.type === "node_started" || e.type === "supervisor_started") {
       const call: OpenCall = { node: e.node, visit: typeof e.visit === "number" ? e.visit : null, startedAt: e.at, endedAt: null, status: "running", agents: [], records: [] };
       calls.push(call);
       open.set(e.node, call);
@@ -341,7 +341,7 @@ export function runCalls(run: RunData | null): RunCall[] {
     else if (e.type === "agent_completed" || e.type === "agent_failed") {
       const agent = call.agents.findLast((a) => a.id === e.agentId && a.endedAt === null);
       if (agent) Object.assign(agent, { endedAt: e.at, status: endStatus(e.type, null) });
-    } else if (e.type === "node_completed" || e.type === "node_failed" || e.type === "node_skipped") {
+    } else if (e.type === "node_completed" || e.type === "node_failed" || e.type === "node_skipped" || e.type === "supervisor_completed" || e.type === "supervisor_failed") {
       Object.assign(call, { endedAt: e.at, status: endStatus(e.type, e.result) });
       open.delete(e.node);
     }

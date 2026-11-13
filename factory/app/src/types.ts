@@ -1,4 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
+import type { SupervisorData } from "./supervisor.ts";
 
 export interface WorkflowQuestion {
   id: string;
@@ -148,6 +149,7 @@ export interface RunReport {
   harnessCostUsd: number;
   cost: RunCost;
   synthetic: boolean;
+  supervisor?: SupervisorData;
 }
 
 export interface LedgerRecord {

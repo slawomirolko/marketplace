@@ -284,6 +284,26 @@ export interface Run {
   ledger: LedgerRecord[];
   events: RunEvent[];
   thresholdsHit: string[];
+  supervisor?: SupervisorRecord;
+}
+
+export type SupervisorStatus = "pending" | "running" | "waiting_for_client" | "done" | "failed";
+
+export interface SupervisorRecord {
+  status: SupervisorStatus;
+  agent: string;
+  tier?: Tier;
+  model?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  costUsd?: number | null;
+  summary?: unknown;
+  output?: string | null;
+  verdict?: string | null;
+  bottleneck?: string | null;
+  idea?: string | null;
+  error?: string | null;
+  work?: PendingWork | null;
 }
 
 export interface SubmitUsage {
@@ -351,6 +371,7 @@ export interface Report {
   harnessCostUsd: number;
   result: string | null;
   cost: CostFooter;
+  supervisor?: Omit<SupervisorRecord, "work">;
 }
 
 export interface RunStatusView {
@@ -364,6 +385,8 @@ export interface RunStatusView {
   next: string;
   proposal?: RunConfig;
   cost: CostFooter;
+  supervisor?: Pick<SupervisorRecord, "status" | "verdict" | "bottleneck" | "idea" | "costUsd">;
+  supervisorWork?: PendingWork;
 }
 
 export interface WorkflowSpecAgent {
