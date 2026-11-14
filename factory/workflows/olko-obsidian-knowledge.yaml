@@ -1,0 +1,56 @@
+name: olko-obsidian-knowledge
+version: 0.1.0
+description: "Manages the Obsidian knowledge base from docs/knowledge: compares the notes, proposes creates and updates, writes only the notes you approve after a re-check, then verifies the written notes. Declining, or a changed target, never writes."
+source: "agents/opencode/olko-obsidian-knowledge-manager.md"
+entry: compare
+roles:
+  writer: medium
+  verifier: medium
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: compare
+    description: "Compares docs/knowledge with the Obsidian notes and drafts the proposal; writes nothing."
+    kind: group
+    workflow: olko-obsidian-knowledge-compare
+  - id: ask-approval
+    description: "Puts the exact proposal to you; only approve writes, and approval covers only the listed notes."
+    kind: interrupt
+    question:
+      id: q-obsidian-knowledge-approve
+      text: "Obsidian proposal (draft for your review):\n{{state.propose.propose}}\n\nWrite exactly these notes (approve), or decline (nothing is written)?"
+      allowed: [approve, decline]
+  - id: recheck
+    description: "Re-reads each approved target just before writing and replies changed or unchanged; it writes nothing."
+    kind: llm
+    role: verifier
+    agent: olko-obsidian-knowledge-manager
+    tools: [read, bash]
+    dirs: ["{{input.project}}", "{{input.worktree}}"]
+    parse: text.raw
+    prompt: |
+      Read only. Do not write any file or note in this step.
+      Approved proposal, with the comparison it was based on:
+      {{state.propose.propose}}
+
+      Re-read each approved target now, at its location: the worktree docs/knowledge path when the request names a worktree, otherwise the vault note. Load obsidian-cli when you read the vault and olko-memory-layer before any memory read.
+      Compare each target with the comparison in the proposal. A create target that now exists counts as changed. An update target whose content differs from the comparison counts as changed.
+      Reply with exactly one word: changed, or unchanged. Reply changed when any target changed; otherwise reply unchanged. Do not add any other text.
+  - id: apply
+    description: "Writes only the approved creates and updates to the worktree or the vault, and reports the exact paths."
+    kind: group
+    workflow: olko-obsidian-knowledge-apply
+  - id: verify
+    description: "Re-reads the written notes and checks them against the approved proposal."
+    kind: group
+    workflow: olko-obsidian-knowledge-verify
+edges:
+  - { from: compare, to: ask-approval, when: 'check-proposal.check-proposal.pass == true', description: "the check passed the proposal as a usable draft: put it to you" }
+  - { from: compare, to: END, description: "the check failed: Obsidian is not open or a worktree path is missing; nothing is written and the retry command or the question is reported" }
+  - { from: ask-approval, to: recheck, when: 'ask-approval.answer == "approve"', description: "you approved the exact text: re-check the targets before writing" }
+  - { from: ask-approval, to: END, description: "you declined: nothing is written" }
+  - { from: recheck, to: compare, when: 'recheck.recheck == "changed"', description: "a target changed since the comparison: build a refreshed proposal and put it to you again" }
+  - { from: recheck, to: apply, when: 'recheck.recheck == "unchanged"', description: "every target still matches the comparison (reply unchanged): write the approved notes" }
+  - { from: recheck, to: END, description: "the re-read did not confirm the targets (any other or garbled reply): nothing is written, and the result is reported" }
+  - { from: apply, to: verify, description: "the approved notes are written: verify them" }
+  - { from: verify, to: END }

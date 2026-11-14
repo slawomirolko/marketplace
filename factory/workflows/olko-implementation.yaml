@@ -1,7 +1,7 @@
 name: olko-implementation
 version: 0.1.0
 description: "Implements one approved Task: entry gate (plans it first when no plan exists), worktree and journal, compatibility preflight, failing tests first, chunked implementation with child-result checks, style and tests, isolated runtime verification, context-file optimization, scope gate, local Task review, then commit, PR, gates, merge and closure after explicit approvals."
-source: agents/opencode/olko-implementation-orchestrator.md (steps 1-11; each phase is a group file; tracker, Docker, Obsidian, editor and adoption sit behind switches)
+source: agents/opencode/olko-implementation-orchestrator.md (steps 1-13 incl. 1a, 5a, 12a, 12b; each phase is a group file; tracker, Docker, Obsidian, editor and adoption sit behind switches)
 entry: entry
 limits:
   maxCycleIterations: 4
@@ -27,7 +27,7 @@ nodes:
     kind: group
     workflow: olko-impl-build
   - id: verify
-    description: "Steps 4-7: style and affected tests until they pass, then the isolated Docker rebuild and runtime evidence."
+    description: "Steps 4-7: style and affected tests until they pass, the acceptance E2E recheck (5a), then the isolated Docker rebuild and runtime evidence."
     kind: group
     workflow: olko-impl-verify
   - id: context
@@ -43,7 +43,7 @@ nodes:
     kind: group
     workflow: olko-impl-review
   - id: deliver
-    description: "Steps 8-11: commit and draft PR only after your yes, PR check, Obsidian and editor gates, merge, cleanup and post-merge closure."
+    description: "Steps 8-9: commit and draft PR only after your yes, PR check, Obsidian and editor gates, merge that keeps the worktree; then closure (steps 11-13): acceptance E2E, post-merge runtime, worktree cleanup."
     kind: group
     workflow: olko-impl-deliver
   - id: report

@@ -1,0 +1,78 @@
+name: olko-skill-sync-local
+version: 0.3.0
+description: "Phase 6: after the marketplace pull request is merged and reinstalled, or directly when no marketplace pull request was made (revert-only run), shows the local project diff this run wrote, asks before committing, opens the local pull request through olko-commit, reports the marketplace and local pull request URLs together, then hands the local pull request to the shared PR step (leave, wait or squash merge). A run that wrote no local file ends here with the explicit statement that the local pull request is omitted."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 6, local project delivery)"
+roles:
+  publisher: medium
+entry: local-diff
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: local-diff
+    description: "Read-only: shows git status and per-file diffs of the local project, the proposed conventional commit subject and the target feature branch. Writes, stages and commits nothing."
+    kind: llm
+    role: publisher
+    agent: olko-marketplace-skill-sync-manager
+    tools: [read, bash]
+    dirs: ["{{state.discover.project}}"]
+    parse: text.raw
+    prompt: |
+      Phase 6 step 1 only, read-only. Do not write, stage, commit or push anything.
+      Local project: {{state.discover.project}}
+      {{#state.publish-pr}}Marketplace pull request already merged: {{state.publish-pr.publish.url}}.{{/state.publish-pr}}{{^state.publish-pr}}No marketplace pull request was made (revert-only run): say so.{{/state.publish-pr}}
+
+      Run `git status` and the per-file `git diff` in the local project. Show only the files this marketplace sync run wrote in the project: adapted local SKILL.md versions (local-only SemVer lines), project adapters (`.agents/skill-config.md`, `.agents/skills/<name>/project.md`), move-to-adapter changes, permission narrowing and other local bindings, `opencode.json` changes, reverted local copies, reinstalled artifact copies and accepted reverts. If this run wrote no local file, say exactly: "No local file written: the local pull request is omitted. Choose stop."
+      Propose the conventional commit subject and the target feature branch (never the default branch).
+      Reply with the diff summary, the file list, the subject and the branch.
+  - id: ask-local
+    description: "Shows the local diff and asks before any commit: commit on a feature branch and open the local pull request, or stop. When the diff says no local file was written, the answer is stop and no local pull request is made."
+    kind: interrupt
+    maxVisits: 20
+    question:
+      id: q-sync-local-publish
+      text: "Local project delivery (second pull request):\n{{state.local-diff.local-diff}}\n\nCommit these files on a feature branch and open the local pull request? If the diff says no local file was written, choose stop: the local pull request is omitted."
+      allowed: [commit, stop]
+  - id: local-commit
+    description: "olko-commit commits only the approved local files on a feature branch, pushes and opens the local pull request (GitHub gh pr create or GitLab glab mr create, per the project config)."
+    kind: llm
+    role: publisher
+    skill: olko-commit
+    tools: [read, edit, bash]
+    dirs: ["{{state.discover.project}}"]
+    parse: sync.prLine
+    prompt: |
+      Run the olko-commit workflow in the LOCAL project repository {{state.discover.project}} (use `git -C` or change into it), not in the marketplace.
+      Commit only the files listed in the approved diff below. Stage them by name; never `git add -A`. Never pass --force and never push to the default branch: use a feature branch. Do not merge. Do not ask questions; the user already approved this commit.
+      If the approved diff lists no file, do not commit and do not open a pull request; end with `pr | none | none | none` and say nothing was written.
+      Hosting: read `gitHosting`, `remoteName` and `defaultBranch` from .agents/skill-config.md. GitHub: `gh pr create`; GitLab: `glab mr create`.
+      PR title: the approved conventional commit subject.
+      PR description, concise: the local changes, and {{#state.publish-pr}}the marketplace pull request they accompany: {{state.publish-pr.publish.url}}{{/state.publish-pr}}{{^state.publish-pr}}that no marketplace pull request was made (revert-only run): say so{{/state.publish-pr}}. Never fold project adapters, local bindings, machine paths or credentials into any marketplace change.
+
+      Approved diff and subject:
+      {{state.local-diff.local-diff}}
+
+      End with exactly one line: `pr | <PR URL> | <branch> | <commit sha>`.
+  - id: report-prs
+    description: "Reports the marketplace and the local pull request URLs together, before the leave, wait or merge decision. Changes nothing."
+    kind: llm
+    role: publisher
+    agent: olko-marketplace-skill-sync-manager
+    prompt: |
+      Phase 6 report only. Do not write, stage, commit, push or merge anything.
+      Report both pull requests together in one short message:
+      Marketplace pull request: {{#state.publish-pr}}{{state.publish-pr.publish.url}}{{/state.publish-pr}}{{^state.publish-pr}}none (revert-only run){{/state.publish-pr}}
+      Local pull request: {{state.local-commit.local-commit.url}}
+      The next step asks whether to leave the local pull request open, wait for CI or squash merge it.
+  - id: local-pr
+    description: "Calls the shared PR step for the local pull request: leave it open, wait for CI or squash merge after your explicit approval."
+    kind: call
+    workflow: olko-pr-merge
+    input: { path: "{{state.discover.project}}", prUrl: "{{state.local-commit.local-commit.url}}", prBranch: "{{state.local-commit.local-commit.branch}}", label: "local" }
+edges:
+  - { from: local-diff, to: ask-local }
+  - { from: ask-local, to: local-commit, when: 'ask-local.answer == "commit"', description: "you approved the commit and the local pull request" }
+  - { from: ask-local, to: END, description: "you chose stop (any other answer also stops here): local changes stay uncommitted and no local pull request is created; for a run that wrote no local file this is the expected answer" }
+  - { from: local-commit, to: report-prs, when: 'local-commit.local-commit.url != "none"', description: "a local pull request was opened" }
+  - { from: local-commit, to: END, description: "no local file was written, so no local pull request exists: the run says so and ends here" }
+  - { from: report-prs, to: local-pr }
+  - { from: local-pr, to: END, description: "the local pull request was left open, waited for or squash merged" }

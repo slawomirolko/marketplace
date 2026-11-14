@@ -1,0 +1,28 @@
+name: olko-skill-optimizer-audit
+version: 0.1.0
+description: "Audit phase: lists every agent file in the given directory in directory order, with the fields it can read (model, allowed skills, description length), and proposes the next targets. The cost ranking, words, estimated tokens and prefix issues need the measure step, which is not available yet and is shown as needs engine op. It changes nothing."
+source: "agents/opencode/olko-skill-optimizer.md (audit mode)"
+roles:
+  reader: low
+entry: audit-report
+nodes:
+  - id: audit-report
+    description: "Read only: one row per agent file in the directory, in directory order (no cost ranking until the measure step exists), and the next targets. Changes nothing."
+    kind: llm
+    role: reader
+    agent: olko-skill-optimizer
+    tools: [read]
+    dirs: ["{{state.resolve-path.path}}"]
+    parse: text.raw
+    prompt: |
+      Audit mode, read only. Do not edit, create or delete any file, and do not write memory.
+      Directory: {{state.ask-target.answer}}
+      Limits: Skip every Cave Crew resource without opening it. Do not read or search `plans/` unless the user named a plan file.
+
+      For every agent .md file in the directory, read its frontmatter only: model, permission.skill allowlist and the length of its description in characters.
+      Words, estimated tokens and prefix issues need the measure step (line-count script with --registry), which is not available in this workflow yet. Write `needs engine op skill.measure` in those cells. Do not estimate them.
+      Report one row per agent, most expensive first. The cost ranking needs the measure step, so write `ranking | needs engine op skill.measure` and list the agents in directory order instead, without guessing a cost order.
+      Columns: agent, words, estimated tokens, allowed skills, description characters, model, prefix issues.
+      Then propose the next targets, as exact paths, with the reason for each. State that nothing was changed.
+edges:
+  - { from: audit-report, to: END }

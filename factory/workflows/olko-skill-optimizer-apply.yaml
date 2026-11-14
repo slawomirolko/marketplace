@@ -1,0 +1,48 @@
+name: olko-skill-optimizer-apply
+version: 0.1.0
+description: "Apply phase: after your approval of the exact proposal, edits only the selected resource and the companion files the approval names, re-reads every changed file and reports paths and test results. For split it also creates the approved new skills with their registry entries. Then it records verified, reusable learning in the memory layer, or reports that learning was skipped."
+source: "agents/opencode/olko-skill-optimizer.md (split execution, approval and editing, finish)"
+roles:
+  writer: medium
+  reader: low
+entry: apply
+nodes:
+  - id: apply
+    description: "Applies the approved edits only, runs the approved registry and test steps, re-reads every changed file and reports exact paths, changes, test results and the wording label. Words and tokens after the change need the measure step and are reported as needs engine op."
+    kind: llm
+    role: writer
+    agent: olko-skill-optimizer
+    tools: [read, edit, bash]
+    dirs: ["{{state.resolve-path.path}}"]
+    parse: text.raw
+    prompt: |
+      The user approved this exact proposal. Apply exactly the approved edits, without rewording them:
+      {{state.draft.draft}}
+      Selected resource: {{state.ask-target.answer}}
+      Mode: {{state.ask-mode.answer}}
+      Limits: Do not edit, inspect or recommend edits to Cave Crew resources. Do not read or search `plans/` unless the user named a plan file.
+
+      1. Edit only the selected resource and the companion files named in the approved edit list. Never edit agents, skills, engine code, tests or the lock file that the approval does not name.
+      2. Change behavior only where the approved text says so. Keep frontmatter, invocation contracts, tools, permissions, commands, paths, thresholds and hard rules intact unless the approved text names the exact change.
+      3. Split (only when the approved split plan is not `none`): for each approved new skill, create it in the repository skill layout with the approved progressive section files; add its registry entry and run `node scripts/registry.mjs` when the repository has that script; in the agent, replace the moved section with the approved "in step X, load skill Y" line; add the skill to the agent's permission.skill allowlist and to the agent manifest entry.
+      4. Run the repository tests when they exist (for example `node --test scripts/*`). Report the results exactly.
+      5. Never add content that changes per run, per user or per machine (dates, session notes, absolute paths) to a resource that loads on every step.
+      6. In a public repository, check every new or changed file for company, team, product and internal repository names before you write it. If you find one, stop, write nothing more and report the hit.
+      7. Re-read every changed file. Report the exact paths, what changed in each, the test results, and whether the wording is ASD-STE100-conformant English or Polish clarity guidance inspired by STE. Write `needs engine op skill.measure` for the words and tokens after the change, so the caller can re-run the measure step.
+      8. Report any approved edit you could not make, with the reason.
+  - id: learn
+    description: "Records only verified, reusable workflow improvements in this agent's memory block through the memory layer skill; otherwise reports that learning was skipped. Stores no one-off or project-specific facts."
+    kind: llm
+    role: writer
+    agent: olko-skill-optimizer
+    tools: [read, edit]
+    parse: text.raw
+    prompt: |
+      Load `olko-memory-layer` through the skill tool before any memory read or write; it owns the storage and retention policy.
+      Apply result of this run: {{state.apply.apply}}
+      Persist only verified, reusable workflow improvements from this run to your own block at `.opencode/memory/olko-skill-optimizer.md`. Do not store one-off or project-specific facts, dates, paths or session notes. If nothing qualifies, reply `learning: none`.
+      If the memory tooling is unavailable, reply `learning: skipped (memory tooling unavailable)`. Do not create a fallback record in task artifacts.
+      Reply with one line: the learning entry you stored, `learning: none`, or the skip reason.
+edges:
+  - { from: apply, to: learn, description: "edits applied and reported: record learning" }
+  - { from: learn, to: END, description: "learning stored or skipped" }

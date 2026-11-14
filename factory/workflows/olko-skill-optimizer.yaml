@@ -1,0 +1,114 @@
+name: olko-skill-optimizer
+version: 0.1.0
+description: "Optimizes one AI instruction resource (agent or SKILL.md) for tokens and cache, or lists every agent in a directory for a cost audit (audit; the cost ranking needs the measure step). It asks for the mode and the exact path, checks the optimizer skill permission, drafts one proposal, and edits nothing until you approve that exact text. Audit changes nothing. Split moves sections into on-demand skills only after approval."
+source: "agents/opencode/olko-skill-optimizer.md"
+entry: memory-read
+roles:
+  reader: low
+  optimizer: medium
+  writer: medium
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: memory-read
+    description: "Reads only this agent's own memory block, through the memory layer skill, before any work starts."
+    kind: llm
+    role: reader
+    agent: olko-skill-optimizer
+    tools: [read]
+    parse: text.raw
+    maxVisits: 1
+    prompt: |
+      Read only. Do not write any file or memory in this step.
+      Load `olko-memory-layer` through the skill tool before the memory read; it owns the storage. Then read only your own block at `.opencode/memory/olko-skill-optimizer.md`.
+      Reply with the lessons from that block as short bullet points, or reply exactly `none` when the block is missing or empty. Do not add any other text.
+  - id: ask-mode
+    description: "Asks which mode to run: audit (rank agents by cost, change nothing), optimize (one resource) or split (one oversized agent or SKILL.md, moved into on-demand skills)."
+    kind: interrupt
+    question:
+      id: q-skill-optimizer-mode
+      text: "Skill optimizer mode? Choose from your request; this question is only the fallback when the request does not make the mode clear.\n- audit: rank every agent in a directory by cost; changes nothing.\n- optimize: one agent or SKILL.md, with a proposal you approve first.\n- split: one oversized agent or SKILL.md, with a split plan you approve first."
+      allowed: [audit, optimize, split]
+  - id: ask-target
+    description: "Asks for the exact path: one agent or SKILL.md for optimize and split, or the agents directory for audit. No guessing."
+    kind: interrupt
+    maxVisits: 3
+    question:
+      id: q-skill-optimizer-target
+      text: "Give the exact path. For optimize or split: the one agent .md or SKILL.md file. For audit: the agents directory. Do not give a Cave Crew resource; those are out of scope."
+  - id: resolve-path
+    description: "Finds the marketplace checkout (input, MARKETPLACE_PATH, project adapter or the built-in fallback). The target checks and the edit steps read and write the selected path inside it."
+    kind: script
+    op: sync.resolvePath
+    maxVisits: 3
+  - id: target-check
+    description: "Read only: confirms the given path is exact and points to one existing file (or one directory for audit); replies ok or ask."
+    kind: llm
+    role: reader
+    agent: olko-skill-optimizer
+    tools: [read]
+    dirs: ["{{state.resolve-path.path}}"]
+    parse: text.raw
+    maxVisits: 3
+    prompt: |
+      Read only. Do not open the content of the target and do not write anything.
+      Mode: {{state.ask-mode.answer}}
+      Given path: {{state.ask-target.answer}}
+      Reply exactly `ok` when the path is exact and exists: one file for optimize or split, one directory for audit. Reply exactly `ask` when the path is missing, ambiguous, a pattern, a list of several resources, or a Cave Crew resource. Do not add any other text.
+  - id: after-target
+    description: "Routes by the chosen mode: audit goes to the cost ranking, optimize and split go to the skill permission check."
+    kind: script
+    op: builtin.pass
+  - id: audit
+    description: "Audit mode: lists every agent in the directory in directory order (the cost ranking needs the measure step) and proposes the next targets. Changes nothing."
+    kind: group
+    workflow: olko-skill-optimizer-audit
+  - id: skill-check
+    description: "Read only: checks that the configured optimizer skill (default olko-agents-optimizer) is allowed in this agent's skill permissions; replies ok or blocked."
+    kind: llm
+    role: reader
+    agent: olko-skill-optimizer
+    tools: [read]
+    parse: text.raw
+    maxVisits: 1
+    prompt: |
+      Read only. Do not write anything.
+      Read `.agents/skill-config.md` in the current project and find `agentsOptimizerSkill`. If it is missing, the default is `olko-agents-optimizer`.
+      Then check that this agent's permission.skill allowlist (olko-skill-optimizer) allows that skill.
+      Reply exactly `ok` when the configured skill is olko-agents-optimizer and it is allowed. Reply exactly `blocked` in every other case, including a different configured skill or a missing permission. Do not add any other text.
+  - id: blocked-report
+    description: "Read only: writes the stop report when the optimizer skill is blocked. The project must extend this agent's skill permissions; nothing is changed."
+    kind: llm
+    role: reader
+    agent: olko-skill-optimizer
+    tools: [read]
+    parse: text.raw
+    maxVisits: 1
+    prompt: |
+      Read only. Do not write anything and do not load any other skill.
+      The skill check replied: {{state.skill-check.skill-check}}
+      Write a short stop report: the optimizer skill from `.agents/skill-config.md` (`agentsOptimizerSkill`, default `olko-agents-optimizer`) is not allowed in this agent's permission.skill allowlist, so the project must extend this agent's skill permissions first. Name the configured skill. Say that no other skill was substituted and that nothing was changed.
+  - id: propose
+    description: "Optimize and split: loads the optimizer skill, applies the wording profile, drafts one proposal and puts it to you. Edits nothing before your approval."
+    kind: group
+    workflow: olko-skill-optimizer-propose
+  - id: apply-edits
+    description: "After your approval of the exact proposal: edits only the selected resource and approved companion files, then re-reads and reports them. Split also creates the approved new skills."
+    kind: group
+    workflow: olko-skill-optimizer-apply
+edges:
+  - { from: memory-read, to: ask-mode, description: "memory read: ask for the mode" }
+  - { from: ask-mode, to: ask-target, description: "mode chosen: ask for the exact path" }
+  - { from: ask-target, to: resolve-path, description: "path given: find the marketplace checkout" }
+  - { from: resolve-path, to: target-check, description: "checkout found: check the path" }
+  - { from: target-check, to: after-target, when: 'target-check.target-check == "ok"', description: "the path is exact: route by mode" }
+  - { from: target-check, to: ask-target, description: "the path is not exact or not allowed (any other reply): ask again" }
+  - { from: after-target, to: audit, when: 'ask-mode.answer == "audit"', description: "audit mode chosen: rank the agents by cost" }
+  - { from: after-target, to: skill-check, description: "optimize or split chosen: check the optimizer skill permission first" }
+  - { from: audit, to: END, description: "audit report written; nothing changed" }
+  - { from: skill-check, to: propose, when: 'skill-check.skill-check == "ok"', description: "the optimizer skill is allowed: draft the proposal" }
+  - { from: skill-check, to: blocked-report, description: "blocked (any other reply): write the stop report; the project must extend this agent's skill permissions; nothing changed" }
+  - { from: blocked-report, to: END, description: "stop report written; nothing changed" }
+  - { from: propose, to: apply-edits, when: 'approve.answer == "approve"', description: "you approved the exact proposal: edit the approved files" }
+  - { from: propose, to: END, when: 'approve.answer != "approve"', description: "you stopped: nothing is edited" }
+  - { from: apply-edits, to: END, description: "edits applied and reported, memory learning recorded or skipped" }

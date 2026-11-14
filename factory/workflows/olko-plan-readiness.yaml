@@ -24,15 +24,19 @@ nodes:
     workflow: olko-plan-gate
     input: { featureDir: "{{state.feature.featureDir}}" }
   - id: readiness
-    description: "Reads every Implementation readiness section and turns each BLOCKING item into a question."
+    description: "grill-with-docs reads every Implementation readiness section and turns each BLOCKING item into a question with the full plan context and the locked decisions, in the user's response language; the workflow puts the questions to the user."
     kind: llm
     role: plan-gate
-    agent: olko-plan-documentation-orchestrator
+    skill: grill-with-docs
+    tools: [read]
+    dirs: ["{{input.project}}"]
     maxVisits: 4
     parse: plan.grill
     prompt: |
-      Do only the read of step 8b for {{state.feature.featureDir}} (project {{input.project}}): read `## Implementation readiness` and `## Open items` of implementation.md and every Task file. Read only; do not delegate or ask.
-      Return every BLOCKING item as a question with exactly 3 options (the first recommended); return no questions when every plan says `Ready for implementation: yes`.
+      Do only the read of step 8b for {{state.feature.featureDir}} (project {{input.project}}): read `## Implementation readiness` and `## Open items` of implementation.md and every Task file, with the full plan context and the locked decisions in tracker.md. Read only; do not delegate, change no file and do not ask the user yourself.
+      Return every BLOCKING item as a question with exactly 3 options (the first recommended); return no questions when every plan says `Ready for implementation: yes`. Do not split a question or paraphrase it into new choices, and do not repeat a locked decision.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the questions and options in that language, concisely.
+      If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
       End with one ```json block: {"questions": [{"problem": "", "why": "", "options": [{"label": "", "business": "", "scope": ""}, {"label": "", "business": "", "scope": ""}, {"label": "", "business": "", "scope": ""}]}]}
   - id: readiness-check
     description: "Formats the blocker batch; stops after three rounds."
@@ -46,7 +50,7 @@ nodes:
     maxVisits: 100
     with: { over: readiness-check.questions }
   - id: ask-blocker
-    description: "Asks one blocker question with three options, the recommended one first."
+    description: "Puts one blocker question with three options, composed by grill-with-docs and the recommended one first, to the user."
     kind: interrupt
     maxVisits: 100
     question:
@@ -69,6 +73,7 @@ nodes:
     parse: text.raw
     prompt: |
       Apply ALL these blocker decisions together to {{state.feature.featureDir}} (project {{input.project}}), refresh `## Implementation readiness`, and record them as locked decisions in tracker.md. Edit only that folder.
+      Record each decision in English per userDecisionRecordLanguage and userDecisionRecordStyle in .agents/skill-config.md (unset: the repository documentation language; concise translation): translate and compact faithfully, keep IDs and meaning-critical exact wording, and add no new decision.
       {{state.blocker-answers.text}}
   - id: gate-blocker
     description: "Consistency gate after the blocker decisions."

@@ -1,0 +1,92 @@
+name: olko-skill-optimizer-propose
+version: 0.1.0
+description: "Propose phase for optimize and split: runs the optimizer skill on the selected resource (read only), applies the language profile after the structural decisions, drafts one proposal with findings, wording changes, split plan and expected size, and puts the exact text to you. Revise runs the analysis again; approve or stop ends the phase. Nothing is edited here."
+source: "agents/opencode/olko-skill-optimizer.md (required skill sequence, steps 2-4, approval and editing)"
+roles:
+  optimizer: medium
+limits:
+  maxCycleIterations: 4
+entry: analyze
+nodes:
+  - id: analyze
+    description: "Runs the optimizer skill on the selected resource, read only: discoverability and gotchas, token and cache audit (prefix stability, placement, examples over rules, split plan, provider advice). The measure step is not available yet and is reported as needs engine op."
+    kind: llm
+    role: optimizer
+    skill: olko-agents-optimizer
+    tools: [read]
+    dirs: ["{{state.resolve-path.path}}"]
+    maxVisits: 4
+    parse: text.raw
+    prompt: |
+      Read only. Do not edit, create or delete any file in this step.
+      Mode: {{state.ask-mode.answer}}
+      Selected resource (exact path, the only target): {{state.ask-target.answer}}
+      Memory lessons for this agent: {{state.memory-read.memory-read}}
+      Limits: Do not inspect or recommend edits to Cave Crew resources. Do not read or search `plans/` unless the user named a plan file.
+
+      Run the optimizer steps in this order: measure, discoverability and gotchas, token and cache audit, split plan, provider advice.
+      Measure step: the line-count measurement is not available in this workflow yet. Write `measure | needs engine op skill.measure` in its place. Do not estimate words, tokens or prefix issues.
+      Keep every rule that the resource needs on every model step in the resource; do not move it into a skill. Never change behavior: keep frontmatter, invocation contracts, tools, permissions, commands, paths, thresholds and hard rules.
+      Reply with the findings for each step, then the split plan (or `split: none`) and the provider advice.
+  - id: wording
+    description: "Applies the language profile of the ASD-STE100 adapter to the proposed wording, after the structural decisions, and adds related skill and agent recommendations. Read only."
+    kind: llm
+    role: optimizer
+    skill: olko-ste100-skill-adapter
+    tools: [read]
+    dirs: ["{{state.resolve-path.path}}"]
+    maxVisits: 4
+    parse: text.raw
+    prompt: |
+      Read only. Do not edit any file.
+      Limits: Do not inspect or recommend edits to Cave Crew resources. Do not read or search `plans/` unless the user named a plan file.
+      Apply your language profile to the proposed wording of the resource at {{state.ask-target.answer}}. The structural decisions below are fixed; the language profile must not undo them.
+      Structural findings from the optimizer:
+      {{state.analyze.analyze}}
+
+      Rules: ASD-STE100 applies only to English text: say so and label it conformant only when it is. For Polish prose, use the Polish clarity profile from the adapter and say it is clarity guidance inspired by STE, never formally ASD-STE100 compliant. Note any wording that could disadvantage or exclude a group of users.
+      Reply with the wording changes (old text, new text, reason), the conformance label, and the related skill and agent recommendations. Mark every recommendation as a draft for the user to decide.
+  - id: draft
+    description: "Combines the findings, wording changes, split plan and expected size into one proposal, marked as draft for your review. Read only."
+    kind: llm
+    role: optimizer
+    agent: olko-skill-optimizer
+    tools: [read]
+    dirs: ["{{state.resolve-path.path}}"]
+    maxVisits: 4
+    parse: text.raw
+    prompt: |
+      Read only. Do not edit any file. Write the proposal text only.
+      Limits: Do not inspect or recommend edits to Cave Crew resources. Do not read or search `plans/` unless the user named a plan file.
+      Language: write the proposal in the user's language, and keep the target's own language requirement (ASD-STE100 applies only to English text; Polish text gets the Polish clarity profile, never a formal ASD-STE100 label).
+      Mode: {{state.ask-mode.answer}}
+      Target: {{state.ask-target.answer}}
+      Findings and split plan:
+      {{state.analyze.analyze}}
+      Wording and recommendations:
+      {{state.wording.wording}}
+
+      Write one proposal with these parts, in this order:
+      1. Target: the exact path.
+      2. Findings table: finding, location, rule or section, action, reason.
+      3. Wording changes: old text, new text, reason.
+      4. Split plan: for each new skill, its name, the section it takes, the one-line load instruction left in the agent, the permission.skill and manifest entries it needs, and the registry entry. Write `none` when there is no split.
+      5. Expected words and tokens after the change: write `needs engine op skill.measure` when the measure step was not available; do not estimate.
+      6. Related skill and agent recommendations.
+      7. Edit list: the exact files and the exact changes you will make after approval, and nothing else.
+      Check the proposal for company, team, product or internal repository names when the target is in a public repository. If you find one, do not propose any edit; write the hit as the only finding and stop.
+      Mark the whole proposal as draft material that a responsible person must review and validate before any edit.
+  - id: approve
+    description: "Puts the exact proposal to you. Approve allows the listed edits only; revise runs the analysis again; stop changes nothing."
+    kind: interrupt
+    maxVisits: 4
+    question:
+      id: q-skill-optimizer-approve
+      text: "Skill optimizer proposal (draft for your review):\n{{state.draft.draft}}\n\nApprove these exact edits, revise (a new draft is made), or stop (nothing is edited)?"
+      allowed: [approve, revise, stop]
+edges:
+  - { from: analyze, to: wording, description: "findings ready: apply the language profile" }
+  - { from: wording, to: draft, description: "wording ready: combine into one proposal" }
+  - { from: draft, to: approve, description: "proposal ready: put it to you" }
+  - { from: approve, to: analyze, when: 'approve.answer == "revise"', description: "you asked to revise: run the analysis again" }
+  - { from: approve, to: END, description: "you approved or stopped: leave the phase; the caller reads your answer" }

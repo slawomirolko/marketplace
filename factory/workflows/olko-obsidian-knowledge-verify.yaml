@@ -1,0 +1,29 @@
+name: olko-obsidian-knowledge-verify
+version: 0.1.0
+description: "Verify phase: re-reads each written note at its final location and checks its title, properties, links, tasks and rendered Markdown against the approved proposal. It reports the changed paths and any remaining discrepancy. It writes nothing."
+source: "agents/opencode/olko-obsidian-knowledge-manager.md (step 6 of the approval-gated workflow)"
+roles:
+  verifier: medium
+entry: check-result
+nodes:
+  - id: check-result
+    description: "Knowledge manager re-reads the written notes and compares them with the approved proposal; it reports the exact paths and any discrepancy."
+    kind: llm
+    role: verifier
+    agent: olko-obsidian-knowledge-manager
+    tools: [read, bash]
+    dirs: ["{{input.project}}", "{{input.worktree}}"]
+    parse: text.raw
+    prompt: |
+      Read only. Do not write any file or note in this step.
+      Approved proposal:
+      {{state.propose.propose}}
+      Write result:
+      {{state.write-notes.write-notes}}
+
+      1. Re-read each approved note at its final location: the worktree docs/knowledge path when the write went to a worktree, otherwise the vault note. Load obsidian-cli when you read the vault.
+      2. Verify the title, properties, links, tasks and rendered Markdown content of each note against the approved proposal.
+      3. Report the exact paths of the notes that changed, then each remaining discrepancy. When the write went to a worktree, give each path relative to the worktree, as docs/knowledge/<vault-relative path>. If none remains, say so.
+      4. If a note is missing or differs from the approved text, say which part differs. Do not fix it in this step.
+edges:
+  - { from: check-result, to: END }

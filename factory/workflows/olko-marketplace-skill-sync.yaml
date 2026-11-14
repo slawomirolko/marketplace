@@ -1,7 +1,7 @@
 name: olko-marketplace-skill-sync
-version: 0.2.0
-description: "Synchronizes project-local skills and OpenCode agents with the marketplace: compares every artifact, asks one decision per difference, applies, publishes through a PR and installs after the merge."
-source: agents/opencode/olko-marketplace-skill-sync-manager.md (phases 1-5)
+version: 0.3.0
+description: "Synchronizes project-local skills and OpenCode agents with the marketplace: compares every artifact, asks one decision per difference, applies, publishes through a marketplace PR, installs after the merge, and then delivers the project-side changes through a second, separate local project PR."
+source: agents/opencode/olko-marketplace-skill-sync-manager.md (phases 1-6)
 roles:
   bootstrap: low
   adapter: medium
@@ -33,7 +33,7 @@ nodes:
     kind: group
     workflow: olko-skill-sync-apply
   - id: publish-phase
-    description: "Phase 5: validates the marketplace, publishes through olko-commit after approval, then leave, wait for CI or squash merge, and installs after the merge."
+    description: "Phase 5 and phase 6: validates the marketplace, publishes through olko-commit after approval, then leave, wait for CI or squash merge, installs after the merge, and delivers the local project pull request last."
     kind: group
     workflow: olko-skill-sync-publish
   - id: report

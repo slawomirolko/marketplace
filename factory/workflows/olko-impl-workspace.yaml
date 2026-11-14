@@ -1,8 +1,10 @@
 name: olko-impl-workspace
 version: 0.1.0
-description: "Step 1: creates or resumes the Task worktree (every later agent and operation runs there), adopts existing changes when switches.adopt is on, and starts the implementation journal and the shared Feature tracker."
-source: "agents/opencode/olko-implementation-orchestrator.md (step 1, CURRENT-CODE ADOPTION, journal and Feature tracker)"
+description: "Step 1: creates or resumes the Task worktree (every later agent and operation runs there), adopts existing changes when switches.adopt is on, starts the implementation journal and the shared Feature tracker, then runs the acceptance E2E baseline (step 1a) in the worktree project."
+source: "agents/opencode/olko-implementation-orchestrator.md (step 1, step 1a ACCEPTANCE E2E BASELINE, CURRENT-CODE ADOPTION, journal and Feature tracker)"
 entry: worktree
+roles:
+  runner: medium
 nodes:
   - id: worktree
     description: "Creates the worktree <project>-worktrees/<task> on feature/<task> from the current branch, or resumes it; the run workspace moves there."
@@ -17,7 +19,36 @@ nodes:
     description: "Adds the ## Implementation journal to the Task plan and creates or resumes feature-tracker.md."
     kind: script
     op: impl.journal
+  - id: e2e-baseline
+    description: "Step 1a: the acceptance E2E runner runs the baseline phase of the Task manifest in the isolated worktree project and reports each criterion; a missing mapping or unavailable environment blocks implementation. Its report is kept with the Task plan."
+    kind: llm
+    role: runner
+    agent: olko-e2e-acceptance-runner
+    tools: [read, bash]
+    parse: impl.runtime
+    prompt: |
+      Phase baseline for Task {{state.task.taskName}}. Approved Task plan with the acceptance-to-scenario manifest: {{state.task.taskFile}}. Run only in the isolated worktree project of {{state.worktree.path}}, never the main stack or the shared database. Do not change any file.
+      Report PASS, FAIL or NOT VERIFIED per criterion, the manifest and commit, each criterion result, and the cleanup proof.
+      End with one line: `runtime | <pass|fail|not verified> | <manifest, commit, blocker>`
+  - id: save-baseline
+    description: "Saves the acceptance E2E baseline report in the Task plan under ## Implementation, before any stop. Only the tail of the runner output (last 4000 characters) is kept; the full report is an engine gap."
+    kind: llm
+    role: runner
+    skill: olko-implementation-journal
+    tools: [read, edit]
+    prompt: |
+      Append the acceptance E2E baseline report below under the ## Implementation section of the Task plan {{state.task.taskFile}}, as given. Change nothing else in the plan.
+      Report (tail of the runner output, last 4000 characters):
+      {{state.e2e-baseline.e2e-baseline.text}}
+  - id: stop-e2e-baseline
+    description: "Stops implementation: the acceptance E2E baseline is NOT VERIFIED because a criterion has no mapping or the environment is unavailable. A FAIL baseline does not stop the run."
+    kind: script
+    op: impl.stop
+    with: { reason: "acceptance E2E baseline not verified: missing mapping or unavailable environment" }
 edges:
   - { from: worktree, to: adopt }
   - { from: adopt, to: journal }
-  - { from: journal, to: END }
+  - { from: journal, to: e2e-baseline }
+  - { from: e2e-baseline, to: save-baseline, description: "the baseline ran; its report is saved to the Task plan" }
+  - { from: save-baseline, to: stop-e2e-baseline, when: 'e2e-baseline.e2e-baseline.verdict == "not verified"', description: "baseline NOT VERIFIED: missing mapping or unavailable environment, implementation is blocked" }
+  - { from: save-baseline, to: END, description: "baseline PASS or FAIL: implementation may continue" }

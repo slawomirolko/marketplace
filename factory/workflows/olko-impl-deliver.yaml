@@ -1,7 +1,7 @@
 name: olko-impl-deliver
 version: 0.1.0
-description: "Steps 8-11: commit, push and a draft PR only after your explicit yes; PR check where you choose which findings to fix; Obsidian and editor gates; merge only after your yes; worktree cleanup and post-merge closure. Answering no ends the run with the work left in the worktree."
-source: "agents/opencode/olko-implementation-orchestrator.md (steps 8-11) and skills/*/olko-implementation-pr-gates, olko-implementation-closure"
+description: "Steps 8-9: commit, push and a draft PR only after your explicit yes; PR check where you choose which findings to fix; Obsidian and editor gates; PR merge only after your yes, which leaves the Task worktree intact. Then the closure group (steps 11-13). Answering no ends the run with the work left in the worktree."
+source: "agents/opencode/olko-implementation-orchestrator.md (steps 8-9, merge-retain; steps 11-13 in olko-impl-closure) and skills/*/olko-implementation-pr-gates, olko-implementation-closure"
 roles:
   publisher: medium
   implementer: medium
@@ -84,22 +84,32 @@ nodes:
     kind: subgraph
     workflow: olko-impl-obsidian
     enabledWhen: "switches.obsidian == true"
+    required: true
   - id: editor
     description: "Editor syntax and structure verification in a new VS Code window; skipped when switches.editor is off."
     kind: subgraph
     workflow: olko-impl-editor
     enabledWhen: "switches.editor == true"
-  - id: pr
-    description: "Calls the shared PR step: leave, wait for CI or squash merge after your yes."
-    kind: call
-    workflow: olko-pr-merge
-    input: { path: "{{state.worktree.path}}", prUrl: "{{state.commit.commit.fields.1}}", prBranch: "{{state.worktree.branch}}", label: "Task" }
-  - id: pr-outcome
-    description: "Branches on the PR answer: cleanup and closure only after a merge."
-    kind: script
-    op: builtin.pass
+    required: true
+  - id: ask-merge
+    description: "Step 9: asks for explicit approval to merge the PR. Merge keeps the Task worktree intact; the worktree is removed only in closure step 13."
+    kind: interrupt
+    question:
+      id: q-impl-merge
+      text: "Task {{state.task.taskName}}: PR {{state.commit.commit.fields.1}} for branch {{state.worktree.branch}}. Merge it now? The Task worktree stays intact. Answer merge, or leave to keep the PR open."
+      allowed: [merge, "leave"]
+  - id: merge-retain
+    description: "Step 9: after your yes, the worktree lifecycle manager merges the PR with merge-retain and keeps the Task worktree and branch."
+    kind: llm
+    role: publisher
+    agent: olko-worktree-lifecycle-manager
+    tools: [read, bash]
+    parse: text.raw
+    prompt: |
+      The user approved the merge of PR {{state.commit.commit.fields.1}} for branch {{state.worktree.branch}} into {{state.worktree.base}}. Phase merge-retain only. Merge the PR, update the target branch, and keep the Task worktree {{state.worktree.path}} and its branch intact: do not remove the worktree or the branch and do not delete any plan.
+      Return the PR URL and the merge commit.
   - id: closure
-    description: "Worktree cleanup and post-merge closure in the main checkout."
+    description: "Closure after a merge: acceptance E2E (11), post-merge runtime (12), worktree cleanup (13), then the Feature steps (12a, 12b)."
     kind: group
     workflow: olko-impl-closure
 edges:
@@ -114,8 +124,8 @@ edges:
   - { from: pr-recheck, to: pr-push }
   - { from: pr-push, to: pr-check }
   - { from: obsidian, to: editor }
-  - { from: editor, to: pr }
-  - { from: pr, to: pr-outcome }
-  - { from: pr-outcome, to: closure, when: 'pr.ask-pr.answer == "merge"', description: "the PR was merged" }
-  - { from: pr-outcome, to: END, description: "PR left open: no cleanup" }
+  - { from: editor, to: ask-merge }
+  - { from: ask-merge, to: merge-retain, when: 'ask-merge.answer == "merge"', description: "you approved the merge" }
+  - { from: ask-merge, to: END, description: "you answered leave: PR stays open, no merge and no cleanup" }
+  - { from: merge-retain, to: closure, description: "PR merged; worktree kept; closure runs acceptance E2E first" }
   - { from: closure, to: END }

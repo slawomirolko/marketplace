@@ -1,8 +1,10 @@
 name: olko-plan-documentation
 version: 0.2.0
-description: "Plans work from an idea or an accepted Feature: discovery drafts the Epic/Feature/Task hierarchy, planning writes the business plan, the technical plan and one implementation plan per Task, then reviews, grills and finalizes them."
+description: "Plans work from an idea or an accepted Feature: discovery drafts the Epic/Feature/Task hierarchy, planning writes the business plan, the technical plan and one implementation plan per Task, then reviews, grills and finalizes them. Every question to the user is composed by grill-with-docs; the workflow only puts it to the user."
 source: agents/opencode/olko-plan-documentation-orchestrator.md (DISCOVERY and IMPLEMENTATION PLANNING; each phase is a group file, tracker steps sit behind switches.tracker)
 entry: route
+roles:
+  planner: high
 limits:
   maxCycleIterations: 4
 nodes:
@@ -11,12 +13,30 @@ nodes:
     kind: script
     op: plan.route
     maxVisits: 2
+  - id: route-grill
+    description: "grill-with-docs composes the one routing question (discovery, planning or both) in the user's response language; it changes no file and asks nothing itself."
+    kind: llm
+    role: planner
+    skill: grill-with-docs
+    tools: [read]
+    dirs: ["{{input.project}}"]
+    maxVisits: 2
+    parse: text.raw
+    prompt: |
+      Compose the one routing question for the project {{input.project}}: what the user wants: discovery (create or refine Epic/Feature/Task issues), planning (implementation plans for an accepted Feature), or both. Offer exactly these three choices. Return the question text only; the workflow puts it to the user. Read only.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely.
+      If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
+  - id: route-blocked
+    description: "Stops the run when grill-with-docs cannot be loaded: the tooling blocker is reported and nothing is asked of the user."
+    kind: script
+    op: builtin.stop
+    with: { reason: "grill-with-docs cannot be loaded: the run stopped without asking the user." }
   - id: ask-route
-    description: "Asks the user which deliverable they want when the run input does not say."
+    description: "Puts the routing question composed by grill-with-docs to the user."
     kind: interrupt
     question:
       id: q-plan-route
-      text: "What do you want: discovery (create or refine Epic/Feature/Task issues), planning (implementation plans for an accepted Feature), or both?"
+      text: "{{state.route-grill.route-grill}}"
       allowed: [discovery, planning, both]
   - id: discovery
     description: "Drafts and reviews the Epic/Feature/Task hierarchy with the backlog writer."
@@ -55,9 +75,11 @@ nodes:
     kind: group
     workflow: olko-plan-finalize
 edges:
-  - { from: route, to: ask-route, when: 'route.route == "ask"', description: "no route in the run input" }
+  - { from: route, to: route-grill, when: 'route.route == "ask"', description: "no route in the run input: grill-with-docs composes the routing question" }
   - { from: route, to: entry, when: 'route.route == "planning"', description: "planning only: skip discovery" }
   - { from: route, to: discovery, description: "discovery or both" }
+  - { from: route-grill, to: route-blocked, when: 'route-grill.route-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded: stop, the blocker is not put to the user as a question" }
+  - { from: route-grill, to: ask-route, description: "grill-with-docs composed the routing question: put it to the user" }
   - { from: ask-route, to: route, description: "the answer becomes the route" }
   - { from: discovery, to: discovery-report, when: 'route.route == "discovery"', description: "only discovery was requested" }
   - { from: discovery, to: entry, description: "both: plan the approved draft" }

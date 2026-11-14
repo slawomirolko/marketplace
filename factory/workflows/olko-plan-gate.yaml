@@ -47,12 +47,30 @@ nodes:
       Correct the Feature plan package in {{input.featureDir}} (project {{input.project}}) so these consistency mismatches are resolved, then stop. Edit only the files of that folder; leave business.md to its own wording unless a verified fact requires a correction.
       Mismatches: {{state.consistency.consistency.detail}}
       Reply with one line: `fixed | <files changed>`.
+  - id: gap-grill
+    description: "After three failed rounds grill-with-docs composes the question whether to accept the remaining mismatches, in the user's response language; it asks nothing itself."
+    kind: llm
+    role: planner
+    skill: grill-with-docs
+    tools: [read]
+    dirs: ["{{input.project}}"]
+    maxVisits: 4
+    parse: text.raw
+    prompt: |
+      Compose the question for the Feature plan {{input.featureDir}} (project {{input.project}}), with the full plan context and the locked decisions in tracker.md: the consistency gate still fails after {{state.round.count}} correction rounds: {{state.consistency.consistency.detail}}. Ask whether to accept the remaining mismatches as ACCEPTED-GAP in tracker.md and continue, or stop, with the choices accept and stop. Return the question text only; the workflow puts it to the user. Change no file.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely.
+      If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
+  - id: gap-blocked
+    description: "Stops the planning run when grill-with-docs cannot be loaded at the gap question: the tooling blocker is reported and nothing is asked of the user."
+    kind: script
+    op: builtin.stop
+    with: { reason: "grill-with-docs cannot be loaded: the consistency gap was not put to the user." }
   - id: ask-gap
-    description: "After three failed rounds asks whether to accept the remaining mismatches."
+    description: "Puts the accept-or-stop question composed by grill-with-docs to the user, after three failed rounds."
     kind: interrupt
     question:
       id: q-plan-gap
-      text: "The consistency gate still fails after {{state.round.count}} correction rounds: {{state.consistency.consistency.detail}}. Accept the remaining mismatches as ACCEPTED-GAP in tracker.md and continue, or stop?"
+      text: "{{state.gap-grill.gap-grill}}"
       allowed: [accept, stop]
   - id: record-gap
     description: "Records the accepted mismatches as ACCEPTED-GAP in tracker.md and the plans."
@@ -63,6 +81,7 @@ nodes:
     parse: text.raw
     prompt: |
       Record in {{input.featureDir}}/tracker.md (and in the `## Open items` of the affected plans as ACCEPTED-GAP) that the user accepted these consistency mismatches: {{state.consistency.consistency.detail}}. Edit only those files.
+      Record the decision in English per userDecisionRecordLanguage and userDecisionRecordStyle in .agents/skill-config.md (unset: the repository documentation language; concise translation): translate and compact faithfully, keep IDs and meaning-critical exact wording, and add no new decision.
       Reply with one line: `recorded | <files>`.
   - id: stop
     description: "Stops the run when the user does not accept the gap."
@@ -74,7 +93,9 @@ edges:
   - { from: consistency, to: END, when: "consistency.consistency.pass == true", description: "plan is consistent" }
   - { from: consistency, to: round, description: "mismatches found" }
   - { from: round, to: fix, when: "round.count < 3", description: "fewer than three correction rounds" }
-  - { from: round, to: ask-gap, description: "three rounds did not fix it" }
+  - { from: round, to: gap-grill, description: "three rounds did not fix it" }
+  - { from: gap-grill, to: gap-blocked, when: 'gap-grill.gap-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded: stop" }
+  - { from: gap-grill, to: ask-gap, description: "grill-with-docs composed the accept-or-stop question: put it to the user" }
   - { from: fix, to: stack }
   - { from: ask-gap, to: record-gap, when: 'ask-gap.answer == "accept"', description: "you accepted the gap" }
   - { from: ask-gap, to: stop, when: 'ask-gap.answer == "stop"', description: "you chose stop" }

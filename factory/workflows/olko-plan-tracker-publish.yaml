@@ -1,29 +1,76 @@
 name: olko-plan-tracker-publish
-version: 0.1.0
-description: "Publishes the approved draft to the tracker after an explicit approval and reads every issue back."
-source: skills/workflow/olko-plan-backlog-discovery/SKILL.md (approval-gated publish to the tracker and read-back)
+version: 0.2.0
+description: "Publishes the approved draft to the tracker after an explicit publish approval; changes to existing tracker issues need their own separate approval first; every issue is read back. A grill-with-docs blocker stops the run without asking the user."
+source: "skills/workflow/olko-plan-backlog-discovery/SKILL.md (approval-gated publish to the tracker and read-back); agents/opencode/olko-plan-documentation-orchestrator.md (DISCOVERY: approval-gated tracker publish, separate approval for existing-issue edits)"
 roles:
   backlog: medium
-entry: ask-publish
+  planner: high
+entry: publish-grill
 nodes:
+  - id: publish-grill
+    description: "grill-with-docs composes the explicit approval question for publishing the approved draft, in the user's response language; it publishes nothing and asks nothing itself."
+    kind: llm
+    role: planner
+    skill: grill-with-docs
+    tools: [read]
+    dirs: ["{{input.project}}"]
+    parse: text.raw
+    prompt: |
+      Compose the approval question for publishing the approved Epic/Feature/Task draft to the tracker now (idea: {{input.idea}}; locked answers: {{state.draft-check.answered}}), with the choices publish and skip. Draft:
+      {{state.draft-check.draft.text}}
+      Return the question text only; the workflow puts it to the user. Publish nothing and change no file.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely.
+      If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
+  - id: grill-blocked
+    description: "Stops the publish step when grill-with-docs cannot be loaded: the tooling blocker is reported and nothing is published or asked of the user."
+    kind: script
+    op: builtin.stop
+    with: { reason: "grill-with-docs cannot be loaded: nothing was published." }
   - id: ask-publish
-    description: "Asks for the explicit approval to publish."
+    description: "Puts the publish question composed by grill-with-docs to the user; the explicit approval is required before anything is published."
     kind: interrupt
     question:
       id: q-plan-publish
-      text: "Publish the approved Epic/Feature/Task draft to the tracker now?"
+      text: "{{state.publish-grill.publish-grill}}"
       allowed: [publish, skip]
+  - id: existing-grill
+    description: "grill-with-docs composes the separate approval question for changes to EXISTING tracker issues in the draft, in the user's response language; it changes nothing itself."
+    kind: llm
+    role: planner
+    skill: grill-with-docs
+    tools: [read]
+    dirs: ["{{input.project}}"]
+    parse: text.raw
+    prompt: |
+      Compose the separate approval question for changes to EXISTING tracker issues in this approved draft (idea: {{input.idea}}; locked answers: {{state.draft-check.answered}}): name each existing issue the draft would change and its exact field changes, with the choices approve-existing (approve those changes) and new-only (create new issues only and change no existing issue). Draft:
+      {{state.draft-check.draft.text}}
+      Return the question text only; the workflow puts it to the user. Publish nothing and change no file.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely.
+      If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
+  - id: ask-existing
+    description: "Puts the existing-issue question composed by grill-with-docs to the user; an existing issue is changed only after approve-existing."
+    kind: interrupt
+    question:
+      id: q-plan-publish-existing
+      text: "{{state.existing-grill.existing-grill}}"
+      allowed: [approve-existing, new-only]
   - id: publish
-    description: "Backlog writer publishes the draft and returns the verified issue links."
+    description: "Backlog writer publishes the draft and returns the verified issue links; existing issues are changed only when the separate existing-issue approval was approve-existing."
     kind: llm
     role: backlog
     agent: olko-feature-backlog-writer
     parse: text.raw
     prompt: |
       Mode: publish. Publish exactly this approved draft to the tracker, then read every created or changed issue back and list its link.
+      Existing-issue approval answer: {{state.ask-existing.answer}}. Change an EXISTING issue only when this answer is approve-existing; with new-only, create new issues only and change no existing issue.
       {{state.draft-check.draft.text}}
       Reply with the verified issue links, one per line.
 edges:
-  - { from: ask-publish, to: publish, when: 'ask-publish.answer == "publish"', description: "you chose publish" }
+  - { from: publish-grill, to: grill-blocked, when: 'publish-grill.publish-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded: stop" }
+  - { from: publish-grill, to: ask-publish, description: "grill-with-docs composed the publish question: put it to the user" }
+  - { from: ask-publish, to: existing-grill, when: 'ask-publish.answer == "publish"', description: "you chose publish: existing-issue changes still need their own approval" }
   - { from: ask-publish, to: END, when: 'ask-publish.answer == "skip"', description: "you chose skip: nothing published" }
+  - { from: existing-grill, to: grill-blocked, when: 'existing-grill.existing-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded: stop" }
+  - { from: existing-grill, to: ask-existing, description: "grill-with-docs composed the existing-issue question: put it to the user" }
+  - { from: ask-existing, to: publish, description: "publish now; the publish step changes existing issues only for approve-existing and creates new issues only for new-only" }
   - { from: publish, to: END }
