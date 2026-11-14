@@ -1,32 +1,55 @@
 name: olko-review-scope
-version: 0.1.0
-description: "Reads the PR (title, body, diff) and picks the lenses: bugs, one stack lens per changed stack, requirements when the PR states criteria."
-source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE, scope and lens detection)"
+version: 0.2.0
+description: "Reads the PR (title, body, diff) or the local diff and picks the lenses: bugs, one stack lens per changed stack, requirements when the PR states criteria."
+source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE, steps 1 and 2: scope and lens detection)"
+roles:
+  orchestrator: medium
 entry: scope
 limits:
   maxCycleIterations: 3
 nodes:
   - id: scope
-    description: "Reads the PR title, body and diff with gh, drops generated lockfiles and flags a stale working tree."
-    kind: script
-    op: github.prScope
-    with:
-      exclude:
-        - '(^|/)pnpm-lock\.yaml$'
-        - '(^|/)package-lock\.json$'
-        - '(^|/)yarn\.lock$'
-  - id: detect
-    description: "Chooses the lenses: bugs always, one stack lens per changed stack, requirements when the PR states criteria."
-    kind: script
-    op: review.detectLenses
-    with:
-      always: { id: bugs, agent: olko-review-bugs-lens }
-      requirements: { id: requirements, agent: olko-review-requirements-lens }
-      stacks:
-        - { id: dotnet, agent: olko-review-dotnet-lens, extensions: [".cs", ".csproj", ".props", ".targets"] }
-        - { id: react, agent: olko-review-react-lens, extensions: [".ts", ".tsx"] }
-        - { id: mobile, agent: olko-review-mobile-lens, extensions: [".kt", ".kts"] }
-        - { id: python, agent: olko-review-python-lens, extensions: [".py"] }
+    description: "The review orchestrator reads the PR or the local diff, drops generated lockfiles, flags a stale working tree and picks the lenses."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    tools: [read, bash]
+    parse: { json: [title, body, head, stale, files, excluded, lenses, unreviewed, criteria, pr?, repo?] }
+    prompt: |
+      Do only steps 1 and 2 of your REVIEW ROUTE. Run no lens, change nothing and post nothing: the factory runs the lenses.
+      {{#input.base}}
+      Scope: the local working tree against {{input.base}}: `git merge-base {{input.base}} HEAD`, then `git diff <merge-base>`, plus untracked files (`git ls-files --others --exclude-standard`) as new files. Title: `local changes against {{input.base}}`. Body: the acceptance criteria below. head: `working tree`. stale: false.
+      Acceptance criteria: {{input.criteria}}
+      {{/input.base}}
+      {{^input.base}}
+      Scope: PR #{{input.pr}} in {{input.repo}}: `gh pr view {{input.pr}} --repo {{input.repo}} --json title,body,headRefName,files`. stale is true when `git branch --show-current` is not the PR head branch.
+      {{/input.base}}
+      Leave generated lockfiles (pnpm-lock.yaml, package-lock.json, yarn.lock) out of files and list them in excluded. No file left: stop and say so.
+      Lenses, with these ids and agent names exactly:
+      - always: {"id": "bugs", "agentName": "olko-review-bugs-lens", "paths": <all files>}
+      - one per stack with changed files, paths = its files: dotnet / olko-review-dotnet-lens (.cs .csproj .props .targets), react / olko-review-react-lens (.ts .tsx), mobile / olko-review-mobile-lens (.kt .kts), python / olko-review-python-lens (.py)
+      - when there are acceptance criteria (the given criteria, else a non-empty PR description, which counts as the criteria): {"id": "requirements", "agentName": "olko-review-requirements-lens", "paths": <all files>, "mode": "code", "criteria": "<the criteria>"}
+      End with one ```json block:
+      {"pr": <PR number or null>, "repo": "<owner/name or empty>", "title": "...", "body": "...", "head": "<head branch>", "stale": <true|false>, "files": ["<path>"], "excluded": ["<path>"], "lenses": [...], "unreviewed": ["<file types reviewed only by the bugs lens>"], "criteria": "<PR description, given, or none>"}
+  - id: diff
+    description: "The review orchestrator returns the diff hunks of the files in scope, for the lenses."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    tools: [read, bash]
+    parse: text
+    prompt: |
+      Do only the diff part of step 1 of your REVIEW ROUTE. Change nothing and post nothing.
+      {{#input.base}}
+      Use `git diff <merge-base of {{input.base}} and HEAD> -- <path>`. An untracked file is a new-file diff of its whole text.
+      {{/input.base}}
+      {{^input.base}}
+      Use `gh pr diff {{input.pr}} --repo {{input.repo}}` and keep only the files below.
+      {{/input.base}}
+      Reply with the raw unified diff of these files and nothing else: no prose, no code fence.
+      {{#state.scope.scope.files}}
+      - {{.}}
+      {{/state.scope.scope.files}}
 edges:
-  - { from: scope, to: detect }
-  - { from: detect, to: END }
+  - { from: scope, to: diff }
+  - { from: diff, to: END }

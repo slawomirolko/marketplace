@@ -8,9 +8,6 @@ const list = z.array(z.unknown());
 
 export const PARSER_CONTRACTS: Record<string, z.ZodType> = {
   "text.raw": z.string(),
-  "review.findings": z.array(z.object({ location: z.string(), ruleId: z.string(), sev: z.string(), problem: z.string(), fix: z.string(), line: z.string() })),
-  "review.verdicts": list,
-  "review.rulesCheck": z.object({ noStore: z.boolean(), violations: list, verdicts: list }),
   "sync.comparison": z.object({ classification: z.string(), marketplaceVersion: z.string(), bump: z.string(), nextVersion: z.string(), action: z.string(), report: z.string() }),
   "sync.prLine": z.object({ url: z.string(), branch: z.string(), commit: z.string() }),
   "sync.applied": z.object({ files: z.array(z.string()), version: z.string() }),

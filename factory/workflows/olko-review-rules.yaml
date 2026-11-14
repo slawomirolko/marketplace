@@ -1,8 +1,9 @@
 name: olko-review-rules
-version: 0.1.0
+version: 0.2.0
 description: "Checks the confirmed findings against the project rule store, verifies new violations and asks the user one question per conflict between a finding and the store."
-source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE, project rules check)"
+source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE, step 6a: project rules check)"
 roles:
+  orchestrator: medium
   rules: medium
   verifier: medium
 entry: rules-check
@@ -10,62 +11,88 @@ limits:
   maxCycleIterations: 3
 nodes:
   - id: rules-check
-    description: "Checks the confirmed findings against the project rule store (ADRs, rule files)."
+    description: "Checks the diff and the confirmed findings against the project rule store (ADRs, rule files)."
     kind: llm
     role: rules
     agent: olko-project-rules-check
-    parse: review.rulesCheck
+    parse: text
     prompt: |
       Mode: code
-      {{#state.scope.pr}}PR #{{state.scope.pr}}: {{/state.scope.pr}}{{state.scope.title}}
+      {{#state.scope.scope.pr}}PR #{{state.scope.scope.pr}}: {{/state.scope.scope.pr}}{{state.scope.scope.title}}
 
       Changed paths:
-      {{#state.scope.files}}
-      - {{path}}
-      {{/state.scope.files}}
+      {{#state.scope.scope.files}}
+      - {{.}}
+      {{/state.scope.scope.files}}
 
-      Confirmed findings ({{state.confirm.confirmed.length}}), one per line:
-      {{#state.confirm.confirmed}}
+      Confirmed findings, one per line:
+      {{#state.confirm.confirm.confirmed}}
       {{line}}
-      {{/state.confirm.confirmed}}
+      {{/state.confirm.confirm.confirmed}}
 
       Diff hunks:
-      {{#state.scope.files}}
-      {{diff}}
-      {{/state.scope.files}}
+      {{state.diff.diff}}
   - id: rules-merge
-    description: "Splits the result into kept, dropped by the store, new violations and conflicts to decide."
-    kind: script
-    op: review.mergeRules
+    description: "The review orchestrator splits the result into kept, dropped by the store, new violations and conflicts to decide."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    parse: { json: [noStore, kept, dropped, violations, decide] }
+    prompt: |
+      Do only the split part of step 6a of your REVIEW ROUTE. Read no file and ask nobody: the factory asks the user.
+      Confirmed findings, in order:
+      {{#state.confirm.confirm.confirmed}}
+      {{line}}{{#unchecked}} (rule unchecked){{/unchecked}}
+      {{/state.confirm.confirm.confirmed}}
+
+      Project rules check output:
+      {{state.rules-check.rules-check}}
+
+      `no-store`: noStore true and every confirmed finding is kept. `keep`: kept, with the citation added when one is given. `drop`: dropped, with the cited entry. `ask`: decide, kind ask. `violation` lines: violations, the text after `violation | `.
+      End with one ```json block:
+      {"noStore": <true|false>, "kept": [{"line": "<finding>", "unchecked": <true|false>}], "dropped": [{"line": "<finding>", "cite": "<entry>"}], "violations": ["<violation>"], "decide": [{"kind": "ask", "line": "<finding>", "cite": "<quoted entry>"}]}
   - id: verify-violations
     description: "The verifier checks the new rule violations."
     kind: llm
     role: verifier
     agent: olko-review-verifier
-    parse: review.verdicts
+    parse: text
     prompt: |
-      {{#state.scope.pr}}PR #{{state.scope.pr}}: {{/state.scope.pr}}{{state.scope.title}}
+      {{#state.scope.scope.pr}}PR #{{state.scope.scope.pr}}: {{/state.scope.scope.pr}}{{state.scope.scope.title}}
 
-      Findings ({{state.rules-merge.violations.length}}), one per line:
-      {{#state.rules-merge.violations}}
+      Findings ({{state.rules-merge.rules-merge.violations.length}}), one per line:
+      {{#state.rules-merge.rules-merge.violations}}
       {{.}}
-      {{/state.rules-merge.violations}}
+      {{/state.rules-merge.rules-merge.violations}}
   - id: rules-violations
-    description: "Adds the confirmed violations to the findings."
-    kind: script
-    op: review.addViolations
+    description: "The review orchestrator adds the confirmed violations to the conflicts the user decides."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    parse: { json: [decide] }
+    prompt: |
+      Do only the violation part of step 6a of your REVIEW ROUTE: each violation the verifier kept (CONFIRMED or CONFIRMED-UNCHECKED) is a finding the user must decide on, like an `ask`. Read no file.
+      Conflicts so far:
+      {{#state.rules-merge.rules-merge.decide}}
+      - {{kind}} | {{line}} | {{cite}}
+      {{/state.rules-merge.rules-merge.decide}}
+
+      Verifier output on the violations:
+      {{state.verify-violations.verify-violations}}
+
+      End with one ```json block: {"decide": [<the conflicts so far>, then {"kind": "violation", "line": "<violation>", "cite": "<file#heading and quoted entry>"} per kept violation]}
   - id: next-decision
     description: "Takes the next conflict between a finding and the store (after violations)."
     kind: script
     op: list.next
     maxVisits: 100
-    with: { over: rules-violations.decide }
+    with: { over: rules-violations.rules-violations.decide }
   - id: next-decision-ask
     description: "Takes the next conflict between a finding and the store (no new violations)."
     kind: script
     op: list.next
     maxVisits: 100
-    with: { over: rules-merge.decide }
+    with: { over: rules-merge.rules-merge.decide }
   - id: ask-rule
     description: "Asks which holds: the finding or the store entry."
     kind: interrupt
@@ -74,15 +101,33 @@ nodes:
       id: "q-rule-{{state.next-decision.index}}{{state.next-decision-ask.index}}"
       text: "The project store and a finding disagree. Which holds?\n{{state.next-decision.item.line}}{{state.next-decision-ask.item.line}}\nStore entry: {{state.next-decision.item.cite}}{{state.next-decision-ask.item.cite}}"
       allowed: [finding, store]
+  - id: rule-decided
+    description: "The review orchestrator records your decision and proposes updating the side that lost."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    maxVisits: 100
+    parse: { json: [decided] }
+    prompt: |
+      Step 6a of your REVIEW ROUTE: record the user's decision on this conflict and propose updating the side that lost. Read no file and change nothing.
+      Decisions so far:
+      {{#state.rule-decided.rule-decided.decided}}
+      - {{kind}}: {{line}} -> {{holds}}
+      {{/state.rule-decided.rule-decided.decided}}
+      This conflict ({{state.next-decision.item.kind}}{{state.next-decision-ask.item.kind}}): {{state.next-decision.item.line}}{{state.next-decision-ask.item.line}}
+      Store entry: {{state.next-decision.item.cite}}{{state.next-decision-ask.item.cite}}
+      The user's answer: {{state.ask-rule.answer}} (`finding`: the finding holds; `store`: the store entry holds).
+      End with one ```json block: {"decided": [<every decision so far, then this one>: {"kind": "<ask|violation>", "line": "<finding>", "cite": "<entry>", "holds": "<finding|store>", "proposal": "<the update to the side that lost>"}]}
 edges:
   - { from: rules-check, to: rules-merge }
-  - { from: rules-merge, to: verify-violations, when: "rules-merge.violations > 0", description: "the store check found new violations" }
-  - { from: rules-merge, to: next-decision-ask, when: "rules-merge.violations == 0", description: "no new violation" }
+  - { from: rules-merge, to: verify-violations, when: "rules-merge.rules-merge.violations > 0", description: "the store check found new violations" }
+  - { from: rules-merge, to: next-decision-ask, when: "rules-merge.rules-merge.violations == 0", description: "no new violation" }
   - { from: verify-violations, to: rules-violations }
   - { from: rules-violations, to: next-decision }
   - { from: next-decision, to: ask-rule, when: "next-decision.done == false", description: "a conflict is left" }
   - { from: next-decision, to: END, when: "next-decision.done == true", description: "all conflicts decided" }
   - { from: next-decision-ask, to: ask-rule, when: "next-decision-ask.done == false", description: "a conflict is left" }
   - { from: next-decision-ask, to: END, when: "next-decision-ask.done == true", description: "all conflicts decided" }
-  - { from: ask-rule, to: next-decision, when: "rules-merge.violations > 0", description: "store violations exist: next violation" }
-  - { from: ask-rule, to: next-decision-ask, when: "rules-merge.violations == 0", description: "no store violation: next question" }
+  - { from: ask-rule, to: rule-decided }
+  - { from: rule-decided, to: next-decision, when: "rules-merge.rules-merge.violations > 0", description: "store violations exist: next violation" }
+  - { from: rule-decided, to: next-decision-ask, when: "rules-merge.rules-merge.violations == 0", description: "no store violation: next question" }

@@ -1,13 +1,15 @@
 name: olko-review-plan
-version: 0.1.0
+version: 0.2.0
 description: "PLAN route: reviews a plan file against its acceptance criteria and the project rules before implementation; no memory."
 source: "agents/opencode/olko-review-orchestrator.md (PLAN ROUTE)"
+roles:
+  orchestrator: medium
 entry: plan-findings
 limits:
   maxCycleIterations: 3
 nodes:
   - id: plan-findings
-    description: "Reads the plan file, runs the requirements lens in plan mode and lets the verifier confirm each finding against the plan text."
+    description: "Runs the requirements lens in plan mode on the plan file and lets the verifier confirm each finding against the plan text."
     kind: group
     workflow: olko-review-plan-findings
   - id: plan-store
@@ -15,9 +17,35 @@ nodes:
     kind: group
     workflow: olko-review-plan-rules
   - id: plan-report
-    description: "Writes the plan review report with plan: lines."
-    kind: script
-    op: review.planReport
+    description: "The review orchestrator writes the plan review report with plan: lines."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    parse: { json: [kept] }
+    prompt: |
+      Do only step 5 of your PLAN ROUTE (report). Read no file.
+      Plan review of {{input.plan}}
+
+      Kept findings:
+      {{#state.plan-rules-merge.plan-rules-merge.kept}}
+      - {{line}}{{#unchecked}} (rule unchecked){{/unchecked}}
+      {{/state.plan-rules-merge.plan-rules-merge.kept}}
+      Decided conflicts (`finding` keeps the finding with tier repo-rule, `store` drops it):
+      {{#state.plan-rule-decided.plan-rule-decided.decided}}
+      - {{kind}}: {{line}} -> {{holds}} holds. {{proposal}}
+      {{/state.plan-rule-decided.plan-rule-decided.decided}}
+      Acceptance criteria: {{#input.criteria}}given{{/input.criteria}}{{^input.criteria}}none, design rules only{{/input.criteria}}
+      Dropped by the verifier:
+      {{#state.plan-confirm.plan-confirm.dropped}}
+      - {{line}} | {{reason}}
+      {{/state.plan-confirm.plan-confirm.dropped}}
+      Project rules check: {{#state.plan-rules-merge.plan-rules-merge.noStore}}no-store, skipped{{/state.plan-rules-merge.plan-rules-merge.noStore}}
+      {{#state.plan-rules-merge.plan-rules-merge.dropped}}
+      - dropped by the store: {{line}} | {{cite}}
+      {{/state.plan-rules-merge.plan-rules-merge.dropped}}
+
+      Write the report with one `plan: <quoted step> | rule-id | sev | problem | fix` line per finding and totals per tier (bug > security > repo-rule > design > style > nit). Then end with one ```json block:
+      {"kept": [{"line": "<plan: finding line>", "ruleId": "<rule-id>", "sev": "<sev>", "tier": "<tier>", "unchecked": <true|false>}]}
 edges:
   - { from: plan-findings, to: plan-store }
   - { from: plan-store, to: plan-report }

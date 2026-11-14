@@ -1,45 +1,107 @@
 name: olko-review-post
-version: 0.1.0
-description: "Ranks the kept findings, asks post or skip for each one, posts one PR comment per post and records the decisions in the lens memory."
-source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE, posting and memory)"
+version: 0.2.0
+description: "Ranks the kept findings, asks post or skip for each one, posts one PR comment per post and records the decisions in the review memory."
+source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE, steps 7 to 10: rank, report, posting and memory)"
+roles:
+  orchestrator: medium
 entry: rank
 limits:
   maxCycleIterations: 3
 nodes:
   - id: rank
-    description: "Ranks the kept findings by severity tier."
-    kind: script
-    op: review.rankFindings
+    description: "The review orchestrator ranks the kept findings by severity tier and writes the report."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    parse: { json: [kept] }
+    prompt: |
+      Do only steps 7 and 8 of your REVIEW ROUTE (rank and report). Read no file and post nothing: the factory asks the user per finding.
+      {{#state.scope.scope.pr}}Review of PR #{{state.scope.scope.pr}}: {{/state.scope.scope.pr}}{{state.scope.scope.title}}
+
+      Kept findings:
+      {{#state.rules-merge.rules-merge.kept}}
+      - {{line}}{{#unchecked}} (rule unchecked){{/unchecked}}
+      {{/state.rules-merge.rules-merge.kept}}
+      Decided conflicts (`finding` keeps the finding with tier repo-rule, `store` drops it):
+      {{#state.rule-decided.rule-decided.decided}}
+      - {{kind}}: {{line}} -> {{holds}} holds. {{proposal}}
+      {{/state.rule-decided.rule-decided.decided}}
+      Lenses run: {{#state.scope.scope.lenses}}{{agentName}} {{/state.scope.scope.lenses}}
+      Lenses missing: {{#state.merge.merge.missing}}{{.}} {{/state.merge.merge.missing}}
+      Acceptance criteria: {{state.scope.scope.criteria}}
+      File types reviewed only by the bugs lens: {{#state.scope.scope.unreviewed}}{{.}} {{/state.scope.scope.unreviewed}}
+      Not reviewed (excluded): {{#state.scope.scope.excluded}}{{.}} {{/state.scope.scope.excluded}}
+      Dropped by the verifier:
+      {{#state.confirm.confirm.dropped}}
+      - {{line}} | {{reason}}
+      {{/state.confirm.confirm.dropped}}
+      Project rules check: {{#state.rules-merge.rules-merge.noStore}}no-store, skipped{{/state.rules-merge.rules-merge.noStore}}
+      {{#state.rules-merge.rules-merge.dropped}}
+      - dropped by the store: {{line}} | {{cite}}
+      {{/state.rules-merge.rules-merge.dropped}}
+      Memory: {{#state.memory.loaded}}loaded{{/state.memory.loaded}}{{^state.memory.loaded}}not loaded (the user chose to continue without it){{/state.memory.loaded}}
+
+      Write the step 8 report. Then end with one ```json block, findings in rank order:
+      {"kept": [{"line": "<finding>", "ruleId": "<rule-id>", "sev": "<sev>", "tier": "<bug|security|repo-rule|design|style|nit>", "unchecked": <true|false>}]}
   - id: next-finding
     description: "Takes the next ranked finding."
     kind: script
     op: list.next
     maxVisits: 200
-    with: { over: rank.kept }
+    with: { over: rank.rank.kept }
   - id: ask-post
     description: "Asks post or skip for this finding."
     kind: interrupt
     maxVisits: 200
     question:
       id: "q-post-{{state.next-finding.index}}"
-      text: "Finding {{state.next-finding.number}} of {{state.next-finding.total}} on PR #{{state.scope.pr}}. Post it as a PR comment?\n{{state.next-finding.item.line}}"
+      text: "Finding {{state.next-finding.number}} of {{state.next-finding.total}} on PR #{{state.scope.scope.pr}}. Post it as a PR comment?\n{{state.next-finding.item.line}}"
       allowed: [post, skip]
   - id: post-one
-    description: "Posts the finding as one PR comment."
-    kind: script
-    op: github.postComment
+    description: "The review orchestrator posts the approved finding as one PR comment."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    tools: [read, bash]
     maxVisits: 200
-    with: { from: next-finding }
-  - id: memory-save
-    description: "Records confirmed and rejected patterns in the review memory."
+    parse: { json: [posted] }
+    prompt: |
+      Do only step 9 of your REVIEW ROUTE for this one finding. The user approved posting exactly this comment. Post it once with `gh pr comment {{state.scope.scope.pr}} --repo {{state.scope.scope.repo}} --body "<the finding>"`. Post nothing else, change nothing.
+      Finding: {{state.next-finding.item.line}}
+      Posted before:
+      {{#state.post-one.post-one.posted}}
+      - {{.}}
+      {{/state.post-one.post-one.posted}}
+      End with one ```json block: {"posted": [<every finding posted before, then this one>]}
+  - id: after-post
+    description: "Branches on the memory block: learn only when it was loaded."
     kind: script
-    op: memory.persist
-    with: { questionPrefix: q-post- }
+    op: builtin.pass
+  - id: memory-save
+    description: "The review orchestrator records confirmed (posted) and rejected (skipped) patterns in its memory block."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    tools: [read, edit]
+    parse: text
+    prompt: |
+      Do only step 10 of your REVIEW ROUTE. Append one line per ranked finding to the memory block {{state.memory.file}} and change no other file: `confirmed:<rule-id>` when it was posted, `rejected:<rule-id>` when it was not.
+      Ranked findings:
+      {{#state.rank.rank.kept}}
+      - {{ruleId}} | {{line}}
+      {{/state.rank.rank.kept}}
+      Posted:
+      {{#state.post-one.post-one.posted}}
+      - {{.}}
+      {{/state.post-one.post-one.posted}}
+      No ranked finding: change nothing and say so.
 edges:
   - { from: rank, to: next-finding }
   - { from: next-finding, to: ask-post, when: "next-finding.done == false", description: "a finding is left" }
-  - { from: next-finding, to: memory-save, when: "next-finding.done == true", description: "all findings decided" }
+  - { from: next-finding, to: after-post, when: "next-finding.done == true", description: "all findings decided" }
   - { from: ask-post, to: post-one, when: 'ask-post.answer == "post"', description: "you chose post" }
   - { from: ask-post, to: next-finding, when: 'ask-post.answer == "skip"', description: "you chose skip" }
   - { from: post-one, to: next-finding }
+  - { from: after-post, to: memory-save, when: "memory.loaded == true", description: "memory block loaded" }
+  - { from: after-post, to: END, when: "memory.loaded == false", description: "no memory block: nothing to record" }
   - { from: memory-save, to: END }

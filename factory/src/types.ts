@@ -1,3 +1,4 @@
+import type { ParseSpec } from "./parse-spec.ts";
 export type Tier = "low" | "medium" | "high";
 export type BackendKind = "fake" | "cli" | "delegate";
 export type CliName = "claude" | "opencode";
@@ -405,7 +406,7 @@ export interface WorkflowSpecNode {
   op?: string;
   with?: Record<string, unknown>;
   prompt?: string;
-  parse?: string;
+  parse?: string | ParseSpec;
   turns?: number;
   askAfterTurn?: number;
   maxVisits?: number;

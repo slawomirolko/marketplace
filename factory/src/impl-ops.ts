@@ -317,7 +317,8 @@ const implReviewGate: Operation = async ({ state, input, nodeId }) => {
   const previous = nodeId ? (state[nodeId] as { round?: number } | undefined) : undefined;
   const round = (previous?.round ?? 0) + 1;
   const review = (state.review as Record<string, unknown> | undefined) ?? {};
-  const kept = ((review["local-rank"] ?? review.rank) as { kept?: { ruleId: string; sev: string; line: string }[] } | undefined)?.kept ?? [];
+  const rank = (review["local-rank"] ?? review.rank) as Record<string, { kept?: { ruleId: string; sev: string; line: string }[] }> | undefined;
+  const kept = (rank?.["local-rank"] ?? rank?.rank)?.kept ?? [];
   const blocking = kept.filter((f) => ["bug", "security"].includes(tierOf(f as never)) || /^req\.(missing|partial)/.test(f.ruleId) || /merge/i.test(f.ruleId));
   const other = kept.filter((f) => !blocking.includes(f));
   appendJournal(task.taskFile, `Task review round ${round}: ${blocking.length} blocking, ${other.length} non-blocking findings`);

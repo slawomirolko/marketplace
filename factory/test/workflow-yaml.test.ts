@@ -22,7 +22,7 @@ roles: { worker: low }
 nodes:
   - id: first
     kind: script
-    op: review.detectLenses
+    op: builtin.pass
   - id: second
     kind: llm
     role: worker
@@ -42,7 +42,7 @@ test("a valid YAML workflow loads with node paths, roles and edges", () => {
 });
 
 const INVALID: [string, string, RegExp][] = [
-  ["unknown operation", VALID.replace("review.detectLenses", "review.nothing"), /unknown operation review\.nothing/],
+  ["unknown operation", VALID.replace("builtin.pass", "builtin.nothing"), /unknown operation builtin\.nothing/],
   ["edge to a missing node", VALID.replace("{ from: second, to: END }", "{ from: second, to: third }"), /edge to unknown node 'third'/],
   ["llm node role without a tier", VALID.replace("roles: { worker: low }", "roles: { other: low }"), /role worker has no tier/],
   ["schema violation", VALID.replace("kind: script", "kind: shell"), /kind/],

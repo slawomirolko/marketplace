@@ -1,7 +1,7 @@
 name: olko-review-feedback-replies
-version: 0.1.0
+version: 0.2.0
 description: "Drafts one reply per wont-fix or question item and posts it only after the user says post."
-source: "agents/opencode/olko-review-orchestrator.md (FEEDBACK ROUTE, replies)"
+source: "agents/opencode/olko-review-feedback-handler.md (step 7: replies)"
 roles:
   feedback: medium
 entry: fb-reply-next
@@ -13,14 +13,14 @@ nodes:
     kind: script
     op: list.next
     maxVisits: 200
-    with: { over: fb-plan.replies }
+    with: { over: fb-plan.fb-plan.replies }
   - id: fb-draft
     description: "The feedback handler drafts one reply (not posted)."
     kind: llm
     role: feedback
     agent: olko-review-feedback-handler
     maxVisits: 200
-    parse: text.raw
+    parse: text
     prompt: |
       Do only step 7 of your workflow for this one item: draft one reply, and do not post it or change any file.
       Decision: {{state.fb-reply-next.item.decision}}.
@@ -40,10 +40,27 @@ nodes:
       text: "Post this reply?\n{{state.fb-draft.fb-draft}}"
       allowed: [post, skip]
   - id: fb-post
-    description: "Posts the reply in its review thread."
-    kind: script
-    op: github.postReply
+    description: "The feedback handler posts the approved reply in its review thread."
+    kind: llm
+    role: feedback
+    agent: olko-review-feedback-handler
+    tools: [read, bash]
     maxVisits: 200
+    parse: { json: [posted] }
+    prompt: |
+      Step 7 of your workflow: the user approved posting exactly this reply. Post it once and never resolve the thread.
+      - kind thread: reply in review thread {{state.fb-reply-next.item.comments.0.id}} (`gh api graphql`, mutation addPullRequestReviewThreadReply).
+      - kind comment: `gh pr comment {{input.pr}} --repo {{input.repo}} --body "<reply>"`.
+      This item's kind: {{state.fb-reply-next.item.comments.0.kind}}.
+
+      Reply:
+      {{state.fb-draft.fb-draft}}
+
+      Posted before:
+      {{#state.fb-post.fb-post.posted}}
+      - {{.}}
+      {{/state.fb-post.fb-post.posted}}
+      End with one ```json block: {"posted": [<every url posted before, then the url of this reply>]}
 edges:
   - { from: fb-reply-next, to: fb-draft, when: "fb-reply-next.done == false", description: "a reply is left" }
   - { from: fb-reply-next, to: END, when: "fb-reply-next.done == true", description: "every reply handled" }

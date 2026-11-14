@@ -1,8 +1,9 @@
 name: olko-review-plan-rules
-version: 0.1.0
+version: 0.2.0
 description: "Checks the plan findings against the project rule store and asks one question per conflict."
-source: "agents/opencode/olko-review-orchestrator.md (PLAN ROUTE, project rules check)"
+source: "agents/opencode/olko-review-orchestrator.md (PLAN ROUTE, step 4: project rules check)"
 roles:
+  orchestrator: medium
   rules: medium
   verifier: medium
 entry: plan-rules
@@ -10,60 +11,80 @@ limits:
   maxCycleIterations: 3
 nodes:
   - id: plan-rules
-    description: "Checks the plan findings against the project rule store."
+    description: "Checks the plan and its confirmed findings against the project rule store."
     kind: llm
     role: rules
     agent: olko-project-rules-check
-    parse: review.rulesCheck
+    parse: text
     prompt: |
       Mode: plan
-      Plan file: {{state.plan-read.path}}
+      Plan file: {{input.plan}}. Read it: it is the plan text.
 
-      Confirmed findings ({{state.plan-confirm.confirmed.length}}), one per line:
-      {{#state.plan-confirm.confirmed}}
+      Confirmed findings, one per line:
+      {{#state.plan-confirm.plan-confirm.confirmed}}
       {{line}}
-      {{/state.plan-confirm.confirmed}}
-
-      Plan text:
-      {{state.plan-read.text}}
+      {{/state.plan-confirm.plan-confirm.confirmed}}
   - id: plan-rules-merge
-    description: "Splits kept, dropped, violations and conflicts for the plan."
-    kind: script
-    op: review.mergeRules
-    with: { confirmed: plan-confirm, check: plan-rules }
+    description: "The review orchestrator splits kept, dropped, violations and conflicts for the plan."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    parse: { json: [noStore, kept, dropped, violations, decide] }
+    prompt: |
+      Do only the split part of step 6a of your REVIEW ROUTE, for PLAN ROUTE step 4. Read no file and ask nobody: the factory asks the user.
+      Confirmed findings, in order:
+      {{#state.plan-confirm.plan-confirm.confirmed}}
+      {{line}}{{#unchecked}} (rule unchecked){{/unchecked}}
+      {{/state.plan-confirm.plan-confirm.confirmed}}
+
+      Project rules check output:
+      {{state.plan-rules.plan-rules}}
+
+      `no-store`: noStore true and every confirmed finding is kept. `keep`: kept, with the citation added when one is given. `drop`: dropped, with the cited entry. `ask`: decide, kind ask. `violation` lines: violations, the text after `violation | `.
+      End with one ```json block:
+      {"noStore": <true|false>, "kept": [{"line": "<finding>", "unchecked": <true|false>}], "dropped": [{"line": "<finding>", "cite": "<entry>"}], "violations": ["<violation>"], "decide": [{"kind": "ask", "line": "<finding>", "cite": "<quoted entry>"}]}
   - id: plan-verify-violations
     description: "The verifier checks the new violations in the plan."
     kind: llm
     role: verifier
     agent: olko-review-verifier
-    parse: review.verdicts
+    parse: text
     prompt: |
-      Plan review of {{state.plan-read.path}}.
+      Plan review of {{input.plan}}. Read the plan file for the plan text.
 
-      Findings ({{state.plan-rules-merge.violations.length}}), one per line:
-      {{#state.plan-rules-merge.violations}}
+      Findings ({{state.plan-rules-merge.plan-rules-merge.violations.length}}), one per line:
+      {{#state.plan-rules-merge.plan-rules-merge.violations}}
       {{.}}
-      {{/state.plan-rules-merge.violations}}
-
-      Plan text:
-      {{state.plan-read.text}}
+      {{/state.plan-rules-merge.plan-rules-merge.violations}}
   - id: plan-rules-violations
-    description: "Adds the confirmed plan violations."
-    kind: script
-    op: review.addViolations
-    with: { rules: plan-rules-merge, verdicts: plan-verify-violations }
+    description: "The review orchestrator adds the confirmed plan violations to the conflicts the user decides."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    parse: { json: [decide] }
+    prompt: |
+      Do only the violation part of step 6a of your REVIEW ROUTE, for PLAN ROUTE step 4: each violation the verifier kept (CONFIRMED or CONFIRMED-UNCHECKED) stops the plan approval until the user decides. Read no file.
+      Conflicts so far:
+      {{#state.plan-rules-merge.plan-rules-merge.decide}}
+      - {{kind}} | {{line}} | {{cite}}
+      {{/state.plan-rules-merge.plan-rules-merge.decide}}
+
+      Verifier output on the violations:
+      {{state.plan-verify-violations.plan-verify-violations}}
+
+      End with one ```json block: {"decide": [<the conflicts so far>, then {"kind": "violation", "line": "<violation>", "cite": "<file#heading and quoted entry>"} per kept violation]}
   - id: plan-next-decision
     description: "Takes the next plan conflict (after violations)."
     kind: script
     op: list.next
     maxVisits: 100
-    with: { over: plan-rules-violations.decide }
+    with: { over: plan-rules-violations.plan-rules-violations.decide }
   - id: plan-next-decision-ask
     description: "Takes the next plan conflict (no new violations)."
     kind: script
     op: list.next
     maxVisits: 100
-    with: { over: plan-rules-merge.decide }
+    with: { over: plan-rules-merge.plan-rules-merge.decide }
   - id: plan-ask-rule
     description: "Asks which holds for the plan: the finding or the store entry."
     kind: interrupt
@@ -72,15 +93,33 @@ nodes:
       id: "q-plan-rule-{{state.plan-next-decision.index}}{{state.plan-next-decision-ask.index}}"
       text: "Plan approval stops here: the project store and a finding disagree. Which holds?\n{{state.plan-next-decision.item.line}}{{state.plan-next-decision-ask.item.line}}\nStore entry: {{state.plan-next-decision.item.cite}}{{state.plan-next-decision-ask.item.cite}}"
       allowed: [finding, store]
+  - id: plan-rule-decided
+    description: "The review orchestrator records your plan decision and proposes updating the side that lost."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    maxVisits: 100
+    parse: { json: [decided] }
+    prompt: |
+      PLAN ROUTE step 4: record the user's decision on this conflict and propose updating the side that lost. Read no file and change nothing.
+      Decisions so far:
+      {{#state.plan-rule-decided.plan-rule-decided.decided}}
+      - {{kind}}: {{line}} -> {{holds}}
+      {{/state.plan-rule-decided.plan-rule-decided.decided}}
+      This conflict ({{state.plan-next-decision.item.kind}}{{state.plan-next-decision-ask.item.kind}}): {{state.plan-next-decision.item.line}}{{state.plan-next-decision-ask.item.line}}
+      Store entry: {{state.plan-next-decision.item.cite}}{{state.plan-next-decision-ask.item.cite}}
+      The user's answer: {{state.plan-ask-rule.answer}} (`finding`: the finding holds; `store`: the store entry holds).
+      End with one ```json block: {"decided": [<every decision so far, then this one>: {"kind": "<ask|violation>", "line": "<finding>", "cite": "<entry>", "holds": "<finding|store>", "proposal": "<the update to the side that lost>"}]}
 edges:
   - { from: plan-rules, to: plan-rules-merge }
-  - { from: plan-rules-merge, to: plan-verify-violations, when: "plan-rules-merge.violations > 0", description: "new violations in the plan" }
-  - { from: plan-rules-merge, to: plan-next-decision-ask, when: "plan-rules-merge.violations == 0", description: "no new violation" }
+  - { from: plan-rules-merge, to: plan-verify-violations, when: "plan-rules-merge.plan-rules-merge.violations > 0", description: "new violations in the plan" }
+  - { from: plan-rules-merge, to: plan-next-decision-ask, when: "plan-rules-merge.plan-rules-merge.violations == 0", description: "no new violation" }
   - { from: plan-verify-violations, to: plan-rules-violations }
   - { from: plan-rules-violations, to: plan-next-decision }
   - { from: plan-next-decision, to: plan-ask-rule, when: "plan-next-decision.done == false", description: "a rule conflict is left" }
   - { from: plan-next-decision, to: END, when: "plan-next-decision.done == true", description: "every rule conflict decided" }
   - { from: plan-next-decision-ask, to: plan-ask-rule, when: "plan-next-decision-ask.done == false", description: "a rule question is left" }
   - { from: plan-next-decision-ask, to: END, when: "plan-next-decision-ask.done == true", description: "every rule question decided" }
-  - { from: plan-ask-rule, to: plan-next-decision, when: "plan-rules-merge.violations > 0", description: "store violations exist: next violation" }
-  - { from: plan-ask-rule, to: plan-next-decision-ask, when: "plan-rules-merge.violations == 0", description: "no store violation: next question" }
+  - { from: plan-ask-rule, to: plan-rule-decided }
+  - { from: plan-rule-decided, to: plan-next-decision, when: "plan-rules-merge.plan-rules-merge.violations > 0", description: "store violations exist: next violation" }
+  - { from: plan-rule-decided, to: plan-next-decision-ask, when: "plan-rules-merge.plan-rules-merge.violations == 0", description: "no store violation: next question" }

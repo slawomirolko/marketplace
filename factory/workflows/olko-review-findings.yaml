@@ -1,8 +1,9 @@
 name: olko-review-findings
-version: 0.1.0
+version: 0.2.0
 description: "Runs the lenses in parallel on the diff, merges their findings and lets the verifier confirm or reject each one."
-source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE, lenses and verification)"
+source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE, steps 4 to 6: lenses, merge and verification)"
 roles:
+  orchestrator: medium
   lens: medium
   verifier: medium
 entry: lenses
@@ -13,10 +14,10 @@ nodes:
     description: "Runs the selected lenses in parallel on the diff hunks (read only)."
     kind: llm
     role: lens
-    agentsFrom: state.detect.lenses
-    parse: review.findings
+    agentsFrom: state.scope.scope.lenses
+    parse: text
     prompt: |
-      {{#state.scope.pr}}PR #{{state.scope.pr}}: {{/state.scope.pr}}{{state.scope.title}}
+      {{#state.scope.scope.pr}}PR #{{state.scope.scope.pr}}: {{/state.scope.scope.pr}}{{state.scope.scope.title}}
       {{#agent.criteria}}
 
       Mode: {{agent.mode}}
@@ -25,52 +26,95 @@ nodes:
       {{/agent.criteria}}
 
       PR description:
-      {{state.scope.body}}
+      {{state.scope.scope.body}}
 
-      Files for this lens ({{agent.files.length}}):
-      {{#agent.files}}
-      - {{path}}
-      {{/agent.files}}
+      Files for this lens ({{agent.paths.length}}):
+      {{#agent.paths}}
+      - {{.}}
+      {{/agent.paths}}
 
       Suppress: {{state.memory.suppressText}}. Prioritize: {{state.memory.prioritizeText}}.
-      {{#state.scope.stale}}
+      {{#state.scope.scope.stale}}
       The current branch is not the PR head: the working-tree files are stale. Judge changed lines from the hunks only.
-      {{/state.scope.stale}}
-      {{^state.scope.stale}}
-      The current branch is the PR head. The files in the working tree match the diff.
-      {{/state.scope.stale}}
+      {{/state.scope.scope.stale}}
+      {{^state.scope.scope.stale}}
+      The working tree matches the diff.
+      {{/state.scope.scope.stale}}
 
-      Diff hunks:
-      {{#agent.files}}
-      {{diff}}
-      {{/agent.files}}
+      Diff hunks (review only the hunks of the files above):
+      {{state.diff.diff}}
   - id: merge
-    description: "Merges and de-duplicates the lens findings."
-    kind: script
-    op: review.mergeFindings
+    description: "The review orchestrator merges and de-duplicates the lens findings."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    parse: { json: [findings, missing] }
+    prompt: |
+      Do only step 5 of your REVIEW ROUTE (merge results) and the COMPLETENESS rule. Read no file and add no finding of your own.
+      {{#state.lenses.bugs}}
+      bugs lens:
+      {{state.lenses.bugs}}
+      {{/state.lenses.bugs}}
+      {{#state.lenses.dotnet}}
+      dotnet lens:
+      {{state.lenses.dotnet}}
+      {{/state.lenses.dotnet}}
+      {{#state.lenses.react}}
+      react lens:
+      {{state.lenses.react}}
+      {{/state.lenses.react}}
+      {{#state.lenses.mobile}}
+      mobile lens:
+      {{state.lenses.mobile}}
+      {{/state.lenses.mobile}}
+      {{#state.lenses.python}}
+      python lens:
+      {{state.lenses.python}}
+      {{/state.lenses.python}}
+      {{#state.lenses.requirements}}
+      requirements lens:
+      {{state.lenses.requirements}}
+      {{/state.lenses.requirements}}
+
+      Lenses that ran: {{#state.scope.scope.lenses}}{{id}} {{/state.scope.scope.lenses}}
+      End with one ```json block: {"findings": ["<path:line | rule-id | sev | problem | fix>"], "missing": ["<id of a lens that returned nothing parsable>"]}
   - id: verify
     description: "The verifier confirms or rejects every finding against the code and the false-positive list."
     kind: llm
     role: verifier
     agent: olko-review-verifier
-    parse: review.verdicts
+    parse: text
     prompt: |
-      {{#state.scope.pr}}PR #{{state.scope.pr}}: {{/state.scope.pr}}{{state.scope.title}}
-      {{#state.scope.stale}}
+      {{#state.scope.scope.pr}}PR #{{state.scope.scope.pr}}: {{/state.scope.scope.pr}}{{state.scope.scope.title}}
+      {{#state.scope.scope.stale}}
       The current branch is not the PR head: the working-tree files are stale. Judge changed lines from the hunks only.
-      {{/state.scope.stale}}
+      {{/state.scope.scope.stale}}
 
-      Findings ({{state.merge.findings.length}}), one per line:
-      {{#state.merge.findings}}
-      {{line}}
-      {{/state.merge.findings}}
+      Findings ({{state.merge.merge.findings.length}}), one per line:
+      {{#state.merge.merge.findings}}
+      {{.}}
+      {{/state.merge.merge.findings}}
   - id: confirm
-    description: "Keeps the confirmed findings."
-    kind: script
-    op: review.confirmFindings
+    description: "The review orchestrator keeps the CONFIRMED and CONFIRMED-UNCHECKED findings."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    parse: { json: [confirmed, dropped] }
+    prompt: |
+      Do only the keep part of step 6 of your REVIEW ROUTE. Read no file.
+      Findings, in order:
+      {{#state.merge.merge.findings}}
+      {{.}}
+      {{/state.merge.merge.findings}}
+
+      Verifier output:
+      {{state.verify.verify}}
+
+      A finding without a verdict is dropped with the reason `no verdict returned`.
+      End with one ```json block: {"confirmed": [{"line": "<finding>", "unchecked": <true for CONFIRMED-UNCHECKED>}], "dropped": [{"line": "<finding>", "reason": "<the verifier reason>"}]}
 edges:
   - { from: lenses, to: merge }
-  - { from: merge, to: verify, when: "merge.findings > 0", description: "the lenses found something" }
-  - { from: merge, to: confirm, when: "merge.findings == 0", description: "nothing to verify" }
+  - { from: merge, to: verify, when: "merge.merge.findings > 0", description: "the lenses found something" }
+  - { from: merge, to: END, when: "merge.merge.findings == 0", description: "nothing to verify" }
   - { from: verify, to: confirm }
   - { from: confirm, to: END }

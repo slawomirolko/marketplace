@@ -41,7 +41,7 @@ export interface WorkflowNode {
   dirs?: string[];
   op?: string;
   with?: Record<string, unknown>;
-  parse?: string;
+  parse?: string | { json: string[] } | { line: string[] };
   maxVisits?: number;
   parallel?: number;
   input?: Record<string, string>;

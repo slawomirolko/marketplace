@@ -257,7 +257,7 @@ export function Details({ item }: { item: Item | null }) {
       {item.node.dirs && <Row label="Extra dirs" value={item.node.dirs.join(", ")} />}
       {item.node.op && <Row label="Operation" value={item.node.op} />}
       {item.node.with && <Row label="Operation args" value={JSON.stringify(item.node.with)} />}
-      {item.node.parse && <Row label="Parser" value={item.node.parse} />}
+      {item.node.parse && <Row label="Parser" value={typeof item.node.parse === "string" ? item.node.parse : JSON.stringify(item.node.parse)} />}
       {item.node.maxVisits && <Row label="Max visits" value={item.node.maxVisits} />}
       {item.node.input && <Row label="Call input" value={Object.entries(item.node.input).map(([k, v]) => `${k} = ${v}`).join("; ")} />}
       {harnessAgent && <Row label="Harness agent" value={harnessAgent} />}

@@ -1910,6 +1910,10 @@ var $ZodNull = /*@__PURE__*/ $constructor("$ZodNull", (inst, def) => {
 		return payload;
 	};
 });
+var $ZodAny = /*@__PURE__*/ $constructor("$ZodAny", (inst, def) => {
+	$ZodType.init(inst, def);
+	inst._zod.parse = (payload) => payload;
+});
 var $ZodUnknown = /*@__PURE__*/ $constructor("$ZodUnknown", (inst, def) => {
 	$ZodType.init(inst, def);
 	inst._zod.parse = (payload) => payload;
@@ -3602,6 +3606,10 @@ function _null$1(Class, params) {
 		type: "null",
 		...normalizeParams(params)
 	});
+}
+// @__NO_SIDE_EFFECTS__
+function _any(Class) {
+	return new Class({ type: "any" });
 }
 // @__NO_SIDE_EFFECTS__
 function _unknown(Class) {
@@ -5477,6 +5485,14 @@ var ZodNull = /*@__PURE__*/ $constructor("ZodNull", (inst, def) => {
 });
 function _null(params) {
 	return /* @__PURE__ */ _null$1(ZodNull, params);
+}
+var ZodAny = /*@__PURE__*/ $constructor("ZodAny", (inst, def) => {
+	$ZodAny.init(inst, def);
+	ZodType.init(inst, def);
+	inst._zod.processJSONSchema = (ctx, json, params) => void 0;
+});
+function any() {
+	return /* @__PURE__ */ _any(ZodAny);
 }
 var ZodUnknown = /*@__PURE__*/ $constructor("ZodUnknown", (inst, def) => {
 	$ZodUnknown.init(inst, def);
@@ -13444,13 +13460,13 @@ function baseOf(state, input) {
 	if (!base) throw new Error("no base branch: run the worktree step first or give input.base");
 	return base;
 }
-function lastLine(text, prefix) {
+function lastLine$1(text, prefix) {
 	const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.toLowerCase().startsWith(`${prefix} |`));
 	return line ? line.split("|").map((p) => p.trim()) : null;
 }
 function parseLine(prefix) {
 	return (text) => {
-		const fields = lastLine(text, prefix);
+		const fields = lastLine$1(text, prefix);
 		if (!fields) throw new Error(`output has no '${prefix} |' line`);
 		return {
 			verdict: (fields[1] ?? "").toLowerCase(),
@@ -13870,7 +13886,8 @@ var implReviewGate = async ({ state, input, nodeId }) => {
 	const task = taskOf(state, input);
 	const round = ((nodeId ? state[nodeId] : void 0)?.round ?? 0) + 1;
 	const review = state.review ?? {};
-	const kept = (review["local-rank"] ?? review.rank)?.kept ?? [];
+	const rank = review["local-rank"] ?? review.rank;
+	const kept = (rank?.["local-rank"] ?? rank?.rank)?.kept ?? [];
 	const blocking = kept.filter((f) => ["bug", "security"].includes(tierOf$1(f)) || /^req\.(missing|partial)/.test(f.ruleId) || /merge/i.test(f.ruleId));
 	const other = kept.filter((f) => !blocking.includes(f));
 	appendJournal(task.taskFile, `Task review round ${round}: ${blocking.length} blocking, ${other.length} non-blocking findings`);
@@ -21667,20 +21684,6 @@ var verdictLine = object({
 var list = array(unknown());
 var PARSER_CONTRACTS = {
 	"text.raw": string(),
-	"review.findings": array(object({
-		location: string(),
-		ruleId: string(),
-		sev: string(),
-		problem: string(),
-		fix: string(),
-		line: string()
-	})),
-	"review.verdicts": list,
-	"review.rulesCheck": object({
-		noStore: boolean(),
-		violations: list,
-		verdicts: list
-	}),
 	"sync.comparison": object({
 		classification: string(),
 		marketplaceVersion: string(),
@@ -21791,6 +21794,70 @@ function missingField(schema, segments) {
 	return null;
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) console.log(JSON.stringify(contractJson(), null, 2));
+// src/parse-spec.ts
+function fieldName(field) {
+	return field.endsWith("?") ? {
+		name: field.slice(0, -1),
+		optional: true
+	} : {
+		name: field,
+		optional: false
+	};
+}
+function lastJson(text) {
+	const raw = [...text.matchAll(/```json\s*([\s\S]*?)```/g)].at(-1)?.[1] ?? text.trim();
+	try {
+		return JSON.parse(raw);
+	} catch {
+		throw new Error("the agent output has no ```json block");
+	}
+}
+function lastLine(text, count) {
+	const line = text.split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.split("|").length >= count);
+	if (!line) throw new Error(`the agent output has no result line with ${count} fields separated by |`);
+	const parts = line.split("|").map((p) => p.trim());
+	return [...parts.slice(0, count - 1), parts.slice(count - 1).join(" | ")];
+}
+function isParseSpec(value) {
+	if (value === "text") return true;
+	if (typeof value !== "object" || value === null) return false;
+	const list = value.json ?? value.line;
+	return Array.isArray(list) && list.length > 0 && list.every((f) => typeof f === "string" && /^[a-zA-Z][a-zA-Z0-9]*\??$/.test(f));
+}
+function buildParser(spec) {
+	if (spec === "text") return (text) => String(text).trim();
+	if ("json" in spec) {
+		const fields = spec.json.map(fieldName);
+		return (text) => {
+			const data = lastJson(String(text));
+			if (typeof data !== "object" || data === null || Array.isArray(data)) throw new Error("the agent JSON is not an object");
+			const missing = fields.filter((f) => !f.optional && !(f.name in data)).map((f) => f.name);
+			if (missing.length) throw new Error(`the agent JSON has no ${missing.join(", ")}`);
+			return {
+				...Object.fromEntries(fields.filter((f) => f.optional).map((f) => [f.name, null])),
+				...data,
+				text: String(text)
+			};
+		};
+	}
+	const fields = spec.line.map((f) => fieldName(f).name);
+	return (text) => {
+		const parts = lastLine(String(text), fields.length);
+		return {
+			...Object.fromEntries(fields.map((f, i) => [f, parts[i] ?? ""])),
+			text: String(text)
+		};
+	};
+}
+function parseContract(spec) {
+	if (spec === "text") return string();
+	const list = "json" in spec ? spec.json : spec.line;
+	const value = "json" in spec ? any() : string();
+	return object({
+		...Object.fromEntries(list.map((f) => [fieldName(f).name, value])),
+		text: string()
+	});
+}
 // src/state-refs.ts
 var CONTEXT_ROOTS = /* @__PURE__ */ new Set([
 	"answers",
@@ -21837,9 +21904,9 @@ function checkFields(spec, node, segments) {
 		if (segments.length === 0) return null;
 		const ids = agentIds(node);
 		if (ids && !ids.includes(segments[0])) return `${keyOf(node)} stores results by agent id (${ids.join(", ")}), not ${segments[0]}`;
-		const contract = PARSER_CONTRACTS[node.parse];
+		const contract = isParseSpec(node.parse) ? parseContract(node.parse) : PARSER_CONTRACTS[node.parse];
 		const missing = contract ? missingField(contract, segments.slice(1)) : null;
-		return missing ? `parser ${node.parse} does not set ${missing}` : null;
+		return missing ? `parser ${typeof node.parse === "string" ? node.parse : JSON.stringify(node.parse)} does not set ${missing}` : null;
 	}
 	if (node.kind === "script" && node.op) {
 		const contract = OPERATION_CONTRACTS[node.op];
@@ -22262,21 +22329,9 @@ var WFSYNC_OPERATIONS = {
 	"wfsync.report": wfsyncReport
 };
 // src/ops.ts
-var TIERS = [
-	"bug",
-	"security",
-	"repo-rule",
-	"design",
-	"style",
-	"nit"
-];
 function stateOf(state, key) {
 	const value = state[key];
 	if (value === void 0) throw new Error(`state.${key} is not set`);
-	return value;
-}
-function stringList(value, name) {
-	if (!Array.isArray(value) || !value.every((v) => typeof v === "string")) throw new Error(`${name} must be a list of strings`);
 	return value;
 }
 function splitDiff(diff) {
@@ -22289,34 +22344,6 @@ function splitDiff(diff) {
 		});
 	}
 	return files;
-}
-function cleanLine(line) {
-	const bare = line.trim().replace(/^[-*]\s+/, "");
-	return /^`[^`]*`$/.test(bare) ? bare.slice(1, -1) : bare;
-}
-function parseFindings(text) {
-	return String(text).split("\n").map(cleanLine).filter((line) => line.split("|").length >= 5 && !/^path\s*\|/i.test(line)).map((line) => {
-		const [location = "", ruleId = "", sev = "", problem = "", ...fix] = line.split("|").map((p) => p.trim());
-		return {
-			location,
-			ruleId,
-			sev,
-			problem,
-			fix: fix.join(" | "),
-			line
-		};
-	});
-}
-function parseVerdicts(text) {
-	const verdicts = [];
-	for (const line of String(text).split("\n").map(cleanLine)) {
-		const match = line.match(/^(CONFIRMED-UNCHECKED|CONFIRMED|REJECTED)\s*\|\s*(.+)$/);
-		if (match?.[1] !== void 0 && match[2] !== void 0) verdicts.push({
-			verdict: match[1],
-			rest: match[2]
-		});
-	}
-	return verdicts;
 }
 function tierOf$1(finding) {
 	const rule = finding.ruleId;
@@ -22332,59 +22359,6 @@ var pass = async () => ({
 	state: { passed: true },
 	output: "verify passed"
 });
-var reviewRoute = async ({ input, exec }) => {
-	if (input.plan) return {
-		state: {
-			route: "PLAN",
-			review: false
-		},
-		output: `PLAN (${input.plan})`
-	};
-	if (input.base) return {
-		state: {
-			route: "LOCAL",
-			review: true
-		},
-		output: `LOCAL (working tree against ${input.base})`
-	};
-	if (!exec) throw new Error("review.route needs the host exec tool");
-	if (input.pr === void 0 || !input.repo) throw new Error("review.route needs repo and pr, or plan, in the input");
-	const view = await exec("gh", [
-		"pr",
-		"view",
-		String(input.pr),
-		"--repo",
-		input.repo,
-		"--json",
-		"author"
-	]);
-	const user = await exec("gh", [
-		"api",
-		"user",
-		"--jq",
-		".login"
-	]);
-	if (view.code !== 0 || user.code !== 0) throw new Error(`gh failed: ${(view.stderr || user.stderr).slice(-300)}`);
-	const author = JSON.parse(view.stdout).author.login;
-	const own = author === user.stdout.trim();
-	if (own && !input.fresh) return {
-		state: {
-			route: "FEEDBACK",
-			review: false,
-			own
-		},
-		output: "FEEDBACK (the PR author is the signed-in user)"
-	};
-	const reason = own ? "fresh review of own PR" : `PR by ${author}`;
-	return {
-		state: {
-			route: "REVIEW",
-			review: true,
-			own
-		},
-		output: `REVIEW (${reason})`
-	};
-};
 function untrackedDiff(file, text) {
 	const lines = text.replace(/\r\n/g, "\n").replace(/\n$/, "").split("\n");
 	return `diff --git a/${file} b/${file}\nnew file mode 100644\n--- /dev/null\n+++ b/${file}\n@@ -0,0 +1,${lines.length} @@\n${lines.map((l) => `+${l}`).join("\n")}\n`;
@@ -22420,138 +22394,6 @@ async function localDiff(exec, root, base) {
 		mergeBase: mergeBase.stdout.trim()
 	};
 }
-async function localScope(input, exec, exclude, root) {
-	const base = String(input.base);
-	const diff = await localDiff(exec, root, base);
-	const isExcluded = (p) => exclude.some((re) => re.test(p));
-	const files = diff.files.filter((f) => !isExcluded(f.path));
-	const excluded = diff.files.filter((f) => isExcluded(f.path)).map((f) => f.path);
-	if (files.length === 0) throw new Error(`no local change against ${base} to review`);
-	return {
-		state: {
-			base,
-			repo: "",
-			title: `local changes against ${base}`,
-			body: (input.criteria ?? "").trim(),
-			head: "working tree",
-			files,
-			excluded,
-			stale: false
-		},
-		metrics: {
-			files: files.length,
-			excluded: excluded.length,
-			stale: 0
-		},
-		output: `Local diff against ${base}: ${files.length} files (${diff.added} new). Not sent to lenses: ${excluded.join(", ") || "none"}.`
-	};
-}
-var prScope = async ({ input, exec, args, cwd }) => {
-	if (input.base) {
-		if (!exec) throw new Error("github.prScope needs the host exec tool");
-		return localScope(input, exec, stringList(args.exclude ?? [], "with.exclude").map((p) => new RegExp(p)), path.resolve(cwd ?? "."));
-	}
-	const pr = input.pr;
-	const repo = input.repo ?? "";
-	if (pr === void 0 || !Number.isInteger(pr) || !/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error("input needs repo owner/name and an integer pr");
-	if (!exec) throw new Error("github.prScope needs the host exec tool");
-	const exclude = stringList(args.exclude ?? [], "with.exclude").map((p) => new RegExp(p));
-	const view = await exec("gh", [
-		"pr",
-		"view",
-		String(pr),
-		"--repo",
-		repo,
-		"--json",
-		"title,body,headRefName,author"
-	]);
-	const diff = await exec("gh", [
-		"pr",
-		"diff",
-		String(pr),
-		"--repo",
-		repo
-	]);
-	if (view.code !== 0 || diff.code !== 0) throw new Error(`gh failed: ${(view.stderr || diff.stderr).slice(-300)}`);
-	const branch = await exec("git", [
-		"-C",
-		cwd ?? ".",
-		"branch",
-		"--show-current"
-	]);
-	const meta = JSON.parse(view.stdout);
-	const all = splitDiff(diff.stdout);
-	const isExcluded = (p) => exclude.some((re) => re.test(p));
-	const files = all.filter((f) => !isExcluded(f.path));
-	const excluded = all.filter((f) => isExcluded(f.path)).map((f) => f.path);
-	if (files.length === 0) throw new Error("no diff to review");
-	const stale = branch.code !== 0 || branch.stdout.trim() !== meta.headRefName;
-	return {
-		state: {
-			pr,
-			repo,
-			title: meta.title,
-			body: meta.body || "",
-			head: meta.headRefName,
-			files,
-			excluded,
-			stale
-		},
-		metrics: {
-			files: files.length,
-			excluded: excluded.length,
-			stale: stale ? 1 : 0
-		},
-		output: `PR #${pr} "${meta.title}" (${meta.headRefName}): ${files.length} files, ${diff.stdout.length} characters of diff. Not sent to lenses: ${excluded.join(", ") || "none"}. Working tree ${stale ? "is not the PR head: lenses judge changed lines from the hunks only" : "is the PR head"}.`
-	};
-};
-var detectLenses = async ({ state, args }) => {
-	const scope = stateOf(state, "scope");
-	const files = scope.files;
-	const always = args.always;
-	const stacks = args.stacks ?? [];
-	const requirements = args.requirements;
-	if (!always?.id || !always.agent) throw new Error("with.always needs id and agent");
-	const lenses = [{
-		id: always.id,
-		agentName: always.agent,
-		role: "lens",
-		paths: files.map((f) => f.path),
-		files
-	}];
-	for (const stack of stacks) {
-		const extensions = stringList(stack.extensions ?? [], `with.stacks.${stack.id}.extensions`);
-		const matched = files.filter((f) => extensions.some((ext) => f.path.endsWith(ext)));
-		if (matched.length) lenses.push({
-			id: stack.id,
-			agentName: stack.agent,
-			role: "lens",
-			paths: matched.map((f) => f.path),
-			files: matched
-		});
-	}
-	const covered = new Set(lenses.slice(1).flatMap((l) => l.paths ?? []));
-	const onlyAlways = [...new Set(files.map((f) => f.path).filter((p) => !covered.has(p)).map((p) => p.match(/\.[^./]+$/)?.[0] ?? "(no extension)"))];
-	const criteria = scope.body.trim();
-	if (requirements?.id && requirements.agent && criteria) lenses.push({
-		id: requirements.id,
-		agentName: requirements.agent,
-		role: "lens",
-		paths: files.map((f) => f.path),
-		files,
-		criteria,
-		mode: "code"
-	});
-	return {
-		state: {
-			lenses,
-			bugsOnlyTypes: onlyAlways,
-			criteria: criteria ? "PR description" : "none"
-		},
-		metrics: { lenses: lenses.length },
-		output: `Lenses: ${lenses.map((l) => `${l.agentName} (${l.paths?.length} files)`).join(", ")}. File types reviewed only by ${always.agent}: ${onlyAlways.join(", ") || "none"}. Acceptance criteria: ${criteria ? "PR description" : "none, requirements lens skipped"}.`
-	};
-};
 function memoryLists(text) {
 	const counts = /* @__PURE__ */ new Map();
 	for (const line of text.split(/\r?\n/)) {
@@ -22607,149 +22449,6 @@ var memoryLoad = async ({ args, cwd }) => {
 		output: `Memory loaded from ${file}: ${suppress.length} suppressed, ${prioritize.length} prioritized patterns.`
 	};
 };
-function nodeArg(args, key, fallback) {
-	const value = args[key] ?? fallback;
-	if (typeof value !== "string") throw new Error(`with.${key} must name a node`);
-	return value;
-}
-var mergeFindings = async ({ state, args }) => {
-	const byKey = /* @__PURE__ */ new Map();
-	const lensResults = state[nodeArg(args, "from", "lenses")] ?? {};
-	for (const [lens, findings] of Object.entries(lensResults)) for (const f of findings) {
-		const key = `${f.location}|${f.ruleId}`;
-		const current = byKey.get(key);
-		if (!current || TIERS.indexOf(tierOf$1(f)) < TIERS.indexOf(tierOf$1(current))) byKey.set(key, {
-			...f,
-			lens
-		});
-	}
-	const findings = [...byKey.values()];
-	return {
-		state: { findings },
-		metrics: { findings: findings.length },
-		output: findings.length ? findings.map((f) => f.line).join("\n") : "No findings from the lenses."
-	};
-};
-var confirmFindings = async ({ state, args }) => {
-	const findings = stateOf(state, nodeArg(args, "findings", "merge")).findings;
-	const verifyNode = nodeArg(args, "verdicts", "verify");
-	const verdicts = state[verifyNode]?.[verifyNode] ?? [];
-	const confirmed = [];
-	const dropped = [];
-	findings.forEach((f, i) => {
-		const v = verdicts[i];
-		if (v && v.verdict !== "REJECTED") confirmed.push({
-			...f,
-			unchecked: v.verdict === "CONFIRMED-UNCHECKED"
-		});
-		else dropped.push({
-			...f,
-			reason: v ? (v.rest.split("|").at(-1) ?? "").trim() : "no verdict returned"
-		});
-	});
-	return {
-		state: {
-			confirmed,
-			dropped,
-			count: confirmed.length
-		},
-		metrics: {
-			confirmed: confirmed.length,
-			dropped: dropped.length
-		},
-		output: `${confirmed.length} confirmed, ${dropped.length} dropped by the verifier.`
-	};
-};
-function parseRulesCheck(text) {
-	const lines = String(text).split("\n").map(cleanLine).filter(Boolean);
-	const result = {
-		noStore: lines.some((l) => /^no-store$/i.test(l)),
-		violations: [],
-		verdicts: []
-	};
-	for (const line of lines) {
-		if (/^violation\s*\|/.test(line)) result.violations.push(line.replace(/^violation\s*\|\s*/, ""));
-		const verdict = line.match(/^(keep|drop|ask)\s*\|\s*(.+)\|\s*([^|]+)$/);
-		if (verdict?.[1] && verdict[2] && verdict[3]) result.verdicts.push({
-			verdict: verdict[1],
-			finding: verdict[2].trim(),
-			cite: verdict[3].trim()
-		});
-	}
-	return result;
-}
-var mergeRules = async ({ state, args }) => {
-	const confirmed = stateOf(state, nodeArg(args, "confirmed", "confirm")).confirmed;
-	const check = Object.values(state[nodeArg(args, "check", "rules-check")] ?? {})[0];
-	if (!check) throw new Error("rules-check returned nothing");
-	if (check.noStore) return {
-		state: {
-			kept: confirmed,
-			dropped: [],
-			decide: [],
-			violations: [],
-			noStore: true
-		},
-		metrics: {
-			noStore: 1,
-			decide: 0,
-			violations: 0,
-			dropped: 0
-		},
-		output: "Project rules check: no-store (no ADR or rule directory). Skipped."
-	};
-	const kept = [];
-	const dropped = [];
-	const decide = [];
-	confirmed.forEach((f, i) => {
-		const v = check.verdicts[i];
-		if (v?.verdict === "drop") dropped.push({
-			line: f.line,
-			cite: v.cite
-		});
-		else if (v?.verdict === "ask") decide.push({
-			kind: "ask",
-			line: f.line,
-			cite: v.cite
-		});
-		else kept.push(f);
-	});
-	return {
-		state: {
-			kept,
-			dropped,
-			decide,
-			violations: check.violations,
-			noStore: false
-		},
-		metrics: {
-			noStore: 0,
-			decide: decide.length,
-			violations: check.violations.length,
-			dropped: dropped.length
-		},
-		output: `Project rules check: ${check.violations.length} violations, ${dropped.length} findings dropped by the store, ${decide.length} to decide.`
-	};
-};
-var addViolations = async ({ state, args }) => {
-	const rules = stateOf(state, nodeArg(args, "rules", "rules-merge"));
-	const verifyNode = nodeArg(args, "verdicts", "verify-violations");
-	const verdicts = state[verifyNode]?.[verifyNode] ?? [];
-	const confirmed = rules.violations.filter((_, i) => verdicts[i] && verdicts[i].verdict !== "REJECTED");
-	const decide = [...rules.decide, ...confirmed.map((line) => ({
-		kind: "violation",
-		line,
-		cite: line.split("|").slice(-2).join("|").trim()
-	}))];
-	return {
-		state: { decide },
-		metrics: {
-			decide: decide.length,
-			violations: confirmed.length
-		},
-		output: `${confirmed.length} store violations confirmed by the verifier.`
-	};
-};
 var listNext = async ({ state, args, nodeId }) => {
 	if (typeof args.over !== "string") throw new Error("with.over must be a state path");
 	const list = args.over.split(".").reduce((value, key) => value && typeof value === "object" ? value[key] : void 0, state);
@@ -22770,312 +22469,6 @@ var listNext = async ({ state, args, nodeId }) => {
 			total: list.length
 		},
 		output: done ? `All ${list.length} items handled.` : `Item ${index + 1} of ${list.length}.`
-	};
-};
-var rankFindings = async ({ state, answers }) => {
-	const scope = stateOf(state, "scope");
-	const detect = stateOf(state, "detect");
-	const confirm = stateOf(state, "confirm");
-	const rules = stateOf(state, "rules-merge");
-	const decide = state["rules-violations"]?.decide ?? state["rules-merge"].decide;
-	const memory = state.memory;
-	const decided = decide.map((d, i) => ({
-		...d,
-		answer: answers?.[`q-rule-${i}`] ?? "unanswered"
-	}));
-	const kept = [...rules.kept];
-	for (const d of decided) if (d.answer !== "store") kept.push({
-		location: d.line.split("|")[0]?.trim() ?? "",
-		ruleId: d.kind === "violation" ? "repo.store" : "repo.ask",
-		sev: "bug",
-		problem: d.line,
-		fix: "",
-		line: d.line,
-		unchecked: false
-	});
-	kept.sort((a, b) => TIERS.indexOf(tierOf$1(a)) - TIERS.indexOf(tierOf$1(b)));
-	const totals = TIERS.map((t) => `${t}: ${kept.filter((f) => tierOf$1(f) === t).length}`).join(", ");
-	const lines = [
-		scope.pr === void 0 ? `Review of ${scope.title}` : `Review of PR #${scope.pr}: ${scope.title}`,
-		"",
-		...kept.length ? kept.map((f) => `${f.line}${f.unchecked ? " (rule unchecked)" : ""}`) : ["No confirmed findings."],
-		"",
-		`Totals: ${totals}`,
-		`Lenses run: ${detect.lenses.map((l) => l.agentName).join(", ")}`,
-		`Acceptance criteria: ${detect.criteria}`,
-		`File types reviewed only by the always-on lens: ${detect.bugsOnlyTypes.join(", ") || "none"}`,
-		`Not reviewed (excluded): ${scope.excluded.join(", ") || "none"}`,
-		`Dropped by the verifier: ${confirm.dropped.length}`,
-		...confirm.dropped.map((f) => `  - ${f.line} | ${f.reason}`),
-		`Project rules check: ${rules.noStore ? "no-store, skipped" : `${rules.dropped.length} dropped by the store`}`,
-		...rules.dropped.map((d) => `  - ${d.line} | ${d.cite}`),
-		...decided.map((d) => `Decided (${d.kind}): ${d.line} -> ${d.answer === "store" ? "store entry holds" : "finding holds"}`),
-		`Memory: ${memory?.loaded ? "loaded" : "not loaded (the user chose to continue without it)"}`
-	];
-	return {
-		state: {
-			kept,
-			count: kept.length
-		},
-		metrics: { kept: kept.length },
-		output: lines.join("\n")
-	};
-};
-var postComment = async ({ state, exec, args }) => {
-	if (!exec) throw new Error("github.postComment needs the host exec tool");
-	if (typeof args.from !== "string") throw new Error("with.from must name the list node");
-	const scope = stateOf(state, "scope");
-	const item = state[args.from]?.item;
-	if (!item) throw new Error(`state.${args.from}.item is not set`);
-	const result = await exec("gh", [
-		"pr",
-		"comment",
-		String(scope.pr),
-		"--repo",
-		scope.repo,
-		"--body",
-		item.line
-	]);
-	if (result.code !== 0) throw new Error(`gh pr comment failed: ${result.stderr.slice(-300)}`);
-	return {
-		state: { posted: item.line },
-		metrics: { posted: 1 },
-		output: `Posted on PR #${scope.pr}: ${item.line}`
-	};
-};
-function memoryDecisionLines(kept, answers, prefix) {
-	return kept.flatMap((f, i) => {
-		const answer = answers[`${prefix}${i}`];
-		if (answer === "post") return [`confirmed:${f.ruleId}`];
-		if (answer === "skip") return [`rejected:${f.ruleId}`];
-		return [];
-	});
-}
-var memoryPersist = async ({ state, answers, args }) => {
-	const memory = state.memory;
-	if (!memory?.loaded || !memory.file) return {
-		state: { written: 0 },
-		metrics: { written: 0 },
-		output: "Learning skipped: the memory block was not loaded."
-	};
-	const kept = stateOf(state, "rank").kept;
-	const lines = memoryDecisionLines(kept, answers ?? {}, typeof args.questionPrefix === "string" ? args.questionPrefix : "q-post-");
-	if (lines.length) fs.appendFileSync(memory.file, `${lines.join("\n")}\n`);
-	return {
-		state: { written: lines.length },
-		metrics: { written: lines.length },
-		output: lines.length ? `Memory: ${lines.length} decisions recorded in ${memory.file}.` : "Memory: nothing durable happened."
-	};
-};
-var planRead = async ({ input, cwd }) => {
-	const root = path.resolve(cwd ?? process.cwd());
-	const file = path.resolve(root, input.plan ?? "");
-	if (!input.plan || file !== root && !file.startsWith(root + path.sep)) throw new Error("input.plan must be a file inside the workspace");
-	if (!fs.existsSync(file)) throw new Error(`plan file ${input.plan} does not exist in ${root}`);
-	const text = fs.readFileSync(file, "utf8");
-	const criteria = (input.criteria ?? "").trim();
-	return {
-		state: {
-			path: input.plan,
-			text,
-			criteria: criteria || "none"
-		},
-		metrics: {
-			characters: text.length,
-			criteria: criteria ? 1 : 0
-		},
-		output: `Plan ${input.plan}: ${text.length} characters. Acceptance criteria: ${criteria ? "given" : "none (design rules only)"}.`
-	};
-};
-function decisions(state, answers, violationsNode, rulesNode, prefix) {
-	return (state[violationsNode]?.decide ?? state[rulesNode]?.decide ?? []).map((d, i) => ({
-		...d,
-		answer: answers?.[`${prefix}${i}`] ?? "unanswered"
-	}));
-}
-var planReport = async ({ state, answers }) => {
-	const plan = stateOf(state, "plan-read");
-	const confirm = stateOf(state, "plan-confirm");
-	const rules = stateOf(state, "plan-rules-merge");
-	const asPlanLine = (line) => line.startsWith("plan:") ? line : `plan: ${line}`;
-	const lines = [
-		`Plan review of ${plan.path}`,
-		"",
-		...rules.kept.length ? rules.kept.map((f) => `${asPlanLine(f.line)}${f.unchecked ? " (rule unchecked)" : ""}`) : ["No confirmed findings."],
-		"",
-		`Totals: ${TIERS.map((t) => `${t}: ${rules.kept.filter((f) => tierOf$1(f) === t).length}`).join(", ")}`,
-		`Acceptance criteria: ${plan.criteria === "none" ? "none, design rules only" : "given"}`,
-		`Dropped by the verifier: ${confirm.dropped.length}`,
-		...confirm.dropped.map((f) => `  - ${f.line} | ${f.reason}`),
-		`Project rules check: ${rules.noStore ? "no-store, skipped" : `${rules.dropped.length} dropped by the store`}`,
-		...rules.dropped.map((d) => `  - ${d.line} | ${d.cite}`),
-		...decisions(state, answers, "plan-rules-violations", "plan-rules-merge", "q-plan-rule-").map((d) => `Decided (${d.kind}): ${d.line} -> ${d.answer === "store" ? "store entry holds" : d.answer === "finding" ? "finding holds" : "not decided"}`)
-	];
-	return {
-		state: {
-			kept: rules.kept,
-			count: rules.kept.length
-		},
-		metrics: { kept: rules.kept.length },
-		output: lines.join("\n")
-	};
-};
-function groupComments(comments, nearbyLines = 3) {
-	const items = [];
-	for (const comment of comments) {
-		const near = comment.path ? items.find((i) => i.path === comment.path && i.line !== null && comment.line !== null && Math.abs(i.line - comment.line) <= nearbyLines) : void 0;
-		if (near) near.comments.push(comment);
-		else items.push({
-			index: items.length,
-			path: comment.path,
-			line: comment.line,
-			comments: [comment]
-		});
-	}
-	return items;
-}
-var prFeedback = async ({ input, exec, cwd }) => {
-	if (!exec) throw new Error("github.prFeedback needs the host exec tool");
-	const repo = input.repo ?? "";
-	const [owner, name] = repo.split("/");
-	if (!owner || !name || input.pr === void 0) throw new Error("github.prFeedback needs repo and pr");
-	const view = await exec("gh", [
-		"pr",
-		"view",
-		String(input.pr),
-		"--repo",
-		repo,
-		"--json",
-		"headRefName,author,comments"
-	]);
-	if (view.code !== 0) throw new Error(`gh pr view failed: ${view.stderr.slice(-300)}`);
-	const meta = JSON.parse(view.stdout);
-	const branch = await exec("git", [
-		"-C",
-		cwd ?? ".",
-		"branch",
-		"--show-current"
-	]);
-	if (branch.code !== 0 || branch.stdout.trim() !== meta.headRefName) throw new Error(`the local branch (${branch.stdout.trim() || "unknown"}) is not the PR head branch ${meta.headRefName}: check out ${meta.headRefName} first`);
-	const checks = await exec("gh", [
-		"pr",
-		"checks",
-		String(input.pr),
-		"--repo",
-		repo,
-		"--json",
-		"name,state"
-	]);
-	const checkList = checks.code === 0 && checks.stdout.trim() ? JSON.parse(checks.stdout) : [];
-	const threads = await exec("gh", [
-		"api",
-		"graphql",
-		"-f",
-		`query=${`query { repository(owner: "${owner}", name: "${name}") { pullRequest(number: ${input.pr}) { reviewThreads(first: 100) { nodes { id isResolved isOutdated comments(first: 1) { nodes { author { login } path line body url } } } } } } }`}`
-	]);
-	if (threads.code !== 0) throw new Error(`gh api graphql failed: ${threads.stderr.slice(-300)}`);
-	const comments = [...JSON.parse(threads.stdout).data.repository.pullRequest.reviewThreads.nodes.filter((t) => !t.isResolved && !t.isOutdated && t.comments.nodes[0]).map((t) => {
-		const c = t.comments.nodes[0];
-		return {
-			id: t.id,
-			kind: "thread",
-			author: c.author?.login ?? "unknown",
-			path: c.path,
-			line: c.line,
-			body: c.body,
-			url: c.url
-		};
-	}), ...meta.comments.filter((c) => c.author?.login !== meta.author.login).map((c) => ({
-		id: c.id,
-		kind: "comment",
-		author: c.author?.login ?? "unknown",
-		path: null,
-		line: null,
-		body: c.body,
-		url: c.url
-	}))];
-	const items = groupComments(comments);
-	const ci = checkList.length ? checkList.map((c) => `${c.name}: ${c.state}`).join(", ") : "no checks";
-	return {
-		state: {
-			head: meta.headRefName,
-			checks: checkList,
-			ci,
-			comments,
-			items
-		},
-		metrics: {
-			checks: checkList.length,
-			comments: comments.length,
-			items: items.length
-		},
-		output: `CI: ${ci}. Unresolved comments: ${comments.length} in ${items.length} items.`
-	};
-};
-var feedbackPlan = async ({ state, answers }) => {
-	const decided = stateOf(state, "fb-check").items.map((item) => ({
-		...item,
-		decision: answers?.[`q-feedback-${item.index}`] ?? "skip"
-	}));
-	const count = (d) => decided.filter((i) => i.decision === d).length;
-	const replies = decided.filter((i) => i.decision === "wont-fix" || i.decision === "question");
-	return {
-		state: {
-			decided,
-			replies,
-			fixes: count("fix")
-		},
-		metrics: {
-			fixes: count("fix"),
-			wontFix: count("wont-fix"),
-			questions: count("question"),
-			skipped: count("skip"),
-			replies: replies.length
-		},
-		output: `Plan: ${count("fix")} fix, ${count("wont-fix")} won't fix, ${count("question")} question, ${count("skip")} skipped.`
-	};
-};
-var postReply = async ({ state, exec, input, args }) => {
-	if (!exec) throw new Error("github.postReply needs the host exec tool");
-	const from = nodeArg(args, "from", "fb-reply-next");
-	const draftNode = nodeArg(args, "draft", "fb-draft");
-	const item = state[from]?.item;
-	const draft = Object.values(state[draftNode] ?? {})[0];
-	if (!item || !draft) throw new Error("no reply to post");
-	const first = item.comments[0];
-	const result = first.kind === "thread" ? await exec("gh", [
-		"api",
-		"graphql",
-		"-f",
-		`query=mutation { addPullRequestReviewThreadReply(input: { pullRequestReviewThreadId: "${first.id}", body: ${JSON.stringify(draft)} }) { comment { url } } }`
-	]) : await exec("gh", [
-		"pr",
-		"comment",
-		String(input.pr),
-		"--repo",
-		input.repo ?? "",
-		"--body",
-		draft
-	]);
-	if (result.code !== 0) throw new Error(`posting the reply failed: ${result.stderr.slice(-300)}`);
-	return {
-		state: { posted: first.url },
-		metrics: { posted: 1 },
-		output: `Reply posted to ${first.url}`
-	};
-};
-var feedbackReport = async ({ state, answers }) => {
-	const check = stateOf(state, "fb-check");
-	const plan = stateOf(state, "fb-plan");
-	const implement = answers?.["q-feedback-implement"];
-	return {
-		state: { done: true },
-		output: [
-			`CI: ${check.ci}`,
-			`Unresolved comments: ${check.comments.length}`,
-			...plan.decided.map((i) => `  - ${i.path ?? "PR"}${i.line ? `:${i.line}` : ""} (${i.comments.length} comments): ${i.decision}`),
-			`Implementation: ${implement === "yes" ? "approved" : implement === "no" ? "declined" : "nothing to implement"}`
-		].join("\n")
 	};
 };
 var MARKETPLACE_FALLBACK = "C:\\Users\\Inny\\Documents\\Git\\marketplace";
@@ -24859,7 +24252,7 @@ var planFiles = async ({ state, cwd }) => {
 };
 var planReviewCollect = async ({ state, nodeId }) => {
 	const previous = nodeId ? state[nodeId] : void 0;
-	const report = state["plan-review"]?.["plan-report"];
+	const report = (state["plan-review"]?.["plan-report"])?.["plan-report"];
 	const file = state["plan-next"]?.item?.path ?? "?";
 	const lines = (report?.kept ?? []).map((f) => f.line);
 	const reports = [...previous?.reports ?? [], ...lines.map((l) => `${file}: ${l}`)];
@@ -25051,27 +24444,8 @@ var OPERATIONS = {
 			output: enabled ? `Subgraph ${String(args.subgraph)} runs (${when}).` : skipped
 		};
 	},
-	"github.prScope": prScope,
-	"github.postComment": postComment,
 	"list.next": listNext,
-	"plan.read": planRead,
-	"review.planReport": planReport,
-	"github.prFeedback": prFeedback,
-	"github.postReply": postReply,
-	"feedback.plan": feedbackPlan,
-	"feedback.report": feedbackReport,
-	"feedback.fixNotAvailable": async () => {
-		throw new Error("Fixing code from review comments needs write-capable agents in the factory (docs/yaml-migration-plan.md, E9). The decisions are recorded in this run; nothing was changed.");
-	},
 	"memory.load": memoryLoad,
-	"memory.persist": memoryPersist,
-	"review.route": reviewRoute,
-	"review.detectLenses": detectLenses,
-	"review.mergeFindings": mergeFindings,
-	"review.confirmFindings": confirmFindings,
-	"review.mergeRules": mergeRules,
-	"review.addViolations": addViolations,
-	"review.rankFindings": rankFindings,
 	"sync.resolvePath": resolveMarketplacePath,
 	"sync.safeSource": safeSource,
 	"sync.discover": discoverArtifacts,
@@ -25116,9 +24490,6 @@ var OPERATIONS = {
 var PARSERS = {
 	...IMPL_PARSERS,
 	"text.raw": (text) => String(text).trim(),
-	"review.findings": parseFindings,
-	"review.verdicts": parseVerdicts,
-	"review.rulesCheck": parseRulesCheck,
 	"sync.comparison": parseComparison,
 	"sync.prLine": parsePrLine,
 	"sync.applied": parseApplied,
@@ -25231,7 +24602,8 @@ function buildNode(workflow, spec) {
 	if (spec.parallel) node.parallel = spec.parallel;
 	if (spec.prompt) node.prompt = render(spec.prompt);
 	if (spec.agentsFrom) node.agentsFrom = agentsFromPath(spec.agentsFrom);
-	if (spec.parse) {
+	if (isParseSpec(spec.parse)) node.parse = buildParser(spec.parse);
+	else if (spec.parse) {
 		const parser = parserNamed(spec.parse);
 		if (!parser) throw new Error(`node ${spec.id}: unknown parser ${spec.parse}`);
 		node.parse = parser;

@@ -1,63 +1,56 @@
 name: olko-review-plan-findings
-version: 0.1.0
-description: "Reads the plan file, runs the requirements lens in plan mode and lets the verifier confirm each finding against the plan text."
-source: "agents/opencode/olko-review-orchestrator.md (PLAN ROUTE, lens and verification)"
+version: 0.2.0
+description: "Runs the requirements lens in plan mode on the plan file and lets the verifier confirm each finding against the plan text."
+source: "agents/opencode/olko-review-orchestrator.md (PLAN ROUTE, steps 1 to 3: lens and verification)"
 roles:
+  orchestrator: medium
   lens: medium
   verifier: medium
-entry: plan-read
+entry: plan-lens
 limits:
   maxCycleIterations: 3
 nodes:
-  - id: plan-read
-    description: "Reads the plan file from the workspace and the optional acceptance criteria."
-    kind: script
-    op: plan.read
   - id: plan-lens
-    description: "Runs the requirements lens in plan mode on the plan text."
+    description: "Runs the requirements lens in plan mode on the plan file."
     kind: llm
     role: lens
     agents:
       - { id: requirements, agent: olko-review-requirements-lens }
-    parse: review.findings
+    parse: text
     prompt: |
       Mode: plan
-      Acceptance criteria: {{state.plan-read.criteria}}
+      Acceptance criteria: {{input.criteria}}{{^input.criteria}}none{{/input.criteria}}
 
-      Plan file: {{state.plan-read.path}}
-
-      Plan text:
-      {{state.plan-read.text}}
-  - id: plan-merge
-    description: "Merges the plan findings."
-    kind: script
-    op: review.mergeFindings
-    with: { from: plan-lens }
+      Plan file: {{input.plan}}. Read it: it is the plan text.
   - id: plan-verify
     description: "The verifier checks the plan findings against the plan text."
     kind: llm
     role: verifier
     agent: olko-review-verifier
-    parse: review.verdicts
+    parse: text
     prompt: |
-      Plan review of {{state.plan-read.path}}. The findings quote plan steps; check them against the plan text below.
+      Plan review of {{input.plan}}. The findings quote plan steps; read the plan file and check them against its text.
+      Lens output `none` means no finding: reply with nothing.
 
-      Findings ({{state.plan-merge.findings.length}}), one per line:
-      {{#state.plan-merge.findings}}
-      {{line}}
-      {{/state.plan-merge.findings}}
-
-      Plan text:
-      {{state.plan-read.text}}
+      Findings, one per line:
+      {{state.plan-lens.requirements}}
   - id: plan-confirm
-    description: "Keeps the confirmed plan findings."
-    kind: script
-    op: review.confirmFindings
-    with: { findings: plan-merge, verdicts: plan-verify }
+    description: "The review orchestrator keeps the confirmed plan findings."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    parse: { json: [confirmed, dropped] }
+    prompt: |
+      Do only step 3 of your PLAN ROUTE: keep CONFIRMED and CONFIRMED-UNCHECKED findings. Read no file.
+      Lens findings:
+      {{state.plan-lens.requirements}}
+
+      Verifier output:
+      {{state.plan-verify.plan-verify}}
+
+      A finding without a verdict is dropped with the reason `no verdict returned`. Lens output `none`: both lists are empty.
+      End with one ```json block: {"confirmed": [{"line": "<finding>", "unchecked": <true for CONFIRMED-UNCHECKED>}], "dropped": [{"line": "<finding>", "reason": "<the verifier reason>"}]}
 edges:
-  - { from: plan-read, to: plan-lens }
-  - { from: plan-lens, to: plan-merge }
-  - { from: plan-merge, to: plan-verify, when: "plan-merge.findings > 0", description: "the lens found something" }
-  - { from: plan-merge, to: plan-confirm, when: "plan-merge.findings == 0", description: "nothing to verify" }
+  - { from: plan-lens, to: plan-verify }
   - { from: plan-verify, to: plan-confirm }
   - { from: plan-confirm, to: END }

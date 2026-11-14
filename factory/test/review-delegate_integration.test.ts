@@ -9,6 +9,8 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { claudeTools } from "../src/marketplace-agents.ts";
+import type { AgentTool } from "../src/types.ts";
 
 const factoryDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.join(factoryDir, "..");
@@ -42,9 +44,10 @@ function runSubagent(work: Payload): Promise<SubagentResult> {
   const { agentName, agentInstructions: instructions, agentDescription: description, model, prompt } = work;
   const dirs = (work.dirs as string[]).flatMap((d) => ["--add-dir", d]);
   const agentsFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "harness-agent-")), "agents.json");
-  fs.writeFileSync(agentsFile, JSON.stringify({ [agentName]: { description, prompt: instructions, tools: ["Read", "Grep", "Glob"] } }));
+  const tools = claudeTools(work.tools as AgentTool[]).allowed;
+  fs.writeFileSync(agentsFile, JSON.stringify({ [agentName]: { description, prompt: instructions, tools } }));
   return new Promise((resolve, reject) => {
-    const child = spawn("claude", ["-p", "--agents", agentsFile, "--agent", agentName, "--model", model, "--output-format", "json", "--allowedTools", "Read,Grep,Glob", ...dirs, "--max-turns", "40"], { cwd: repoRoot, shell: process.platform === "win32" });
+    const child = spawn("claude", ["-p", "--agents", agentsFile, "--agent", agentName, "--model", model, "--output-format", "json", "--allowedTools", tools.join(","), ...dirs, "--max-turns", "40"], { cwd: repoRoot, shell: process.platform === "win32" });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d) => (stdout += d));
@@ -68,6 +71,7 @@ test("a harness drives the YAML olko-review workflow over stdio in delegate mode
   const submitted: { agentName: string; usage: SubagentResult["usage"] }[] = [];
   const asked: string[] = [];
   const batches: string[][] = [];
+  const bashNodes = new Set<string>();
   try {
     const started = await call(client, "factory_start", { goal: `Review PR #${PR} in ${REPO}`, workflow: "olko-review", input: { repo: REPO, pr: PR, fresh: true } });
     const runId = started.runId as string;
@@ -79,6 +83,7 @@ test("a harness drives the YAML olko-review workflow over stdio in delegate mode
         const items = status.pendingWorkItems as Payload[];
         for (const work of items) assert.ok(work.agentName && work.agentInstructions, `pendingWork for ${work.nodePath} carries the marketplace agent to run`);
         batches.push(items.map((w) => w.agentName));
+        for (const work of items) if ((work.tools as string[]).includes("bash")) bashNodes.add(work.nodePath.split("/").at(-1));
         const results = await Promise.all(items.map((w) => runSubagent(w)));
         for (const [i, work] of items.entries()) {
           const result = results[i]!;
@@ -96,6 +101,8 @@ test("a harness drives the YAML olko-review workflow over stdio in delegate mode
     assert.equal(report.status, "done", JSON.stringify(report));
     assert.ok(report.workflow.startsWith("olko-review@"));
     assert.ok(submitted.some((s) => s.agentName === "olko-review-bugs-lens"));
+    assert.ok(submitted.some((s) => s.agentName === "olko-review-orchestrator"), "the orchestrator agent runs the route, scope, merge and rank steps");
+    for (const node of ["route", "scope", "diff"]) assert.ok(bashNodes.has(node), `${node} runs gh and git through the agent: ${[...bashNodes].join(",")}`);
     assert.equal(asked[0], "q-memory-missing");
     assert.ok(asked.slice(1).every((id) => /^q-post-\d+$/.test(id)), asked.join(","));
     const lensBatch = batches.find((b) => b.includes("olko-review-bugs-lens"));

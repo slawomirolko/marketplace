@@ -1,7 +1,9 @@
 name: olko-review-review
-version: 0.1.0
+version: 0.2.0
 description: "REVIEW route: a read-only review of someone else's PR or a fresh review of your own, from scope to posted comments. On the LOCAL route (a working tree against input.base) the ranked findings go back to the caller and nothing is posted."
 source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE)"
+roles:
+  orchestrator: medium
 entry: review-scope
 limits:
   maxCycleIterations: 3
@@ -35,11 +37,42 @@ nodes:
     kind: script
     op: builtin.pass
   - id: local-rank
-    description: "LOCAL route only: ranks the kept findings by severity tier and returns them to the caller."
-    kind: script
-    op: review.rankFindings
+    description: "LOCAL route only: the review orchestrator ranks the kept findings by severity tier and returns the report to the caller."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    parse: { json: [kept] }
+    prompt: |
+      Do only steps 7 and 8 of your REVIEW ROUTE (rank and report) for a local diff. Read no file and post nothing.
+      Review of {{state.scope.scope.title}}
+
+      Kept findings:
+      {{#state.rules-merge.rules-merge.kept}}
+      - {{line}}{{#unchecked}} (rule unchecked){{/unchecked}}
+      {{/state.rules-merge.rules-merge.kept}}
+      Decided conflicts (`finding` keeps the finding with tier repo-rule, `store` drops it):
+      {{#state.rule-decided.rule-decided.decided}}
+      - {{kind}}: {{line}} -> {{holds}} holds. {{proposal}}
+      {{/state.rule-decided.rule-decided.decided}}
+      Lenses run: {{#state.scope.scope.lenses}}{{agentName}} {{/state.scope.scope.lenses}}
+      Lenses missing: {{#state.merge.merge.missing}}{{.}} {{/state.merge.merge.missing}}
+      Acceptance criteria: {{state.scope.scope.criteria}}
+      File types reviewed only by the bugs lens: {{#state.scope.scope.unreviewed}}{{.}} {{/state.scope.scope.unreviewed}}
+      Not reviewed (excluded): {{#state.scope.scope.excluded}}{{.}} {{/state.scope.scope.excluded}}
+      Dropped by the verifier:
+      {{#state.confirm.confirm.dropped}}
+      - {{line}} | {{reason}}
+      {{/state.confirm.confirm.dropped}}
+      Project rules check: {{#state.rules-merge.rules-merge.noStore}}no-store, skipped{{/state.rules-merge.rules-merge.noStore}}
+      {{#state.rules-merge.rules-merge.dropped}}
+      - dropped by the store: {{line}} | {{cite}}
+      {{/state.rules-merge.rules-merge.dropped}}
+      Memory: {{#state.memory.loaded}}loaded{{/state.memory.loaded}}{{^state.memory.loaded}}not loaded (the user chose to continue without it){{/state.memory.loaded}}
+
+      Write the step 8 report. Then end with one ```json block, findings in rank order:
+      {"kept": [{"line": "<finding>", "ruleId": "<rule-id>", "sev": "<sev>", "tier": "<bug|security|repo-rule|design|style|nit>", "unchecked": <true|false>}]}
   - id: review-post
-    description: "Ranks the kept findings, asks post or skip for each one, posts one PR comment per post and records the decisions in the lens memory."
+    description: "Ranks the kept findings, asks post or skip for each one, posts one PR comment per post and records the decisions in the review memory."
     kind: group
     workflow: olko-review-post
 edges:
@@ -50,7 +83,7 @@ edges:
   - { from: ask-memory, to: END, when: 'ask-memory.answer == "stop"', description: "you chose stop" }
   - { from: review-findings, to: review-rules }
   - { from: review-rules, to: after-rules }
-  - { from: after-rules, to: local-rank, when: 'route.route == "LOCAL"', description: "local working tree: nothing to post" }
+  - { from: after-rules, to: local-rank, when: 'route.route.route == "LOCAL"', description: "local working tree: nothing to post" }
   - { from: after-rules, to: review-post, description: "a PR: post the findings" }
   - { from: local-rank, to: END }
   - { from: review-post, to: END }
