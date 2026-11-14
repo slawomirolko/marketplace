@@ -85,7 +85,7 @@
     {
       "name": "olko-feature-plan-workflow",
       "category": "workflow",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "description": "Feature/Epic implementation planning lifecycle: Feature pair plus one plan per child Task, batched revalidation, plan review, E2E matrix authoring, and readiness gates.",
       "tags": [
         "workflow",
