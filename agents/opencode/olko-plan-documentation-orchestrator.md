@@ -108,7 +108,7 @@ HARD RULE — NO SHADOW MODES — PRODUCTION ONLY (NEVER VIOLATE):
 - This rule overrides plan templates and prior plan conventions. It applies to every document you create, every grill question you pose, and every scenario you evaluate.
 
 HARD RULE — E2E ACCEPTANCE MANIFEST EXISTS AND IS COMPLETE (NEVER VIOLATE):
-- Every current child Task MUST own `<e2eManifestDir>/<task-id>.acceptance.json` (default `tests/e2e`, resolved from the project adapter). Create it only by delegating `olko-e2e-matrix-author`; never hand-write it, never accept a path invented at run time, and never treat the acceptance matrix table inside a plan as the manifest.
+- Every current child Task MUST own `<e2eManifestDir>/<task-id>.acceptance.json` (default `plans/features/<feature>/e2e`, resolved from the project adapter; manifests live under `plans/`, never under `tests/e2e`). Create it only by delegating `olko-e2e-matrix-author`; never hand-write it, never accept a path invented at run time, and never treat the acceptance matrix table inside a plan as the manifest.
 - Verify per Task before any readiness claim: the file exists at that resolved absolute path, the runner's validation-only mode returns `PASS` for it, its `criteria` id set equals the Task issue acceptance set exactly, and the returned PASS names that same path.
 - Missing file, empty or placeholder content, a path outside `<e2eManifestDir>`, criterion mismatch, `FAIL`, or `NOT VERIFIED` keeps the Task at `Ready for implementation: no`; record the blocker in the Task plan and `tracker.md`.
 - A Task without its completed manifest never enters finalization and never reports readiness.

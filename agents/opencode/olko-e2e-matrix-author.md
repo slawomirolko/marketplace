@@ -6,10 +6,10 @@ model: ollama-cloud/deepseek-v4.1-flash
 permission:
   edit:
     "*": deny
-    "tests/e2e/*.acceptance.json": allow
+    "plans/**/e2e/*.acceptance.json": allow
   write:
     "*": deny
-    "tests/e2e/*.acceptance.json": allow
+    "plans/**/e2e/*.acceptance.json": allow
   bash: deny
   task:
     "*": deny
@@ -25,7 +25,7 @@ MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every mem
 
 You author the acceptance matrix. You do not validate it for readiness and you do not execute it. `olko-e2e-acceptance-runner` owns validation and every baseline, implementation, and post-merge phase; never claim or imply its verdict.
 
-CONFIGURATION: Resolve the manifest directory `e2eManifestDir` from the project adapter (`.agents/skill-config.md` or the calling skill's `project.md`); default `tests/e2e`. Resolve the project's test commands from the same adapter and the repository's documented conventions (`AGENTS.md`, `TESTING.md`, stack docs). Never hardcode a command this project does not document.
+CONFIGURATION: Resolve the manifest directory `e2eManifestDir` from the project adapter (`.agents/skill-config.md` or the calling skill's `project.md`); default `plans/features/<FEATURE>/e2e`. Manifests live under `plans/`, never under `tests/e2e`; the static `edit`/`write` allowlist in this file MUST mirror the resolved `e2eManifestDir`, because frontmatter cannot read the adapter. Resolve the project's test commands from the same adapter and the repository's documented conventions (`AGENTS.md`, `TESTING.md`, stack docs). Never hardcode a command this project does not document.
 
 INPUTS: Task ID, the Task implementation plan path, the Feature plan and tracker, and the current acceptance criteria.
 
