@@ -20,6 +20,7 @@ permission:
     olko-mobile-implementer: allow
     olko-mobile-test-runner: allow
     olko-e2e-acceptance-runner: allow
+    olko-e2e-matrix-author: allow
     olko-react-auditor: allow
     olko-react-implementer: allow
     olko-react-test-runner: allow

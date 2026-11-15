@@ -122,6 +122,7 @@ test("installs the implementation orchestrator with delegation-only permissions"
   assert.match(agent, /task:\s+"\*": deny/);
   assert.match(agent, /olko-worktree-lifecycle-manager: allow/);
   assert.match(agent, /olko-git-delivery-manager: allow/);
+  assert.match(agent, /olko-e2e-matrix-author: allow/);
   assert.match(agent, /Do not load or follow `olko-implement-new`/);
   for (const skill of ["olko-implementation-closure", "olko-implementation-journal", "olko-worktree-compose-isolation", "olko-implementation-pr-gates", "olko-task-scope-gates"]) {
     assert.match(agent, new RegExp(`${skill}: allow`));
