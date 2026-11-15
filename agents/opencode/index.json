@@ -14,7 +14,7 @@
     },
     {
       "name": "olko-implementation-orchestrator",
-      "version": "2.8.0",
+      "version": "2.9.0",
       "file": "olko-implementation-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -34,6 +34,7 @@
       ],
       "delegates": [
         "olko-e2e-acceptance-runner",
+        "olko-e2e-matrix-author",
         "olko-marketplace-skill-bootstrapper",
         "olko-worktree-lifecycle-manager",
         "olko-git-delivery-manager",
