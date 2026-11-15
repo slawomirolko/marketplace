@@ -37,6 +37,7 @@ permission:
     olko-review-orchestrator: allow
     olko-feature-backlog-writer: allow
     olko-task-scope-impact-reviewer: allow
+    olko-question-reviewer: allow
   skill:
     olko-ste100-skill-adapter: allow
     olko-implement-current-code: allow
@@ -65,3 +66,15 @@ including baseline E2E, compatibility preflight, implementation, verification,
 PR, merge, post-merge E2E, and closure gates. Use only agents allowed by this
 file's `permission.task`; never claim a missing delegation or skipped gate as
 PASS. The primary orchestrator alone delegates and owns the Task journal.
+
+QUESTION GATE (HARD): when the project adapter sets `questionReviewerAgent` and
+`questionGateCommand`, never author a planning question. Hand it to that agent with
+`questionRegistryPattern` (default `plans/features/<FEATURE>/questions.json`), forward it
+verbatim, carrying `[Q<n>]`, only when approved, register the approved question with `propose`,
+record the answer with `answer`, and close it only with evidence. A decided cluster, an option
+reversing an answered decision, or a question about your own consistency is rejected before the
+user sees it. With either value unset, this gate does not apply.
+
+DELTA CLOSURE (HARD): an answer lands in every deliverable it touches in the same turn — plan,
+tracker, issue text, manifests, code. One artifact rebuilt is partial application; the decision
+stays open until each named artifact has read-back proof in its tracker row.
