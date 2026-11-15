@@ -1,6 +1,6 @@
 ---
 name: grill-with-docs
-version: 1.5.0
+version: 1.6.0
 description: A grilling session that stress-tests a plan against the project's documented domain model — sharpens fuzzy terminology, challenges it against the existing glossary, cross-references it with the code, and updates documentation (CONTEXT.md, ADRs) inline as decisions crystallize. The domain-aware variant of grill-me — use this instead when the repo has (or should have) a CONTEXT.md glossary or docs/adr/ decision records. Triggers include "grill with docs", "stress-test this against our domain model", "does this match our language", "check this against our glossary", "grill this and update the docs", or any time a non-trivial plan needs to be reconciled with the project's documented decisions.
 origin: vendored
 ---
@@ -25,6 +25,17 @@ A question the user cannot evaluate is a skill violation. Every question MUST co
    - **Change scope** — concrete footprint: files to create/change, migrations, new producers, tests, config keys. Write "no change" only when it is truly zero.
 
 The recommendation states its reason in one line. Never present a known-broken option as its equal: if an option carries a defect, name that defect inside the option.
+
+### Question eligibility
+
+A question covers business scope, domain terminology, or a trade-off. Before it is shown:
+
+- **No self-consistency questions.** A contradiction between an artifact and verified code, or between an artifact and a decision already locked, is a defect to fix in the same change — never a question and never an option.
+- **Every option must be legal.** If an option would leave an artifact contradicting a verified fact or a locked decision, delete it and re-derive the set. An option whose outcome is "leave the specification broken" is not a choice.
+- **Never re-litigate a settled decision.** An option that undoes, postpones, or reverses a decision the user already made is forbidden, unless the user themself changed that decision; only then is it a new question that supersedes the old one.
+- **One topic, one decision.** A topic already answered is never asked about again under new wording, a new name, or a new framing.
+- **Genuinely open.** If the proposed decision record already settles what the question asks, act on it and drop the wording.
+- **Name the deliverables.** A question states which artifacts the answer will change; one whose answer changes nothing is not asked.
 
 ## Question format
 
@@ -167,7 +178,7 @@ When the user describes how something works, check the code. If it disagrees, ex
 
 ### Update CONTEXT.md inline
 
-When the user resolves a term, update `CONTEXT.md` in the format defined by [CONTEXT-FORMAT.md](./CONTEXT-FORMAT.md). Record decisions as they arrive. Revalidate the plan only after every question is closed, one per turn.
+When the user resolves a term, update `CONTEXT.md` in the format defined by [CONTEXT-FORMAT.md](./CONTEXT-FORMAT.md). Record decisions as they arrive. Revalidate the plan only after every question is closed, one per turn. A decision whose deliverables are only partly rewritten stays open, and no further question is asked while it is open.
 
 `CONTEXT.md` should be totally devoid of implementation details. Do not treat `CONTEXT.md` as a spec, a scratch pad, or a repository for implementation decisions. It is a glossary and nothing else.
 

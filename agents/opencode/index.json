@@ -3,8 +3,18 @@
   "opencodeAgentFormat": "v1",
   "agents": [
     {
+      "name": "olko-question-reviewer",
+      "version": "1.0.0",
+      "file": "olko-question-reviewer.md",
+      "stack": "cross-stack",
+      "role": "auditor",
+      "skills": [
+        "olko-memory-layer"
+      ]
+    },
+    {
       "name": "olko-implementation-orchestrator",
-      "version": "2.7.0",
+      "version": "2.8.0",
       "file": "olko-implementation-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -50,7 +60,8 @@
         "olko-investigation-readiness-worker",
         "olko-review-orchestrator",
         "olko-feature-backlog-writer",
-        "olko-task-scope-impact-reviewer"
+        "olko-task-scope-impact-reviewer",
+        "olko-question-reviewer"
       ]
     },
     {
@@ -487,7 +498,7 @@
     },
     {
       "name": "olko-feature-backlog-writer",
-      "version": "1.4.0",
+      "version": "1.5.0",
       "file": "olko-feature-backlog-writer.md",
       "stack": "cross-stack",
       "role": "writer",
