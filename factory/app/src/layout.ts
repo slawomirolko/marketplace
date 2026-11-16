@@ -78,7 +78,7 @@ function layoutLevel(level: Level, expanded: Set<string>, parentKey: string | nu
     }
   }
   const edges: FlowEdge[] = [
-    ...level.edges.map((edge) => ({ id: `${edge.from}->${edge.to}`, source: edge.from, target: edge.to, label: edge.label ?? undefined, type: "smoothstep", markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 } })),
+    ...level.edges.map((edge) => ({ id: `${edge.from}->${edge.to}`, source: edge.from, target: edge.to, label: edge.label ?? undefined, type: "smoothstep", ...(edge.dashed ? { style: { strokeDasharray: "6 4" }, className: "optional" } : {}), markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 } })),
     ...placed.flatMap((box) => box.inner?.edges ?? []),
   ];
   return {

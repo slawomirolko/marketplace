@@ -34,15 +34,16 @@ export function buildLevel(workflows: Workflow[], name: string, prefix = name, s
       const branching = workflow.edges.filter((o) => o.from === e.from).length > 1;
       const condition = e.when ?? (branching ? "otherwise" : null);
       const label = e.description ? (condition ? `${e.description} (${condition})` : e.description) : condition;
-      return { from: `${prefix}/${e.from}`, to: e.to === "END" || (e.to === "FINISH" && isRoot) ? END_KEY : e.to === "FINISH" ? finishKey : `${prefix}/${e.to}`, label };
+      return { from: `${prefix}/${e.from}`, to: e.to === "END" || (e.to === "FINISH" && isRoot) ? END_KEY : e.to === "FINISH" ? finishKey : `${prefix}/${e.to}`, label, optional: condition !== null };
     });
+  const exits = isRoot ? [] : workflow.edges.filter((e) => e.to === "END").map((e) => ({ from: `${prefix}/${e.from}`, optional: e.when !== undefined || workflow.edges.filter((o) => o.from === e.from).length > 1 }));
   if (finishes) items.push({ key: finishKey, kind: "terminal", label: "ends run" });
   if (isRoot) {
     items.unshift({ key: START_KEY, kind: "terminal", label: "start" });
     items.push({ key: END_KEY, kind: "terminal", label: "END" });
-    edges.unshift({ from: START_KEY, to: `${prefix}/${workflow.entry}`, label: null });
+    edges.unshift({ from: START_KEY, to: `${prefix}/${workflow.entry}`, label: null, optional: false });
   }
-  return { items, edges };
+  return { items, edges, entry: `${prefix}/${workflow.entry}`, exits };
 }
 
 export function descendantKeys(item: Item): string[] {

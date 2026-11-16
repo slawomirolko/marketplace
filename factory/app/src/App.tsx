@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Background, Controls, ReactFlow, ReactFlowProvider, useReactFlow, useStore } from "@xyflow/react";
+import { Background, Controls, Panel, ReactFlow, ReactFlowProvider, useReactFlow, useStore } from "@xyflow/react";
 import type { NodeChange } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import "./styles.css";
@@ -9,6 +9,7 @@ import { Details } from "./Details.tsx";
 import { CallsList } from "./Calls.tsx";
 import { SupervisorRing } from "./SupervisorRing.tsx";
 import { layoutGraph } from "./layout.ts";
+import { agentsOnly } from "./agents-only.ts";
 import { nodeAriaLabel, nodeTypes } from "./nodes.tsx";
 import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost, disabledKeys, configDisabledKeys, liveAncestors, liveState, LIVE_STATUSES, mainAgentOf, containedWorkflows, findItem, ancestorKeys, allItems } from "./tree.ts";
 import type { StaleWorkflow } from "./types.ts";
@@ -17,18 +18,19 @@ import type { AgentInfo, Bounds, FactoryConfig, FlowEdge, FlowNode, Item, Level,
 const API = `${import.meta.env.BASE_URL}api`;
 const LIVE_REFRESH_MS = 15_000;
 const SHOW_COUNTS_KEY = "factory-viewer.show-numbers";
+const AGENTS_ONLY_KEY = "factory-viewer.agents-only";
 
-function readShowCounts(): boolean {
+function readFlag(key: string): boolean {
   try {
-    return window.localStorage.getItem(SHOW_COUNTS_KEY) === "1";
+    return window.localStorage.getItem(key) === "1";
   } catch {
     return false;
   }
 }
 
-function writeShowCounts(value: boolean): void {
+function writeFlag(key: string, value: boolean): void {
   try {
-    window.localStorage.setItem(SHOW_COUNTS_KEY, value ? "1" : "0");
+    window.localStorage.setItem(key, value ? "1" : "0");
   } catch {
     return;
   }
@@ -94,11 +96,16 @@ function Viewer() {
   const [marketplace, setMarketplace] = useState("");
   const [updating, setUpdating] = useState(false);
   const [updateNote, setUpdateNote] = useState<string | null>(null);
-  const [showCounts, setShowCounts] = useState(readShowCounts);
+  const [showCounts, setShowCounts] = useState(() => readFlag(SHOW_COUNTS_KEY));
+  const [onlyAgents, setOnlyAgents] = useState(() => readFlag(AGENTS_ONLY_KEY));
   const [tab, setTab] = useState<"node" | "calls">("node");
   const changeShowCounts = useCallback((value: boolean) => {
     setShowCounts(value);
-    writeShowCounts(value);
+    writeFlag(SHOW_COUNTS_KEY, value);
+  }, []);
+  const changeOnlyAgents = useCallback((value: boolean) => {
+    setOnlyAgents(value);
+    writeFlag(AGENTS_ONLY_KEY, value);
   }, []);
   const loadStale = useCallback(() => {
     getJson<{ marketplace: string; stale: StaleWorkflow[] }>("/stale")
@@ -213,7 +220,8 @@ function Viewer() {
     }
   }, [workflows, rootName, detail]);
   const level = built?.level ?? null;
-  const graph = useMemo(() => (level ? layoutGraph(level, expanded) : { nodes: [], edges: [], bounds: null }), [level, expanded]);
+  const drawn = useMemo(() => (level && onlyAgents ? agentsOnly(level) : level), [level, onlyAgents]);
+  const graph = useMemo(() => (drawn ? layoutGraph(drawn, expanded) : { nodes: [], edges: [], bounds: null }), [drawn, expanded]);
   const runIndex: RunIndex = useMemo(() => (level ? buildRunIndex(level, config, detail?.report ?? null, detail?.run ?? null) : new Map()), [level, config, detail]);
   const nodes = useMemo(
     (): FlowNode[] => graph.nodes.map((n) => ({ ...n, selected: n.id === selected?.key, ariaLabel: nodeAriaLabel(n.data.item, detail?.report ?? null, runIndex.get(n.id)) })),
@@ -366,6 +374,11 @@ function Viewer() {
               colorMode="system"
               minZoom={0.1}
             >
+              <Panel position="top-left">
+                <label className="agents-only" title="Show only agent steps. Solid line: always runs next. Dashed line: runs only under a condition or a switch.">
+                  <input type="checkbox" checked={onlyAgents} onChange={(e) => changeOnlyAgents(e.target.checked)} /> Agents only
+                </label>
+              </Panel>
               <Background />
               <Controls showInteractive={false} />
               <FitToBounds bounds={graph.bounds} />

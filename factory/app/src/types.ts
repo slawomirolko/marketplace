@@ -229,11 +229,20 @@ export interface LevelEdge {
   from: string;
   to: string;
   label: string | null;
+  optional?: boolean;
+  dashed?: boolean;
+}
+
+export interface LevelExit {
+  from: string;
+  optional: boolean;
 }
 
 export interface Level {
   items: Item[];
   edges: LevelEdge[];
+  entry?: string;
+  exits?: LevelExit[];
 }
 
 export interface TerminalItem {
