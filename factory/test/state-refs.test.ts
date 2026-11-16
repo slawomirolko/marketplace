@@ -24,11 +24,11 @@ entry: draft
 roles: { writer: low }
 nodes:
   - { id: draft, kind: llm, role: writer, prompt: "Write." }
-  - { id: check, kind: llm, role: writer, parse: plan.consistency, prompt: "Draft {{state.draft.text}}, ok {{state.check.check.pass}}, wrong {{state.check.consistency.pass}}, field {{state.check.check.verdict}}" }
-  - { id: ask, kind: interrupt, question: { id: q-a, text: "{{state.ask.answer}} {{state.ask.reason}} {{state.gone.text}}" } }
+  - { id: check, kind: llm, role: writer, parse: sync.prLine, prompt: "Draft {{state.draft.text}}, ok {{state.check.check.url}}, wrong {{state.check.consistency.url}}, field {{state.check.check.verdict}}" }
+  - { id: ask, kind: interrupt, question: { id: q-a, text: "{{state.ask.answer}} {{state.ask.reason}} {{state.gone.text}} {{#each.state.lost}}{{key}}{{/each.state.lost}}" } }
 edges:
   - { from: draft, to: check }
-  - { from: check, to: ask, when: "check.check.pass == true" }
+  - { from: check, to: ask, when: 'check.check.url == "u" || gone.text == null' }
   - { from: check, to: END }
   - { from: ask, to: END }
 `,
@@ -36,10 +36,12 @@ edges:
   const errors = stateReferenceErrors(expandWorkflowDir(dir).get("main")!);
   assert.deepEqual(errors, [
     "main: check prompt reads state.draft.text: draft has no parse:, so it stores nothing in state",
-    "main: check prompt reads state.check.consistency.pass: check stores results by agent id (check), not consistency",
-    "main: check prompt reads state.check.check.verdict: parser plan.consistency does not set verdict",
+    "main: check prompt reads state.check.consistency.url: check stores results by agent id (check), not consistency",
+    "main: check prompt reads state.check.check.verdict: parser sync.prLine does not set verdict",
     "main: ask question reads state.ask.reason: ask is a question; it sets only answer",
     "main: ask question reads state.gone.text: no step gone in this scope sets state",
+    "main: ask question reads state.lost: no step lost in this scope sets state",
+    "main: check edge to ask (when) reads gone.text: no step gone in this scope sets state",
   ]);
 });
 
@@ -78,9 +80,9 @@ edges:
 });
 
 test("the contract describes every parser and walks object, array and string fields", () => {
-  assert.equal(missingField(PARSER_CONTRACTS["plan.draft"]!, ["feature", "criteria", "length"]), null);
-  assert.equal(missingField(PARSER_CONTRACTS["plan.draft"]!, ["questions", "0", "length"]), null);
-  assert.equal(missingField(PARSER_CONTRACTS["plan.draft"]!, ["feature", "owner"]), "feature.owner");
+  assert.equal(missingField(PARSER_CONTRACTS["csync.suggestions"]!, ["suggestions", "0", "items", "length"]), null);
+  assert.equal(missingField(PARSER_CONTRACTS["csync.suggestions"]!, ["suggestions", "0", "verdict", "length"]), null);
+  assert.equal(missingField(PARSER_CONTRACTS["csync.suggestions"]!, ["suggestions", "0", "owner"]), "suggestions.0.owner");
   assert.equal(missingField(PARSER_CONTRACTS["impl.chunks"]!, ["chunks", "first"]), "chunks.first");
   assert.deepEqual(Object.keys(PARSER_CONTRACTS).sort(), [...Object.keys(PARSERS), ...Object.keys(WFSYNC_PARSERS)].sort());
   const json = contractJson();

@@ -71,8 +71,26 @@ for (const [when, state, expected] of CONDITIONS) {
   });
 }
 
-test("an edge condition on a missing state path is rejected", () => {
-  assert.throws(() => evaluateWhen("merge.findings > 0", {}), /merge\.findings is not set/);
+test("a missing state path reads as null, so == null and != null test whether it is set", () => {
+  assert.equal(evaluateWhen("input.route == null", { input: {} }), true);
+  assert.equal(evaluateWhen("input.route != null", { input: { route: "both" } }), true);
+  assert.equal(evaluateWhen("merge.findings > 0", {}), false);
+  assert.throws(() => evaluateWhen("merge.findings > some", {}), /not a number, boolean, null or quoted string/);
+});
+
+test("|| and && combine clauses, with && binding tighter than ||", () => {
+  const state = { a: { v: 1 }, b: { v: 2 } };
+  assert.equal(evaluateWhen("a.v == 9 || b.v == 2", state), true);
+  assert.equal(evaluateWhen("a.v == 1 && b.v == 9", state), false);
+  assert.equal(evaluateWhen("a.v == 9 || a.v == 1 && b.v == 2", state), true);
+  assert.equal(evaluateWhen("a.v == 9 || a.v == 1 && b.v == 9", state), false);
+});
+
+test("a prompt reads every answer and iterates a map of agent results with each", () => {
+  const prompt = VALID.replace('prompt: "Check {{goal}}"', 'prompt: "{{answers.q-1}}|{{#each.state.audit}}{{key}}={{value.verdict}};{{/each.state.audit}}"');
+  const node = loadWorkflowFile(writeYaml(prompt)).nodes.find((n) => n.id === "second")!;
+  const text = node.prompt!({ goal: "g", input: {}, agent: { id: "second", tier: "low" } as never, answers: { "q-1": "yes" }, state: { audit: { dotnet: { verdict: "ok" }, react: { verdict: "fail" } } } });
+  assert.equal(text, "yes|dotnet=ok;react=fail;");
 });
 
 test("the comparator result line becomes a classification with versions and action", () => {

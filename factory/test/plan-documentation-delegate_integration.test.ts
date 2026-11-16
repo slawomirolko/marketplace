@@ -122,6 +122,14 @@ test("a harness drives the YAML plan documentation over stdio in delegate mode w
     assert.ok(fs.readdirSync(path.join(feature, "tasks")).some((f) => f.endsWith("-implementation.md")));
     assert.ok(batches.flat().some((w) => w.nodePath.includes("/plan-review/")), "the review PLAN route ran through the call");
     assert.ok(asked.filter((q) => String(q.id).startsWith("q-plan-grill-")).every((q) => q.allowed.join() === "1,2,3"));
+    const work = batches.flat();
+    const orchestratorRan = (step: string) => work.some((w) => w.nodePath === `olko-plan-documentation/${step}` && w.agentName === "olko-plan-documentation-orchestrator");
+    for (const step of ["feature", "auditors", "plan-files", "report"]) assert.ok(orchestratorRan(step), `the orchestrator agent ran ${step}`);
+    assert.ok(!work.some((w) => w.nodePath === "olko-plan-documentation/route"), "input.route picks the path without an agent");
+    const recorded = (step: string) => work.filter((w) => w.nodePath === `olko-plan-documentation/${step}`).length;
+    assert.equal(recorded("grill-record"), asked.filter((q) => String(q.id).startsWith("q-plan-grill-")).length, "the orchestrator records every grill answer in tracker.md");
+    assert.equal(recorded("blocker-record"), asked.filter((q) => String(q.id).startsWith("q-plan-blocker-")).length, "the orchestrator records every blocker decision in tracker.md");
+    assert.ok(!work.some((w) => w.nodePath.endsWith("/editor/open")), "the editor switch is off");
     const changed = execFileSync("git", ["-C", project, "status", "--porcelain", "--untracked-files=all"], { encoding: "utf8" }).split(/\r?\n/).filter(Boolean).map((l) => l.slice(3).trim());
     assert.ok(changed.every((c) => c.startsWith(`plans/features/${FEATURE}/`) || c === ".opencode/memory/olko-plan-documentation-orchestrator.md"), changed.join(", "));
     const agents = Object.values(report.byNode).flatMap((node: any) => Object.values(node.byAgent)).filter((a: any) => a.tier !== null) as any[];

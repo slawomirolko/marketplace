@@ -177,6 +177,7 @@ export interface PromptContext {
   state: WorkflowState | undefined;
   agent: Agent;
   answer?: string;
+  answers?: Record<string, string>;
   steps?: number;
 }
 

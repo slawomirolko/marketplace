@@ -21676,11 +21676,6 @@ var line = object({
 	fields: array(string()),
 	text: string()
 });
-var verdictLine = object({
-	pass: boolean(),
-	count: number(),
-	detail: string()
-});
 var list = array(unknown());
 var PARSER_CONTRACTS = {
 	"text.raw": string(),
@@ -21732,19 +21727,6 @@ var PARSER_CONTRACTS = {
 		loses: string(),
 		line: string()
 	})) }),
-	"plan.draft": object({
-		questions: array(string()),
-		feature: object({
-			title: string(),
-			goal: string(),
-			criteria: array(string())
-		}).nullable(),
-		tasks: list,
-		text: string()
-	}),
-	"plan.grill": object({ questions: list }),
-	"plan.consistency": verdictLine,
-	"plan.findings": verdictLine,
 	"impl.preflight": line,
 	"impl.tests": line,
 	"impl.chunks": object({ chunks: array(object({
@@ -21942,13 +21924,13 @@ function stateReferenceErrors(spec) {
 				errors.push(`${spec.name}: ${node.id} ${where}: ${error.message}`);
 				continue;
 			}
-			for (const name of names.filter((n) => n.startsWith("state."))) report(node.id, where, name, checkPath(spec, node.scope, name.slice(6)));
+			for (const name of names.map((n) => n.replace(/^each\./, "")).filter((n) => n.startsWith("state."))) report(node.id, where, name, checkPath(spec, node.scope, name.slice(6)));
 		}
 		for (const [where, dotted] of [["agentsFrom", node.agentsFrom], ["allowedFrom", node.question?.allowedFrom]]) if (dotted) report(node.id, where, dotted, checkPath(spec, node.scope, dotted.replace(/^state\./, "")));
 	}
 	const scopeOf = new Map(spec.nodes.map((n) => [n.id, n.scope]));
-	for (const edge of spec.edges) {
-		const dotted = edge.when?.match(CONDITION_PATH)?.[1];
+	for (const edge of spec.edges) for (const clause of edge.when ? whenClauses(edge.when) : []) {
+		const dotted = clause.match(CONDITION_PATH)?.[1];
 		if (!dotted || CONTEXT_ROOTS.has(dotted.split(".")[0])) continue;
 		report(edge.from, `edge to ${edge.to} (when)`, dotted, checkPath(spec, scopeOf.get(edge.from), dotted));
 	}
@@ -24115,279 +24097,6 @@ function parseSuggestions(text) {
 		line: `${i + 1}. ${s.verdict}: ${s.items.join(" + ")} — ${s.evidence} — loses: ${s.loses}`
 	})) };
 }
-function parseDraft(text) {
-	const data = lastJsonBlock(text);
-	return {
-		questions: (data.questions ?? []).filter((q) => typeof q === "string" && q.trim()),
-		feature: data.feature ?? null,
-		tasks: data.tasks ?? [],
-		text: String(data.text ?? "")
-	};
-}
-function parseGrill(text) {
-	const questions = lastJsonBlock(text).questions ?? [];
-	for (const q of questions) if (!q.problem || !Array.isArray(q.options) || q.options.length !== 3) throw new Error(`grill question needs a problem and exactly 3 options: ${JSON.stringify(q).slice(0, 200)}`);
-	return { questions };
-}
-function parseVerdictLine(prefix) {
-	return (text) => {
-		const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.startsWith(`${prefix} |`));
-		if (!line) throw new Error(`output has no '${prefix} |' line`);
-		const [, verdict = "", count = "0", detail = ""] = line.split("|").map((p) => p.trim());
-		return {
-			pass: verdict === "pass" || verdict === "yes" || verdict === "none",
-			count: Number(count) || 0,
-			detail
-		};
-	};
-}
-var planRoute = async ({ input, answers }) => {
-	const route = input.route ?? answers?.["q-plan-route"];
-	if (route && ![
-		"discovery",
-		"planning",
-		"both"
-	].includes(route)) throw new Error(`input.route must be discovery, planning or both, not ${route}`);
-	return {
-		state: { route: route ?? "ask" },
-		metrics: {},
-		output: `Route: ${route ?? "ask the user"}.`
-	};
-};
-var planDraftCheck = async ({ state, answers, nodeId }) => {
-	const draft = Object.values(stateOf(state, "draft"))[0];
-	const previous = nodeId ? state[nodeId] : void 0;
-	const round = (previous?.round ?? 0) + 1;
-	const answer = previous ? answers?.[`q-plan-questions-${previous.round}`] ?? answers?.[`q-plan-revise-${previous.round}`] : void 0;
-	const answered = [previous?.answered, answer].filter(Boolean).join("\n\n");
-	const ask = draft.questions.length > 0 && round <= 3;
-	return {
-		state: {
-			round,
-			ask,
-			questions: draft.questions.map((q, i) => `${i + 1}. ${q}`).join("\n"),
-			answered: answered || "none yet",
-			draft
-		},
-		metrics: {
-			questions: draft.questions.length,
-			round
-		},
-		output: ask ? `Draft round ${round}: ${draft.questions.length} open questions.` : `Draft ready: ${draft.tasks.length} Tasks.`
-	};
-};
-var planFeature = async ({ state, input, cwd }) => {
-	const fromTracker = state["tracker-context/context"];
-	const draft = (fromTracker && Object.values(fromTracker)[0]) ?? state["draft-check"]?.draft;
-	if (!draft) throw new Error("no Feature context: give input.route planning with the tracker on, or run the discovery draft first");
-	const missing = draft.tasks.filter((t) => !t.criteria?.length).map((t) => t.id);
-	if (!draft.tasks.length) throw new Error("entry gate: the Feature has no child Tasks; route to the backlog writer draft first");
-	if (missing.length) throw new Error(`entry gate: Tasks without acceptance criteria: ${missing.join(", ")}; never plan from a guessed criterion`);
-	const featureId = input.featureId ?? (draft.feature?.title ?? "feature").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-	const featureDir = `plans/features/${featureId}`;
-	fs.mkdirSync(path.join(cwd ?? ".", featureDir, "tasks"), { recursive: true });
-	const tasks = draft.tasks.map((t) => `- ${t.id}: ${t.title}\n${t.criteria.map((c) => `  - ${c}`).join("\n")}`).join("\n");
-	const criteria = [...draft.feature?.criteria ?? [], ...draft.tasks.flatMap((t) => t.criteria)].join("\n");
-	return {
-		state: {
-			featureId,
-			featureDir,
-			text: draft.text,
-			tasks,
-			taskIds: draft.tasks.map((t) => t.id),
-			criteria
-		},
-		metrics: { tasks: draft.tasks.length },
-		output: `Feature ${featureId}: ${draft.tasks.length} Tasks with acceptance criteria; plan folder ${featureDir}.`
-	};
-};
-var AUDITORS = [
-	[/\.net|c#|csproj|asp\.net/i, "olko-dotnet-auditor"],
-	[/kotlin|android/i, "olko-mobile-auditor"],
-	[/react native|expo/i, "olko-react-native-auditor"],
-	[/\breact\b(?! native)/i, "olko-react-auditor"],
-	[/army python|python army/i, "olko-army-python-auditor"]
-];
-var planAuditors = async ({ state, cwd }) => {
-	const { featureDir } = stateOf(state, "feature");
-	const file = path.join(cwd ?? ".", featureDir, "implementation.md");
-	const text = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
-	const scope = text.split(/^## /m).find((s) => /^(implementation scope|scope|technical scope)/i.test(s)) ?? text;
-	const agents = AUDITORS.filter(([re]) => re.test(scope)).map(([, agent]) => ({
-		id: agent.replace(/^olko-|-auditor$/g, ""),
-		agentName: agent
-	}));
-	return {
-		state: { agents },
-		metrics: { auditors: agents.length },
-		output: agents.length ? `Auditors for the planned technologies: ${agents.map((a) => a.agentName).join(", ")}.` : "No stack auditor matches the planned technologies; audits skipped."
-	};
-};
-var planFindings = async ({ state, args }) => {
-	const from = String(args.from);
-	const results = Object.entries(state[from] ?? {});
-	const total = results.reduce((sum, [, r]) => sum + r.count, 0);
-	return {
-		state: {
-			total,
-			text: results.filter(([, r]) => r.count > 0).map(([id, r]) => `${id}: ${r.detail}`).join("\n") || "none"
-		},
-		metrics: { findings: total },
-		output: total ? `${total} findings to fold from ${from}.` : `No findings from ${from}.`
-	};
-};
-var planFiles = async ({ state, cwd }) => {
-	const { featureDir, criteria } = stateOf(state, "feature");
-	const root = path.join(cwd ?? ".", featureDir);
-	const tasks = fs.existsSync(path.join(root, "tasks")) ? fs.readdirSync(path.join(root, "tasks")).filter((f) => f.endsWith("-implementation.md")).sort().map((f) => `${featureDir}/tasks/${f}`) : [];
-	const files = [`${featureDir}/implementation.md`, ...tasks].map((p) => ({
-		path: p,
-		criteria
-	}));
-	return {
-		state: { files },
-		metrics: { files: files.length },
-		output: `${files.length} plan files to review.`
-	};
-};
-var planReviewCollect = async ({ state, nodeId }) => {
-	const previous = nodeId ? state[nodeId] : void 0;
-	const report = (state["plan-review"]?.["plan-report"])?.["plan-report"];
-	const file = state["plan-next"]?.item?.path ?? "?";
-	const lines = (report?.kept ?? []).map((f) => f.line);
-	const reports = [...previous?.reports ?? [], ...lines.map((l) => `${file}: ${l}`)];
-	return {
-		state: {
-			reports,
-			confirmed: reports.length,
-			text: reports.join("\n") || "none"
-		},
-		metrics: { confirmed: reports.length },
-		output: `${lines.length} confirmed plan findings for ${file}.`
-	};
-};
-var planGrillQuestions = async ({ state, nodeId }) => {
-	const parsed = Object.values(stateOf(state, "grill"))[0];
-	const round = ((nodeId ? state[nodeId] : void 0)?.round ?? 0) + 1;
-	const questions = parsed.questions.map((q, i) => ({
-		index: i,
-		text: [
-			`Problem: ${q.problem}`,
-			`Why I am asking: ${q.why}`,
-			...q.options.map((o, n) => `${n + 1}. ${o.label}${n === 0 ? " (recommended)" : ""}\n   Business: ${o.business}\n   Change scope: ${o.scope}`),
-			q.glossary ? `Glossary: ${q.glossary}` : ""
-		].filter(Boolean).join("\n")
-	}));
-	const count = round <= 3 ? questions.length : 0;
-	return {
-		state: {
-			round,
-			questions,
-			count
-		},
-		metrics: {
-			questions: questions.length,
-			round
-		},
-		output: count ? `Grill round ${round}: ${count} questions as one batch.` : `Grill round ${round}: no open question${questions.length ? " (round limit reached; the rest stays in Open items)" : ""}.`
-	};
-};
-var planAnswers = async ({ state, answers, args }) => {
-	const from = String(args.from);
-	const prefix = String(args.prefix);
-	const source = stateOf(state, from);
-	const lines = source.questions.map((q) => `Question ${q.index + 1}:\n${q.text}\nAnswer: ${answers?.[`${prefix}${source.round}-${q.index}`] ?? "unanswered"}`);
-	return {
-		state: {
-			text: lines.join("\n\n") || "none",
-			count: lines.length
-		},
-		metrics: { answers: lines.length },
-		output: `${lines.length} answers collected.`
-	};
-};
-var planReadiness = async ({ state, nodeId }) => {
-	const parsed = Object.values(stateOf(state, "readiness"))[0];
-	const round = ((nodeId ? state[nodeId] : void 0)?.round ?? 0) + 1;
-	const questions = parsed.questions.map((q, i) => ({
-		index: i,
-		text: [
-			`Blocker: ${q.problem}`,
-			`Why I am asking: ${q.why}`,
-			...q.options.map((o, n) => `${n + 1}. ${o.label}${n === 0 ? " (recommended)" : ""}\n   Business: ${o.business}\n   Change scope: ${o.scope}`)
-		].join("\n")
-	}));
-	return {
-		state: {
-			round,
-			questions,
-			count: round <= 3 ? questions.length : 0
-		},
-		metrics: {
-			blockers: questions.length,
-			round
-		},
-		output: questions.length ? `Readiness round ${round}: ${questions.length} blockers.` : "Ready for implementation: no blockers."
-	};
-};
-var planOpenEditor = async ({ state, exec, cwd }) => {
-	const { featureDir } = stateOf(state, "feature");
-	const res = exec ? await exec("code", ["-n", featureDir], { cwd: cwd ?? "." }) : {
-		code: -1,
-		stdout: "",
-		stderr: "no exec"
-	};
-	return {
-		state: { opened: res.code === 0 },
-		metrics: { opened: res.code === 0 ? 1 : 0 },
-		output: res.code === 0 ? `Opened ${featureDir} in VS Code.` : `Could not open VS Code; run: code -n ${featureDir}`
-	};
-};
-var planScopeCheck = async ({ state, exec, cwd }) => {
-	if (!exec) throw new Error("plan.scopeCheck needs the host exec tool");
-	const { featureDir } = stateOf(state, "feature");
-	const status = (await exec("git", [
-		"-C",
-		cwd ?? ".",
-		"status",
-		"--porcelain",
-		"--untracked-files=all"
-	])).stdout.split(/\r?\n/).filter(Boolean).map((l) => l.slice(3).trim());
-	const allowed = (p) => p.startsWith(`${featureDir}/`) || p === ".opencode/memory/olko-plan-documentation-orchestrator.md";
-	const outside = status.filter((p) => !allowed(p));
-	if (outside.length) throw new Error(`planning changed files outside the plan folder: ${outside.join(", ")}`);
-	return {
-		state: { changed: status },
-		metrics: { changed: status.length },
-		output: `Plan scope check passed: ${status.length} changed files, all under ${featureDir}.`
-	};
-};
-var planFeatureReport = async ({ state, cwd }) => {
-	const { featureDir, featureId } = stateOf(state, "feature");
-	const root = path.join(cwd ?? ".", featureDir);
-	const tasks = fs.existsSync(path.join(root, "tasks")) ? fs.readdirSync(path.join(root, "tasks")).filter((f) => f.endsWith("-implementation.md")) : [];
-	const ready = fs.existsSync(path.join(root, "implementation.md")) ? fs.readFileSync(path.join(root, "implementation.md"), "utf8").match(/Ready for implementation:\s*(yes|no)/i)?.[1] ?? "missing" : "missing";
-	const auditors = state.auditors?.agents?.map((a) => a.agentName) ?? [];
-	const review = state["plan-collect"]?.confirmed ?? 0;
-	return {
-		state: { ready },
-		metrics: { tasks: tasks.length },
-		output: [
-			`Feature plan ${featureId}`,
-			`Files: ${[
-				"business.md",
-				"implementation.md",
-				"stack.md",
-				"tracker.md"
-			].map((f) => `${featureDir}/${f}`).join(", ")}`,
-			`Task plans: ${tasks.map((t) => `${featureDir}/tasks/${t}`).join(", ") || "none"}`,
-			`Ready for implementation: ${ready}`,
-			`Auditors: ${auditors.join(", ") || "none (no matching technology)"}`,
-			`Plan review: ${review} confirmed findings folded`,
-			"Domain changes: write-free recommendation in business.md; vault changes stay approval-gated after implementation."
-		].join("\n")
-	};
-};
 var OPERATIONS = {
 	...IMPL_OPERATIONS,
 	"builtin.pass": pass,
@@ -24402,19 +24111,6 @@ var OPERATIONS = {
 	"builtin.stop": async ({ args }) => {
 		throw new Error(String(args.reason ?? "stopped by the user"));
 	},
-	"plan.route": planRoute,
-	"plan.draftCheck": planDraftCheck,
-	"plan.feature": planFeature,
-	"plan.auditors": planAuditors,
-	"plan.findings": planFindings,
-	"plan.files": planFiles,
-	"plan.reviewCollect": planReviewCollect,
-	"plan.grillQuestions": planGrillQuestions,
-	"plan.answers": planAnswers,
-	"plan.readiness": planReadiness,
-	"plan.openEditor": planOpenEditor,
-	"plan.scopeCheck": planScopeCheck,
-	"plan.report": planFeatureReport,
 	"builtin.values": async ({ args }) => {
 		if (!Array.isArray(args.values)) throw new Error("with.values must be a list");
 		return {
@@ -24497,10 +24193,6 @@ var PARSERS = {
 	"csync.inventory": parseInventory,
 	"csync.verdict": parseVerdict,
 	"csync.staged": parseStaged,
-	"plan.draft": parseDraft,
-	"plan.grill": parseGrill,
-	"plan.consistency": parseVerdictLine("consistency"),
-	"plan.findings": parseVerdictLine("findings"),
 	"csync.suggestions": parseSuggestions
 };
 function operationNamed(name) {
@@ -24525,25 +24217,32 @@ function literal(text) {
 	const quoted = trimmed.match(/^(["'])(.*)\1$/);
 	if (quoted?.[2] !== void 0) return quoted[2];
 	if (trimmed === "true" || trimmed === "false") return trimmed === "true";
+	if (trimmed === "null") return null;
 	const number = Number(trimmed);
-	if (Number.isNaN(number)) throw new Error(`condition value ${trimmed} is not a number, boolean or quoted string`);
+	if (Number.isNaN(number)) throw new Error(`condition value ${trimmed} is not a number, boolean, null or quoted string`);
 	return number;
 }
-function evaluateWhen(when, state) {
-	const match = when.trim().match(CONDITION);
-	if (!match?.[1] || !match[2] || match[3] === void 0) throw new Error(`condition '${when}' must be '<state path> <operator> <value>'`);
-	const raw = readPath(state, match[1]);
-	if (raw === void 0) throw new Error(`condition '${when}': ${match[1]} is not set`);
+function compare(clause, state) {
+	const match = clause.trim().match(CONDITION);
+	if (!match?.[1] || !match[2] || match[3] === void 0) throw new Error(`condition '${clause}' must be '<state path> <operator> <value>'`);
+	const raw = readPath(state, match[1]) ?? null;
 	const left = Array.isArray(raw) ? raw.length : raw;
 	const right = literal(match[3]);
+	if (match[2] === "==") return left === right;
+	if (match[2] === "!=") return left !== right;
+	if (left === null || right === null) return false;
 	switch (match[2]) {
-		case "==": return left === right;
-		case "!=": return left !== right;
 		case ">": return Number(left) > Number(right);
 		case "<": return Number(left) < Number(right);
 		case ">=": return Number(left) >= Number(right);
 		default: return Number(left) <= Number(right);
 	}
+}
+function whenClauses(when) {
+	return when.split(/\|\||&&/).map((c) => c.trim());
+}
+function evaluateWhen(when, state) {
+	return when.split("||").some((any) => any.split("&&").every((all) => compare(all, state)));
 }
 function agentsFromPath(dotted) {
 	const statePath = dotted.replace(/^state\./, "");
@@ -24553,9 +24252,28 @@ function agentsFromPath(dotted) {
 		return agents;
 	};
 }
+function eachView(value) {
+	const entries = Object.entries(value).map(([key, entry]) => ({
+		key,
+		value: entry
+	}));
+	return new Proxy(entries, {
+		get: (target, key) => key in target ? Reflect.get(target, key) : view(value[key]),
+		has: (target, key) => key in target || key in value
+	});
+}
+function view(value) {
+	return typeof value === "object" && value !== null && !Array.isArray(value) ? eachView(value) : value;
+}
+function withEach(context) {
+	return {
+		...context,
+		each: eachView(context)
+	};
+}
 function render(template) {
 	mustache.parse(template);
-	return (context) => mustache.render(template, context);
+	return (context) => mustache.render(template, withEach(context));
 }
 function buildNode(workflow, spec) {
 	if (spec.kind === "call") {
@@ -25557,6 +25275,7 @@ var Factory = class {
 			state: view.state,
 			agent,
 			answer: (node.question && view.answers[node.question.id]) ?? "",
+			answers: view.answers,
 			steps: run.steps
 		});
 	}
@@ -25630,11 +25349,12 @@ var Factory = class {
 		if (node.kind === "interrupt") {
 			if (!node.question) throw new Error(`interrupt node ${node.path} has no question`);
 			const view = this.view(run, node);
-			const context = {
+			const context = withEach({
 				goal: run.goal,
 				input: view.input,
-				state: view.state
-			};
+				state: view.state,
+				answers: view.answers
+			});
 			const { allowedFrom, ...fixed } = node.question;
 			const question = {
 				...fixed,

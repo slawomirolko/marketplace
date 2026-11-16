@@ -1,5 +1,5 @@
 name: olko-plan-tracker-context
-version: 0.1.0
+version: 0.2.0
 description: "Reads the Feature with its Epic and child Tasks from the tracker, read only."
 source: agents/opencode/olko-plan-documentation-orchestrator.md (entry gate, read-only Feature context from the tracker)
 roles:
@@ -11,9 +11,9 @@ nodes:
     kind: llm
     role: backlog
     agent: olko-feature-backlog-writer
-    parse: plan.draft
+    parse: { json: [feature, tasks, hierarchy] }
     prompt: |
       Mode: context, read-only. Read the Feature {{input.featureId}} with its Epic and every child Task.
-      End with one ```json block: {"questions": [], "feature": {"title": "", "goal": "", "criteria": [""]}, "tasks": [{"id": "", "title": "", "criteria": [""]}], "text": "<the Feature and Tasks as markdown>"}
+      End with one ```json block: {"feature": {"title": "", "goal": "", "criteria": [""]}, "tasks": [{"id": "", "title": "", "criteria": [""]}], "hierarchy": "<the Epic goal, the Feature and every Task with its acceptance criteria as markdown>"}
 edges:
   - { from: context, to: END }

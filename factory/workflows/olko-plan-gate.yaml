@@ -1,5 +1,5 @@
 name: olko-plan-gate
-version: 0.1.0
+version: 0.2.0
 description: "Steps 2a and 3, called after every plan change: refreshes stack.md, runs the bidirectional business-to-technical consistency gate, and corrects the plan up to three times before asking whether to accept the remaining gap."
 source: agents/opencode/olko-plan-documentation-orchestrator.md (steps 2a and 3, stack.md and the bidirectional consistency gate with its correction loop)
 roles:
@@ -26,7 +26,7 @@ nodes:
     role: plan-gate
     agent: olko-plan-documentation-orchestrator
     maxVisits: 4
-    parse: plan.consistency
+    parse: { line: [check, verdict, count, detail] }
     prompt: |
       Do only the check of step 3 of your workflow for the Feature plan folder {{input.featureDir}} in the project {{input.project}}: the bidirectional business-to-technical consistency gate, stack.md against the final scope, and every Task file against its Feature milestone, file estimate, dependencies, parallelism and acceptance. Read only; do not edit anything, do not delegate, do not ask the user.
       End with exactly one line: `consistency | <pass|fail> | <number of mismatches> | <mismatches, semicolon separated, or none>`.
@@ -90,10 +90,10 @@ nodes:
     with: { reason: "The user stopped planning at the consistency gate." }
 edges:
   - { from: stack, to: consistency }
-  - { from: consistency, to: END, when: "consistency.consistency.pass == true", description: "plan is consistent" }
+  - { from: consistency, to: END, when: 'consistency.consistency.verdict == "pass"', description: "plan is consistent" }
   - { from: consistency, to: round, description: "mismatches found" }
-  - { from: round, to: fix, when: "round.count < 3", description: "fewer than three correction rounds" }
-  - { from: round, to: gap-grill, description: "three rounds did not fix it" }
+  - { from: round, to: gap-grill, when: "round.count == 3", description: "three rounds did not fix it" }
+  - { from: round, to: fix, description: "fewer than three correction rounds" }
   - { from: gap-grill, to: gap-blocked, when: 'gap-grill.gap-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded: stop" }
   - { from: gap-grill, to: ask-gap, description: "grill-with-docs composed the accept-or-stop question: put it to the user" }
   - { from: fix, to: stack }

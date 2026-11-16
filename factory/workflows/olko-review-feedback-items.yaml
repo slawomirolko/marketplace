@@ -1,6 +1,6 @@
 name: olko-review-feedback-items
-version: 0.2.0
-description: "Reads CI state and unresolved review comments of your own PR, assesses each item and asks one decision per item."
+version: 0.3.0
+description: "Reads CI state and unresolved review comments of your own PR, assesses each item and asks one decision per item (answer q-feedback-<item index>)."
 source: "agents/opencode/olko-review-feedback-handler.md (steps 1 to 4: CI state, comments, grouping, assessment and decisions)"
 roles:
   feedback: medium
@@ -60,26 +60,10 @@ nodes:
       id: "q-feedback-{{state.fb-next.index}}"
       text: "Review comment {{state.fb-next.number}} of {{state.fb-next.total}}{{#state.fb-next.item.path}} on {{state.fb-next.item.path}}:{{state.fb-next.item.line}}{{/state.fb-next.item.path}}.\nAssessment: {{state.fb-assess.fb-assess}}\nYour decision?"
       allowed: [fix, wont-fix, question, skip]
-  - id: fb-record
-    description: "The feedback handler records your decision for this item."
-    kind: llm
-    role: feedback
-    agent: olko-review-feedback-handler
-    maxVisits: 200
-    parse: { json: [decided] }
-    prompt: |
-      Step 4 of your workflow: record the user's decision for this one item. Change no file.
-      Decisions so far:
-      {{#state.fb-record.fb-record.decided}}
-      - item {{index}}: {{decision}}
-      {{/state.fb-record.fb-record.decided}}
-      This item: index {{state.fb-next.item.index}}. The user's decision: {{state.fb-decide.answer}}.
-      End with one ```json block: {"decided": [<every decision so far, then this one>: {"index": <item index>, "decision": "<fix|wont-fix|question|skip>"}]}
 edges:
   - { from: fb-check, to: fb-next, when: "fb-check.fb-check.headOk == true", description: "the local branch is the PR head" }
   - { from: fb-check, to: fb-stop, when: "fb-check.fb-check.headOk == false", description: "the local branch is not the PR head" }
   - { from: fb-next, to: fb-assess, when: "fb-next.done == false", description: "an item is left" }
   - { from: fb-next, to: END, when: "fb-next.done == true", description: "all items decided" }
   - { from: fb-assess, to: fb-decide }
-  - { from: fb-decide, to: fb-record }
-  - { from: fb-record, to: fb-next }
+  - { from: fb-decide, to: fb-next }

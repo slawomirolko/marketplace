@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { priceUsage } from "./prices.ts";
-import { evaluateWhen, loadWorkflowDir, readPath } from "./workflow-yaml.ts";
+import { evaluateWhen, loadWorkflowDir, readPath, withEach } from "./workflow-yaml.ts";
 import { FACTORY_DIR } from "./paths.ts";
 import { loadFactoryConfig } from "./config.ts";
 import { readMarketplaceAgent } from "./marketplace-agents.ts";
@@ -451,6 +451,7 @@ export class Factory {
       state: view.state,
       agent,
       answer: (node.question && view.answers[node.question.id]) ?? "",
+      answers: view.answers,
       steps: run.steps,
     });
   }
@@ -512,7 +513,7 @@ export class Factory {
     if (node.kind === "interrupt") {
       if (!node.question) throw new Error(`interrupt node ${node.path} has no question`);
       const view = this.view(run, node);
-      const context = { goal: run.goal, input: view.input, state: view.state };
+      const context = withEach({ goal: run.goal, input: view.input, state: view.state, answers: view.answers });
       const { allowedFrom, ...fixed } = node.question;
       const question = { ...fixed, id: view.prefix + Mustache.render(node.question.id, context), text: Mustache.render(node.question.text, context), ...(allowedFrom ? { allowed: allowedOf(view.state, allowedFrom) } : {}) };
       const answer = run.answers[question.id];

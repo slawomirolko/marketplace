@@ -1,5 +1,5 @@
 name: olko-review-findings
-version: 0.2.0
+version: 0.3.0
 description: "Runs the lenses in parallel on the diff, merges their findings and lets the verifier confirm or reject each one."
 source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE, steps 4 to 6: lenses, merge and verification)"
 roles:
@@ -51,30 +51,10 @@ nodes:
     parse: { json: [findings, missing] }
     prompt: |
       Do only step 5 of your REVIEW ROUTE (merge results) and the COMPLETENESS rule. Read no file and add no finding of your own.
-      {{#state.lenses.bugs}}
-      bugs lens:
-      {{state.lenses.bugs}}
-      {{/state.lenses.bugs}}
-      {{#state.lenses.dotnet}}
-      dotnet lens:
-      {{state.lenses.dotnet}}
-      {{/state.lenses.dotnet}}
-      {{#state.lenses.react}}
-      react lens:
-      {{state.lenses.react}}
-      {{/state.lenses.react}}
-      {{#state.lenses.mobile}}
-      mobile lens:
-      {{state.lenses.mobile}}
-      {{/state.lenses.mobile}}
-      {{#state.lenses.python}}
-      python lens:
-      {{state.lenses.python}}
-      {{/state.lenses.python}}
-      {{#state.lenses.requirements}}
-      requirements lens:
-      {{state.lenses.requirements}}
-      {{/state.lenses.requirements}}
+      {{#each.state.lenses}}
+      {{key}} lens:
+      {{value}}
+      {{/each.state.lenses}}
 
       Lenses that ran: {{#state.scope.scope.lenses}}{{id}} {{/state.scope.scope.lenses}}
       End with one ```json block: {"findings": ["<path:line | rule-id | sev | problem | fix>"], "missing": ["<id of a lens that returned nothing parsable>"]}

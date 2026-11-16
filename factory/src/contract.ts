@@ -3,7 +3,6 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 const line = z.object({ verdict: z.string(), detail: z.string(), fields: z.array(z.string()), text: z.string() });
-const verdictLine = z.object({ pass: z.boolean(), count: z.number(), detail: z.string() });
 const list = z.array(z.unknown());
 
 export const PARSER_CONTRACTS: Record<string, z.ZodType> = {
@@ -16,10 +15,6 @@ export const PARSER_CONTRACTS: Record<string, z.ZodType> = {
   "csync.verdict": z.object({ verdict: z.string(), bump: z.string(), nextVersion: z.string(), action: z.string(), report: z.string() }),
   "csync.staged": z.object({ name: z.string(), stagedPath: z.string(), findings: list, missing: list, entry: z.unknown(), category: z.unknown(), blockers: z.array(z.string()) }),
   "csync.suggestions": z.object({ suggestions: z.array(z.object({ items: z.array(z.string()), verdict: z.string(), evidence: z.string(), loses: z.string(), line: z.string() })) }),
-  "plan.draft": z.object({ questions: z.array(z.string()), feature: z.object({ title: z.string(), goal: z.string(), criteria: z.array(z.string()) }).nullable(), tasks: list, text: z.string() }),
-  "plan.grill": z.object({ questions: list }),
-  "plan.consistency": verdictLine,
-  "plan.findings": verdictLine,
   "impl.preflight": line,
   "impl.tests": line,
   "impl.chunks": z.object({ chunks: z.array(z.object({ stack: z.string(), title: z.string(), files: z.array(z.string()), brief: z.string() })) }),

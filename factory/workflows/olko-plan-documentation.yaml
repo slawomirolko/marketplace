@@ -1,5 +1,5 @@
 name: olko-plan-documentation
-version: 0.2.0
+version: 0.4.0
 description: "Plans work from an idea or an accepted Feature: discovery drafts the Epic/Feature/Task hierarchy, planning writes the business plan, the technical plan and one implementation plan per Task, then reviews, grills and finalizes them. Every question to the user is composed by grill-with-docs; the workflow only puts it to the user."
 source: agents/opencode/olko-plan-documentation-orchestrator.md (DISCOVERY and IMPLEMENTATION PLANNING; each phase is a group file, tracker steps sit behind switches.tracker)
 entry: route
@@ -9,10 +9,9 @@ limits:
   maxCycleIterations: 4
 nodes:
   - id: route
-    description: "Reads input.route (discovery, planning or both); without it the user is asked."
+    description: "Picks the path by the requested deliverable (TWO DISTINCT PATHS): input.route names it; without a known route the edges ask one routing question."
     kind: script
-    op: plan.route
-    maxVisits: 2
+    op: builtin.pass
   - id: route-grill
     description: "grill-with-docs composes the one routing question (discovery, planning or both) in the user's response language; it changes no file and asks nothing itself."
     kind: llm
@@ -20,7 +19,6 @@ nodes:
     skill: grill-with-docs
     tools: [read]
     dirs: ["{{input.project}}"]
-    maxVisits: 2
     parse: text.raw
     prompt: |
       Compose the one routing question for the project {{input.project}}: what the user wants: discovery (create or refine Epic/Feature/Task issues), planning (implementation plans for an accepted Feature), or both. Offer exactly these three choices. Return the question text only; the workflow puts it to the user. Read only.
@@ -75,13 +73,14 @@ nodes:
     kind: group
     workflow: olko-plan-finalize
 edges:
-  - { from: route, to: route-grill, when: 'route.route == "ask"', description: "no route in the run input: grill-with-docs composes the routing question" }
-  - { from: route, to: entry, when: 'route.route == "planning"', description: "planning only: skip discovery" }
-  - { from: route, to: discovery, description: "discovery or both" }
+  - { from: route, to: entry, when: 'input.route == "planning"', description: "planning only: skip discovery" }
+  - { from: route, to: discovery, when: 'input.route == "discovery" || input.route == "both"', description: "discovery or both" }
+  - { from: route, to: route-grill, description: "no known route in the run input: grill-with-docs composes the routing question" }
   - { from: route-grill, to: route-blocked, when: 'route-grill.route-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded: stop, the blocker is not put to the user as a question" }
   - { from: route-grill, to: ask-route, description: "grill-with-docs composed the routing question: put it to the user" }
-  - { from: ask-route, to: route, description: "the answer becomes the route" }
-  - { from: discovery, to: discovery-report, when: 'route.route == "discovery"', description: "only discovery was requested" }
+  - { from: ask-route, to: entry, when: 'ask-route.answer == "planning"', description: "you chose planning: skip discovery" }
+  - { from: ask-route, to: discovery, description: "you chose discovery or both" }
+  - { from: discovery, to: discovery-report, when: 'input.route == "discovery" || ask-route.answer == "discovery"', description: "only discovery was requested" }
   - { from: discovery, to: entry, description: "both: plan the approved draft" }
   - { from: discovery-report, to: END }
   - { from: entry, to: package }

@@ -1,6 +1,6 @@
 name: olko-plan-readiness
-version: 0.1.0
-description: "Steps 8 and 8b: cleanup of rejected options, consistency gate, then blocker batches until every plan says Ready for implementation: yes."
+version: 0.2.0
+description: "Steps 8 and 8b: cleanup of rejected options, consistency gate, then blocker batches until every plan says Ready for implementation: yes; each blocker decision is recorded in tracker.md and the batch is applied together."
 source: "agents/opencode/olko-plan-documentation-orchestrator.md (Steps 8-8b: cleanup, consistency gate, blocker batches until every plan is ready)"
 roles:
   plan-gate: medium
@@ -17,12 +17,17 @@ nodes:
     tools: [read, edit]
     parse: text.raw
     prompt: |
-      Step 8 cleanup of {{state.feature.featureDir}}/implementation.md and the Task files (project {{input.project}}): remove denied, rejected, superseded or unchosen options only after checking their approved replacement is concrete; keep scope, ordered actions, validation, acceptance criteria and blockers. Update tracker.md with the final decisions. Edit only that folder.
+      Step 8 cleanup of {{state.feature.feature.featureDir}}/implementation.md and the Task files (project {{input.project}}): remove denied, rejected, superseded or unchosen options only after checking their approved replacement is concrete; keep scope, ordered actions, validation, acceptance criteria and blockers. Update tracker.md with the final decisions. Edit only that folder.
   - id: gate-cleanup
     description: "Consistency gate after the cleanup."
     kind: call
     workflow: olko-plan-gate
-    input: { featureDir: "{{state.feature.featureDir}}" }
+    input: { featureDir: "{{state.feature.feature.featureDir}}" }
+  - id: blocker-round
+    description: "Counts the blocker rounds; the edge after it stops before a fourth round."
+    kind: script
+    op: builtin.count
+    maxVisits: 4
   - id: readiness
     description: "grill-with-docs reads every Implementation readiness section and turns each BLOCKING item into a question with the full plan context and the locked decisions, in the user's response language; the workflow puts the questions to the user."
     kind: llm
@@ -31,38 +36,43 @@ nodes:
     tools: [read]
     dirs: ["{{input.project}}"]
     maxVisits: 4
-    parse: plan.grill
+    parse: { json: [questions] }
     prompt: |
-      Do only the read of step 8b for {{state.feature.featureDir}} (project {{input.project}}): read `## Implementation readiness` and `## Open items` of implementation.md and every Task file, with the full plan context and the locked decisions in tracker.md. Read only; do not delegate, change no file and do not ask the user yourself.
+      Do only the read of step 8b for {{state.feature.feature.featureDir}} (project {{input.project}}): read `## Implementation readiness` and `## Open items` of implementation.md and every Task file, with the full plan context and the locked decisions in tracker.md. Read only; do not delegate, change no file and do not ask the user yourself.
       Return every BLOCKING item as a question with exactly 3 options (the first recommended); return no questions when every plan says `Ready for implementation: yes`. Do not split a question or paraphrase it into new choices, and do not repeat a locked decision.
       Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the questions and options in that language, concisely.
       If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
-      End with one ```json block: {"questions": [{"problem": "", "why": "", "options": [{"label": "", "business": "", "scope": ""}, {"label": "", "business": "", "scope": ""}, {"label": "", "business": "", "scope": ""}]}]}
-  - id: readiness-check
-    description: "Formats the blocker batch; stops after three rounds."
-    kind: script
-    op: plan.readiness
-    maxVisits: 4
+      End with one ```json block, one item per blocker, its text in this layout:
+      {"questions": [{"text": "Blocker: <problem>\nWhy I am asking: <why>\n1. <recommended option> (recommended)\n   Business: <business consequence>\n   Change scope: <scope>\n2. <option>\n   Business: <business consequence>\n   Change scope: <scope>\n3. <option>\n   Business: <business consequence>\n   Change scope: <scope>"}]}
   - id: blocker-next
     description: "Takes the next blocker of the batch."
     kind: script
     op: list.next
     maxVisits: 100
-    with: { over: readiness-check.questions }
+    with: { over: readiness.readiness.questions }
   - id: ask-blocker
     description: "Puts one blocker question with three options, composed by grill-with-docs and the recommended one first, to the user."
     kind: interrupt
     maxVisits: 100
     question:
-      id: "q-plan-blocker-{{state.readiness-check.round}}-{{state.blocker-next.index}}"
+      id: "q-plan-blocker-{{state.blocker-round.count}}-{{state.blocker-next.index}}"
       text: "Blocker {{state.blocker-next.number}} of {{state.blocker-next.total}}:\n{{state.blocker-next.item.text}}"
       allowed: ["1", "2", "3"]
-  - id: blocker-answers
-    description: "Collects the whole batch of blocker decisions."
-    kind: script
-    op: plan.answers
-    maxVisits: 4
-    with: { from: readiness-check, prefix: q-plan-blocker- }
+  - id: blocker-record
+    description: "The plan documentation orchestrator records the blocker decision in the open batch of tracker.md; the plan files stay unchanged while the batch is open."
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    tools: [read, edit]
+    maxVisits: 100
+    parse: text
+    prompt: |
+      Step 8b of your workflow: record this blocker and the user's decision in blocker batch {{state.blocker-round.count}} in {{state.feature.feature.featureDir}}/tracker.md (project {{input.project}}). Keep the plan files unchanged while the batch is open: edit only tracker.md, delegate nothing and ask nothing.
+      Blocker {{state.blocker-next.number}} of {{state.blocker-next.total}}:
+      {{state.blocker-next.item.text}}
+      The user's decision: option {{state.ask-blocker.answer}}.
+      Record the decision in English per userDecisionRecordLanguage and userDecisionRecordStyle in .agents/skill-config.md (unset: the repository documentation language; concise translation): translate and compact faithfully, keep IDs and meaning-critical exact wording, and add no new decision.
+      Reply with one line: `recorded | <blocker number>`.
   - id: blocker-apply
     description: "Plan editor applies the decisions and records them as locked decisions."
     kind: llm
@@ -72,24 +82,24 @@ nodes:
     maxVisits: 4
     parse: text.raw
     prompt: |
-      Apply ALL these blocker decisions together to {{state.feature.featureDir}} (project {{input.project}}), refresh `## Implementation readiness`, and record them as locked decisions in tracker.md. Edit only that folder.
-      Record each decision in English per userDecisionRecordLanguage and userDecisionRecordStyle in .agents/skill-config.md (unset: the repository documentation language; concise translation): translate and compact faithfully, keep IDs and meaning-critical exact wording, and add no new decision.
-      {{state.blocker-answers.text}}
+      Apply ALL decisions of blocker batch {{state.blocker-round.count}}, as recorded in {{state.feature.feature.featureDir}}/tracker.md, together to {{state.feature.feature.featureDir}} (project {{input.project}}), refresh `## Implementation readiness`, and record them as locked decisions in tracker.md. Edit only that folder.
+      Keep each recorded decision as tracker.md states it, and add no new decision.
   - id: gate-blocker
     description: "Consistency gate after the blocker decisions."
     kind: call
     workflow: olko-plan-gate
     maxVisits: 4
-    input: { featureDir: "{{state.feature.featureDir}}" }
+    input: { featureDir: "{{state.feature.feature.featureDir}}" }
 edges:
   - { from: cleanup, to: gate-cleanup }
-  - { from: gate-cleanup, to: readiness }
-  - { from: readiness, to: readiness-check }
-  - { from: readiness-check, to: blocker-next, when: "readiness-check.count > 0", description: "blockers remain" }
-  - { from: readiness-check, to: END, description: "every plan is ready" }
+  - { from: gate-cleanup, to: blocker-round }
+  - { from: blocker-round, to: END, when: "blocker-round.count == 4", description: "three blocker rounds done" }
+  - { from: blocker-round, to: readiness, description: "fewer than three blocker rounds" }
+  - { from: readiness, to: END, when: "readiness.readiness.questions == 0", description: "every plan is ready" }
+  - { from: readiness, to: blocker-next, description: "blockers remain" }
   - { from: blocker-next, to: ask-blocker, when: "blocker-next.done == false", description: "a blocker of the batch is left" }
-  - { from: blocker-next, to: blocker-answers, description: "every blocker of the batch answered" }
-  - { from: ask-blocker, to: blocker-next }
-  - { from: blocker-answers, to: blocker-apply }
+  - { from: blocker-next, to: blocker-apply, when: "blocker-next.done == true", description: "every blocker of the batch answered" }
+  - { from: ask-blocker, to: blocker-record }
+  - { from: blocker-record, to: blocker-next }
   - { from: blocker-apply, to: gate-blocker }
-  - { from: gate-blocker, to: readiness }
+  - { from: gate-blocker, to: blocker-round }

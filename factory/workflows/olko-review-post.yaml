@@ -1,5 +1,5 @@
 name: olko-review-post
-version: 0.2.0
+version: 0.3.0
 description: "Ranks the kept findings, asks post or skip for each one, posts one PR comment per post and records the decisions in the review memory."
 source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE, steps 7 to 10: rank, report, posting and memory)"
 roles:
@@ -73,10 +73,6 @@ nodes:
       - {{.}}
       {{/state.post-one.post-one.posted}}
       End with one ```json block: {"posted": [<every finding posted before, then this one>]}
-  - id: after-post
-    description: "Branches on the memory block: learn only when it was loaded."
-    kind: script
-    op: builtin.pass
   - id: memory-save
     description: "The review orchestrator records confirmed (posted) and rejected (skipped) patterns in its memory block."
     kind: llm
@@ -98,10 +94,9 @@ nodes:
 edges:
   - { from: rank, to: next-finding }
   - { from: next-finding, to: ask-post, when: "next-finding.done == false", description: "a finding is left" }
-  - { from: next-finding, to: after-post, when: "next-finding.done == true", description: "all findings decided" }
+  - { from: next-finding, to: memory-save, when: "next-finding.done == true && memory.loaded == true", description: "all findings decided and the memory block is loaded" }
+  - { from: next-finding, to: END, description: "all findings decided and no memory block: nothing to record" }
   - { from: ask-post, to: post-one, when: 'ask-post.answer == "post"', description: "you chose post" }
   - { from: ask-post, to: next-finding, when: 'ask-post.answer == "skip"', description: "you chose skip" }
   - { from: post-one, to: next-finding }
-  - { from: after-post, to: memory-save, when: "memory.loaded == true", description: "memory block loaded" }
-  - { from: after-post, to: END, when: "memory.loaded == false", description: "no memory block: nothing to record" }
   - { from: memory-save, to: END }

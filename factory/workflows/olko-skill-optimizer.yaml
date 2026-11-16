@@ -1,5 +1,5 @@
 name: olko-skill-optimizer
-version: 0.1.0
+version: 0.2.0
 description: "Optimizes one AI instruction resource (agent or SKILL.md) for tokens and cache, or lists every agent in a directory for a cost audit (audit; the cost ranking needs the measure step). It asks for the mode and the exact path, checks the optimizer skill permission, drafts one proposal, and edits nothing until you approve that exact text. Audit changes nothing. Split moves sections into on-demand skills only after approval."
 source: "agents/opencode/olko-skill-optimizer.md"
 entry: memory-read
@@ -55,10 +55,6 @@ nodes:
       Mode: {{state.ask-mode.answer}}
       Given path: {{state.ask-target.answer}}
       Reply exactly `ok` when the path is exact and exists: one file for optimize or split, one directory for audit. Reply exactly `ask` when the path is missing, ambiguous, a pattern, a list of several resources, or a Cave Crew resource. Do not add any other text.
-  - id: after-target
-    description: "Routes by the chosen mode: audit goes to the cost ranking, optimize and split go to the skill permission check."
-    kind: script
-    op: builtin.pass
   - id: audit
     description: "Audit mode: lists every agent in the directory in directory order (the cost ranking needs the measure step) and proposes the next targets. Changes nothing."
     kind: group
@@ -101,10 +97,9 @@ edges:
   - { from: ask-mode, to: ask-target, description: "mode chosen: ask for the exact path" }
   - { from: ask-target, to: resolve-path, description: "path given: find the marketplace checkout" }
   - { from: resolve-path, to: target-check, description: "checkout found: check the path" }
-  - { from: target-check, to: after-target, when: 'target-check.target-check == "ok"', description: "the path is exact: route by mode" }
+  - { from: target-check, to: audit, when: 'target-check.target-check == "ok" && ask-mode.answer == "audit"', description: "the path is exact and audit mode chosen: rank the agents by cost" }
+  - { from: target-check, to: skill-check, when: 'target-check.target-check == "ok"', description: "the path is exact and optimize or split chosen: check the optimizer skill permission first" }
   - { from: target-check, to: ask-target, description: "the path is not exact or not allowed (any other reply): ask again" }
-  - { from: after-target, to: audit, when: 'ask-mode.answer == "audit"', description: "audit mode chosen: rank the agents by cost" }
-  - { from: after-target, to: skill-check, description: "optimize or split chosen: check the optimizer skill permission first" }
   - { from: audit, to: END, description: "audit report written; nothing changed" }
   - { from: skill-check, to: propose, when: 'skill-check.skill-check == "ok"', description: "the optimizer skill is allowed: draft the proposal" }
   - { from: skill-check, to: blocked-report, description: "blocked (any other reply): write the stop report; the project must extend this agent's skill permissions; nothing changed" }

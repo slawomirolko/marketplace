@@ -37,7 +37,7 @@ nodes:
     kind: llm
     role: verifier
     agent: olko-obsidian-knowledge-manager
-    parse: plan.consistency
+    parse: { line: [check, verdict, count, reason] }
     prompt: |
       Read only. Do not write any file, note or vault state in this step.
       Proposal to check:

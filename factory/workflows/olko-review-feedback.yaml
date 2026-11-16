@@ -1,5 +1,5 @@
 name: olko-review-feedback
-version: 0.2.0
+version: 0.3.0
 description: "FEEDBACK route: works through CI state and review comments on your own PR, decides each item with the user, implements agreed fixes and drafts replies."
 source: "agents/opencode/olko-review-orchestrator.md (FEEDBACK ROUTE) and agents/opencode/olko-review-feedback-handler.md"
 roles:
@@ -27,10 +27,10 @@ nodes:
         - {{kind}} {{id}} by {{author}} ({{url}}): {{body}}
       {{/comments}}
       {{/state.fb-check.fb-check.items}}
-      Decisions (an item without a decision is skip):
-      {{#state.fb-record.fb-record.decided}}
-      - item {{index}}: {{decision}}
-      {{/state.fb-record.fb-record.decided}}
+      Decisions, as the user's answers to q-feedback-<item index> (an item without such an answer is skip):
+      {{#each.answers}}
+      - {{key}}: {{value}}
+      {{/each.answers}}
       End with one ```json block: {"fixes": <number of fix items>, "fixItems": [<each fix item with its path, line and comments>], "replies": [<each wont-fix and question item: {"index", "path", "line", "decision", "comments"}>]}
   - id: fb-implement
     description: "Asks whether to implement the fixes now."
@@ -77,9 +77,10 @@ nodes:
       {{#state.fb-check.fb-check.items}}
       - item {{index}} {{path}}:{{line}} ({{comments.length}} comments)
       {{/state.fb-check.fb-check.items}}
-      {{#state.fb-record.fb-record.decided}}
-      - item {{index}}: {{decision}}
-      {{/state.fb-record.fb-record.decided}}
+      Decisions, as the user's answers to q-feedback-<item index>:
+      {{#each.answers}}
+      - {{key}}: {{value}}
+      {{/each.answers}}
       Implementation: {{state.fb-implement.answer}}{{^state.fb-implement.answer}}nothing to implement{{/state.fb-implement.answer}}. {{state.fb-fix.fb-fix.detail}}
       Replies posted:
       {{#state.fb-post.fb-post.posted}}

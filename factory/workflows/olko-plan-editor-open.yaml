@@ -1,12 +1,20 @@
 name: olko-plan-editor-open
-version: 0.1.0
+version: 0.2.0
 description: "Step 11: opens the plan folder in VS Code."
 source: skills/workflow/olko-plan-finalization/SKILL.md (step 11, open the plan folder in VS Code)
+roles:
+  plan-gate: medium
 entry: open
 nodes:
   - id: open
-    description: "Runs code -n on the plan folder; prints the command when it fails."
-    kind: script
-    op: plan.openEditor
+    description: "The plan documentation orchestrator runs code -n on the relative plan folder; when it fails once it prints the same command for the user."
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    tools: [bash]
+    parse: text
+    prompt: |
+      Do only step 11 of olko-plan-finalization in the project {{input.project}}: open the plan directory in Visual Studio Code with its relative path from the working directory, never an absolute path: `code -n {{state.feature.feature.featureDir}}`. Run no other command and change no file. If it fails once, print the same relative command for the user and finish: never block or retry.
+      Reply with one line: `editor | <opened|failed> | code -n {{state.feature.feature.featureDir}}`.
 edges:
   - { from: open, to: END }

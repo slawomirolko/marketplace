@@ -1,32 +1,53 @@
 name: olko-plan-audit
-version: 0.1.0
+version: 0.3.0
 description: "Steps 4 and 5: stack auditors chosen from the technologies the plan implements review the plan; verified findings are folded in and the consistency gate runs again."
 source: "agents/opencode/olko-plan-documentation-orchestrator.md (Steps 4-5: stack auditors chosen by technology, verified findings folded, consistency gate)"
 roles:
   auditor: medium
+  plan-gate: medium
   planner: high
 entry: auditors
 limits:
   maxCycleIterations: 4
 nodes:
   - id: auditors
-    description: "Chooses the stack auditors from the technologies named in implementation.md."
-    kind: script
-    op: plan.auditors
+    description: "The plan documentation orchestrator reads the implementation scope and chooses an auditor only for each technology the technical document says will be implemented."
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    tools: [read]
+    parse: { json: [agents, skipped] }
+    prompt: |
+      Do only the selection part of step 4 of your workflow: read the implementation scope of {{state.feature.feature.featureDir}}/implementation.md and its Task files (project {{input.project}}) and choose an auditor only for each technology that the technical document says will be implemented. Do not choose an auditor for a technology outside the implementation scope. Read only; change no file, delegate nothing and ask nothing.
+      Auditors, with these ids and agent names exactly:
+      - .NET: {"id": "dotnet", "agentName": "olko-dotnet-auditor"}
+      - Android/Kotlin: {"id": "mobile", "agentName": "olko-mobile-auditor"}
+      - React web: {"id": "react", "agentName": "olko-react-auditor"}
+      - React Native: {"id": "react-native", "agentName": "olko-react-native-auditor"}
+      - Python Army: {"id": "army-python", "agentName": "olko-army-python-auditor"}
+      End with one ```json block: {"agents": [<the chosen auditors>], "skipped": "<the auditors not chosen, each with its reason>"}
   - id: audit
-    description: "Selected auditors review the planned changes (read only)."
+    description: "Selected auditors review the planned changes in parallel (read only)."
     kind: llm
     role: auditor
-    agentsFrom: state.auditors.agents
-    parse: plan.findings
+    agentsFrom: state.auditors.auditors.agents
+    parse: text
     prompt: |
-      Review only: audit the architecture and style of the planned changes in {{state.feature.featureDir}}/implementation.md and its Task files (project {{input.project}}). Do not edit code, tests, configuration, AGENTS.md, plan documents, agents or skills.
-      Return exact rule and file:line evidence plus corrections to the technical document. End with one line: `findings | <none|found> | <count> | <findings, semicolon separated>`.
-  - id: audit-findings
-    description: "Counts the auditor findings."
-    kind: script
-    op: plan.findings
-    with: { from: audit }
+      Review only: audit the architecture and style of the planned changes in {{state.feature.feature.featureDir}}/implementation.md and its Task files (project {{input.project}}). Do not edit code, tests, configuration, AGENTS.md, plan documents, agents or skills.
+      Return exact rule and file:line evidence plus corrections to the technical document, or say that you found nothing.
+  - id: audit-merge
+    description: "The plan documentation orchestrator collects the auditor findings with their rule and file:line evidence."
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    parse: { json: [findings] }
+    prompt: |
+      Do only the collect part of step 4 of your workflow: collect the exact rule and file:line evidence plus the corrections to the technical document from the auditor results below. Add no finding of your own; read no file and change nothing.
+      {{#each.state.audit}}
+      auditor {{key}}:
+      {{value}}
+      {{/each.state.audit}}
+      End with one ```json block: {"findings": ["<auditor | rule | file:line | correction to the technical document>"]}
   - id: fold-audit
     description: "Plan editor folds the verified auditor findings into the plan."
     kind: llm
@@ -35,17 +56,20 @@ nodes:
     tools: [read, edit]
     parse: text.raw
     prompt: |
-      Fold only these verified auditor findings into the plan package {{state.feature.featureDir}} (project {{input.project}}); edit only that folder.
-      {{state.audit-findings.text}}
+      Fold only these verified auditor findings into the plan package {{state.feature.feature.featureDir}} (project {{input.project}}); edit only that folder.
+      {{#state.audit-merge.audit-merge.findings}}
+      - {{.}}
+      {{/state.audit-merge.audit-merge.findings}}
   - id: gate-audit
     description: "Consistency gate after the audit fixes."
     kind: call
     workflow: olko-plan-gate
-    input: { featureDir: "{{state.feature.featureDir}}" }
+    input: { featureDir: "{{state.feature.feature.featureDir}}" }
 edges:
-  - { from: auditors, to: audit }
-  - { from: audit, to: audit-findings }
-  - { from: audit-findings, to: fold-audit, when: "audit-findings.total > 0", description: "auditors found something" }
-  - { from: audit-findings, to: END, description: "no auditor finding" }
+  - { from: auditors, to: END, when: "auditors.auditors.agents == 0", description: "no stack auditor matches the planned technologies: audits skipped" }
+  - { from: auditors, to: audit, description: "auditors chosen for the planned technologies" }
+  - { from: audit, to: audit-merge }
+  - { from: audit-merge, to: fold-audit, when: "audit-merge.audit-merge.findings != 0", description: "auditors found something" }
+  - { from: audit-merge, to: END, when: "audit-merge.audit-merge.findings == 0", description: "no auditor finding" }
   - { from: fold-audit, to: gate-audit }
   - { from: gate-audit, to: END }

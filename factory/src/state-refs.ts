@@ -2,6 +2,7 @@ import Mustache from "mustache";
 import { missingField, OPERATION_CONTRACTS, PARSER_CONTRACTS } from "./contract.ts";
 import { isParseSpec, parseContract } from "./parse-spec.ts";
 import type { WorkflowSpec, WorkflowSpecNode } from "./types.ts";
+import { whenClauses } from "./workflow-yaml.ts";
 
 const CONTEXT_ROOTS = new Set(["answers", "input", "switches"]);
 const CONDITION_PATH = /^\s*([a-zA-Z0-9_./-]+)\s*(==|!=|>=|<=|>|<)/;
@@ -86,7 +87,7 @@ export function stateReferenceErrors(spec: WorkflowSpec): string[] {
         errors.push(`${spec.name}: ${node.id} ${where}: ${(error as Error).message}`);
         continue;
       }
-      for (const name of names.filter((n) => n.startsWith("state."))) report(node.id, where, name, checkPath(spec, node.scope, name.slice("state.".length)));
+      for (const name of names.map((n) => n.replace(/^each\./, "")).filter((n) => n.startsWith("state."))) report(node.id, where, name, checkPath(spec, node.scope, name.slice("state.".length)));
     }
     for (const [where, dotted] of [["agentsFrom", node.agentsFrom], ["allowedFrom", node.question?.allowedFrom]] as const) {
       if (dotted) report(node.id, where, dotted, checkPath(spec, node.scope, dotted.replace(/^state\./, "")));
@@ -94,9 +95,11 @@ export function stateReferenceErrors(spec: WorkflowSpec): string[] {
   }
   const scopeOf = new Map(spec.nodes.map((n) => [n.id, n.scope]));
   for (const edge of spec.edges) {
-    const dotted = edge.when?.match(CONDITION_PATH)?.[1];
-    if (!dotted || CONTEXT_ROOTS.has(dotted.split(".")[0]!)) continue;
-    report(edge.from, `edge to ${edge.to} (when)`, dotted, checkPath(spec, scopeOf.get(edge.from), dotted));
+    for (const clause of edge.when ? whenClauses(edge.when) : []) {
+      const dotted = clause.match(CONDITION_PATH)?.[1];
+      if (!dotted || CONTEXT_ROOTS.has(dotted.split(".")[0]!)) continue;
+      report(edge.from, `edge to ${edge.to} (when)`, dotted, checkPath(spec, scopeOf.get(edge.from), dotted));
+    }
   }
   return [...new Set(errors)];
 }

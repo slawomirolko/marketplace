@@ -1,5 +1,5 @@
 name: olko-plan-discovery
-version: 0.3.0
+version: 0.4.0
 description: "Discovery: the backlog writer drafts the Epic/Feature/Task hierarchy, the writer checks it against the locked answers (a contradiction or a repeated answered question returns it for a corrected draft), grill-with-docs presents the open questions as one batch per round and the one draft review and the revise question; the approved draft is published to the tracker when the tracker switch is on."
 source: "agents/opencode/olko-plan-documentation-orchestrator.md (DISCOVERY: backlog writer draft with question batches, one draft review, approval-gated tracker publish); skills/workflow/olko-plan-backlog-discovery/SKILL.md (question ownership gate, reconciliation after each answer batch, approval-gated publish)"
 roles:
@@ -15,20 +15,37 @@ nodes:
     role: backlog
     agent: olko-feature-backlog-writer
     maxVisits: 20
-    parse: plan.draft
+    parse: { json: [questions, decisions, feature, tasks, hierarchy] }
     prompt: |
       Mode: draft. Do not write to the tracker. Idea: {{input.idea}}
       Project: {{input.project}} (use its repository evidence to establish what exists and what should change).
-      Answers so far (locked decisions): {{state.draft-check.answered}}
+      Locked decisions so far:
+      {{#state.draft.draft.decisions}}
+      - {{.}}
+      {{/state.draft.draft.decisions}}
+      {{^state.draft.draft.decisions}}
+      none yet
+      {{/state.draft.draft.decisions}}
+      {{#state.ask-questions.answer}}
+      The user's latest answer to the question batch (it can repeat a decision already locked above):
+      {{state.ask-questions.answer}}
+      {{/state.ask-questions.answer}}
+      {{#state.ask-revise.answer}}
+      The user's latest requested change to the draft (it can repeat a decision already locked above):
+      {{state.ask-revise.answer}}
+      {{/state.ask-revise.answer}}
+      {{#state.draft-consistency.draft-consistency.detail}}
+      The last consistency check of your draft found: {{state.draft-consistency.draft-consistency.detail}}
+      {{/state.draft-consistency.draft-consistency.detail}}
 
-      Reconcile before returning: drop every question already answered above; if the draft contradicts a locked decision, correct the draft to match it. Never turn a contradiction into a new choice for the user.
+      Reconcile before returning: add each new answer to the locked decisions once; drop every question already answered; if the draft contradicts a locked decision, correct the draft to match it. Never turn a contradiction into a new choice for the user.
       When decisions remain open, return all currently answerable questions together. When the draft is ready, return no questions.
       Record decisions per userDecisionRecordLanguage and userDecisionRecordStyle in .agents/skill-config.md in {{input.project}} (unset: the repository documentation language; concise translation): translate and compact faithfully, keep IDs and meaning-critical exact wording, add no new decision.
-      End with one ```json block: {"questions": ["<question>"], "feature": {"title": "", "goal": "", "criteria": [""]}, "tasks": [{"id": "T1", "title": "", "criteria": [""]}], "text": "<the Epic/Feature/Task hierarchy as markdown>"}
-  - id: draft-check
-    description: "Counts the draft round and lists the open draft questions as one numbered batch (empty when none are left). The edge after it tests that list directly, so there is no round limit: every open question is put to the user until answered or closed."
+      End with one ```json block: {"questions": ["<question>"], "decisions": ["<every locked decision>"], "feature": {"title": "", "goal": "", "criteria": [""]}, "tasks": [{"id": "T1", "title": "", "criteria": [""]}], "hierarchy": "<the Epic/Feature/Task hierarchy as markdown>"}
+  - id: draft-round
+    description: "Counts the draft rounds, so every question to the user has its own id. There is no round limit: every open question is put to the user until answered or closed."
     kind: script
-    op: plan.draftCheck
+    op: builtin.count
     maxVisits: 20
   - id: draft-consistency
     description: "Backlog writer checks the draft against the locked answers, read only: a contradicted locked decision or an answered question still listed fails the check and sends the draft back for correction."
@@ -36,12 +53,19 @@ nodes:
     role: backlog
     agent: olko-feature-backlog-writer
     maxVisits: 20
-    parse: plan.consistency
+    parse: { line: [check, verdict, count, detail] }
     prompt: |
       Mode: consistency check. Read only: do not write to the tracker or any file, do not ask the user. Idea: {{input.idea}}
-      Locked decisions (answers so far): {{state.draft-check.answered}}
-      Draft: {{state.draft-check.draft.text}}
-      Open questions listed in the draft: {{state.draft-check.questions}}
+      Locked decisions:
+      {{#state.draft.draft.decisions}}
+      - {{.}}
+      {{/state.draft.draft.decisions}}
+      Draft:
+      {{state.draft.draft.hierarchy}}
+      Open questions listed in the draft:
+      {{#state.draft.draft.questions}}
+      - {{.}}
+      {{/state.draft.draft.questions}}
 
       Check two things: (1) the draft contradicts no locked decision; (2) no question already answered in the locked decisions is still listed as open.
       End with exactly one line: `consistency | <pass|fail> | <number of contradictions and repeated questions> | <items, semicolon separated, or none>`.
@@ -60,10 +84,16 @@ nodes:
     maxVisits: 20
     parse: text.raw
     prompt: |
-      Present the reconciled batch of open draft questions for the Epic/Feature/Task draft of the project {{input.project}}, with the full plan context (idea: {{input.idea}}) and the locked answers: {{state.draft-check.answered}}. Draft:
-      {{state.draft-check.draft.text}}
+      Present the reconciled batch of open draft questions for the Epic/Feature/Task draft of the project {{input.project}}, with the full plan context (idea: {{input.idea}}) and the locked answers:
+      {{#state.draft.draft.decisions}}
+      - {{.}}
+      {{/state.draft.draft.decisions}}
+      Draft:
+      {{state.draft.draft.hierarchy}}
       Questions, all together:
-      {{state.draft-check.questions}}
+      {{#state.draft.draft.questions}}
+      - {{.}}
+      {{/state.draft.draft.questions}}
       Return the question text only; the workflow puts it to the user. Do not add questions and do not change any file.
       Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the questions in that language, concisely.
       If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
@@ -72,7 +102,7 @@ nodes:
     kind: interrupt
     maxVisits: 20
     question:
-      id: "q-plan-questions-{{state.draft-check.round}}"
+      id: "q-plan-questions-{{state.draft-round.count}}"
       text: "{{state.questions-grill.questions-grill}}"
   - id: review-grill
     description: "grill-with-docs presents the one content review of the draft (approve or revise) in the user's response language; it asks nothing itself."
@@ -84,8 +114,8 @@ nodes:
     maxVisits: 3
     parse: text.raw
     prompt: |
-      Present the one content review of this draft for the project {{input.project}} (idea: {{input.idea}}; locked answers: {{state.draft-check.answered}}): approve it, or revise it. Draft:
-      {{state.draft-check.draft.text}}
+      Present the one content review of this draft for the project {{input.project}} (idea: {{input.idea}}; locked answers: {{#state.draft.draft.decisions}}{{.}}; {{/state.draft.draft.decisions}}): approve it, or revise it. Draft:
+      {{state.draft.draft.hierarchy}}
       Return the question text only, with the choices approve and revise; the workflow puts it to the user. Do not change any file.
       Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely.
       If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
@@ -94,7 +124,7 @@ nodes:
     kind: interrupt
     maxVisits: 3
     question:
-      id: "q-plan-draft-review-{{state.draft-check.round}}"
+      id: "q-plan-draft-review-{{state.draft-round.count}}"
       text: "{{state.review-grill.review-grill}}"
       allowed: [approve, revise]
   - id: revise-grill
@@ -107,8 +137,8 @@ nodes:
     maxVisits: 3
     parse: text.raw
     prompt: |
-      Present the question: what should change in this draft for the project {{input.project}} (idea: {{input.idea}}; locked answers: {{state.draft-check.answered}})? Draft:
-      {{state.draft-check.draft.text}}
+      Present the question: what should change in this draft for the project {{input.project}} (idea: {{input.idea}}; locked answers: {{#state.draft.draft.decisions}}{{.}}; {{/state.draft.draft.decisions}})? Draft:
+      {{state.draft.draft.hierarchy}}
       Return the question text only; the workflow puts it to the user. Do not change any file.
       Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely.
       If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
@@ -117,7 +147,7 @@ nodes:
     kind: interrupt
     maxVisits: 20
     question:
-      id: "q-plan-revise-{{state.draft-check.round}}"
+      id: "q-plan-revise-{{state.draft-round.count}}"
       text: "{{state.revise-grill.revise-grill}}"
   - id: tracker-publish
     description: "Publishes the approved draft to the tracker after one more approval; skipped when switches.tracker is off."
@@ -129,10 +159,10 @@ nodes:
     kind: script
     op: builtin.pass
 edges:
-  - { from: draft, to: draft-check }
-  - { from: draft-check, to: draft-consistency, description: "the round is counted: check the draft against the locked answers" }
-  - { from: draft-consistency, to: draft, when: "draft-consistency.draft-consistency.pass == false", description: "the draft contradicts a locked decision or still lists an answered question: the writer returns a corrected draft" }
-  - { from: draft-consistency, to: questions-grill, when: 'draft-check.questions != ""', description: "consistent and the writer still has open questions: grill-with-docs presents the batch" }
+  - { from: draft, to: draft-round }
+  - { from: draft-round, to: draft-consistency, description: "the round is counted: check the draft against the locked answers" }
+  - { from: draft-consistency, to: draft, when: 'draft-consistency.draft-consistency.verdict == "fail"', description: "the draft contradicts a locked decision or still lists an answered question: the writer returns a corrected draft" }
+  - { from: draft-consistency, to: questions-grill, when: "draft.draft.questions != 0", description: "consistent and the writer still has open questions: grill-with-docs presents the batch" }
   - { from: draft-consistency, to: review-grill, description: "consistent and no open question left: grill-with-docs presents the draft review" }
   - { from: questions-grill, to: blocked, when: 'questions-grill.questions-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded: stop" }
   - { from: questions-grill, to: ask-questions, description: "grill-with-docs composed the batch: put it to the user" }
