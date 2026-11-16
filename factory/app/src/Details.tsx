@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useViewer } from "./context.ts";
-import { costOf, failureOf, formatAmount, formatTokens, formatUsd, ledgerOf, runFailure, tierOf } from "./tree.ts";
+import { costOf, failureOf, formatAmount, formatDuration, formatTokens, formatUsd, itemPasses, ledgerOf, runFailure, tierOf, timeSpent } from "./tree.ts";
 import type { Item, LedgerRecord, TeamItem, Workflow, WorkflowAgent, WorkflowItem } from "./types.ts";
 
 function kindLabel(item: WorkflowItem): string {
@@ -61,6 +61,54 @@ function LedgerTable({ records }: { records: LedgerRecord[] }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+function PassTimes({ item }: { item: WorkflowItem }) {
+  const { run } = useViewer();
+  const passes = itemPasses(item, run);
+  if (!run || passes.length === 0) return null;
+  const total = timeSpent(item, run);
+  const waited = passes.reduce((s, p) => s + p.waitMs, 0);
+  if (item.kind === "subgraph") {
+    return (
+      <section>
+        <h3>Time</h3>
+        <Row label="Total" value={`${formatDuration(total)} over ${passes.length} step run${passes.length === 1 ? "" : "s"} inside`} />
+        {waited > 0 && <Row label="Waiting for answers" value={`${formatDuration(waited)} (not counted)`} />}
+      </section>
+    );
+  }
+  return (
+    <section>
+      <h3>Time</h3>
+      <Row label="Total" value={formatDuration(total)} />
+      <div className="table-wrap" tabIndex={0}>
+        <table>
+          <thead>
+            <tr>
+              <th>Pass</th>
+              <th>Started</th>
+              <th>Status</th>
+              <th>Time</th>
+              {waited > 0 && <th>Waiting for answer</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {passes.map((p, i) => (
+              <tr key={`${p.startedAt}|${i}`}>
+                <td>{p.visit ?? i + 1}</td>
+                <td title={p.startedAt}>{new Date(p.startedAt).toLocaleTimeString([], { hour12: false })}</td>
+                <td>{p.status}</td>
+                <td>{formatDuration(p.durationMs)}</td>
+                {waited > 0 && <td>{p.waitMs ? formatDuration(p.waitMs) : "—"}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {waited > 0 && <p className="muted">Time waiting for a user answer is not counted in the pass time.</p>}
+    </section>
   );
 }
 
@@ -270,6 +318,7 @@ export function Details({ item }: { item: Item | null }) {
       {cost && <Row label="Cache tokens (read + write)" value={num(cost.cacheTokens ?? 0)} />}
       {cost && <Row label="Steps" value={cost.steps} />}
       {cost && <Row label="Cost source" value={cost.costSource} />}
+      <PassTimes item={item} />
       {question && (
         <section>
           <h3>Question to the user</h3>

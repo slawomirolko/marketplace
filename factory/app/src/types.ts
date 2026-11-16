@@ -184,6 +184,8 @@ export interface RunEvent {
   visit?: number;
   error?: unknown;
   result?: string;
+  level?: string;
+  questionId?: string;
 }
 
 export interface RunConfig {
@@ -295,6 +297,7 @@ export interface RunIndexEntry {
   model: string | null;
   failure: string | null;
   runs: number | null;
+  timeMs: number | null;
 }
 
 export type RunIndex = Map<string, RunIndexEntry>;

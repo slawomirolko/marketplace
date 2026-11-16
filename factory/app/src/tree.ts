@@ -236,7 +236,7 @@ export function buildRunIndex(level: Level, config: FactoryConfig | null, report
   for (const item of allItems(level)) {
     const cost = costOf(item, report);
     const tier = tierOf(item, config, report);
-    index.set(item.key, { cost, tier, model: cost?.model ?? (tier ? report?.tierModels?.[tier] ?? null : null), failure: failureOf(item, run), runs: runCount(item, run) });
+    index.set(item.key, { cost, tier, model: cost?.model ?? (tier ? report?.tierModels?.[tier] ?? null : null), failure: failureOf(item, run), runs: runCount(item, run), timeMs: timeSpent(item, run) });
   }
   return index;
 }
@@ -263,6 +263,14 @@ export function formatUsd(cost: Cost | null | undefined): string {
   return formatAmount(cost.costUsd, cost);
 }
 
+type WorkflowStepItem = Exclude<Item, { kind: "terminal" } | { kind: "agent" }>;
+
+function coversPath(item: WorkflowStepItem): (path: string) => boolean {
+  const keys = item.kind === "subgraph" ? descendantKeys(item) : [item.key];
+  const inside = item.kind === "subgraph";
+  return (path) => keys.some((k) => path === k || (inside && path.startsWith(`${k}/`)));
+}
+
 export function runCount(item: Item, run: RunData | null): number | null {
   if (!run || item.kind === "terminal") return null;
   if (item.kind === "agent") {
@@ -271,9 +279,8 @@ export function runCount(item: Item, run: RunData | null): number | null {
     const id = item.agent.id;
     return runCalls(run).filter((c) => c.node === item.nodePath && c.agent === id).length;
   }
-  const keys = item.kind === "subgraph" ? descendantKeys(item) : [item.key];
-  const inside = item.kind === "subgraph";
-  return run.events.filter((e) => e.type === "node_started" && typeof e.node === "string" && keys.some((k) => e.node === k || (inside && e.node!.startsWith(`${k}/`)))).length;
+  const covers = coversPath(item);
+  return run.events.filter((e) => e.type === "node_started" && typeof e.node === "string" && covers(e.node)).length;
 }
 
 export interface RunCall {
@@ -286,23 +293,31 @@ export interface RunCall {
   costUsd: number | null;
   records: number;
   durationMs: number | null;
+  waitMs: number;
 }
 
-interface OpenAgent {
+export interface PassAgent {
   id: string;
   startedAt: string;
   endedAt: string | null;
   status: string;
+  durationMs: number | null;
+  waitMs: number;
 }
 
-interface OpenCall {
+/** One visit of one node: from its node_started to its completed, failed or skipped event. */
+export interface RunPass {
   node: string;
   visit: number | null;
   startedAt: string;
   endedAt: string | null;
   status: string;
-  agents: OpenAgent[];
+  agents: PassAgent[];
   records: LedgerRecord[];
+  /** Active time: start to end minus the time spent waiting for a user answer; the ledger durationMs sum when the pass has no end. */
+  durationMs: number | null;
+  /** Time inside the pass spent waiting for a user answer (a question or a budget pause). */
+  waitMs: number;
 }
 
 function endStatus(type: string, result: unknown): string {
@@ -318,62 +333,132 @@ function elapsed(from: string, to: string | null): number | null {
   return Number.isFinite(ms) && ms >= 0 ? ms : null;
 }
 
+interface Span {
+  from: number;
+  to: number;
+}
+
+/** Spans in which the run stood still for the user: a question (needs_input) or a budget pause, each up to its run_resumed. */
+function userWaits(events: RunData["events"]): Span[] {
+  const spans: Span[] = [];
+  let from: number | null = null;
+  for (const e of events) {
+    if (e.type === "needs_input" || (e.type === "budget_threshold" && e.level === "pause")) from ??= Date.parse(e.at);
+    else if (e.type === "run_resumed" && from !== null) {
+      spans.push({ from, to: Date.parse(e.at) });
+      from = null;
+    }
+  }
+  return spans;
+}
+
+function activeTime(from: string, to: string | null, waits: Span[]): { durationMs: number | null; waitMs: number } {
+  const total = elapsed(from, to);
+  if (total === null) return { durationMs: null, waitMs: 0 };
+  const start = Date.parse(from);
+  const end = start + total;
+  const waitMs = waits.reduce((s, w) => s + Math.max(0, Math.min(end, w.to) - Math.max(start, w.from)), 0);
+  return { durationMs: total - waitMs, waitMs };
+}
+
 function summed(records: LedgerRecord[]): { costUsd: number | null; durationMs: number | null } {
   const costUsd = records.some((r) => r.costUsd == null) ? null : Math.round(records.reduce((s, r) => s + (r.costUsd ?? 0), 0) * 1e6) / 1e6;
   const timed = records.filter((r) => typeof r.durationMs === "number");
   return { costUsd, durationMs: timed.length ? timed.reduce((s, r) => s + (r.durationMs ?? 0), 0) : null };
 }
 
-export function runCalls(run: RunData | null): RunCall[] {
+const PASS_END = new Set(["node_completed", "node_failed", "node_skipped", "supervisor_completed", "supervisor_failed"]);
+
+export function runPasses(run: RunData | null): RunPass[] {
   if (!run) return [];
-  const calls: OpenCall[] = [];
-  const open = new Map<string, OpenCall>();
+  const passes: RunPass[] = [];
+  const open = new Map<string, RunPass>();
   for (const e of run.events) {
     if (typeof e.node !== "string") continue;
     if (e.type === "node_started" || e.type === "supervisor_started") {
-      const call: OpenCall = { node: e.node, visit: typeof e.visit === "number" ? e.visit : null, startedAt: e.at, endedAt: null, status: "running", agents: [], records: [] };
-      calls.push(call);
-      open.set(e.node, call);
+      const pass: RunPass = { node: e.node, visit: typeof e.visit === "number" ? e.visit : null, startedAt: e.at, endedAt: null, status: "running", agents: [], records: [], durationMs: null, waitMs: 0 };
+      passes.push(pass);
+      open.set(e.node, pass);
       continue;
     }
-    const call = open.get(e.node);
-    if (!call) continue;
-    if (e.type === "agent_started" && e.agentId) call.agents.push({ id: e.agentId, startedAt: e.at, endedAt: null, status: "running" });
-    else if (e.type === "agent_completed" || e.type === "agent_failed") {
-      const agent = call.agents.findLast((a) => a.id === e.agentId && a.endedAt === null);
+    const pass = open.get(e.node);
+    if (!pass) continue;
+    if ((e.type === "agent_started" || e.type === "work_offered") && e.agentId) {
+      if (!pass.agents.some((a) => a.id === e.agentId && a.endedAt === null)) pass.agents.push({ id: e.agentId, startedAt: e.at, endedAt: null, status: "running", durationMs: null, waitMs: 0 });
+    } else if (e.type === "agent_completed" || e.type === "agent_failed") {
+      const agent = pass.agents.findLast((a) => a.id === e.agentId && a.endedAt === null);
       if (agent) Object.assign(agent, { endedAt: e.at, status: endStatus(e.type, null) });
-    } else if (e.type === "node_completed" || e.type === "node_failed" || e.type === "node_skipped" || e.type === "supervisor_completed" || e.type === "supervisor_failed") {
-      Object.assign(call, { endedAt: e.at, status: endStatus(e.type, e.result) });
+    } else if (PASS_END.has(e.type)) {
+      Object.assign(pass, { endedAt: e.at, status: endStatus(e.type, e.result) });
       open.delete(e.node);
     }
   }
   for (const record of run.ledger) {
-    const call = calls.findLast((c) => c.node === record.nodePath && c.startedAt <= record.at) ?? calls.find((c) => c.node === record.nodePath);
-    call?.records.push(record);
+    const pass = passes.findLast((p) => p.node === record.nodePath && p.startedAt <= record.at) ?? passes.find((p) => p.node === record.nodePath);
+    pass?.records.push(record);
   }
+  const waits = userWaits(run.events);
+  for (const pass of passes) {
+    const time = activeTime(pass.startedAt, pass.endedAt, waits);
+    pass.durationMs = time.durationMs ?? summed(pass.records).durationMs;
+    pass.waitMs = time.waitMs;
+    for (const agent of pass.agents) Object.assign(agent, activeTime(agent.startedAt, agent.endedAt, waits));
+  }
+  return passes;
+}
+
+export function runCalls(run: RunData | null): RunCall[] {
+  if (!run) return [];
   const unfinished = LIVE_STATUSES.includes(run.status) ? "running" : "unfinished";
-  return calls.flatMap((call): RunCall[] => {
+  return runPasses(run).flatMap((pass): RunCall[] => {
     const status = (s: string) => (s === "running" ? unfinished : s);
-    const recorded = [...new Set(call.records.map((r) => r.agentId).filter((id): id is string => Boolean(id)))];
-    if (call.agents.length === 0 && recorded.length > 1) {
+    const recorded = [...new Set(pass.records.map((r) => r.agentId).filter((id): id is string => Boolean(id)))];
+    if (pass.agents.length === 0 && recorded.length > 1) {
       return recorded.map((id) => {
-        const records = call.records.filter((r) => r.agentId === id);
+        const records = pass.records.filter((r) => r.agentId === id);
         const total = summed(records);
-        return { node: call.node, agent: id, agentName: records.find((r) => r.agentName)?.agentName ?? null, visit: call.visit, status: status(call.status), startedAt: call.startedAt, costUsd: total.costUsd, records: records.length, durationMs: total.durationMs };
+        return { node: pass.node, agent: id, agentName: records.find((r) => r.agentName)?.agentName ?? null, visit: pass.visit, status: status(pass.status), startedAt: pass.startedAt, costUsd: total.costUsd, records: records.length, durationMs: total.durationMs, waitMs: 0 };
       });
     }
-    const agentIds = new Set(call.agents.map((a) => a.id));
+    const agentIds = new Set(pass.agents.map((a) => a.id));
     if (agentIds.size > 1) {
-      return call.agents.map((a) => {
-        const records = call.records.filter((r) => r.agentId === a.id);
+      return pass.agents.map((a) => {
+        const records = pass.records.filter((r) => r.agentId === a.id);
         const total = summed(records);
-        return { node: call.node, agent: a.id, agentName: records.find((r) => r.agentName)?.agentName ?? null, visit: call.visit, status: status(a.status), startedAt: a.startedAt, costUsd: total.costUsd, records: records.length, durationMs: elapsed(a.startedAt, a.endedAt) ?? total.durationMs };
+        return { node: pass.node, agent: a.id, agentName: records.find((r) => r.agentName)?.agentName ?? null, visit: pass.visit, status: status(a.status), startedAt: a.startedAt, costUsd: total.costUsd, records: records.length, durationMs: a.durationMs ?? total.durationMs, waitMs: a.waitMs };
       });
     }
-    const total = summed(call.records);
-    const agent = call.agents[0]?.id ?? call.records.find((r) => r.agentId)?.agentId ?? null;
-    return [{ node: call.node, agent, agentName: call.records.find((r) => r.agentName)?.agentName ?? null, visit: call.visit, status: status(call.status), startedAt: call.startedAt, costUsd: total.costUsd, records: call.records.length, durationMs: elapsed(call.startedAt, call.endedAt) ?? total.durationMs }];
+    const total = summed(pass.records);
+    const agent = pass.agents[0]?.id ?? pass.records.find((r) => r.agentId)?.agentId ?? null;
+    return [{ node: pass.node, agent, agentName: pass.records.find((r) => r.agentName)?.agentName ?? null, visit: pass.visit, status: status(pass.status), startedAt: pass.startedAt, costUsd: total.costUsd, records: pass.records.length, durationMs: pass.durationMs, waitMs: pass.waitMs }];
   });
+}
+
+export interface TimedPass {
+  node: string;
+  visit: number | null;
+  startedAt: string;
+  status: string;
+  durationMs: number | null;
+  waitMs: number;
+}
+
+/**
+ * The timed passes behind a graph node: an agent's own calls, a step's or team's visits
+ * (a team visit is wall time, so its parallel agents are not added up), and for a group
+ * every step visit inside it.
+ */
+export function itemPasses(item: Item, run: RunData | null): TimedPass[] {
+  if (!run || item.kind === "terminal") return [];
+  if (item.kind === "agent") return runCalls(run).filter((c) => c.node === item.nodePath && c.agent === item.agent.id);
+  const covers = coversPath(item);
+  return runPasses(run).filter((p) => covers(p.node));
+}
+
+/** Total active time of a graph node in a run: the sum of its passes; null when no pass has a known duration. */
+export function timeSpent(item: Item, run: RunData | null): number | null {
+  const known = itemPasses(item, run).map((p) => p.durationMs).filter((ms): ms is number => ms !== null);
+  return known.length ? known.reduce((s, ms) => s + ms, 0) : null;
 }
 
 export function findItem(level: Level, key: string): Item | null {
@@ -398,7 +483,12 @@ export function ancestorKeys(level: Level, key: string): string[] {
 
 export function formatDuration(ms: number | null): string {
   if (ms == null) return "—";
-  if (ms < 1000) return `${ms} ms`;
-  const s = Math.round(ms / 1000);
-  return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`;
+  const whole = Math.round(ms);
+  if (whole < 1000) return `${whole}ms`;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const s = Math.round(whole / 1000);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${pad(s % 60)}s`;
+  const m = Math.round(s / 60);
+  return `${Math.floor(m / 60)}h ${pad(m % 60)}m`;
 }

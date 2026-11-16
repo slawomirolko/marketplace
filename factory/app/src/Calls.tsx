@@ -60,7 +60,7 @@ export function CallsList({ selectedKey, teamNodes, onSelect }: { selectedKey: s
                   <td>{call.visit ?? "—"}</td>
                   <td>{call.status}</td>
                   <td className={call.costUsd == null && call.records > 0 ? "cost-unknown" : ""}>{call.records ? cost(call.costUsd) : "—"}</td>
-                  <td>{formatDuration(call.durationMs)}</td>
+                  <td title={call.waitMs ? `plus ${formatDuration(call.waitMs)} waiting for a user answer, not counted` : undefined}>{formatDuration(call.durationMs)}{call.waitMs ? " ⏸" : ""}</td>
                 </tr>
               );
             })}

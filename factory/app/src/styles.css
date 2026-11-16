@@ -134,6 +134,8 @@ select hr { border: none; border-top: 3px solid var(--fg); margin: 6px 0; }
 .show-numbers { display: inline-flex; gap: 6px; align-items: center; font-size: 0.9em; }
 .run-badge { position: absolute; top: -10px; right: -10px; z-index: 1; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; display: grid; place-items: center; background: #ffffff; color: #1b1b1f; border: 1.5px solid var(--neutral-line); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); font-size: 12px; font-weight: 700; line-height: 1; pointer-events: none; }
 .run-badge-sum { border-style: dashed; }
+.run-badge:has(.run-time) { display: flex; gap: 5px; align-items: center; }
+.run-time { font-weight: 500; padding-left: 5px; border-left: 1px solid var(--neutral-line); white-space: nowrap; }
 
 .tabs { display: flex; gap: 4px; margin: -4px 0 10px; border-bottom: 1px solid var(--line); }
 .tabs button { border: 1px solid transparent; border-bottom: 0; background: transparent; color: var(--muted); padding: 5px 12px; border-radius: 6px 6px 0 0; cursor: pointer; font: inherit; margin-bottom: -1px; }

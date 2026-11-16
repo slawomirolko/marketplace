@@ -331,8 +331,65 @@ test("run calls: every visit in time order with status, ledger cost and duration
   assert.deepEqual(runCalls(null), []);
 });
 
+test("time spent: passes add up, user waits are left out, a team counts wall time and a group sums its steps", async () => {
+  const { itemPasses, runCalls, timeSpent } = await import("../app/src/tree.ts");
+  const at = (s: number) => new Date(Date.UTC(2026, 0, 1) + s * 1000).toISOString();
+  const run: RunData = {
+    ...runWithEvents([
+      { at: at(0), type: "node_started", node: "w/fix", visit: 1 },
+      { at: at(0), type: "work_offered", node: "w/fix", agentId: "fix" },
+      { at: at(30), type: "agent_completed", node: "w/fix", agentId: "fix" },
+      { at: at(30), type: "node_completed", node: "w/fix" },
+      { at: at(30), type: "node_started", node: "w/ask", visit: 1 },
+      { at: at(30), type: "needs_input", node: "w/ask", questionId: "q" },
+      { at: at(630), type: "run_resumed" },
+      { at: at(631), type: "node_completed", node: "w/ask", result: "answered" },
+      { at: at(631), type: "node_started", node: "w/fix", visit: 2 },
+      { at: at(631), type: "work_offered", node: "w/fix", agentId: "fix" },
+      { at: at(651), type: "agent_completed", node: "w/fix", agentId: "fix" },
+      { at: at(651), type: "node_completed", node: "w/fix" },
+      { at: at(651), type: "node_started", node: "w/build/compile", visit: 1 },
+      { at: at(661), type: "node_completed", node: "w/build/compile" },
+      { at: at(661), type: "node_started", node: "w/review", visit: 1 },
+      { at: at(661), type: "work_offered", node: "w/review", agentId: "docs" },
+      { at: at(661), type: "work_offered", node: "w/review", agentId: "code" },
+      { at: at(701), type: "agent_completed", node: "w/review", agentId: "docs" },
+      { at: at(711), type: "agent_completed", node: "w/review", agentId: "code" },
+      { at: at(711), type: "node_completed", node: "w/review" },
+      { at: at(711), type: "node_started", node: "w/script", visit: 1 },
+    ]),
+    ledger: [ledgerRecord("w/script", at(711), 0, { kind: "script", durationMs: 840 })],
+  };
+  const step = (key: string): Item => ({ key, kind: "step", node: { id: key.split("/").at(-1) ?? key, kind: "llm" } });
+  const reviewNode = { id: "review", kind: "llm" };
+  const agent = (id: string): Item => ({ key: `w/review#${id}`, kind: "agent", node: reviewNode, agent: { id, role: undefined }, nodePath: "w/review" });
+  const team: Item = { key: "w/review", kind: "team", node: reviewNode, inner: { items: [], edges: [] } };
+  const group: Item = { key: "w/build", kind: "subgraph", node: { id: "build", kind: "subgraph", workflow: "b" }, inner: { items: [step("w/build/compile")], edges: [] } };
+  assert.equal(timeSpent(step("w/fix"), run), 50_000, "two passes of 30 s and 20 s add up");
+  assert.deepEqual(itemPasses(step("w/fix"), run).map((p) => [p.visit, p.durationMs]), [[1, 30_000], [2, 20_000]], "each pass keeps its own duration");
+  assert.equal(timeSpent(step("w/ask"), run), 1000, "the 10 minutes waiting for the answer are not step time");
+  assert.equal(itemPasses(step("w/ask"), run)[0]?.waitMs, 600_000, "the wait is kept apart");
+  assert.equal(timeSpent(team, run), 50_000, "parallel agents: the team shows wall time, not the sum of its agents");
+  assert.equal(timeSpent(agent("docs"), run), 40_000, "an agent runs from work_offered to agent_completed");
+  assert.equal(timeSpent(agent("code"), run), 50_000);
+  assert.equal(timeSpent(group, run), 10_000, "a group sums the steps inside it");
+  assert.equal(timeSpent(step("w/script"), run), 840, "an open pass falls back to the ledger durationMs");
+  assert.equal(timeSpent(step("w/plan"), run), null, "a step that never ran has no time");
+  assert.equal(timeSpent({ key: START_KEY, kind: "terminal", label: "start" }, run), null);
+  assert.equal(timeSpent(step("w/fix"), null), null);
+  assert.deepEqual(runCalls(run).filter((c) => c.node === "w/review").map((c) => [c.agent, c.durationMs]), [["docs", 40_000], ["code", 50_000]], "the calls tab gets the same per-agent times");
+});
+
+test("durations read as 840ms, 3m 12s or 1h 05m", async () => {
+  const { formatDuration } = await import("../app/src/tree.ts");
+  assert.deepEqual(
+    [null, 0, 840, 999, 1000, 59_400, 59_600, 192_000, 3_599_000, 3_900_000, 36_000_000].map(formatDuration),
+    ["—", "0ms", "840ms", "999ms", "1s", "59s", "1m 00s", "3m 12s", "59m 59s", "1h 05m", "10h 00m"],
+  );
+});
+
 test("demo run: every ledger record lands in one call and the index carries the run counts", async () => {
-  const { allItems, ancestorKeys, buildRunIndex, findItem, runCalls, runCount } = await import("../app/src/tree.ts");
+  const { allItems, ancestorKeys, buildRunIndex, findItem, runCalls, runCount, timeSpent } = await import("../app/src/tree.ts");
   const { data, detail } = await demoRun();
   const calls = runCalls(detail.run);
   assert.equal(calls.reduce((s, c) => s + c.records, 0), detail.run.ledger.length, "no ledger record is lost or counted twice");
@@ -340,6 +397,7 @@ test("demo run: every ledger record lands in one call and the index carries the 
   const level = buildLevel(data.workflows(), "hello", "hello", ["hello"], detail.report);
   const index = buildRunIndex(level, data.config(), detail.report, detail.run);
   for (const item of allItems(level)) assert.equal(index.get(item.key)?.runs, runCount(item, detail.run), `run count of ${item.key}`);
+  for (const item of allItems(level)) assert.equal(index.get(item.key)?.timeMs, timeSpent(item, detail.run), `time of ${item.key}`);
   assert.equal(index.get("hello/plan")?.runs, 1);
   assert.equal(index.get("hello/review#docs")?.runs, 1, "an agent with ledger records but no agent_started event still counts its visit");
   assert.deepEqual(calls.filter((c) => c.node === "hello/review").map((c) => c.agent).sort(), ["docs", "security", "style", "tests"], "a team visit lists one call per agent");

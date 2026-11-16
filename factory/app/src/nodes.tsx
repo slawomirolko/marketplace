@@ -2,10 +2,10 @@ import { useEffect, useRef } from "react";
 import { Handle, Position } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import { useViewer } from "./context.ts";
-import { formatTokens, formatUsd, isDisabled, isGroup, isLive, ranIn } from "./tree.ts";
+import { formatDuration, formatTokens, formatUsd, isDisabled, isGroup, isLive, ranIn } from "./tree.ts";
 import type { CardFlowNode, ClusterFlowNode, Item, RunIndexEntry, RunReport, TerminalFlowNode } from "./types.ts";
 
-const EMPTY_ENTRY: RunIndexEntry = { cost: null, tier: null, model: null, failure: null, runs: null };
+const EMPTY_ENTRY: RunIndexEntry = { cost: null, tier: null, model: null, failure: null, runs: null, timeMs: null };
 
 function useEntry(item: Item): RunIndexEntry {
   return useViewer().index?.get(item.key) ?? EMPTY_ENTRY;
@@ -111,10 +111,17 @@ function useLive(item: Item): { className: string; label: string | null } {
 
 function RunBadge({ item }: { item: Item }) {
   const { showCounts, mode } = useViewer();
-  const { runs } = useEntry(item);
+  const { runs, timeMs } = useEntry(item);
   if (!showCounts || mode !== "runs" || runs === null) return null;
-  const label = item.kind === "subgraph" ? `${runs} step runs inside this group` : `ran ${runs} time${runs === 1 ? "" : "s"} in this run`;
-  return <span className={`run-badge${item.kind === "subgraph" ? " run-badge-sum" : ""}`} title={label} aria-label={label}>{runs}</span>;
+  const time = timeMs === null ? null : formatDuration(timeMs);
+  const counted = item.kind === "subgraph" ? `${runs} step runs inside this group` : `ran ${runs} time${runs === 1 ? "" : "s"} in this run`;
+  const label = time === null ? counted : `${counted}, ${time} in total`;
+  return (
+    <span className={`run-badge${item.kind === "subgraph" ? " run-badge-sum" : ""}`} title={label} aria-label={label}>
+      {runs}
+      {time !== null && <span className="run-time">{time}</span>}
+    </span>
+  );
 }
 
 export function CardNode({ data, selected }: NodeProps<CardFlowNode>) {
