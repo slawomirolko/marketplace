@@ -3,27 +3,8 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 const line = z.object({ verdict: z.string(), detail: z.string(), fields: z.array(z.string()), text: z.string() });
-const list = z.array(z.unknown());
 
 export const PARSER_CONTRACTS: Record<string, z.ZodType> = {
-  "text.raw": z.string(),
-  "sync.comparison": z.object({ classification: z.string(), marketplaceVersion: z.string(), bump: z.string(), nextVersion: z.string(), action: z.string(), report: z.string() }),
-  "sync.prLine": z.object({ url: z.string(), branch: z.string(), commit: z.string() }),
-  "sync.applied": z.object({ files: z.array(z.string()), version: z.string() }),
-  "csync.capabilities": z.object({ capabilities: list, probable: z.array(z.object({ id: z.string(), evidence: z.string() })) }),
-  "csync.inventory": z.object({ rows: list }),
-  "csync.verdict": z.object({ verdict: z.string(), bump: z.string(), nextVersion: z.string(), action: z.string(), report: z.string() }),
-  "csync.staged": z.object({ name: z.string(), stagedPath: z.string(), findings: list, missing: list, entry: z.unknown(), category: z.unknown(), blockers: z.array(z.string()) }),
-  "csync.suggestions": z.object({ suggestions: z.array(z.object({ items: z.array(z.string()), verdict: z.string(), evidence: z.string(), loses: z.string(), line: z.string() })) }),
-  "impl.preflight": line,
-  "impl.tests": line,
-  "impl.chunks": z.object({ chunks: z.array(z.object({ stack: z.string(), title: z.string(), files: z.array(z.string()), brief: z.string() })) }),
-  "impl.chunk": line,
-  "impl.dispute": line,
-  "impl.style": line,
-  "impl.docker": line,
-  "impl.runtime": line,
-  "impl.delivery": line,
   "wfsync.mapping": line,
   "wfsync.verify": line,
 };

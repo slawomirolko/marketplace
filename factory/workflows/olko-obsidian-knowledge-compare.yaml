@@ -14,7 +14,7 @@ nodes:
     agent: olko-obsidian-knowledge-manager
     tools: [read, bash]
     dirs: ["{{input.project}}", "{{input.worktree}}"]
-    parse: text.raw
+    parse: text
     prompt: |
       Read only. Do not create, change, rename, move or delete any note, file or vault state in this step.
       Request from the user: {{input.request}}

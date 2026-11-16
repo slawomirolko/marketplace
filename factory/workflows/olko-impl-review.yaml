@@ -1,9 +1,10 @@
 name: olko-impl-review
-version: 0.1.0
-description: "Step 7c: olko-review on the local Task diff with the acceptance criteria. Bug, security, missing or partial requirement and merge-safety findings block delivery: the implementers fix them, checks run again and the review repeats. Non-blocking findings are recorded."
+version: 0.2.0
+description: "Step 7c: olko-review on the local Task diff with the acceptance criteria. Bug, security, missing or partial requirement and merge-safety findings block delivery: the implementers fix them, checks run again and the review repeats, at most three reviews. Non-blocking findings are recorded."
 source: "agents/opencode/olko-implementation-orchestrator.md (step 7c, TASK REVIEW)"
 roles:
   implementer: medium
+  orchestrator: medium
 entry: review
 limits:
   maxCycleIterations: 3
@@ -13,39 +14,62 @@ nodes:
     kind: call
     workflow: olko-review
     maxVisits: 3
-    input: { base: "{{state.worktree.base}}", criteria: "{{state.task.criteria}}" }
-  - id: review-gate
-    description: "Splits blocking from non-blocking findings and records the review in the journal and the Feature tracker."
+    input: { base: "{{state.worktree.worktree.base}}", criteria: "{{state.task.task.criteria}}" }
+  - id: review-round
+    description: "Counts the Task reviews."
     kind: script
-    op: impl.reviewGate
+    op: builtin.count
     maxVisits: 3
+  - id: review-gate
+    description: "The implementation orchestrator confirms merge safety, splits blocking from non-blocking findings and records the review in the journal and the Feature tracker."
+    kind: llm
+    role: orchestrator
+    agent: olko-implementation-orchestrator
+    tools: [read, edit]
+    maxVisits: 3
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: { json: [blocking, nonBlocking] }
+    prompt: |
+      Step 7c, Task review round {{state.review-round.count}} for Task {{state.task.task.taskName}} of Feature {{state.task.task.featureId}}. Delegate nothing, ask nothing and change no code.
+      Kept review findings of the local Task diff:
+      {{#state.review.local-rank.local-rank.kept}}
+      - {{tier}} | {{ruleId}} | {{sev}} | {{line}}
+      {{/state.review.local-rank.local-rank.kept}}
+      {{^state.review.local-rank.local-rank.kept}}
+      - no kept finding
+      {{/state.review.local-rank.local-rank.kept}}
+      Separately confirm from the diff in this worktree and the plan {{state.task.task.taskFile}} that this Task is independently safe to merge. Any bug, security, req.missing, req.partial or merge-safety finding is blocking; record non-blocking findings separately. Record the review, exact scope, verdict and file:line evidence in the shared Feature tracker {{state.task.task.tracker}} and the implementation journal.
+      End with one ```json block: {"blocking": ["<finding line>"], "nonBlocking": ["<finding line>"]}
   - id: review-fix
     description: "The stack implementers fix the blocking findings."
     kind: llm
     role: implementer
-    agentsFrom: state.stacks.implementers
+    agentsFrom: state.stacks.stacks.implementers
     tools: [read, edit, bash]
     maxVisits: 2
-    dirs: ["{{state.task.featureDir}}"]
-    parse: text.raw
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: text
     prompt: |
-      Fix only these blocking review findings for the {{agent.id}} stack in this worktree (Task plan {{state.task.taskFile}}). Do not change the failing-test-first tests, add comments or plan ids to code, or touch CI/CD workflow files.
-      {{state.review-gate.text}}
+      Fix only these blocking review findings for the {{agent.id}} stack in this worktree (Task plan {{state.task.task.taskFile}}). Do not change the failing-test-first tests, add comments or plan ids to code, or touch CI/CD workflow files.
+      {{#state.review-gate.review-gate.blocking}}
+      - {{.}}
+      {{/state.review-gate.review-gate.blocking}}
   - id: recheck
     description: "Calls the shared checks step again after the fixes."
     kind: call
     workflow: olko-impl-checks
     maxVisits: 2
-    input: { plan: "{{state.task.taskFile}}", base: "{{state.worktree.base}}" }
+    input: { plan: "{{state.task.task.taskFile}}", featureDir: "{{state.task.task.featureDir}}", base: "{{state.worktree.worktree.base}}" }
   - id: stop-review
     description: "Stops: blocking findings are never waived."
     kind: script
-    op: impl.stop
-    with: { from: review-gate }
+    op: builtin.stop
+    with: { reason: "Implementation stopped: blocking review findings remain after {{state.review-round.count}} reviews:\n{{#state.review-gate.review-gate.blocking}}{{.}}\n{{/state.review-gate.review-gate.blocking}}" }
 edges:
-  - { from: review, to: review-gate }
-  - { from: review-gate, to: END, when: 'review-gate.next == "pass"', description: "no blocking finding" }
-  - { from: review-gate, to: review-fix, when: 'review-gate.next == "fix"', description: "blocking findings and fix rounds left" }
-  - { from: review-gate, to: stop-review, description: "blocking findings after three reviews" }
+  - { from: review, to: review-round }
+  - { from: review-round, to: review-gate }
+  - { from: review-gate, to: END, when: "review-gate.review-gate.blocking == 0", description: "no blocking finding" }
+  - { from: review-gate, to: stop-review, when: "review-round.count >= 3", description: "blocking findings after three reviews" }
+  - { from: review-gate, to: review-fix, description: "blocking findings and fix rounds left" }
   - { from: review-fix, to: recheck }
   - { from: recheck, to: review }

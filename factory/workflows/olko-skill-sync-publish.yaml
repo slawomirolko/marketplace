@@ -1,23 +1,39 @@
 name: olko-skill-sync-publish
-version: 0.4.0
-description: "Phase 5 and the order of phase 6: validates the marketplace, publishes through olko-commit after approval, then leave, wait for CI or squash merge, installs after the merge, and only then starts the separate local project pull request; verified flow memory is saved last. A run with only local reverts skips the marketplace pull request and goes straight to the local delivery. A stop makes no marketplace pull request and ends the run without a local delivery, so nothing is reported complete while only one of the two deliveries exists."
-source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 5, two-pull-request contract, phase 6 order)"
+version: 0.5.0
+description: "Phase 5 and the order of phase 6: the sync manager validates the marketplace, olko-commit publishes after approval, then leave, wait for CI or squash merge, installs after the merge, and only then starts the separate local project pull request; verified flow memory is saved last. A run with only local reverts skips the marketplace pull request and goes straight to the local delivery. A stop makes no marketplace pull request and ends the run without a local delivery, so nothing is reported complete while only one of the two deliveries exists."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 4 validation, phase 5, two-pull-request contract, phase 6 order)"
 roles:
+  sync: medium
   publisher: medium
 entry: validate
 limits:
   maxCycleIterations: 3
 nodes:
   - id: validate
-    description: "Runs registry --fix, the agent installer check and the marketplace node tests."
-    kind: script
-    op: sync.validate
+    description: "The sync manager runs registry --fix, the agent installer check and the affected marketplace node tests, and reads the marketplace diff. Commits nothing."
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    tools: [read, bash]
+    dirs: ["{{state.resolve-path.resolve-path.path}}"]
+    parse: { json: [changed, status, diffStat, versions, summary, failed] }
+    prompt: |
+      Do only the validation of Phase 4 and the diff of Phase 5 in the marketplace {{state.resolve-path.resolve-path.path}} (run commands there). Do not commit, push, install or ask.
+      Accepted decisions that changed the marketplace (reverts change only the local project and are not validated here):
+      {{#state.plan.plan.accepted}}
+      - {{type}} {{name}}: {{decision}} -> {{version}} (route {{route}})
+      {{/state.plan.plan.accepted}}
+
+      When a skill changed: `node scripts/registry.mjs --fix`. For every changed agent: `node scripts/install-opencode-agents.mjs --project <temporary empty directory> --agent <name>`, then delete that directory. When anything changed: the affected Node tests. Then `git status --porcelain --untracked-files=all` and `git diff --stat`.
+
+      End with one ```json block:
+      {"changed": <number of changed marketplace files in git status, 0 when none>, "status": "<git status output>", "diffStat": "<git diff --stat output>", "versions": "<one line per non-revert decision: type name decision -> version>", "summary": "<one result per check: pass or FAIL with the last error lines, or nothing to validate>", "failed": <number of failed checks>}
   - id: ask-publish
     description: "Shows the diff, versions and validation; asks before commit and push."
     kind: interrupt
     question:
       id: q-sync-publish
-      text: "Marketplace diff:\n{{state.validate.status}}\n{{state.validate.diffStat}}\n\nVersions:\n{{state.validate.versions}}\n\nValidation: {{state.validate.summary}}\n\nCommit and push on a feature branch and open a PR? Stop: no marketplace PR is made and the run ends without a local delivery, so it is not reported complete."
+      text: "Marketplace diff:\n{{state.validate.validate.status}}\n{{state.validate.validate.diffStat}}\n\nVersions:\n{{state.validate.validate.versions}}\n\nValidation: {{state.validate.validate.summary}}\n\nCommit and push on a feature branch and open a PR? Stop: no marketplace PR is made and the run ends without a local delivery, so it is not reported complete."
       allowed: [publish, stop]
   - id: publish
     description: "olko-commit commits on a feature branch, pushes and opens the PR."
@@ -25,26 +41,27 @@ nodes:
     role: publisher
     skill: olko-commit
     tools: [read, edit, bash]
-    dirs: ["{{state.resolve-path.path}}"]
-    parse: sync.prLine
+    dirs: ["{{state.resolve-path.resolve-path.path}}"]
+    parse: { line: [marker, url, branch, commit] }
     prompt: |
-      Run the olko-commit workflow in the marketplace repository {{state.resolve-path.path}} (use `git -C` or change into it), not in the current directory.
+      Run the olko-commit workflow in the marketplace repository {{state.resolve-path.resolve-path.path}} (use `git -C` or change into it), not in the current directory.
       Never pass --force, never push to main: use its scope-named feature branch and PR flow. Do not merge. Do not ask questions; the user already approved this publish.
-      PR title: the conventional commit subject for this change, for example `feat(sync): {{#state.plan.accepted}}{{name}} {{/state.plan.accepted}}`.
+      PR title: the conventional commit subject for this change, for example `feat(sync): {{#state.plan.plan.accepted}}{{name}} {{/state.plan.plan.accepted}}`.
       PR description, concise: the artifacts and versions below, and the validation result. Carry only portable artifacts: never include project adapters, `.agents/skill-config.md`, local-only SemVer lines, permission narrowing, opencode.json changes, machine paths or credentials; those belong to the separate local pull request.
-      {{state.validate.versions}}
-      Validation: {{state.validate.summary}}
+      {{state.validate.validate.versions}}
+      Validation: {{state.validate.validate.summary}}
 
       End with exactly one line: `pr | <PR URL> | <branch> | <commit sha>`.
-  - id: publish-pr
-    description: "Reads the PR URL and branch from the publish output."
+  - id: stop-main
+    description: "Stops the run: the publish step reports the default branch, and the sync requires a feature branch."
     kind: script
-    op: sync.prOf
+    op: builtin.stop
+    with: { reason: "The publish step reported branch main; the sync requires a feature branch and pull request. Check the marketplace repository." }
   - id: pr
     description: "Calls the shared PR step: leave, wait for CI or squash merge."
     kind: call
     workflow: olko-pr-merge
-    input: { path: "{{state.resolve-path.path}}", prUrl: "{{state.publish-pr.publish.url}}", prBranch: "{{state.publish-pr.publish.branch}}", label: "marketplace" }
+    input: { path: "{{state.resolve-path.resolve-path.path}}", prUrl: "{{state.publish.publish.url}}", prBranch: "{{state.publish.publish.branch}}", label: "marketplace" }
   - id: pr-outcome
     description: "Branches on the PR answer: install only after a merge."
     kind: script
@@ -58,25 +75,32 @@ nodes:
     kind: group
     workflow: olko-skill-sync-local
   - id: memory-gate
-    description: "Passes the run on after the local delivery; it decides in the next edges whether a marketplace change was installed and so has verified decisions to record."
+    description: "Passes the run on after the local delivery; it decides in the next edges whether a marketplace change was installed and verified, and so has flow improvements to record."
     kind: script
     op: builtin.pass
   - id: memory-save
-    description: "Records the verified decisions in the sync memory after both deliveries and the verified installation."
-    kind: script
-    op: sync.memorySave
+    description: "After both deliveries and the verified installation, the sync manager persists verified flow improvements through olko-memory-layer."
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    tools: [read, edit]
+    prompt: |
+      Both deliveries and the installation are verified. Do only the last step of your workflow: persist verified flow improvements through `olko-memory-layer` (load it first; it owns the storage and what may be stored). Change no other file.
+      Install result: {{#state.install.install.lines}}{{.}}; {{/state.install.install.lines}}
+      Reply with the lessons you recorded, or `none` when nothing verified and reusable happened.
 edges:
-  - { from: validate, to: ask-publish, when: "validate.changed > 0", description: "the marketplace changed" }
-  - { from: validate, to: local-phase, when: "validate.changed == 0", description: "only local reverts: no marketplace pull request is made, so only the local delivery runs" }
+  - { from: validate, to: ask-publish, when: "validate.validate.changed > 0", description: "the marketplace changed" }
+  - { from: validate, to: local-phase, description: "only local reverts: no marketplace pull request is made, so only the local delivery runs" }
   - { from: ask-publish, to: publish, when: 'ask-publish.answer == "publish"', description: "you chose publish" }
   - { from: ask-publish, to: END, when: 'ask-publish.answer == "stop"', description: "you chose stop: no marketplace pull request is made, the marketplace changes stay unpublished, nothing is installed and no local delivery runs, so the run is not reported complete" }
-  - { from: publish, to: publish-pr }
-  - { from: publish-pr, to: pr }
+  - { from: publish, to: stop-main, when: 'publish.publish.branch == "main"', description: "pushed to the default branch" }
+  - { from: publish, to: pr, description: "PR opened on a feature branch" }
+  - { from: stop-main, to: END, description: "never reached: stop-main fails the run" }
   - { from: pr, to: pr-outcome }
   - { from: pr-outcome, to: install-phase, when: 'pr.ask-pr.answer == "merge"', description: "the marketplace pull request was merged" }
   - { from: pr-outcome, to: END, description: "marketplace pull request is open and left or waiting: it is not merged, nothing is installed, and local delivery waits for the merge" }
   - { from: install-phase, to: local-phase, description: "reinstall is verified, so the local pull request may follow" }
   - { from: local-phase, to: memory-gate, description: "the local delivery finished (pull request left open, waited for or merged)" }
-  - { from: memory-gate, to: memory-save, when: "validate.changed > 0", description: "a marketplace change was installed, so the verified decisions are saved to memory after the local delivery" }
-  - { from: memory-gate, to: END, description: "a revert-only run has no installed marketplace change, so memory is not saved and the run ends after the local delivery" }
+  - { from: memory-gate, to: memory-save, when: "validate.validate.changed > 0 && install.install.failed == 0", description: "a marketplace change was installed and verified, so flow improvements are saved to memory after the local delivery" }
+  - { from: memory-gate, to: END, description: "a revert-only run or a failed install has nothing verified to record, so memory is not saved and the run ends after the local delivery" }
   - { from: memory-save, to: END }

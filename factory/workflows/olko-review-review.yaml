@@ -1,5 +1,5 @@
 name: olko-review-review
-version: 0.2.0
+version: 0.3.0
 description: "REVIEW route: a read-only review of someone else's PR or a fresh review of your own, from scope to posted comments. On the LOCAL route (a working tree against input.base) the ranked findings go back to the caller and nothing is posted."
 source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE)"
 roles:
@@ -13,16 +13,24 @@ nodes:
     kind: group
     workflow: olko-review-scope
   - id: memory
-    description: "Loads the review memory: patterns to suppress (rejected twice) and to prioritize (confirmed once)."
-    kind: script
-    op: memory.load
-    with: { agent: olko-review-orchestrator }
+    description: "Step 3: the review orchestrator loads its memory through olko-memory-layer: patterns to suppress (rejected twice) and to prioritize (confirmed once). Writes nothing."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    tools: [read]
+    parse: { json: [loaded, file, suppressText, prioritizeText] }
+    prompt: |
+      Do only step 3 of your REVIEW ROUTE (load memory). Read only: write no file and no memory.
+      Load `olko-memory-layer` first, then read only your own memory block. Count the `confirmed:<pattern>` and `rejected:<pattern>` lines per pattern and build the Suppress and Prioritize lists of step 3.
+
+      End with one ```json block:
+      {"loaded": <true when the block exists and was read, else false>, "file": "<path of your memory block>", "suppressText": "<suppressed patterns, comma separated, or none>", "prioritizeText": "<prioritized patterns, comma separated, or none>"}
   - id: ask-memory
     description: "Asks whether to continue without a memory block."
     kind: interrupt
     question:
       id: q-memory-missing
-      text: "The review memory block {{state.memory.file}} does not exist. Fix: install the agent memory with `node scripts/install-opencode-agents.mjs --project <project> --agent olko-review-orchestrator`. Continue this review without memory, or stop?"
+      text: "The review memory block {{state.memory.memory.file}} does not exist. Fix: install the agent memory with `node scripts/install-opencode-agents.mjs --project <project> --agent olko-review-orchestrator`. Continue this review without memory, or stop?"
       allowed: [continue, stop]
   - id: review-findings
     description: "Runs the lenses in parallel on the diff, merges their findings and lets the verifier confirm or reject each one."
@@ -67,7 +75,7 @@ nodes:
       {{#state.rules-merge.rules-merge.dropped}}
       - dropped by the store: {{line}} | {{cite}}
       {{/state.rules-merge.rules-merge.dropped}}
-      Memory: {{#state.memory.loaded}}loaded{{/state.memory.loaded}}{{^state.memory.loaded}}not loaded (the user chose to continue without it){{/state.memory.loaded}}
+      Memory: {{#state.memory.memory.loaded}}loaded{{/state.memory.memory.loaded}}{{^state.memory.memory.loaded}}not loaded (the user chose to continue without it){{/state.memory.memory.loaded}}
 
       Write the step 8 report. Then end with one ```json block, findings in rank order:
       {"kept": [{"line": "<finding>", "ruleId": "<rule-id>", "sev": "<sev>", "tier": "<bug|security|repo-rule|design|style|nit>", "unchecked": <true|false>}]}
@@ -77,8 +85,8 @@ nodes:
     workflow: olko-review-post
 edges:
   - { from: review-scope, to: memory }
-  - { from: memory, to: review-findings, when: "memory.loaded == true", description: "memory block loaded" }
-  - { from: memory, to: ask-memory, when: "memory.loaded == false", description: "no memory block yet" }
+  - { from: memory, to: review-findings, when: "memory.memory.loaded == true", description: "memory block loaded" }
+  - { from: memory, to: ask-memory, when: "memory.memory.loaded != true", description: "no memory block yet" }
   - { from: ask-memory, to: review-findings, when: 'ask-memory.answer == "continue"', description: "you chose continue without memory" }
   - { from: ask-memory, to: END, when: 'ask-memory.answer == "stop"', description: "you chose stop" }
   - { from: review-findings, to: review-rules }

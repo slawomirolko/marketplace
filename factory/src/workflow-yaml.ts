@@ -107,6 +107,7 @@ function buildNode(workflow: WorkflowSpec, spec: WorkflowSpecNode): WorkflowNode
     const dirs = spec.dirs.map(render);
     node.dirs = (context) => dirs.map((dir) => dir(context)).filter(Boolean);
   }
+  if (spec.workspace) node.workspace = render(spec.workspace);
   if (spec.agents) node.agents = spec.agents.map((a) => ({ id: a.id, ...(a.role ? { role: a.role } : {}), ...(a.agent ? { agentName: a.agent } : {}) }));
   if (spec.question) node.question = spec.question;
   if (spec.turns) node.turns = spec.turns;

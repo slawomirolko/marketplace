@@ -1,5 +1,5 @@
 name: olko-marketplace-skill-sync
-version: 0.3.0
+version: 0.4.0
 description: "Synchronizes project-local skills and OpenCode agents with the marketplace: compares every artifact, asks one decision per difference, applies, publishes through a marketplace PR, installs after the merge, and then delivers the project-side changes through a second, separate local project PR."
 source: agents/opencode/olko-marketplace-skill-sync-manager.md (phases 1-6)
 roles:
@@ -25,9 +25,34 @@ nodes:
     kind: group
     workflow: olko-skill-sync-decide
   - id: plan
-    description: "Collects the accepted decisions and how each one is applied."
-    kind: script
-    op: sync.plan
+    description: "The sync manager collects your decisions, the accepted ones and the approved version and route of each one. Changes nothing."
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    parse: { json: [decided, accepted] }
+    prompt: |
+      Phase 3 is answered. Collect the decisions only; change nothing and ask nothing.
+      Artifacts that needed a decision, with the question that asked for it:
+      {{#state.rows.rows.decide}}
+      - {{type}} {{name}}: {{classification}}; marketplace {{marketplaceVersion}}; proposed {{nextVersion}}; question {{question}}
+      {{/state.rows.rows.decide}}
+      All artifacts:
+      {{state.rows.rows.table}}
+      Paths:
+      {{#state.discover.discover.compare}}
+      - {{type}} {{name}}: local {{localPath}}; marketplace {{marketplacePath}}
+      {{/state.discover.discover.compare}}
+      User answers by question id:
+      {{#each.answers}}
+      - {{key}}: {{value}}
+      {{/each.answers}}
+
+      The decision of an artifact is the answer to its question; an identical artifact has decision `none`, an unanswered one `unanswered`. `none`, `leave`, `reject` and `unanswered` are not accepted.
+      Route of an accepted decision: `revert-local` -> revert, `move-to-adapter` -> adapter, every other -> change.
+      Approved version: `adopt-<patch|minor|major>` -> the marketplace version bumped by that part (`1.0.0` when there is no marketplace version); `create` -> the proposed version; every other -> the marketplace version.
+
+      End with one ```json block:
+      {"decided": [{"type": "<skill|agent>", "name": "<name>", "classification": "<classification>", "decision": "<decision>"}], "accepted": [{"type": "<skill|agent>", "name": "<name>", "classification": "<classification>", "marketplaceVersion": "<x.y.z or none>", "decision": "<decision>", "route": "<change|revert|adapter>", "version": "<approved x.y.z>", "localPath": "<path>", "marketplacePath": "<path or none>"}]}
   - id: apply-phase
     description: "Phase 4: applies one accepted decision at a time: marketplace change, move-to-adapter with draft and approval, or revert-local after a final confirmation."
     kind: group
@@ -37,15 +62,31 @@ nodes:
     kind: group
     workflow: olko-skill-sync-publish
   - id: report
-    description: "Reports every artifact with its classification and decision, and what was published or installed."
-    kind: script
-    op: sync.report
+    description: "The sync manager reports every artifact with its classification and decision, and what was published, merged, installed and delivered locally. Changes nothing."
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    parse: text
+    prompt: |
+      Write the final report of this sync run. Change nothing.
+      Marketplace: {{state.resolve-path.resolve-path.path}} at {{#state.safe-source.safe-source.head}}{{state.safe-source.safe-source.head}}{{/state.safe-source.safe-source.head}}{{^state.safe-source.safe-source.head}}an unknown head{{/state.safe-source.safe-source.head}}
+      Decisions:
+      {{#state.plan.plan.decided}}
+      - {{type}} {{name}}: {{classification}} -> {{decision}}
+      {{/state.plan.plan.decided}}
+      {{#state.validate}}Validation: {{state.validate.validate.summary}} (changed files: {{state.validate.validate.changed}}).{{/state.validate}}{{^state.validate}}Marketplace, branches and installs: unchanged.{{/state.validate}}
+      {{#state.publish}}Marketplace pull request: {{state.publish.publish.url}}.{{/state.publish}}
+      {{#state.pr.merge}}Squash merged as {{state.pr.merge.merge.commit}}.{{/state.pr.merge}}
+      {{#state.install}}Install: {{#state.install.install.lines}}{{.}}; {{/state.install.install.lines}}{{/state.install}}
+      {{#state.local-commit}}Local pull request: {{state.local-commit.local-commit.url}}.{{/state.local-commit}}
+
+      Report one line per artifact with its classification and decision, then the outcome: what was published, merged and installed, and the local delivery. Follow your two-pull-request contract: do not report the run complete while only one of the two deliveries exists, and say explicitly when the local pull request was omitted because no local file was written.
 edges:
   - { from: sources, to: compare-phase }
   - { from: compare-phase, to: decide-phase }
   - { from: decide-phase, to: plan }
-  - { from: plan, to: apply-phase, when: "plan.accepted > 0", description: "some decisions change something" }
-  - { from: plan, to: report, when: "plan.accepted == 0", description: "every decision is leave or reject" }
+  - { from: plan, to: apply-phase, when: "plan.plan.accepted > 0", description: "some decisions change something" }
+  - { from: plan, to: report, description: "every decision is leave or reject" }
   - { from: apply-phase, to: publish-phase }
   - { from: publish-phase, to: report }
   - { from: report, to: END }

@@ -13,7 +13,7 @@ nodes:
     agent: olko-obsidian-knowledge-manager
     tools: [read, edit, bash]
     dirs: ["{{input.project}}", "{{input.worktree}}"]
-    parse: text.raw
+    parse: text
     prompt: |
       The user approved this proposal. Write exactly the approved text, without rewording it:
       {{state.propose.propose}}

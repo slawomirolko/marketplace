@@ -1,5 +1,5 @@
 name: olko-impl-verify
-version: 0.1.0
+version: 0.2.0
 description: "Steps 4-7: style and affected tests until they pass, then the acceptance E2E recheck (step 5a), then the Docker rebuild in an isolated Compose project with runtime evidence (behind switches.docker)."
 source: "agents/opencode/olko-implementation-orchestrator.md (steps 4-7, step 5a ACCEPTANCE E2E RECHECK, WORKTREE COMPOSE ISOLATION)"
 entry: checks
@@ -10,23 +10,24 @@ nodes:
     description: "Calls the shared checks step: style, affected tests and fix rounds."
     kind: call
     workflow: olko-impl-checks
-    input: { plan: "{{state.task.taskFile}}", base: "{{state.worktree.base}}" }
+    input: { plan: "{{state.task.task.taskFile}}", featureDir: "{{state.task.task.featureDir}}", base: "{{state.worktree.worktree.base}}" }
   - id: e2e-recheck
     description: "Step 5a: the acceptance E2E runner runs the implementation phase of the same manifest; every criterion must pass and is compared with the baseline report. Never skipped for missing tools, credentials, screenshots or cleanup."
     kind: llm
     role: runner
     agent: olko-e2e-acceptance-runner
     tools: [read, bash]
-    parse: impl.runtime
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: { line: [phase, verdict, detail] }
     prompt: |
-      Phase implementation for Task {{state.task.taskName}}, from the same manifest as the baseline in {{state.task.taskFile}}. Run only in the isolated worktree project of {{state.worktree.path}}, never the main stack or the shared database. Do not change any file.
+      Phase implementation for Task {{state.task.task.taskName}}, from the same manifest as the baseline in {{state.task.task.taskFile}}. Run only in the isolated worktree project of {{state.worktree.worktree.path}}, never the main stack or the shared database. Do not change any file.
       Report PASS, FAIL or NOT VERIFIED per criterion, compare each with the baseline result, and give the cleanup proof and the first actionable failure.
-      End with one line: `runtime | <pass|fail|not verified> | <first failing criterion or blocker, cleanup proof>`
+      End with one line, the verdict in lowercase: `implementation | <pass|fail|not verified> | <first failing criterion or blocker, cleanup proof>`
   - id: stop-e2e-recheck
-    description: "Stops before Docker: a criterion did not pass in the acceptance E2E recheck. The first failing criterion is in the recheck report."
+    description: "Stops before Docker: a criterion did not pass in the acceptance E2E recheck."
     kind: script
-    op: impl.stop
-    with: { reason: "acceptance E2E recheck not PASS: a criterion failed or is not verified; see the recheck report" }
+    op: builtin.stop
+    with: { reason: "Implementation stopped: acceptance E2E recheck {{state.e2e-recheck.e2e-recheck.verdict}}: {{state.e2e-recheck.e2e-recheck.detail}}" }
   - id: docker
     description: "Rebuilds in an isolated Compose project, collects runtime evidence and tears it down; skipped when switches.docker is off."
     kind: subgraph

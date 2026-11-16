@@ -1,7 +1,9 @@
 name: olko-skill-sync-sources
-version: 0.1.0
-description: "Prepares both sides: the marketplace path, memory and missing skills, and a safe, current marketplace checkout."
+version: 0.2.0
+description: "Prepares both sides: the marketplace path, memory and missing skills, and a safe, current marketplace checkout (phase 1 by the sync manager: clean, on main, fast-forwarded; asks before switching branch and stops the run otherwise)."
 source: "agents/opencode/olko-marketplace-skill-sync-manager.md (startup and phase 1)"
+roles:
+  sync: medium
 entry: path
 limits:
   maxCycleIterations: 3
@@ -14,12 +16,40 @@ nodes:
     description: "Loads the manager memory and lets the bootstrapper install registry skills missing from the project."
     kind: group
     workflow: olko-skill-sync-prepare
-  - id: safe
-    description: "Phase 1: calls the shared safe-source step for the marketplace checkout."
-    kind: call
-    workflow: olko-safe-source
-    input: { path: "{{state.resolve-path.path}}", label: "marketplace" }
+  - id: safe-source
+    description: "Phase 1: the sync manager requires a clean marketplace worktree on main, then fetches and pulls origin/main fast-forward only. It switches to main only after your answer."
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    tools: [read, bash]
+    dirs: ["{{state.resolve-path.resolve-path.path}}"]
+    maxVisits: 2
+    parse: { json: [ok, reason, detail, head?] }
+    prompt: |
+      Do only Phase 1 (establish safe sources) for the marketplace checkout {{state.resolve-path.resolve-path.path}}. Use `git -C` on that path. Do not compare, edit or commit anything.
+      {{#answers.q-marketplace-main}}The user answered `{{answers.q-marketplace-main}}` to switching the checkout to main: when the answer is `switch` and the worktree is clean, run `git checkout main` first.{{/answers.q-marketplace-main}}{{^answers.q-marketplace-main}}The user has not approved a branch switch: when the checkout is not on main, do not switch; report the branch.{{/answers.q-marketplace-main}}
+      Stop at the first failing check: not a Git repository or status fails, dirty worktree, not on main, missing origin remote, fetch failure, fast-forward pull failure.
+
+      End with one ```json block:
+      {"ok": <true only when the checkout is clean, on main and fast-forwarded to origin/main>, "reason": "<ok|status|dirty|not-main|checkout|no-remote|fetch|pull>", "detail": "<the branch name for not-main, else what failed or the head>", "head": "<HEAD sha when ok, else null>"}
+  - id: ask-main
+    description: "Asks whether to switch the marketplace checkout to main."
+    kind: interrupt
+    question:
+      id: q-marketplace-main
+      text: "The marketplace checkout is on {{state.safe-source.safe-source.detail}}, not main. Switch it to main?"
+      allowed: [switch, stop]
+  - id: stop-unsafe
+    description: "Stops the run: the marketplace checkout is not safe to compare against."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Sync stopped before any comparison: the marketplace checkout is not safe; the safe-source step names what failed." }
 edges:
   - { from: path, to: prepare }
-  - { from: prepare, to: safe }
-  - { from: safe, to: END }
+  - { from: prepare, to: safe-source }
+  - { from: safe-source, to: END, when: "safe-source.safe-source.ok == true", description: "clean and current" }
+  - { from: safe-source, to: ask-main, when: 'safe-source.safe-source.reason == "not-main"', description: "not on main" }
+  - { from: safe-source, to: stop-unsafe, description: "dirty, no remote or pull failed" }
+  - { from: ask-main, to: safe-source, when: 'ask-main.answer == "switch"', description: "you chose switch" }
+  - { from: ask-main, to: stop-unsafe, when: 'ask-main.answer == "stop"', description: "you chose stop" }
+  - { from: stop-unsafe, to: END, description: "never reached: stop-unsafe fails the run" }

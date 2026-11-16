@@ -1,5 +1,5 @@
 name: olko-review-post
-version: 0.3.0
+version: 0.3.1
 description: "Ranks the kept findings, asks post or skip for each one, posts one PR comment per post and records the decisions in the review memory."
 source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE, steps 7 to 10: rank, report, posting and memory)"
 roles:
@@ -39,7 +39,7 @@ nodes:
       {{#state.rules-merge.rules-merge.dropped}}
       - dropped by the store: {{line}} | {{cite}}
       {{/state.rules-merge.rules-merge.dropped}}
-      Memory: {{#state.memory.loaded}}loaded{{/state.memory.loaded}}{{^state.memory.loaded}}not loaded (the user chose to continue without it){{/state.memory.loaded}}
+      Memory: {{#state.memory.memory.loaded}}loaded{{/state.memory.memory.loaded}}{{^state.memory.memory.loaded}}not loaded (the user chose to continue without it){{/state.memory.memory.loaded}}
 
       Write the step 8 report. Then end with one ```json block, findings in rank order:
       {"kept": [{"line": "<finding>", "ruleId": "<rule-id>", "sev": "<sev>", "tier": "<bug|security|repo-rule|design|style|nit>", "unchecked": <true|false>}]}
@@ -81,7 +81,7 @@ nodes:
     tools: [read, edit]
     parse: text
     prompt: |
-      Do only step 10 of your REVIEW ROUTE. Append one line per ranked finding to the memory block {{state.memory.file}} and change no other file: `confirmed:<rule-id>` when it was posted, `rejected:<rule-id>` when it was not.
+      Do only step 10 of your REVIEW ROUTE. Append one line per ranked finding to the memory block {{state.memory.memory.file}} and change no other file: `confirmed:<rule-id>` when it was posted, `rejected:<rule-id>` when it was not.
       Ranked findings:
       {{#state.rank.rank.kept}}
       - {{ruleId}} | {{line}}
@@ -94,7 +94,7 @@ nodes:
 edges:
   - { from: rank, to: next-finding }
   - { from: next-finding, to: ask-post, when: "next-finding.done == false", description: "a finding is left" }
-  - { from: next-finding, to: memory-save, when: "next-finding.done == true && memory.loaded == true", description: "all findings decided and the memory block is loaded" }
+  - { from: next-finding, to: memory-save, when: "next-finding.done == true && memory.memory.loaded == true", description: "all findings decided and the memory block is loaded" }
   - { from: next-finding, to: END, description: "all findings decided and no memory block: nothing to record" }
   - { from: ask-post, to: post-one, when: 'ask-post.answer == "post"', description: "you chose post" }
   - { from: ask-post, to: next-finding, when: 'ask-post.answer == "skip"', description: "you chose skip" }

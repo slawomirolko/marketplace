@@ -1,8 +1,10 @@
 name: olko-implementation
-version: 0.1.0
+version: 0.2.0
 description: "Implements one approved Task: entry gate (plans it first when no plan exists), worktree and journal, compatibility preflight, failing tests first, chunked implementation with child-result checks, style and tests, isolated runtime verification, context-file optimization, scope gate, local Task review, then commit, PR, gates, merge and closure after explicit approvals."
 source: agents/opencode/olko-implementation-orchestrator.md (steps 1-13 incl. 1a, 5a, 12a, 12b; each phase is a group file; tracker, Docker, Obsidian, editor and adoption sit behind switches)
 entry: entry
+roles:
+  orchestrator: medium
 limits:
   maxCycleIterations: 4
 nodes:
@@ -47,9 +49,23 @@ nodes:
     kind: group
     workflow: olko-impl-deliver
   - id: report
-    description: "Writes the run report into the journal."
-    kind: script
-    op: impl.report
+    description: "The implementation orchestrator writes its final report (delegation plan, scopes, changed files, verification results, unresolved blockers) into the journal."
+    kind: llm
+    role: orchestrator
+    agent: olko-implementation-orchestrator
+    tools: [read, edit]
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: text
+    prompt: |
+      Write your final report for Task {{state.task.task.taskName}} of Feature {{state.task.task.featureId}} into the implementation journal of {{state.task.task.taskFile}} and update its Session fields. Delegate nothing, ask nothing and change no code.
+      Report the delegation plan, each agent's scope, changed files, verification results and unresolved blockers, from the journal and these facts:
+      Worktree: {{state.worktree.worktree.path}} on {{state.worktree.worktree.branch}}
+      Chunks: {{state.chunk-next.total}}
+      Code paths: {{state.scope-gate.scope-gate.count}}
+      Blocking review findings left: {{state.review-gate.review-gate.blocking.length}}
+      Delivery: {{#state.commit.commit}}committed {{commit}}, PR {{url}}{{/state.commit.commit}}{{^state.commit.commit}}{{#state.ask-commit.answer}}not committed (you answered {{state.ask-commit.answer}}){{/state.ask-commit.answer}}{{/state.commit.commit}}
+      Merge: {{#state.merge-retain.merge-retain}}{{state.merge-retain.merge-retain}}{{/state.merge-retain.merge-retain}}{{^state.merge-retain.merge-retain}}not merged{{/state.merge-retain.merge-retain}}
+      Reply with the report as plain text, at most fifteen lines.
 edges:
   - { from: entry, to: workspace }
   - { from: workspace, to: preflight-phase }

@@ -1,9 +1,10 @@
 name: olko-claude-sync-compare
-version: 0.1.0
-description: "Phase 2: one comparator per capability returns a verdict; the rows carry the actions each verdict allows."
-source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 2, compare)"
+version: 0.2.0
+description: "Phase 2 and 3: one comparator per capability returns a verdict; the sync manager builds the decision table with the actions each verdict allows."
+source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 2, compare, and phase 3, decision table)"
 roles:
   sync-worker: low
+  sync: medium
 entry: compare
 limits:
   maxCycleIterations: 3
@@ -13,22 +14,43 @@ nodes:
     kind: llm
     role: sync-worker
     agent: olko-claude-sync-comparator
-    agentsFrom: state.exclusions.compare
+    agentsFrom: state.exclusions.exclusions.compare
     tools: [read, bash]
-    dirs: ["{{state.state.target}}", "{{state.state.olko}}", "{{state.state.user}}", "{{state.state.stateDir}}"]
-    parse: csync.verdict
+    dirs: ["{{state.setup.setup.target}}", "{{state.setup.setup.olko}}", "{{state.setup.setup.user}}", "{{state.setup.setup.stateDir}}"]
+    parse: { line: [result, verdict, bump, nextVersion, action] }
     prompt: |
       Capability: {{agent.id}} ({{agent.kind}}), link basis {{agent.basis}}
       Copies:
       {{agent.copiesText}}
-      Lineage: run sync-state.mjs lineage get --capability {{agent.id}} --state-dir {{state.state.stateDir}}
+      Lineage: run sync-state.mjs lineage get --capability {{agent.id}} --state-dir {{state.setup.setup.stateDir}}
 
       End your report with exactly one line:
       result | <identical|platform-delta-only|target-only|olko-only|user-only|target-ahead|olko-ahead|user-ahead|diverged> | <none|patch|minor|major> | <proposed next Olko version or none> | <recommended action>
   - id: rows
-    description: "Builds the decision table with the actions each verdict allows."
-    kind: script
-    op: csync.rows
+    description: "The sync manager builds the decision table and the actions each verdict allows."
+    kind: llm
+    role: sync
+    agent: olko-claude-sync-manager
+    parse: { json: [rows, decide, table] }
+    prompt: |
+      Do only the table of your Phase 3. Ask nothing, run nothing and dispatch no worker: the factory asks the user the decision on each row.
+      Capabilities compared:
+      {{#state.exclusions.exclusions.compare}}
+      - {{id}} ({{kind}}): {{copiesText}}
+      {{/state.exclusions.exclusions.compare}}
+      Comparator verdicts (capability: verdict | SemVer bump | proposed next Olko version | recommended action):
+      {{#each.state.compare}}
+      - {{key}}: {{value.verdict}} | {{value.bump}} | {{value.nextVersion}} | {{value.action}}
+      {{/each.state.compare}}
+      Excluded:
+      {{#state.exclusions.exclusions.excluded}}
+      - {{id}}: {{reason}}
+      {{/state.exclusions.exclusions.excluded}}
+      A capability without a verdict is a failed comparator: name it in the table as failed and leave it out of decide.
+      Write each allowed action of your table as one option; an action with a bump is one option per bump: port-to-olko-patch, port-to-olko-minor, port-to-olko-major (publish-to-olko the same).
+      After the table, end with one ```json block:
+      {"rows": [{"id": "<capability id>", "kind": "skill|agent", "verdict": "<verdict>", "bump": "<bump>", "nextVersion": "<proposed Olko version>", "action": "<recommended action>"}], "decide": [{"id": "<capability id>", "kind": "skill|agent", "verdict": "<verdict>", "line": "<kind> <id>: <verdict>; copies <store> <version>, ...; recommended <action>; proposed Olko version <version>", "options": ["<allowed action>"]}], "table": "<the table, one line per row, excluded rows last as `<id>: excluded (<reason>)`>"}
+      decide lists every row whose verdict is not identical, in table order.
 edges:
   - { from: compare, to: rows }
   - { from: rows, to: END }

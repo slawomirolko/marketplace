@@ -244,6 +244,11 @@
           },
           "description": "Mustache templates of extra directories the agent may read or write besides the run workspace."
         },
+        "workspace": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Mustache template of a directory: when the node completes and it renders to an existing directory, every later step of the run works there."
+        },
         "enabledWhen": {
           "type": "string",
           "minLength": 1,

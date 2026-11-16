@@ -82,7 +82,7 @@ nodes:
     tools: [read]
     dirs: ["{{input.project}}"]
     maxVisits: 20
-    parse: text.raw
+    parse: text
     prompt: |
       Present the reconciled batch of open draft questions for the Epic/Feature/Task draft of the project {{input.project}}, with the full plan context (idea: {{input.idea}}) and the locked answers:
       {{#state.draft.draft.decisions}}
@@ -112,7 +112,7 @@ nodes:
     tools: [read]
     dirs: ["{{input.project}}"]
     maxVisits: 3
-    parse: text.raw
+    parse: text
     prompt: |
       Present the one content review of this draft for the project {{input.project}} (idea: {{input.idea}}; locked answers: {{#state.draft.draft.decisions}}{{.}}; {{/state.draft.draft.decisions}}): approve it, or revise it. Draft:
       {{state.draft.draft.hierarchy}}
@@ -135,7 +135,7 @@ nodes:
     tools: [read]
     dirs: ["{{input.project}}"]
     maxVisits: 3
-    parse: text.raw
+    parse: text
     prompt: |
       Present the question: what should change in this draft for the project {{input.project}} (idea: {{input.idea}}; locked answers: {{#state.draft.draft.decisions}}{{.}}; {{/state.draft.draft.decisions}})? Draft:
       {{state.draft.draft.hierarchy}}

@@ -474,6 +474,7 @@ export class Factory {
   advance(run: Run, node: WorkflowNode): void {
     const workflow = workflowOf(run);
     const view = this.view(run, node);
+    if (node.workspace) this.moveWorkspace(run, node, node.workspace({ goal: run.goal, input: view.input, state: view.state, agent: { id: node.localId ?? node.id }, answers: view.answers, steps: run.steps }).trim());
     const context = { ...view.state, answers: view.answers, input: view.input, switches: run.input?.switches ?? {} };
     const edge = workflow.edges.filter((e) => e.from === node.id).find((e) => e.when === undefined || evaluateWhen(e.when, context));
     if (!edge) throw new Error(`no edge from ${node.id} matches the run state`);
@@ -491,6 +492,13 @@ export class Factory {
     run.visits[edge.to] = visits;
     if (run.nodeAgents) delete run.nodeAgents[edge.to];
     run.cursor = workflow.nodes.findIndex((n) => n.id === edge.to);
+  }
+
+  moveWorkspace(run: Run, node: WorkflowNode, target: string): void {
+    if (!target || target === run.workspace) return;
+    if (!fs.existsSync(target) || !fs.statSync(target).isDirectory()) throw new Error(`node ${node.path}: workspace ${target} is not a directory`);
+    run.workspace = target;
+    this.event(run, "workspace_changed", { node: node.path, workspace: target });
   }
 
   async step(run: Run): Promise<void> {

@@ -1,54 +1,87 @@
 name: olko-impl-tests-first
-version: 0.1.0
-description: "Step 3a: the test-first author writes one failing test per acceptance criterion for every stack the Task touches; unclear criteria and blocked choices go to you, never guessed."
-source: "agents/opencode/olko-implementation-orchestrator.md (step 3a, FAILING TESTS FIRST)"
+version: 0.2.0
+description: "Step 3a: the orchestrator names the stacks of the Task and their agents; the test-first author writes one failing test per acceptance criterion for every stack; unclear criteria and blocked choices go to you, never guessed."
+source: "agents/opencode/olko-implementation-orchestrator.md (step 3a, FAILING TESTS FIRST; choose agents by stack and by the allowlist)"
 roles:
   implementer: medium
+  orchestrator: medium
 entry: stacks
 limits:
   maxCycleIterations: 3
 nodes:
   - id: stacks
-    description: "Finds the stacks the Task plan names and picks the test author, implementer and test runner for each."
+    description: "The implementation orchestrator finds the stacks the Task plan touches and picks the test author, implementer and test runner of each from its allowlist."
+    kind: llm
+    role: orchestrator
+    agent: olko-implementation-orchestrator
+    tools: [read]
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: { json: [stacks, authors, implementers, runners] }
+    prompt: |
+      Read only: name the stacks that Task {{state.task.task.taskName}} touches, from its approved plan {{state.task.task.taskFile}} and the Feature plan {{state.task.task.featurePlan}}, and choose the agents of each stack by your stack rule and your permission.task allowlist. Delegate nothing, ask nothing and change no file.
+      Stack ids: dotnet, army-python, mobile, react, react-native. Never invent an agent name and never leave one null: the implementer of a stack is olko-<stack id>-implementer and its test runner is olko-<stack id>-test-runner, both in your permission.task allowlist.
+      End with one ```json block, one item per stack in each list: {"stacks": ["<stack id>"], "authors": [{"id": "<stack id>", "agentName": "olko-test-first-author"}], "implementers": [{"id": "<stack id>", "agentName": "<the stack implementer>"}], "runners": [{"id": "<stack id>", "agentName": "<the stack test runner>"}]}
+  - id: tests-round
+    description: "Counts the failing-tests-first rounds."
     kind: script
-    op: impl.stacks
+    op: builtin.count
+    maxVisits: 3
   - id: write-tests
     description: "olko-test-first-author (mode write), one call per stack: one failing test per criterion, run, failing for the reason the criterion describes."
     kind: llm
     role: implementer
-    agentsFrom: state.stacks.authors
+    agentsFrom: state.stacks.stacks.authors
     tools: [read, edit, bash]
     maxVisits: 3
-    dirs: ["{{state.task.featureDir}}"]
-    parse: impl.tests
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: { line: [result, count, unclear, blocked] }
     prompt: |
-      Mode: write. Task {{state.task.taskName}}, stack {{agent.id}}. Approved Task plan: {{state.task.taskFile}}. Work only in this worktree.
+      Mode: write. Task {{state.task.task.taskName}}, stack {{agent.id}}. Approved Task plan: {{state.task.task.taskFile}}. Work only in this worktree.
       Acceptance criteria:
-      {{state.task.criteria}}
-      Answers you already have for unclear criteria: {{state.tests-check.answered}}
+      {{state.task.task.criteria}}
+      {{#state.ask-unclear.answer}}
+      The user answered your open questions: {{state.ask-unclear.answer}}
+      {{/state.ask-unclear.answer}}
       Write one failing test per criterion, run them, and make each fail for the reason the criterion describes. No comments and no criterion or plan ids in test code. No CI/CD workflow files.
       End with one line: `tests | <number of failing tests written> | unclear: <none or questions separated by ;> | blocked: <none or question with options>`
   - id: tests-check
-    description: "Records criterion, test and failure in the journal, freezes the test files and lists open items."
-    kind: script
-    op: impl.testsFirst
+    description: "The implementation orchestrator records criterion, test and failure reason in the journal, lists the failing-test-first files as read-only input for the implementers, and lists open items."
+    kind: llm
+    role: orchestrator
+    agent: olko-implementation-orchestrator
+    tools: [read, edit]
     maxVisits: 3
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: { json: [verdict, testFiles, questions] }
+    prompt: |
+      Step 3a, round {{state.tests-round.count}} for Task {{state.task.task.taskName}}. Delegate nothing, ask nothing and change no code or test.
+      Test-first author results per stack:
+      {{#each.state.write-tests}}
+      {{key}}:
+      {{value.text}}
+      {{/each.state.write-tests}}
+      {{#state.ask-unclear.answer}}
+      The user's answer to the open items: {{state.ask-unclear.answer}}
+      {{/state.ask-unclear.answer}}
+      Record each criterion -> test -> failure reason, the test files, and any user answer in the implementation journal of {{state.task.task.taskFile}}. An `Unclear criteria` or `Blocked:` item blocks the stack's implementation until the user decides; never guess it.
+      End with one ```json block: {"verdict": "<done when no open item is left, else unclear>", "testFiles": ["<path of a test file the author created or changed, relative to the worktree>"], "questions": "<the open questions and blocked choices with their options, one per line, or empty>"}
   - id: ask-unclear
     description: "Asks you to settle the unclear criteria and blocked choices (free text)."
     kind: interrupt
     maxVisits: 3
     question:
-      id: "q-impl-unclear-{{state.tests-check.round}}"
-      text: "The test author could not write these tests without guessing:\n{{state.tests-check.questions}}\nYour answer (it goes back to the author):"
+      id: "q-impl-unclear-{{state.tests-round.count}}"
+      text: "The test author could not write these tests without guessing:\n{{state.tests-check.tests-check.questions}}\nYour answer (it goes back to the author):"
   - id: stop-unclear
     description: "Stops: implementation of a stack waits until its criteria are clear."
     kind: script
-    op: impl.stop
-    with: { from: tests-check }
+    op: builtin.stop
+    with: { reason: "Implementation stopped: criteria still unclear after {{state.tests-round.count}} rounds:\n{{state.tests-check.tests-check.questions}}" }
 edges:
-  - { from: stacks, to: write-tests }
+  - { from: stacks, to: tests-round }
+  - { from: tests-round, to: write-tests }
   - { from: write-tests, to: tests-check }
-  - { from: tests-check, to: END, when: 'tests-check.next == "done"', description: "every criterion has a failing test" }
-  - { from: tests-check, to: ask-unclear, when: 'tests-check.next == "ask"', description: "a criterion is unclear or a choice is blocked" }
-  - { from: tests-check, to: stop-unclear, description: "still unclear after your answer" }
-  - { from: ask-unclear, to: write-tests }
+  - { from: tests-check, to: END, when: 'tests-check.tests-check.verdict == "done"', description: "every criterion has a failing test" }
+  - { from: tests-check, to: stop-unclear, when: "tests-round.count >= 3", description: "still unclear after three rounds" }
+  - { from: tests-check, to: ask-unclear, description: "a criterion is unclear or a choice is blocked" }
+  - { from: ask-unclear, to: tests-round }

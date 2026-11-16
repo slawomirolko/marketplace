@@ -11,7 +11,7 @@ nodes:
     kind: llm
     role: backlog
     agent: olko-feature-backlog-writer
-    parse: text.raw
+    parse: text
     prompt: |
       Read only: read YouTrack Task {{input.taskId}} of Feature {{input.featureId}}. Return its title, state and acceptance criteria. Do not create, edit or comment on any issue.
 edges:

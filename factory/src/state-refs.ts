@@ -76,6 +76,8 @@ export function stateReferenceErrors(spec: WorkflowSpec): string[] {
     ...(node.prompt ? [["prompt", node.prompt] as [string, string]] : []),
     ...(node.question ? [["question", node.question.text] as [string, string], ["question id", node.question.id] as [string, string]] : []),
     ...(node.dirs ?? []).map((d) => ["dirs", d] as [string, string]),
+    ...(node.workspace ? [["workspace", node.workspace] as [string, string]] : []),
+    ...Object.entries(node.with ?? {}).filter(([, v]) => typeof v === "string" && v.includes("{{")).map(([k, v]) => [`with.${k}`, v as string] as [string, string]),
     ...Object.values(node.input ?? {}).map((v) => ["input", v] as [string, string]),
   ];
   for (const node of spec.nodes) {

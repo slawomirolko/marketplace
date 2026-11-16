@@ -54,7 +54,7 @@ nodes:
     role: planner
     skill: olko-plan-editor
     tools: [read, edit]
-    parse: text.raw
+    parse: text
     prompt: |
       Fold only these verified auditor findings into the plan package {{state.feature.feature.featureDir}} (project {{input.project}}); edit only that folder.
       {{#state.audit-merge.audit-merge.findings}}

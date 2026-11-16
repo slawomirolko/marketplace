@@ -68,7 +68,7 @@ nodes:
     skill: olko-plan-editor
     tools: [read, edit]
     maxVisits: 4
-    parse: text.raw
+    parse: text
     prompt: |
       Apply ALL answers of grill batch {{state.grill-round.count}}, as recorded in {{state.feature.feature.featureDir}}/tracker.md, together to the plan package {{state.feature.feature.featureDir}} (project {{input.project}}) and record the batch closure in tracker.md. Edit only that folder.
       Keep each recorded decision as tracker.md states it, and add no new decision.
@@ -93,7 +93,7 @@ nodes:
     skill: olko-plan-editor
     tools: [read, edit]
     maxVisits: 4
-    parse: text.raw
+    parse: text
     prompt: |
       Fold only these verified re-validation findings into {{state.feature.feature.featureDir}} (project {{input.project}}); edit only that folder.
       {{#each.state.revalidate}}

@@ -113,7 +113,12 @@ test("a harness drives the YAML marketplace skill sync over stdio in delegate mo
     assert.ok(report.workflow.startsWith("olko-marketplace-skill-sync@"));
     const compare = offered.filter((w) => w.agentName === "olko-marketplace-skill-sync-comparator");
     assert.deepEqual(compare.map((w) => w.agentId).sort(), [...ARTIFACTS].sort());
-    assert.ok(compare.every((w) => w.tools.join() === "read" && w.dirs.includes(marketplace)), JSON.stringify(compare.map((w) => [w.tools, w.dirs])));
+    assert.ok(compare.every((w) => w.tools.join() === "read,bash" && w.dirs.includes(marketplace)), JSON.stringify(compare.map((w) => [w.tools, w.dirs])));
+    const stepOf = (w: Payload) => String(w.nodePath).split("/").at(-1) ?? "";
+    const manager = offered.filter((w) => w.agentName === "olko-marketplace-skill-sync-manager");
+    for (const step of ["resolve-path", "memory", "safe-source", "discover", "versions", "rows", "plan", "report"]) assert.ok(manager.some((w) => stepOf(w) === step), `the sync manager runs ${step}: ${manager.map(stepOf).join()}`);
+    assert.ok(manager.every((w) => !w.tools.includes("edit")), "with leave on every decision the sync manager only reads");
+    assert.ok(!offered.some((w) => ["apply", "validate", "publish", "install", "memory-save"].includes(stepOf(w))), "leave on every decision applies, publishes and installs nothing");
     const adapt = offered.filter((w) => w.agentName === "olko-adapt-to-marketplace");
     assert.ok(adapt.every((w) => w.tools.includes("edit") && /--local-only/.test(w.prompt)), "skill node offers write access and local-only mode");
     const decisions = asked.filter((q) => q.id.startsWith("q-sync-"));

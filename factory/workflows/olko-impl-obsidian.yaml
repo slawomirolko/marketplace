@@ -1,5 +1,5 @@
 name: olko-impl-obsidian
-version: 0.1.0
+version: 0.2.0
 description: "Step 8b: after the PR is green, the knowledge manager proposes Obsidian note changes; they are written only after your approval, and a declined or missing approval blocks the merge."
 source: "skills/*/olko-implementation-pr-gates (OBSIDIAN KNOWLEDGE-BASE GATE)"
 roles:
@@ -11,9 +11,9 @@ nodes:
     kind: llm
     role: writer
     agent: olko-obsidian-knowledge-manager
-    parse: text.raw
+    parse: text
     prompt: |
-      Read only: propose Obsidian knowledge-base changes for Task {{state.task.taskName}} (plan {{state.task.taskFile}}, worktree {{state.worktree.path}}). Do not write the vault.
+      Read only: propose Obsidian knowledge-base changes for Task {{state.task.task.taskName}} (plan {{state.task.task.taskFile}}, worktree {{state.worktree.worktree.path}}). Do not write the vault.
   - id: ask-obsidian
     description: "Asks whether to write the proposed notes; declining blocks the merge."
     kind: interrupt
@@ -27,15 +27,15 @@ nodes:
     role: writer
     agent: olko-obsidian-knowledge-manager
     tools: [read, edit]
-    parse: text.raw
+    parse: text
     prompt: |
       The user approved this proposal; write exactly these notes:
       {{state.propose.propose}}
   - id: stop-obsidian
     description: "Stops before merge: the Obsidian gate was declined."
     kind: script
-    op: impl.stop
-    with: { reason: "the Obsidian gate was declined, so the PR is not merged" }
+    op: builtin.stop
+    with: { reason: "Implementation stopped: the Obsidian gate was declined, so the PR is not merged" }
 edges:
   - { from: propose, to: ask-obsidian }
   - { from: ask-obsidian, to: write-notes, when: 'ask-obsidian.answer == "approve"', description: "you approved the notes" }

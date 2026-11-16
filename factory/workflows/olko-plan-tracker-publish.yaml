@@ -14,7 +14,7 @@ nodes:
     skill: grill-with-docs
     tools: [read]
     dirs: ["{{input.project}}"]
-    parse: text.raw
+    parse: text
     prompt: |
       Compose the approval question for publishing the approved Epic/Feature/Task draft to the tracker now (idea: {{input.idea}}; locked answers: {{#state.draft.draft.decisions}}{{.}}; {{/state.draft.draft.decisions}}), with the choices publish and skip. Draft:
       {{state.draft.draft.hierarchy}}
@@ -40,7 +40,7 @@ nodes:
     skill: grill-with-docs
     tools: [read]
     dirs: ["{{input.project}}"]
-    parse: text.raw
+    parse: text
     prompt: |
       Compose the separate approval question for changes to EXISTING tracker issues in this approved draft (idea: {{input.idea}}; locked answers: {{#state.draft.draft.decisions}}{{.}}; {{/state.draft.draft.decisions}}): name each existing issue the draft would change and its exact field changes, with the choices approve-existing (approve those changes) and new-only (create new issues only and change no existing issue). Draft:
       {{state.draft.draft.hierarchy}}
@@ -59,7 +59,7 @@ nodes:
     kind: llm
     role: backlog
     agent: olko-feature-backlog-writer
-    parse: text.raw
+    parse: text
     prompt: |
       Mode: publish. Publish exactly this approved draft to the tracker, then read every created or changed issue back and list its link.
       Existing-issue approval answer: {{state.ask-existing.answer}}. Change an EXISTING issue only when this answer is approve-existing; with new-only, create new issues only and change no existing issue.

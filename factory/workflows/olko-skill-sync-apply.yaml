@@ -1,5 +1,5 @@
 name: olko-skill-sync-apply
-version: 0.1.0
+version: 0.2.0
 description: "Phase 4: applies one accepted decision at a time: marketplace change, move-to-adapter with draft and approval, or revert-local after a final confirmation."
 source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 4)"
 roles:
@@ -13,37 +13,39 @@ nodes:
     kind: script
     op: list.next
     maxVisits: 200
-    with: { over: plan.accepted }
+    with: { over: plan.plan.accepted }
   - id: apply
     description: "The sync manager makes the marketplace change for this one decision (read and edit)."
     kind: llm
     role: sync
     agent: olko-marketplace-skill-sync-manager
     tools: [read, edit]
-    dirs: ["{{state.resolve-path.path}}"]
+    dirs: ["{{state.resolve-path.resolve-path.path}}"]
     maxVisits: 200
-    parse: sync.applied
+    parse: { line: [status, files, version] }
     prompt: |
       Do only Phase 4 of your workflow for this one accepted decision. The factory owns every other phase and every question: do not ask, do not commit, push, install, run registry --fix, or touch any other artifact.
       Decision: {{state.apply-next.item.decision}} for {{state.apply-next.item.type}} {{state.apply-next.item.name}} (classification {{state.apply-next.item.classification}}).
-      Local project: {{state.discover.project}}
-      Marketplace: {{state.resolve-path.path}}
+      Local project: {{state.discover.discover.project}}
+      Local path: {{state.apply-next.item.localPath}}
+      Marketplace: {{state.resolve-path.resolve-path.path}}
+      Marketplace path: {{state.apply-next.item.marketplacePath}}
 
-      {{state.apply-next.item.instruction}}
+      Apply it as your Phase 4 says for this decision and artifact type (a create of a local-only skill follows the validation requirements of olko-adapt-to-marketplace).
       The user approved version {{state.apply-next.item.version}}: set it on the manifest entry even when the body has no portable change. Use `blocked` only when a write fails.
 
-      Reply with one line: `applied | <changed files, comma separated> | <version>`, or `blocked | <reason>` when you could not apply it.
+      Reply with one line: `applied | <changed files, comma separated> | <version>`, or `blocked | none | <reason>` when you could not apply it.
   - id: adapter-draft
     description: "Drafts the project adapter change for move-to-adapter (no write)."
     kind: llm
     role: sync
     agent: olko-marketplace-skill-sync-manager
-    dirs: ["{{state.resolve-path.path}}"]
+    dirs: ["{{state.resolve-path.resolve-path.path}}"]
     maxVisits: 200
-    parse: text.raw
+    parse: text
     prompt: |
       Do only step (1) of the move-to-adapter decision in Phase 4 for {{state.apply-next.item.type}} {{state.apply-next.item.name}}, and do not write any file: draft the exact diff for the project's `.agents/skill-config.md` or `.agents/skills/{{state.apply-next.item.name}}/project.md` (every reported project value and every delegated skill in `uses`), and list the keys the marketplace skill does not expose yet (step 2, a marketplace change with at least a minor bump).
-      Local project: {{state.discover.project}}
+      Local project: {{state.discover.discover.project}}
       Local path: {{state.apply-next.item.localPath}}
       Marketplace path: {{state.apply-next.item.marketplacePath}}
       Reply with the diff and the key list only.
@@ -61,18 +63,23 @@ nodes:
     role: sync
     agent: olko-marketplace-skill-sync-manager
     tools: [read, edit]
-    dirs: ["{{state.resolve-path.path}}"]
+    dirs: ["{{state.resolve-path.resolve-path.path}}"]
     maxVisits: 200
-    parse: sync.applied
+    parse: { line: [status, files, version] }
     prompt: |
       Do only steps (1) and (2) of the move-to-adapter decision in Phase 4 for {{state.apply-next.item.type}} {{state.apply-next.item.name}}, exactly as the approved draft below. Do not replace the local skill body (the factory does step 3 after one more confirmation), do not commit, push or install.
-      Local project: {{state.discover.project}}
-      Marketplace: {{state.resolve-path.path}}
+      Local project: {{state.discover.discover.project}}
+      Marketplace: {{state.resolve-path.resolve-path.path}}
 
       Approved draft:
       {{state.adapter-draft.adapter-draft}}
 
-      Reply with one line: `applied | <changed files, comma separated> | <version>`, or `blocked | <reason>` when you could not apply it.
+      Reply with one line: `applied | <changed files, comma separated> | <version>`, or `blocked | none | <reason>` when you could not apply it.
+  - id: stop-blocked
+    description: "Stops the run: the sync manager could not apply an accepted decision."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Apply blocked: the sync manager could not apply an accepted decision; its last reply names the reason." }
   - id: ask-revert
     description: "Final confirmation before the local copy is overwritten."
     kind: interrupt
@@ -82,20 +89,37 @@ nodes:
       text: "Final confirmation: replace the local {{state.apply-next.item.type}} {{state.apply-next.item.localPath}} with its marketplace counterpart {{state.apply-next.item.marketplacePath}}? This overwrites the local copy."
       allowed: [revert, keep]
   - id: revert
-    description: "Replaces the local copy with the marketplace version."
-    kind: script
-    op: sync.revertLocal
+    description: "After the final confirmation, the sync manager replaces only the selected local copy with its marketplace counterpart."
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    tools: [read, edit, bash]
+    dirs: ["{{state.resolve-path.resolve-path.path}}"]
     maxVisits: 200
+    parse: { json: [reverted, detail] }
+    prompt: |
+      The user gave the final confirmation for this accepted revert in Phase 4 (or step 3 of move-to-adapter). Replace only the selected local source with its marketplace counterpart; touch nothing else, do not commit, push or install.
+      {{state.apply-next.item.type}} {{state.apply-next.item.name}}
+      Local path: {{state.apply-next.item.localPath}}
+      Marketplace counterpart: {{state.apply-next.item.marketplacePath}}
+      For a skill directory, keep the local `project.md` adapter file. If there is no marketplace counterpart, change nothing.
+
+      End with one ```json block:
+      {"reverted": <true when the local copy now matches the marketplace counterpart, else false>, "detail": "<what was replaced, or why nothing was>"}
 edges:
   - { from: apply-next, to: END, when: "apply-next.done == true", description: "all decisions applied" }
   - { from: apply-next, to: apply, when: 'apply-next.item.route == "change"', description: "adopt or create" }
   - { from: apply-next, to: ask-revert, when: 'apply-next.item.route == "revert"', description: "revert-local" }
   - { from: apply-next, to: adapter-draft, when: 'apply-next.item.route == "adapter"', description: "move-to-adapter" }
-  - { from: apply, to: apply-next }
+  - { from: apply, to: stop-blocked, when: 'apply.apply.status == "blocked"', description: "the change could not be applied" }
+  - { from: apply, to: apply-next, description: "applied: next decision" }
   - { from: adapter-draft, to: ask-adapter }
   - { from: ask-adapter, to: adapter-write, when: 'ask-adapter.answer == "write"', description: "you chose write" }
   - { from: ask-adapter, to: apply-next, when: 'ask-adapter.answer == "skip"', description: "you chose skip" }
-  - { from: adapter-write, to: ask-revert }
+  - { from: adapter-write, to: stop-blocked, when: 'adapter-write.adapter-write.status == "blocked"', description: "the adapter could not be written" }
+  - { from: adapter-write, to: ask-revert, description: "adapter written: confirm replacing the local body" }
+  - { from: stop-blocked, to: END, description: "never reached: stop-blocked fails the run" }
   - { from: ask-revert, to: revert, when: 'ask-revert.answer == "revert"', description: "you confirmed the overwrite" }
   - { from: ask-revert, to: apply-next, when: 'ask-revert.answer == "keep"', description: "you kept the local copy" }
-  - { from: revert, to: apply-next }
+  - { from: revert, to: stop-blocked, when: "revert.revert.reverted == false", description: "no marketplace counterpart to revert to" }
+  - { from: revert, to: apply-next, description: "reverted: next decision" }

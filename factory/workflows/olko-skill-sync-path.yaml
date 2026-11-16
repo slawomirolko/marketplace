@@ -1,24 +1,44 @@
 name: olko-skill-sync-path
-version: 0.1.0
-description: "Finds the marketplace checkout (input, MARKETPLACE_PATH, project adapter, fallback) and asks before using the built-in fallback."
+version: 0.2.0
+description: "The sync manager finds the marketplace checkout (input, MARKETPLACE_PATH, project adapter, fallback) and checks it is a Git repository; asks before using the built-in fallback and stops when the path is not usable."
 source: "agents/opencode/olko-marketplace-skill-sync-manager.md (marketplace path)"
+roles:
+  sync: medium
 entry: resolve-path
 limits:
   maxCycleIterations: 3
 nodes:
   - id: resolve-path
-    description: "Finds the marketplace checkout: input, MARKETPLACE_PATH, project adapter, or the built-in fallback."
-    kind: script
-    op: sync.resolvePath
+    description: "The sync manager resolves the marketplace path in its fixed order and verifies it exists and is a Git repository. Writes nothing."
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    tools: [read, bash]
+    parse: { json: [path, source, fallback, problem?] }
+    prompt: |
+      Only resolve the marketplace repository path, in the order of your instructions. Read only: do not write, switch branches, fetch or pull.
+      {{#input.marketplace}}Explicit path supplied by the user in this run: {{input.marketplace}}{{/input.marketplace}}{{^input.marketplace}}No explicit path was supplied in this run.{{/input.marketplace}}
+      Then check the `MARKETPLACE_PATH` environment variable, then `.opencode/marketplace-path.local.json` (field `marketplacePath`) in the current project, then the fallback default.
+      Verify that the resolved path exists and is a Git repository (`git -C <path> rev-parse --is-inside-work-tree`). Report the absolute, real path.
+
+      End with one ```json block:
+      {"path": "<absolute marketplace path>", "source": "<input|MARKETPLACE_PATH|project adapter|fallback>", "fallback": <true when the source is the fallback default, else false>, "problem": "<why the path does not exist or is not a Git repository, or null>"}
   - id: ask-fallback
     description: "Asks before using the built-in fallback path."
     kind: interrupt
     question:
       id: q-marketplace-fallback
-      text: "The marketplace path comes from the built-in fallback: {{state.resolve-path.path}}. Use it?"
+      text: "The marketplace path comes from the built-in fallback: {{state.resolve-path.resolve-path.path}}. Use it?"
       allowed: [continue, stop]
+  - id: stop-path
+    description: "Stops the run: the marketplace path does not exist or is not a Git repository."
+    kind: script
+    op: builtin.stop
+    with: { reason: "The marketplace path does not exist or is not a Git repository; the resolve-path step names the path and the problem." }
 edges:
-  - { from: resolve-path, to: ask-fallback, when: "resolve-path.fallback == true", description: "only the built-in fallback path was found" }
-  - { from: resolve-path, to: END, when: "resolve-path.fallback == false", description: "path from input, environment or adapter" }
+  - { from: resolve-path, to: stop-path, when: "resolve-path.resolve-path.problem != null", description: "the path does not exist or is not a Git repository" }
+  - { from: resolve-path, to: ask-fallback, when: "resolve-path.resolve-path.fallback == true", description: "only the built-in fallback path was found" }
+  - { from: resolve-path, to: END, description: "path from input, environment or adapter" }
   - { from: ask-fallback, to: END, when: 'ask-fallback.answer == "continue"', description: "you chose continue with the fallback path" }
   - { from: ask-fallback, to: FINISH, when: 'ask-fallback.answer == "stop"', description: "you chose stop" }
+  - { from: stop-path, to: END, description: "never reached: stop-path fails the run" }

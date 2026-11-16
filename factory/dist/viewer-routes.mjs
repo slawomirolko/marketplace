@@ -46,7 +46,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 }) : target, mod));
 var __toCommonJS = (mod) => __hasOwnProp.call(mod, "module.exports") ? mod["module.exports"] : __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var __require = /* #__PURE__ */ (() => createRequire(import.meta.url))();
-// node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js
 function getEnumValues(entries) {
 	const numericValues = Object.values(entries).filter((v) => typeof v === "number");
 	return Object.entries(entries).filter(([k, _]) => numericValues.indexOf(+k) === -1).map(([_, v]) => v);
@@ -580,7 +580,7 @@ function constantCatch(value) {
 	fn[CONSTANT_CATCH] = true;
 	return fn;
 }
-// node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/core.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/core.js
 var _a$1;
 var _zodDesc = {
 	value: void 0,
@@ -686,7 +686,7 @@ function config(newConfig) {
 	if (newConfig) Object.assign(globalConfig, newConfig);
 	return globalConfig;
 }
-// node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/errors.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/errors.js
 function _getMessage() {
 	const internals = this._zod;
 	internals.message ?? (internals.message = JSON.stringify(internals.def, jsonStringifyReplacer, 2));
@@ -801,7 +801,7 @@ function formatError(error, mapper = (issue) => issue.message) {
 	processError(error);
 	return fieldErrors;
 }
-// node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/parse.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/parse.js
 function finalizeParams(callee, params) {
 	return {
 		callee: params?.callee ?? callee,
@@ -1007,7 +1007,7 @@ var _safeEncodeAsync = (_Err) => async (schema, value, _ctx) => {
 var _safeDecodeAsync = (_Err) => async (schema, value, _ctx) => {
 	return _safeParseAsync(_Err)(schema, value, _ctx);
 };
-// node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/regexes.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/regexes.js
 /**
 * @deprecated CUID v1 is deprecated by its authors due to information leakage
 * (timestamps embedded in the id). Use {@link cuid2} instead.
@@ -1079,7 +1079,7 @@ var boolean$1 = /^(?:true|false)$/i;
 var _null$2 = /^null$/i;
 var lowercase = /^[^A-Z]*$/;
 var uppercase = /^[^a-z]*$/;
-// node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/checks.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/checks.js
 var $ZodCheck = /*@__PURE__*/ $constructor("$ZodCheck", (inst, def) => {
 	var _a;
 	inst._zod ?? (inst._zod = {});
@@ -1374,7 +1374,7 @@ var $ZodCheckOverwrite = /*@__PURE__*/ $constructor("$ZodCheckOverwrite", (inst,
 		payload.value = def.tx(payload.value);
 	};
 });
-// node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/doc.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/doc.js
 var Doc = class {
 	constructor(args = [], closed = {}) {
 		this.content = [];
@@ -1407,13 +1407,13 @@ var Doc = class {
 		return new F(...Object.keys(this.closed), `return function (${this.args.join(", ")}) {\n${content.join("\n")}\n};`)(...Object.values(this.closed));
 	}
 };
-// node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/versions.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/versions.js
 var version = {
 	major: 4,
 	minor: 6,
 	patch: 7
 };
-// node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/schemas.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/schemas.js
 var $ZodType = /*@__PURE__*/ $constructor("$ZodType", (inst, def) => {
 	var _a;
 	inst ?? (inst = {});
@@ -2890,7 +2890,7 @@ function handleRefineResult(result, payload, input, inst) {
 		payload.issues.push(issue(_iss));
 	}
 }
-// node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/memoizer.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/memoizer.js
 var $ZodCyclicError = class extends Error {
 	constructor() {
 		super(`Cannot parse a reference cycle that closes through a transform`);
@@ -3142,7 +3142,7 @@ function isBackEdge(ctx, value) {
 	const backEdges = ctx[STATE]?.backEdges;
 	return backEdges !== void 0 && isRef(value) && backEdges.has(value);
 }
-// node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/en.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/en.js
 var error = () => {
 	const Sizable = {
 		string: {
@@ -3249,7 +3249,7 @@ var error = () => {
 function en_default() {
 	return { localeError: error() };
 }
-// node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/registries.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/registries.js
 var _a;
 var $ZodRegistry = class {
 	constructor() {
@@ -3295,7 +3295,7 @@ function registry() {
 }
 (_a = globalThis).__zod_globalRegistry ?? (_a.__zod_globalRegistry = registry());
 var globalRegistry = globalThis.__zod_globalRegistry;
-// node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/api.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/api.js
 function snapshotChecks(def) {
 	if (def.checks) def.checks = [...def.checks];
 	return def;
@@ -3825,7 +3825,7 @@ function _check(fn, params) {
 	ch._zod.check = fn;
 	return ch;
 }
-// node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/to-json-schema.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/to-json-schema.js
 function assignProps(target, ...sources) {
 	for (const source of sources) for (const key of Reflect.ownKeys(source)) if (Object.prototype.propertyIsEnumerable.call(source, key)) assignProp(target, key, source[key]);
 	return target;
@@ -4268,7 +4268,7 @@ var createStandardJSONSchemaMethod = (schema, io, processors = {}) => (params) =
 	extractDefs(ctx, schema);
 	return finalize(ctx, schema);
 };
-// node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema-processors.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema-processors.js
 var narrowMin = (agg, key, value) => {
 	if (agg[key] === void 0 || value > agg[key]) agg[key] = value;
 };
@@ -4913,7 +4913,7 @@ function toJSONSchema(input, params) {
 	extractDefs(ctx, input);
 	return finalize(ctx, input);
 }
-// node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/errors.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/errors.js
 var _installedErrorProtos = /* @__PURE__ */ new WeakSet([Object.prototype, Error.prototype]);
 function _lazyMethod(proto, key, make) {
 	Object.defineProperty(proto, key, {
@@ -4962,7 +4962,7 @@ var initializer = (inst, issues) => {
 	});
 };
 var ZodRealError = /*@__PURE__*/ $constructor("ZodError", initializer, void 0, { Parent: Error });
-// node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/parse.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/parse.js
 var parse = /* @__PURE__ */ _parse(ZodRealError);
 var parseAsync = /* @__PURE__ */ _parseAsync(ZodRealError);
 var safeParse = /* @__PURE__ */ _safeParse(ZodRealError);
@@ -4975,7 +4975,7 @@ var safeEncode = /* @__PURE__ */ _safeEncode(ZodRealError);
 var safeDecode = /* @__PURE__ */ _safeDecode(ZodRealError);
 var safeEncodeAsync = /* @__PURE__ */ _safeEncodeAsync(ZodRealError);
 var safeDecodeAsync = /* @__PURE__ */ _safeDecodeAsync(ZodRealError);
-// node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/schemas.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/schemas.js
 function _ensureDefaultLocale() {
 	if (!globalConfig.localeError) config(en_default());
 }
@@ -5953,7 +5953,7 @@ function priceUsage(model, tokens, cacheWriteTtlKnown) {
 		costSource: hasUntimedWrites ? "estimated" : "measured"
 	};
 }
-// node_modules/.pnpm/mustache@4.2.0/node_modules/mustache/mustache.mjs
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/mustache@4.2.0/node_modules/mustache/mustache.mjs
 /*!
 * mustache.js - Logic-less {{mustache}} templates with JavaScript
 * http://github.com/janl/mustache.js
@@ -6538,7 +6538,7 @@ mustache.escape = escapeHtml;
 mustache.Scanner = Scanner;
 mustache.Context = Context;
 mustache.Writer = Writer;
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/identity.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/identity.js
 var require_identity = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var ALIAS = Symbol.for("yaml.alias");
 	var DOC = Symbol.for("yaml.document");
@@ -6587,7 +6587,7 @@ var require_identity = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.isScalar = isScalar;
 	exports.isSeq = isSeq;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/visit.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/visit.js
 var require_visit = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var BREAK = Symbol("break visit");
@@ -6777,7 +6777,7 @@ var require_visit = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.visit = visit;
 	exports.visitAsync = visitAsync;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/directives.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/directives.js
 var require_directives = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var visit = require_visit();
@@ -6940,7 +6940,7 @@ var require_directives = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Directives.defaultTags = { "!!": "tag:yaml.org,2002:" };
 	exports.Directives = Directives;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/anchors.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/anchors.js
 var require_anchors = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var visit = require_visit();
@@ -7006,7 +7006,7 @@ var require_anchors = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.createNodeAnchors = createNodeAnchors;
 	exports.findNewAnchor = findNewAnchor;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/applyReviver.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/applyReviver.js
 var require_applyReviver = /* @__PURE__ */ __commonJSMin(((exports) => {
 	/**
 	* Applies the JSON.parse reviver algorithm as defined in the ECMA-262 spec,
@@ -7047,7 +7047,7 @@ var require_applyReviver = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.applyReviver = applyReviver;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/toJS.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/toJS.js
 var require_toJS = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	/**
@@ -7083,7 +7083,7 @@ var require_toJS = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.toJS = toJS;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Node.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Node.js
 var require_Node = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var applyReviver = require_applyReviver();
 	var identity = require_identity();
@@ -7116,7 +7116,7 @@ var require_Node = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.NodeBase = NodeBase;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Alias.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Alias.js
 var require_Alias = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var anchors = require_anchors();
 	var visit = require_visit();
@@ -7211,7 +7211,7 @@ var require_Alias = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.Alias = Alias;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Scalar.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Scalar.js
 var require_Scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var Node = require_Node();
@@ -7237,7 +7237,7 @@ var require_Scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.Scalar = Scalar;
 	exports.isScalarValue = isScalarValue;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/createNode.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/createNode.js
 var require_createNode = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Alias = require_Alias();
 	var identity = require_identity();
@@ -7299,7 +7299,7 @@ var require_createNode = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.createNode = createNode;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Collection.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Collection.js
 var require_Collection = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var createNode = require_createNode();
 	var identity = require_identity();
@@ -7419,7 +7419,7 @@ var require_Collection = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.collectionFromPath = collectionFromPath;
 	exports.isEmptyPath = isEmptyPath;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyComment.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyComment.js
 var require_stringifyComment = /* @__PURE__ */ __commonJSMin(((exports) => {
 	/**
 	* Stringifies a comment.
@@ -7438,7 +7438,7 @@ var require_stringifyComment = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.lineComment = lineComment;
 	exports.stringifyComment = stringifyComment;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/foldFlowLines.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/foldFlowLines.js
 var require_foldFlowLines = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var FOLD_FLOW = "flow";
 	var FOLD_BLOCK = "block";
@@ -7557,7 +7557,7 @@ var require_foldFlowLines = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.FOLD_QUOTED = FOLD_QUOTED;
 	exports.foldFlowLines = foldFlowLines;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyString.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyString.js
 var require_stringifyString = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Scalar = require_Scalar();
 	var foldFlowLines = require_foldFlowLines();
@@ -7780,7 +7780,7 @@ var require_stringifyString = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.stringifyString = stringifyString;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringify.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringify.js
 var require_stringify = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var anchors = require_anchors();
 	var identity = require_identity();
@@ -7887,7 +7887,7 @@ var require_stringify = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.createStringifyContext = createStringifyContext;
 	exports.stringify = stringify;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyPair.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyPair.js
 var require_stringifyPair = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var Scalar = require_Scalar();
@@ -7983,7 +7983,7 @@ var require_stringifyPair = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.stringifyPair = stringifyPair;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/log.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/log.js
 var require_log = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var node_process = __require("process");
 	function debug(logLevel, ...messages) {
@@ -7998,7 +7998,7 @@ var require_log = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.debug = debug;
 	exports.warn = warn;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/merge.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/merge.js
 var require_merge = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var Scalar = require_Scalar();
@@ -8040,7 +8040,7 @@ var require_merge = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.isMergeKey = isMergeKey;
 	exports.merge = merge;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/addPairToJSMap.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/addPairToJSMap.js
 var require_addPairToJSMap = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var log = require_log();
 	var merge = require_merge();
@@ -8090,7 +8090,7 @@ var require_addPairToJSMap = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.addPairToJSMap = addPairToJSMap;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Pair.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Pair.js
 var require_Pair = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var createNode = require_createNode();
 	var stringifyPair = require_stringifyPair();
@@ -8122,7 +8122,7 @@ var require_Pair = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.Pair = Pair;
 	exports.createPair = createPair;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyCollection.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyCollection.js
 var require_stringifyCollection = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var stringify = require_stringify();
@@ -8239,7 +8239,7 @@ var require_stringifyCollection = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.stringifyCollection = stringifyCollection;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/YAMLMap.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/YAMLMap.js
 var require_YAMLMap = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var stringifyCollection = require_stringifyCollection();
 	var addPairToJSMap = require_addPairToJSMap();
@@ -8347,7 +8347,7 @@ var require_YAMLMap = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.YAMLMap = YAMLMap;
 	exports.findPair = findPair;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/common/map.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/common/map.js
 var require_map = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var YAMLMap = require_YAMLMap();
@@ -8363,7 +8363,7 @@ var require_map = /* @__PURE__ */ __commonJSMin(((exports) => {
 		createNode: (schema, obj, ctx) => YAMLMap.YAMLMap.from(schema, obj, ctx)
 	};
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/YAMLSeq.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/YAMLSeq.js
 var require_YAMLSeq = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var createNode = require_createNode();
 	var stringifyCollection = require_stringifyCollection();
@@ -8468,7 +8468,7 @@ var require_YAMLSeq = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.YAMLSeq = YAMLSeq;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/common/seq.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/common/seq.js
 var require_seq = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var YAMLSeq = require_YAMLSeq();
@@ -8484,7 +8484,7 @@ var require_seq = /* @__PURE__ */ __commonJSMin(((exports) => {
 		createNode: (schema, obj, ctx) => YAMLSeq.YAMLSeq.from(schema, obj, ctx)
 	};
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/common/string.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/common/string.js
 var require_string = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var stringifyString = require_stringifyString();
 	exports.string = {
@@ -8498,7 +8498,7 @@ var require_string = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/common/null.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/common/null.js
 var require_null = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Scalar = require_Scalar();
 	var nullTag = {
@@ -8512,7 +8512,7 @@ var require_null = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.nullTag = nullTag;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/core/bool.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/core/bool.js
 var require_bool$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Scalar = require_Scalar();
 	var boolTag = {
@@ -8530,7 +8530,7 @@ var require_bool$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.boolTag = boolTag;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyNumber.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyNumber.js
 var require_stringifyNumber = /* @__PURE__ */ __commonJSMin(((exports) => {
 	function stringifyNumber({ format, minFractionDigits, tag, value }) {
 		if (typeof value === "bigint") return String(value);
@@ -8550,7 +8550,7 @@ var require_stringifyNumber = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.stringifyNumber = stringifyNumber;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/core/float.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/core/float.js
 var require_float$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Scalar = require_Scalar();
 	var stringifyNumber = require_stringifyNumber();
@@ -8590,7 +8590,7 @@ var require_float$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.floatExp = floatExp;
 	exports.floatNaN = floatNaN;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/core/int.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/core/int.js
 var require_int$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var stringifyNumber = require_stringifyNumber();
 	var intIdentify = (value) => typeof value === "bigint" || Number.isInteger(value);
@@ -8630,7 +8630,7 @@ var require_int$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.intHex = intHex;
 	exports.intOct = intOct;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/core/schema.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/core/schema.js
 var require_schema$2 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var map = require_map();
 	var _null = require_null();
@@ -8653,7 +8653,7 @@ var require_schema$2 = /* @__PURE__ */ __commonJSMin(((exports) => {
 		float.float
 	];
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/json/schema.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/json/schema.js
 var require_schema$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Scalar = require_Scalar();
 	var map = require_map();
@@ -8714,7 +8714,7 @@ var require_schema$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	});
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/binary.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/binary.js
 var require_binary = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var node_buffer = __require("buffer");
 	var Scalar = require_Scalar();
@@ -8769,7 +8769,7 @@ var require_binary = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/pairs.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/pairs.js
 var require_pairs = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var Pair = require_Pair();
@@ -8829,7 +8829,7 @@ var require_pairs = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.pairs = pairs;
 	exports.resolvePairs = resolvePairs;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/omap.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/omap.js
 var require_omap = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var toJS = require_toJS();
@@ -8893,7 +8893,7 @@ var require_omap = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.YAMLOMap = YAMLOMap;
 	exports.omap = omap;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/bool.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/bool.js
 var require_bool = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Scalar = require_Scalar();
 	function boolStringify({ value, source }, ctx) {
@@ -8919,7 +8919,7 @@ var require_bool = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.falseTag = falseTag;
 	exports.trueTag = trueTag;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/float.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/float.js
 var require_float = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Scalar = require_Scalar();
 	var stringifyNumber = require_stringifyNumber();
@@ -8962,7 +8962,7 @@ var require_float = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.floatExp = floatExp;
 	exports.floatNaN = floatNaN;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/int.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/int.js
 var require_int = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var stringifyNumber = require_stringifyNumber();
 	var intIdentify = (value) => typeof value === "bigint" || Number.isInteger(value);
@@ -9034,7 +9034,7 @@ var require_int = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.intHex = intHex;
 	exports.intOct = intOct;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/set.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/set.js
 var require_set = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var Pair = require_Pair();
@@ -9102,7 +9102,7 @@ var require_set = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.YAMLSet = YAMLSet;
 	exports.set = set;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/timestamp.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/timestamp.js
 var require_timestamp = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var stringifyNumber = require_stringifyNumber();
 	/** Internal types handle bigint as number, because TS can't figure it out. */
@@ -9184,7 +9184,7 @@ var require_timestamp = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.intTime = intTime;
 	exports.timestamp = timestamp;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/schema.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/schema.js
 var require_schema = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var map = require_map();
 	var _null = require_null();
@@ -9223,7 +9223,7 @@ var require_schema = /* @__PURE__ */ __commonJSMin(((exports) => {
 		timestamp.timestamp
 	];
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/tags.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/tags.js
 var require_tags = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var map = require_map();
 	var _null = require_null();
@@ -9308,7 +9308,7 @@ var require_tags = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.coreKnownTags = coreKnownTags;
 	exports.getTags = getTags;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/Schema.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/Schema.js
 var require_Schema = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var map = require_map();
@@ -9335,7 +9335,7 @@ var require_Schema = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyDocument.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyDocument.js
 var require_stringifyDocument = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var stringify = require_stringify();
@@ -9396,7 +9396,7 @@ var require_stringifyDocument = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.stringifyDocument = stringifyDocument;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/Document.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/Document.js
 var require_Document = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Alias = require_Alias();
 	var Collection = require_Collection();
@@ -9676,7 +9676,7 @@ var require_Document = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.Document = Document;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/errors.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/errors.js
 var require_errors$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var YAMLError = class extends Error {
 		constructor(name, pos, code, message) {
@@ -9728,7 +9728,7 @@ var require_errors$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.YAMLWarning = YAMLWarning;
 	exports.prettifyError = prettifyError;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-props.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-props.js
 var require_resolve_props = /* @__PURE__ */ __commonJSMin(((exports) => {
 	function resolveProps(tokens, { flow, indicator, next, offset, onError, parentIndent, startOnNewline }) {
 		let spaceBefore = false;
@@ -9834,7 +9834,7 @@ var require_resolve_props = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.resolveProps = resolveProps;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/util-contains-newline.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/util-contains-newline.js
 var require_util_contains_newline = /* @__PURE__ */ __commonJSMin(((exports) => {
 	function containsNewline(key) {
 		if (!key) return null;
@@ -9862,7 +9862,7 @@ var require_util_contains_newline = /* @__PURE__ */ __commonJSMin(((exports) => 
 	}
 	exports.containsNewline = containsNewline;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/util-flow-indent-check.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/util-flow-indent-check.js
 var require_util_flow_indent_check = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var utilContainsNewline = require_util_contains_newline();
 	function flowIndentCheck(indent, fc, onError) {
@@ -9873,7 +9873,7 @@ var require_util_flow_indent_check = /* @__PURE__ */ __commonJSMin(((exports) =>
 	}
 	exports.flowIndentCheck = flowIndentCheck;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/util-map-includes.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/util-map-includes.js
 var require_util_map_includes = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	function mapIncludes(ctx, items, search) {
@@ -9884,7 +9884,7 @@ var require_util_map_includes = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.mapIncludes = mapIncludes;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-block-map.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-block-map.js
 var require_resolve_block_map = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Pair = require_Pair();
 	var YAMLMap = require_YAMLMap();
@@ -9971,7 +9971,7 @@ var require_resolve_block_map = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.resolveBlockMap = resolveBlockMap;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-block-seq.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-block-seq.js
 var require_resolve_block_seq = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var YAMLSeq = require_YAMLSeq();
 	var resolveProps = require_resolve_props();
@@ -10015,7 +10015,7 @@ var require_resolve_block_seq = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.resolveBlockSeq = resolveBlockSeq;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-end.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-end.js
 var require_resolve_end = /* @__PURE__ */ __commonJSMin(((exports) => {
 	function resolveEnd(end, offset, reqSpace, onError) {
 		let comment = "";
@@ -10052,7 +10052,7 @@ var require_resolve_end = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.resolveEnd = resolveEnd;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-flow-collection.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-flow-collection.js
 var require_resolve_flow_collection = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var Pair = require_Pair();
@@ -10214,7 +10214,7 @@ var require_resolve_flow_collection = /* @__PURE__ */ __commonJSMin(((exports) =
 	}
 	exports.resolveFlowCollection = resolveFlowCollection;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/compose-collection.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/compose-collection.js
 var require_compose_collection = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var Scalar = require_Scalar();
@@ -10265,7 +10265,7 @@ var require_compose_collection = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.composeCollection = composeCollection;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-block-scalar.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-block-scalar.js
 var require_resolve_block_scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Scalar = require_Scalar();
 	function resolveBlockScalar(ctx, scalar, onError) {
@@ -10441,7 +10441,7 @@ var require_resolve_block_scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.resolveBlockScalar = resolveBlockScalar;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-flow-scalar.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-flow-scalar.js
 var require_resolve_flow_scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Scalar = require_Scalar();
 	var resolveEnd = require_resolve_end();
@@ -10645,7 +10645,7 @@ var require_resolve_flow_scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.resolveFlowScalar = resolveFlowScalar;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/compose-scalar.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/compose-scalar.js
 var require_compose_scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var Scalar = require_Scalar();
@@ -10705,7 +10705,7 @@ var require_compose_scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.composeScalar = composeScalar;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/util-empty-scalar-position.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/util-empty-scalar-position.js
 var require_util_empty_scalar_position = /* @__PURE__ */ __commonJSMin(((exports) => {
 	function emptyScalarPosition(offset, before, pos) {
 		if (before) {
@@ -10731,7 +10731,7 @@ var require_util_empty_scalar_position = /* @__PURE__ */ __commonJSMin(((exports
 	}
 	exports.emptyScalarPosition = emptyScalarPosition;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/compose-node.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/compose-node.js
 var require_compose_node = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Alias = require_Alias();
 	var identity = require_identity();
@@ -10821,7 +10821,7 @@ var require_compose_node = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.composeEmptyNode = composeEmptyNode;
 	exports.composeNode = composeNode;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/compose-doc.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/compose-doc.js
 var require_compose_doc = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Document = require_Document();
 	var composeNode = require_compose_node();
@@ -10862,7 +10862,7 @@ var require_compose_doc = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.composeDoc = composeDoc;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/composer.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/composer.js
 var require_composer = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var node_process = __require("process");
 	var directives = require_directives();
@@ -11059,7 +11059,7 @@ var require_composer = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.Composer = Composer;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/cst-scalar.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/cst-scalar.js
 var require_cst_scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var resolveBlockScalar = require_resolve_block_scalar();
 	var resolveFlowScalar = require_resolve_flow_scalar();
@@ -11325,7 +11325,7 @@ var require_cst_scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.resolveAsScalar = resolveAsScalar;
 	exports.setScalarValue = setScalarValue;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/cst-stringify.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/cst-stringify.js
 var require_cst_stringify = /* @__PURE__ */ __commonJSMin(((exports) => {
 	/**
 	* Stringify a CST document, token, or collection item
@@ -11375,7 +11375,7 @@ var require_cst_stringify = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.stringify = stringify;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/cst-visit.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/cst-visit.js
 var require_cst_visit = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var BREAK = Symbol("break visit");
 	var SKIP = Symbol("skip children");
@@ -11465,7 +11465,7 @@ var require_cst_visit = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.visit = visit;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/cst.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/cst.js
 var require_cst = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var cstScalar = require_cst_scalar();
 	var cstStringify = require_cst_stringify();
@@ -11543,7 +11543,7 @@ var require_cst = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.prettyToken = prettyToken;
 	exports.tokenType = tokenType;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/lexer.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/lexer.js
 var require_lexer = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var cst = require_cst();
 	function isEmpty(ch) {
@@ -12075,7 +12075,7 @@ var require_lexer = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.Lexer = Lexer;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/line-counter.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/line-counter.js
 var require_line_counter = /* @__PURE__ */ __commonJSMin(((exports) => {
 	/**
 	* Tracks newlines during parsing in order to provide an efficient API for
@@ -12121,7 +12121,7 @@ var require_line_counter = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.LineCounter = LineCounter;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/parser.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/parser.js
 var require_parser = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var node_process = __require("process");
 	var cst = require_cst();
@@ -12986,7 +12986,7 @@ var require_parser = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.Parser = Parser;
 }));
-// node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/public-api.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/public-api.js
 var require_public_api = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var composer = require_composer();
 	var Document = require_Document();
@@ -13372,611 +13372,6 @@ function opencodeConfigDir(name, tools = ["read"]) {
 	} else fs.writeFileSync(target, `---\n${agent.frontmatter}\n---\n\n${agent.prompt}\n`);
 	return dir;
 }
-// src/impl-ops.ts
-var STACKS = [
-	{
-		id: "dotnet",
-		pattern: /\.net\b|c#|csproj|asp\.net|\.cs\b/i,
-		extensions: [".cs", ".csproj"]
-	},
-	{
-		id: "mobile",
-		pattern: /kotlin|android|\.kt\b/i,
-		extensions: [".kt", ".kts"]
-	},
-	{
-		id: "react-native",
-		pattern: /react native|expo/i,
-		extensions: []
-	},
-	{
-		id: "react",
-		pattern: /\breact\b(?! native)|\.tsx\b/i,
-		extensions: [".ts", ".tsx"]
-	},
-	{
-		id: "army-python",
-		pattern: /\bpython\b|\.py\b/i,
-		extensions: [".py"]
-	}
-];
-var AGENT_PREFIX = {
-	dotnet: "olko-dotnet",
-	mobile: "olko-mobile",
-	"react-native": "olko-react-native",
-	react: "olko-react",
-	"army-python": "olko-army-python"
-};
-var CODE_EXTENSIONS = [
-	".cs",
-	".ts",
-	".tsx",
-	".js",
-	".jsx",
-	".kt",
-	".kts",
-	".py"
-];
-var CONTEXT_FILE = /(^|\/)(AGENTS|CODING_STYLE|TESTING|CLAUDE)\.md$/;
-var DOC_PATH = /(^|\/)(docs|plans)\/|\.md$/i;
-var TEST_PATH = /(^|\/)tests?\/|tests?\.(cs|ts|tsx|kt|py)$|test_[^/]+\.py$|\.(test|spec)\.(ts|tsx)$/i;
-function stateOf$1(state, key) {
-	const value = state[key];
-	if (value === void 0) throw new Error(`state.${key} is not set`);
-	return value;
-}
-function section(text, title) {
-	const lines = text.split(/\r?\n/);
-	const start = lines.findIndex((l) => /^#{2,4}\s/.test(l) && title.test(l));
-	if (start < 0) return "";
-	const level = lines[start].match(/^#+/)[0].length;
-	const end = lines.findIndex((l, i) => i > start && new RegExp(`^#{1,${level}}\\s`).test(l));
-	return lines.slice(start + 1, end < 0 ? void 0 : end).join("\n").trim();
-}
-function appendJournal(file, line) {
-	if (!fs.existsSync(file)) return;
-	const text = fs.readFileSync(file, "utf8");
-	const entry = `- ${(/* @__PURE__ */ new Date()).toISOString().replace(/\.\d+Z$/, "Z")} ${line.replace(/\r?\n/g, " ").slice(0, 600)}`;
-	if (/^## Implementation\s*$/m.test(text)) fs.writeFileSync(file, `${text.replace(/\s*$/, "")}\n${entry}\n`);
-	else fs.writeFileSync(file, `${text.replace(/\s*$/, "")}\n\n## Implementation\n\n${entry}\n`);
-}
-function taskOf(state, input) {
-	const task = state.task;
-	if (task) return task;
-	if (!input.plan) throw new Error("no Task in state and no input.plan");
-	return {
-		ok: true,
-		featureId: "",
-		featureDir: path.dirname(path.dirname(input.plan)),
-		featurePlan: path.join(path.dirname(path.dirname(input.plan)), "implementation.md"),
-		tracker: "",
-		taskFile: input.plan,
-		taskName: path.basename(input.plan).replace(/-implementation\.md$/, ""),
-		criteria: input.criteria ?? ""
-	};
-}
-function baseOf(state, input) {
-	const base = state.worktree?.base ?? input.base;
-	if (!base) throw new Error("no base branch: run the worktree step first or give input.base");
-	return base;
-}
-function lastLine$1(text, prefix) {
-	const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.toLowerCase().startsWith(`${prefix} |`));
-	return line ? line.split("|").map((p) => p.trim()) : null;
-}
-function parseLine(prefix) {
-	return (text) => {
-		const fields = lastLine$1(text, prefix);
-		if (!fields) throw new Error(`output has no '${prefix} |' line`);
-		return {
-			verdict: (fields[1] ?? "").toLowerCase(),
-			detail: fields.slice(2).join(" | "),
-			fields: fields.slice(1),
-			text: String(text).slice(-4e3)
-		};
-	};
-}
-function parseChunks(text) {
-	const block = [...String(text).matchAll(/```json\s*([\s\S]*?)```/g)].map((m) => m[1]).pop();
-	if (!block) throw new Error("chunker output has no ```json block");
-	const parsed = JSON.parse(block);
-	if (!Array.isArray(parsed.chunks) || parsed.chunks.length === 0) throw new Error("chunker returned no chunks");
-	return { chunks: parsed.chunks.map((c) => ({
-		stack: String(c.stack ?? ""),
-		title: String(c.title ?? ""),
-		files: (c.files ?? []).map(String),
-		brief: String(c.brief ?? "")
-	})) };
-}
-function results(state, node) {
-	return Object.entries(state[node] ?? {});
-}
-async function changed(exec, root, base) {
-	return (await localDiff(exec, root, base)).files;
-}
-function addedLines(file) {
-	return file.diff.split(/\r?\n/).filter((l) => l.startsWith("+") && !l.startsWith("+++")).map((l) => l.slice(1));
-}
-function hashFile(file) {
-	return fs.existsSync(file) ? crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex") : "missing";
-}
-var implTask = async ({ input, state, nodeId }) => {
-	const visits = ((nodeId ? state[nodeId] : void 0)?.visits ?? 0) + 1;
-	const root = path.resolve(input.project ?? ".");
-	const planned = state.plan?.feature?.featureId;
-	const featureId = input.featureId ?? planned ?? "";
-	const featureDir = path.join(root, "plans", "features", featureId);
-	const tasksDir = path.join(featureDir, "tasks");
-	const tasks = featureId && fs.existsSync(tasksDir) ? fs.readdirSync(tasksDir).filter((f) => f.endsWith("-implementation.md")).sort() : [];
-	const pick = input.taskId ? tasks.find((f) => f.startsWith(input.taskId)) : tasks[0];
-	const taskFile = pick ? path.join(tasksDir, pick) : "";
-	const text = taskFile ? fs.readFileSync(taskFile, "utf8") : "";
-	const criteria = section(text, /acceptance/i);
-	const ready = /ready for implementation:\s*\**\s*yes/i.test(text);
-	const reason = !featureId ? "no featureId in the input" : !pick ? `no approved Task plan in ${path.relative(root, tasksDir)}` : !criteria ? `${pick} has no acceptance criteria` : !ready ? `${pick} does not say Ready for implementation: yes` : "";
-	const ok = reason === "";
-	const canPlan = !ok && visits === 1 && Boolean(input.idea);
-	const task = {
-		ok,
-		canPlan,
-		stop: !ok && !canPlan,
-		visits,
-		reason,
-		featureId,
-		featureDir,
-		featurePlan: path.join(featureDir, "implementation.md"),
-		tracker: path.join(featureDir, "feature-tracker.md"),
-		taskFile,
-		taskName: pick ? pick.replace(/-implementation\.md$/, "") : "",
-		criteria
-	};
-	return {
-		state: task,
-		metrics: {
-			ok: ok ? 1 : 0,
-			tasks: tasks.length
-		},
-		output: ok ? `Task ${task.taskName} of Feature ${featureId}: acceptance criteria present, plan ready.` : `Entry gate: ${reason}.${canPlan ? " Routing to plan documentation." : ""}`
-	};
-};
-var implWorktree = async ({ input, state, exec }) => {
-	if (!exec) throw new Error("impl.worktree needs the host exec tool");
-	const task = stateOf$1(state, "task");
-	const root = path.resolve(input.project ?? ".");
-	const current = await exec("git", [
-		"-C",
-		root,
-		"branch",
-		"--show-current"
-	]);
-	const base = current.stdout.trim();
-	if (current.code !== 0 || !base) throw new Error(`the main checkout ${root} is not on a branch`);
-	const slug = task.taskName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-	const branch = `feature/${slug}`;
-	const target = path.join(path.dirname(root), `${path.basename(root)}-worktrees`, slug);
-	let resumed = false;
-	if (fs.existsSync(path.join(target, ".git"))) resumed = true;
-	else {
-		fs.mkdirSync(path.dirname(target), { recursive: true });
-		const add = await exec("git", [
-			"-C",
-			root,
-			"worktree",
-			"add",
-			...(await exec("git", [
-				"-C",
-				root,
-				"rev-parse",
-				"--verify",
-				"--quiet",
-				`refs/heads/${branch}`
-			])).code === 0 ? [target, branch] : [
-				"-b",
-				branch,
-				target,
-				"HEAD"
-			]
-		]);
-		if (add.code !== 0) throw new Error(`git worktree add failed: ${add.stderr.slice(-300)}`);
-	}
-	const workspace = fs.realpathSync.native(target);
-	return {
-		state: {
-			path: workspace,
-			branch,
-			base,
-			resumed
-		},
-		workspace,
-		metrics: { resumed: resumed ? 1 : 0 },
-		output: `${resumed ? "Resumed" : "Created"} worktree ${workspace} on ${branch} (base ${base}). Every later agent and operation runs there.`
-	};
-};
-var implJournal = async ({ state, exec }) => {
-	const task = stateOf$1(state, "task");
-	const worktree = stateOf$1(state, "worktree");
-	const text = fs.readFileSync(task.taskFile, "utf8");
-	if (!/^## Implementation\s*$/m.test(text)) fs.writeFileSync(task.taskFile, `${text.replace(/\s*$/, "")}\n\n## Implementation\n\n- Session status: in progress\n- Current step: preflight\n- Worktree: ${worktree.path}\n- Branch: ${worktree.branch} (base ${worktree.base})\n\n### Log\n`);
-	appendJournal(task.taskFile, worktree.resumed ? "resumed by the factory run" : "started by the factory run");
-	if (!fs.existsSync(task.tracker)) {
-		const head = exec ? (await exec("git", [
-			"-C",
-			worktree.path,
-			"rev-parse",
-			"HEAD"
-		])).stdout.trim() : "";
-		fs.writeFileSync(task.tracker, `# Feature tracker: ${task.featureId}\n\n- Base commit: ${head}\n\n## Tasks\n\n- ${task.taskName}: in progress on ${worktree.branch}\n\n## Pending\n\n## Final Feature audit\n\nnot run\n`);
-	}
-	return {
-		state: {
-			journal: task.taskFile,
-			tracker: task.tracker
-		},
-		metrics: {},
-		output: `Journal in ${task.taskFile}; Feature tracker ${task.tracker}.`
-	};
-};
-var implPreflight = async ({ state, nodeId }) => {
-	const task = stateOf$1(state, "task");
-	const round = ((nodeId ? state[nodeId] : void 0)?.round ?? 0) + 1;
-	const verdicts = results(state, "workers");
-	const lines = [
-		"flow",
-		"runtime",
-		"test",
-		"readiness"
-	].map((id) => {
-		const v = verdicts.find(([k]) => k === id)?.[1];
-		return {
-			id,
-			verdict: v ? v.verdict.toUpperCase() : "MISSING",
-			detail: v?.detail ?? "no result"
-		};
-	});
-	const pass = lines.every((l) => l.verdict === "PASS");
-	const text = lines.map((l) => `${l.id}: ${l.verdict} | ${l.detail}`).join("\n");
-	appendJournal(task.taskFile, `preflight round ${round}: ${lines.map((l) => `${l.id}=${l.verdict}`).join(", ")}`);
-	return {
-		state: {
-			round,
-			pass,
-			next: pass ? "pass" : round < 3 ? "ask" : "stop",
-			text,
-			reason: `preflight did not pass after ${round} rounds:\n${text}`
-		},
-		metrics: {
-			pass: pass ? 1 : 0,
-			round
-		},
-		output: pass ? "Preflight: four PASS results; implementation may start." : `Preflight round ${round}: not all PASS.\n${text}`
-	};
-};
-var implStacks = async ({ state, input }) => {
-	const task = taskOf(state, input);
-	const text = [task.taskFile, task.featurePlan].filter((f) => f && fs.existsSync(f)).map((f) => fs.readFileSync(f, "utf8")).join("\n");
-	const stacks = STACKS.filter((s) => s.pattern.test(text)).map((s) => s.id);
-	if (stacks.length === 0) throw new Error(`no known stack named in ${task.taskFile}`);
-	const prefix = (s) => AGENT_PREFIX[s];
-	const as = (role) => stacks.map((s) => ({
-		id: s,
-		agentName: role === "author" ? "olko-test-first-author" : `${prefix(s)}-${role}`,
-		role: role === "author" ? "implementer" : role === "test-runner" ? "runner" : "implementer"
-	}));
-	return {
-		state: {
-			stacks,
-			authors: as("author"),
-			implementers: as("implementer"),
-			runners: as("test-runner")
-		},
-		metrics: { stacks: stacks.length },
-		output: `Stacks of this Task: ${stacks.join(", ")}.`
-	};
-};
-var implTestsFirst = async ({ state, input, answers, nodeId, exec, cwd }) => {
-	const task = taskOf(state, input);
-	const previous = nodeId ? state[nodeId] : void 0;
-	const round = (previous?.round ?? 0) + 1;
-	const answer = previous ? answers?.[`q-impl-unclear-${previous.round}`] : void 0;
-	const answered = [previous?.answered, answer].filter(Boolean).join("\n");
-	const written = results(state, "write-tests");
-	const open = written.flatMap(([stack, r]) => r.fields.slice(1).filter((f) => !/^(unclear|blocked):\s*none\s*$/i.test(f) && /^(unclear|blocked):/i.test(f)).map((f) => `${stack}: ${f}`));
-	const count = written.reduce((sum, [, r]) => sum + (Number(r.verdict) || 0), 0);
-	const testFiles = {};
-	if (exec && cwd) {
-		for (const file of await changed(exec, cwd, baseOf(state, input))) if (TEST_PATH.test(file.path)) testFiles[file.path] = hashFile(path.join(cwd, file.path));
-	}
-	appendJournal(task.taskFile, `failing tests first, round ${round}: ${count} tests written (${Object.keys(testFiles).join(", ") || "no test file changed"}); open items: ${open.length}`);
-	const next = open.length === 0 ? "done" : round < 3 ? "ask" : "stop";
-	return {
-		state: {
-			round,
-			count,
-			open: open.length,
-			questions: open.join("\n"),
-			answered: answered || "none",
-			testFiles,
-			testList: Object.keys(testFiles).join(", ") || "none",
-			next,
-			reason: `criteria still unclear after ${round} rounds:\n${open.join("\n")}`
-		},
-		metrics: {
-			tests: count,
-			open: open.length,
-			files: Object.keys(testFiles).length
-		},
-		output: `${count} failing tests written; ${Object.keys(testFiles).length} test files; ${open.length} open items.`
-	};
-};
-var implChunkPlan = async ({ state }) => {
-	const stacks = stateOf$1(state, "stacks");
-	const parsed = Object.values(stateOf$1(state, "chunker"))[0];
-	const owner = /* @__PURE__ */ new Map();
-	const chunks = parsed.chunks.map((c, index) => {
-		const agent = stacks.implementers.find((a) => a.id === c.stack) ?? stacks.implementers[0];
-		const files = c.files.filter((f) => {
-			if (owner.has(f)) return false;
-			owner.set(f, index);
-			return true;
-		});
-		return {
-			index,
-			title: c.title,
-			stack: agent.id,
-			files,
-			brief: c.brief,
-			agents: [agent]
-		};
-	});
-	return {
-		state: { chunks },
-		metrics: { chunks: chunks.length },
-		output: `${chunks.length} chunks: ${chunks.map((c) => `${c.index + 1}. ${c.stack} ${c.title}`).join("; ")}.`
-	};
-};
-var implChildCheck = async ({ state, input, exec, cwd, nodeId }) => {
-	if (!exec || !cwd) throw new Error("impl.childCheck needs the host exec tool");
-	const task = taskOf(state, input);
-	const chunk = stateOf$1(state, "chunk-next").item;
-	const previous = nodeId ? state[nodeId] : void 0;
-	const attempts = previous?.chunk === chunk.index ? (previous.attempts ?? 0) + 1 : 1;
-	const edgeRuns = previous?.edgeRuns ?? 0;
-	const result = Object.values(state.implement ?? {})[0];
-	const verdict = result?.verdict ?? "missing";
-	const frozen = state["tests-check"]?.testFiles ?? {};
-	const violations = [];
-	for (const file of await changed(exec, cwd, baseOf(state, input))) {
-		if (/^\.github\/workflows\/|azure-pipelines|\.gitlab-ci/.test(file.path)) violations.push(`${file.path}: CI/CD workflow file changed without explicit permission`);
-		if (frozen[file.path] !== void 0) {
-			if (hashFile(path.join(cwd, file.path)) !== frozen[file.path]) violations.push(`${file.path}: a failing-test-first file was changed`);
-			continue;
-		}
-		if (!CODE_EXTENSIONS.some((e) => file.path.endsWith(e))) continue;
-		const python = file.path.endsWith(".py");
-		for (const line of addedLines(file)) {
-			if (python ? /^\s*#(?!!)/.test(line) : /^\s*(\/\/(?!\/)|\/\*)/.test(line)) violations.push(`${file.path}: explanatory comment added: ${line.trim().slice(0, 120)}`);
-			if (/\b(AC|D)\d+\b|\bMAIN-\d+\b/.test(line)) violations.push(`${file.path}: plan or criterion id inside code: ${line.trim().slice(0, 120)}`);
-		}
-	}
-	const next = violations.length ? attempts < 3 ? "fix" : "stop" : verdict === "blocked" ? "blocked" : verdict === "dispute" ? "dispute" : verdict === "edge-cases" && edgeRuns === 0 ? "edge" : "done";
-	appendJournal(task.taskFile, `chunk ${chunk.index + 1} (${chunk.stack} ${chunk.title}) attempt ${attempts}: ${verdict}; ${violations.length} rule violations`);
-	return {
-		state: {
-			chunk: chunk.index,
-			attempts,
-			edgeRuns: next === "edge" ? edgeRuns + 1 : edgeRuns,
-			verdict,
-			next,
-			violations: violations.join("\n"),
-			detail: result?.detail ?? "",
-			report: result?.text ?? "",
-			reason: `chunk ${chunk.index + 1} still breaks the child-result rules after ${attempts} attempts:\n${violations.join("\n")}`
-		},
-		metrics: {
-			violations: violations.length,
-			attempts
-		},
-		output: violations.length ? `Chunk ${chunk.index + 1}: ${violations.length} violations.\n${violations.join("\n")}` : `Chunk ${chunk.index + 1}: ${verdict}.`
-	};
-};
-var implDispute = async ({ state }) => {
-	const result = Object.values(state.dispute ?? {})[0];
-	const justified = result?.verdict === "justified";
-	return {
-		state: {
-			justified,
-			next: justified ? "ask" : "implement",
-			detail: result?.detail ?? ""
-		},
-		metrics: { justified: justified ? 1 : 0 },
-		output: justified ? `The test author keeps the test: ${result?.detail}` : `The test author changed the test: ${result?.detail ?? "no detail"}`
-	};
-};
-var implChecks = async ({ state, input, nodeId }) => {
-	const task = taskOf(state, input);
-	const round = ((nodeId ? state[nodeId] : void 0)?.round ?? 0) + 1;
-	const style = results(state, "style");
-	const tests = results(state, "runners");
-	const failures = [...style.map(([id, r]) => ({
-		kind: "style",
-		id,
-		...r
-	})), ...tests.map(([id, r]) => ({
-		kind: "tests",
-		id,
-		...r
-	}))].filter((r) => r.verdict !== "pass");
-	const pass = failures.length === 0 && style.length > 0 && tests.length > 0;
-	const text = failures.map((f) => `${f.kind} ${f.id}: ${f.verdict} | ${f.detail}`).join("\n");
-	appendJournal(task.taskFile, `checks round ${round}: ${pass ? "style and tests pass" : text}`);
-	const inTests = (f) => f.kind === "style" && /Tests?\.(cs|ts|tsx|kt|py)\b|(^|[\s`(/])tests?\/|\.(test|spec)\.|test_\w+\.py/i.test(f.detail);
-	const testFailures = failures.filter(inTests);
-	const codeFailures = failures.filter((f) => !inTests(f));
-	const next = pass ? "pass" : round >= 4 ? "stop" : testFailures.length ? "fix-tests" : "fix";
-	const lineOf = (f) => `${f.kind} ${f.id}: ${f.verdict} | ${f.detail}`;
-	return {
-		state: {
-			round,
-			pass,
-			next,
-			failures: codeFailures.map(lineOf).join("\n") || "none",
-			testFailures: testFailures.map(lineOf).join("\n") || "none",
-			reason: `style or tests still fail after ${round} rounds:\n${text}`
-		},
-		metrics: {
-			failures: failures.length,
-			round
-		},
-		output: pass ? "Style and affected tests pass." : `Round ${round}: ${failures.length} failing checks.\n${text}`
-	};
-};
-var implDocker = async ({ state, input }) => {
-	const task = taskOf(state, input);
-	const docker = Object.values(state["docker-rebuild"] ?? {})[0];
-	const runtime = results(state, "runtime");
-	const verified = docker?.verdict === "pass" && runtime.length > 0 && runtime.every(([, r]) => r.verdict === "verified");
-	const text = [`docker: ${docker?.verdict ?? "missing"} | ${docker?.detail ?? ""}`, ...runtime.map(([id, r]) => `runtime ${id}: ${r.verdict} | ${r.detail}`)].join("\n");
-	appendJournal(task.taskFile, `isolated Docker and runtime verification: ${verified ? "VERIFIED" : "NOT VERIFIED"}`);
-	if (task.tracker && fs.existsSync(task.tracker)) fs.appendFileSync(task.tracker, `\n### Runtime evidence ${task.taskName}\n\n${text}\n`);
-	return {
-		state: {
-			verified,
-			next: verified ? "pass" : "stop",
-			text,
-			reason: `runtime verification failed:\n${text}`
-		},
-		metrics: { verified: verified ? 1 : 0 },
-		output: verified ? "Isolated Docker rebuild and runtime evidence: VERIFIED." : `NOT VERIFIED:\n${text}`
-	};
-};
-var implContextFiles = async ({ state, input, exec, cwd }) => {
-	if (!exec || !cwd) throw new Error("impl.contextFiles needs the host exec tool");
-	const files = (await changed(exec, cwd, baseOf(state, input))).map((f) => f.path).filter((p) => CONTEXT_FILE.test(p) && fs.existsSync(path.join(cwd, p)) && fs.readFileSync(path.join(cwd, p), "utf8").split(/\r?\n/).length >= 20);
-	return {
-		state: {
-			files,
-			count: files.length,
-			list: files.join("\n") || "none"
-		},
-		metrics: { files: files.length },
-		output: files.length ? `Context files to optimize: ${files.join(", ")}.` : "No agent-context file of 20 lines or more changed."
-	};
-};
-var implScopeGate = async ({ state, input, exec, cwd }) => {
-	if (!exec || !cwd) throw new Error("impl.scopeGate needs the host exec tool");
-	const files = (await changed(exec, cwd, baseOf(state, input))).map((f) => f.path);
-	const code = files.filter((p) => !DOC_PATH.test(p));
-	const docs = files.filter((p) => DOC_PATH.test(p));
-	const over = code.length > 15;
-	return {
-		state: {
-			count: code.length,
-			docs: docs.length,
-			over,
-			paths: code.join("\n")
-		},
-		metrics: {
-			code: code.length,
-			docs: docs.length
-		},
-		output: `${code.length} code paths${over ? " (more than 15: needs an explicit extension)" : ""}, ${docs.length} documentation paths.`
-	};
-};
-var implReviewGate = async ({ state, input, nodeId }) => {
-	const task = taskOf(state, input);
-	const round = ((nodeId ? state[nodeId] : void 0)?.round ?? 0) + 1;
-	const review = state.review ?? {};
-	const rank = review["local-rank"] ?? review.rank;
-	const kept = (rank?.["local-rank"] ?? rank?.rank)?.kept ?? [];
-	const blocking = kept.filter((f) => ["bug", "security"].includes(tierOf$1(f)) || /^req\.(missing|partial)/.test(f.ruleId) || /merge/i.test(f.ruleId));
-	const other = kept.filter((f) => !blocking.includes(f));
-	appendJournal(task.taskFile, `Task review round ${round}: ${blocking.length} blocking, ${other.length} non-blocking findings`);
-	if (task.tracker && fs.existsSync(task.tracker)) fs.appendFileSync(task.tracker, `\n### Task review ${task.taskName} round ${round}\n\n${kept.map((f) => `- ${f.line}`).join("\n") || "- no findings"}\n`);
-	const next = blocking.length === 0 ? "pass" : round < 3 ? "fix" : "stop";
-	return {
-		state: {
-			round,
-			blocking: blocking.length,
-			next,
-			text: blocking.map((f) => f.line).join("\n") || "none",
-			nonBlocking: other.map((f) => f.line).join("\n") || "none",
-			reason: `blocking review findings remain after ${round} rounds:\n${blocking.map((f) => f.line).join("\n")}`
-		},
-		metrics: {
-			blocking: blocking.length,
-			nonBlocking: other.length
-		},
-		output: blocking.length ? `${blocking.length} blocking findings:\n${blocking.map((f) => f.line).join("\n")}` : `No blocking finding (${other.length} non-blocking recorded).`
-	};
-};
-var implStop = async ({ state, args }) => {
-	const reason = state[String(args.from ?? "")]?.reason ?? String(args.reason ?? "stopped");
-	throw new Error(`Implementation stopped: ${reason}`);
-};
-var implOpenEditor = async ({ exec, cwd }) => {
-	if (!exec || !cwd) throw new Error("impl.openEditor needs the host exec tool");
-	const result = await exec("code", ["--new-window", cwd]);
-	return {
-		state: { opened: result.code === 0 },
-		metrics: { opened: result.code === 0 ? 1 : 0 },
-		output: result.code === 0 ? `Opened ${cwd} in a new VS Code window.` : `Could not open VS Code; run: code --new-window "${cwd}"`
-	};
-};
-var implReport = async ({ state, input }) => {
-	const task = taskOf(state, input);
-	const worktree = state.worktree;
-	const get = (key) => state[key];
-	const chunks = get("chunk-plan")?.chunks.length ?? 0;
-	const commit = get("ask-commit");
-	const delivery = Object.values(get("commit") ?? {})[0];
-	const lines = [
-		`Task ${task.taskName} (Feature ${task.featureId})`,
-		`Worktree: ${worktree?.path ?? "none"} on ${worktree?.branch ?? "none"}`,
-		`Preflight: ${get("preflight")?.pass ? "four PASS" : "not passed"}`,
-		`Failing tests first: ${get("tests-check")?.count ?? 0}`,
-		`Chunks implemented: ${chunks}`,
-		`Checks: ${get("checks")?.check?.pass ?? get("recheck")?.check?.pass ? "style and tests pass" : "see the journal"}`,
-		`Code paths: ${get("scope-gate")?.count ?? "?"}`,
-		`Task review: ${get("review-gate")?.blocking === 0 ? "no blocking finding" : "blocking findings left"}`,
-		`Delivery: ${delivery ? `committed, PR ${delivery.fields[1] ?? "?"}` : commit?.answer === "no" ? "not committed (you answered no)" : "not reached"}`
-	];
-	appendJournal(task.taskFile, `run report: ${lines.slice(1).join("; ")}`);
-	return {
-		state: { text: lines.join("\n") },
-		metrics: { chunks },
-		output: lines.join("\n")
-	};
-};
-var IMPL_OPERATIONS = {
-	"impl.task": implTask,
-	"impl.worktree": implWorktree,
-	"impl.journal": implJournal,
-	"impl.preflight": implPreflight,
-	"impl.stacks": implStacks,
-	"impl.testsFirst": implTestsFirst,
-	"impl.chunkPlan": implChunkPlan,
-	"impl.childCheck": implChildCheck,
-	"impl.dispute": implDispute,
-	"impl.checks": implChecks,
-	"impl.docker": implDocker,
-	"impl.contextFiles": implContextFiles,
-	"impl.scopeGate": implScopeGate,
-	"impl.reviewGate": implReviewGate,
-	"impl.stop": implStop,
-	"impl.openEditor": implOpenEditor,
-	"impl.report": implReport
-};
-var IMPL_PARSERS = {
-	"impl.preflight": parseLine("preflight"),
-	"impl.tests": parseLine("tests"),
-	"impl.chunks": parseChunks,
-	"impl.chunk": parseLine("chunk"),
-	"impl.dispute": parseLine("dispute"),
-	"impl.style": parseLine("style"),
-	"impl.docker": parseLine("docker"),
-	"impl.runtime": parseLine("runtime"),
-	"impl.delivery": parseLine("delivery")
-};
 // src/sources-lock.ts
 var FACTORY_DIR$1 = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 var LOCK_FILE = path.join(FACTORY_DIR$1, "workflows.lock.json");
@@ -14126,7 +13521,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 	writeLock(lock);
 	console.log(`${Object.keys(lock).length} workflows locked against ${marketplace} at ${commit} in ${LOCK_FILE}`);
 }
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/code.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/code.js
 var require_code$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.regexpCode = exports.getEsmExportName = exports.getProperty = exports.safeStringify = exports.stringify = exports.strConcat = exports.addCodeArg = exports.str = exports._ = exports.nil = exports._Code = exports.Name = exports.IDENTIFIER = exports._CodeOrName = void 0;
@@ -14260,7 +13655,7 @@ var require_code$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.regexpCode = regexpCode;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/scope.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/scope.js
 var require_scope = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.ValueScope = exports.ValueScopeName = exports.Scope = exports.varKinds = exports.UsedValueState = void 0;
@@ -14396,7 +13791,7 @@ var require_scope = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.ValueScope = ValueScope;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/index.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/index.js
 var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.or = exports.and = exports.not = exports.CodeGen = exports.operators = exports.varKinds = exports.ValueScopeName = exports.ValueScope = exports.Scope = exports.Name = exports.regexpCode = exports.stringify = exports.getProperty = exports.nil = exports.strConcat = exports.str = exports._ = void 0;
@@ -15064,7 +14459,7 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
 		return x instanceof code_1.Name ? x : (0, code_1._)`(${x})`;
 	}
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/util.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/util.js
 var require_util = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.checkStrictMode = exports.getErrorPath = exports.Type = exports.useFunc = exports.setEvaluated = exports.evaluatedPropsToName = exports.mergeEvaluated = exports.eachItem = exports.unescapeJsonPointer = exports.escapeJsonPointer = exports.escapeFragment = exports.unescapeFragment = exports.schemaRefOrVal = exports.schemaHasRulesButRef = exports.schemaHasRules = exports.checkUnknownRules = exports.alwaysValidSchema = exports.toHash = void 0;
@@ -15204,7 +14599,7 @@ var require_util = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.checkStrictMode = checkStrictMode;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/names.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/names.js
 var require_names = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -15227,7 +14622,7 @@ var require_names = /* @__PURE__ */ __commonJSMin(((exports) => {
 		jsonPart: new codegen_1.Name("jsonPart")
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/errors.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/errors.js
 var require_errors = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.extendErrors = exports.resetErrorsCount = exports.reportExtraError = exports.reportError = exports.keyword$DataError = exports.keywordError = void 0;
@@ -15322,7 +14717,7 @@ var require_errors = /* @__PURE__ */ __commonJSMin(((exports) => {
 		if (propertyName) keyValues.push([E.propertyName, propertyName]);
 	}
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/boolSchema.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/boolSchema.js
 var require_boolSchema = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.boolOrEmptySchema = exports.topBoolOrEmptySchema = void 0;
@@ -15363,7 +14758,7 @@ var require_boolSchema = /* @__PURE__ */ __commonJSMin(((exports) => {
 		(0, errors_1.reportError)(cxt, boolError, void 0, overrideAllErrors);
 	}
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/rules.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/rules.js
 var require_rules = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.getRules = exports.isJSONType = void 0;
@@ -15420,7 +14815,7 @@ var require_rules = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.getRules = getRules;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/applicability.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/applicability.js
 var require_applicability = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.shouldUseRule = exports.shouldUseGroup = exports.schemaHasRulesForType = void 0;
@@ -15439,7 +14834,7 @@ var require_applicability = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.shouldUseRule = shouldUseRule;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/dataType.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/dataType.js
 var require_dataType = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.reportTypeError = exports.checkDataTypes = exports.checkDataType = exports.coerceAndCheckDataType = exports.getJSONTypes = exports.getSchemaTypes = exports.DataType = void 0;
@@ -15602,7 +14997,7 @@ var require_dataType = /* @__PURE__ */ __commonJSMin(((exports) => {
 		};
 	}
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/defaults.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/defaults.js
 var require_defaults = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.assignDefaults = void 0;
@@ -15627,7 +15022,7 @@ var require_defaults = /* @__PURE__ */ __commonJSMin(((exports) => {
 		gen.if(condition, (0, codegen_1._)`${childData} = ${(0, codegen_1.stringify)(defaultValue)}`);
 	}
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/code.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/code.js
 var require_code = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.validateUnion = exports.validateArray = exports.usePattern = exports.callValidateCode = exports.schemaProperties = exports.allSchemaProperties = exports.noPropertyInData = exports.propertyInData = exports.isOwnProperty = exports.hasPropFunc = exports.reportMissingProp = exports.checkMissingProp = exports.checkReportMissingProp = void 0;
@@ -15750,7 +15145,7 @@ var require_code = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.validateUnion = validateUnion;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/keyword.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/keyword.js
 var require_keyword = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.validateKeywordUsage = exports.validSchemaType = exports.funcKeywordCode = exports.macroKeywordCode = void 0;
@@ -15855,7 +15250,7 @@ var require_keyword = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.validateKeywordUsage = validateKeywordUsage;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/subschema.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/subschema.js
 var require_subschema = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.extendSubschemaMode = exports.extendSubschemaData = exports.getSubschema = void 0;
@@ -15921,7 +15316,7 @@ var require_subschema = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.extendSubschemaMode = extendSubschemaMode;
 }));
-// node_modules/.pnpm/fast-deep-equal@3.1.3/node_modules/fast-deep-equal/index.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/fast-deep-equal@3.1.3/node_modules/fast-deep-equal/index.js
 var require_fast_deep_equal = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	module.exports = function equal(a, b) {
 		if (a === b) return true;
@@ -15950,7 +15345,7 @@ var require_fast_deep_equal = /* @__PURE__ */ __commonJSMin(((exports, module) =
 		return a !== a && b !== b;
 	};
 }));
-// node_modules/.pnpm/json-schema-traverse@1.0.0/node_modules/json-schema-traverse/index.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/json-schema-traverse@1.0.0/node_modules/json-schema-traverse/index.js
 var require_json_schema_traverse = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var traverse = module.exports = function(schema, opts, cb) {
 		if (typeof opts == "function") {
@@ -16024,7 +15419,7 @@ var require_json_schema_traverse = /* @__PURE__ */ __commonJSMin(((exports, modu
 		return str.replace(/~/g, "~0").replace(/\//g, "~1");
 	}
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/resolve.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/resolve.js
 var require_resolve = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.getSchemaRefs = exports.resolveUrl = exports.normalizeId = exports._getFullPath = exports.getFullPath = exports.inlineRef = void 0;
@@ -16152,7 +15547,7 @@ var require_resolve = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.getSchemaRefs = getSchemaRefs;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/index.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/index.js
 var require_validate = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.getData = exports.KeywordCxt = exports.validateFunctionCode = void 0;
@@ -16570,7 +15965,7 @@ var require_validate = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.getData = getData;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/validation_error.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/validation_error.js
 var require_validation_error = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var ValidationError = class extends Error {
@@ -16582,7 +15977,7 @@ var require_validation_error = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.default = ValidationError;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/ref_error.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/ref_error.js
 var require_ref_error = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var resolve_1 = require_resolve();
@@ -16595,7 +15990,7 @@ var require_ref_error = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.default = MissingRefError;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/index.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/index.js
 var require_compile = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.resolveSchema = exports.getCompilingSchema = exports.resolveRef = exports.compileSchema = exports.SchemaEnv = void 0;
@@ -16808,7 +16203,7 @@ var require_compile = /* @__PURE__ */ __commonJSMin(((exports) => {
 		if (env.schema !== env.root.schema) return env;
 	}
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/data.json
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/data.json
 var data_exports = /* @__PURE__ */ __exportAll({
 	$id: () => $id$9,
 	additionalProperties: () => false,
@@ -16836,7 +16231,7 @@ var init_data = __esmMin((() => {
 		additionalProperties: false
 	};
 }));
-// node_modules/.pnpm/fast-uri@3.1.9/node_modules/fast-uri/lib/utils.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/fast-uri@3.1.9/node_modules/fast-uri/lib/utils.js
 var require_utils = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	/** @type {(value: string) => boolean} */
 	var isUUID = RegExp.prototype.test.bind(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/iu);
@@ -17472,7 +16867,7 @@ var require_utils = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		stringArrayToHexStripped
 	};
 }));
-// node_modules/.pnpm/fast-uri@3.1.9/node_modules/fast-uri/lib/schemes.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/fast-uri@3.1.9/node_modules/fast-uri/lib/schemes.js
 var require_schemes = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var { isUUID } = require_utils();
 	var URN_REG = /^([\da-z][\d\-a-z]{0,31}):((?:[\w!$'()*+,\-./:;=@]|%[\da-f]{2})+)$/iu;
@@ -17655,7 +17050,7 @@ var require_schemes = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		getSchemeHandler
 	};
 }));
-// node_modules/.pnpm/fast-uri@3.1.9/node_modules/fast-uri/index.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/fast-uri@3.1.9/node_modules/fast-uri/index.js
 var require_fast_uri = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var { normalizeIPv6, removeDotSegments, removeDotSegmentsRelative, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, serializePathEncoding, normalizeQueryFragmentEncoding, encodeQuery, encodeFragment, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils();
 	var { SCHEMES, getSchemeHandler } = require_schemes();
@@ -18105,14 +17500,14 @@ var require_fast_uri = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	module.exports.default = fastUri;
 	module.exports.fastUri = fastUri;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/uri.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/uri.js
 var require_uri = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var uri = require_fast_uri();
 	uri.code = "require(\"ajv/dist/runtime/uri\").default";
 	exports.default = uri;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/core.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/core.js
 var require_core$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = void 0;
@@ -18680,7 +18075,7 @@ var require_core$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 		return { anyOf: [schema, $dataRef] };
 	}
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/core/id.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/core/id.js
 var require_id = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.default = {
@@ -18690,7 +18085,7 @@ var require_id = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/core/ref.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/core/ref.js
 var require_ref = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.callRef = exports.getValidate = void 0;
@@ -18796,7 +18191,7 @@ var require_ref = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.callRef = callRef;
 	exports.default = def;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/core/index.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/core/index.js
 var require_core = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var id_1 = require_id();
@@ -18812,7 +18207,7 @@ var require_core = /* @__PURE__ */ __commonJSMin(((exports) => {
 		ref_1.default
 	];
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitNumber.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitNumber.js
 var require_limitNumber = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -18854,7 +18249,7 @@ var require_limitNumber = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/multipleOf.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/multipleOf.js
 var require_multipleOf = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -18876,7 +18271,7 @@ var require_multipleOf = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/ucs2length.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/ucs2length.js
 var require_ucs2length = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	function ucs2length(str) {
@@ -18897,7 +18292,7 @@ var require_ucs2length = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.default = ucs2length;
 	ucs2length.code = "require(\"ajv/dist/runtime/ucs2length\").default";
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitLength.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitLength.js
 var require_limitLength = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -18923,7 +18318,7 @@ var require_limitLength = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/pattern.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/pattern.js
 var require_pattern = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var code_1 = require_code();
@@ -18954,7 +18349,7 @@ var require_pattern = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitProperties.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitProperties.js
 var require_limitProperties = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -18977,7 +18372,7 @@ var require_limitProperties = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/required.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/required.js
 var require_required = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var code_1 = require_code();
@@ -19042,7 +18437,7 @@ var require_required = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitItems.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitItems.js
 var require_limitItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -19065,14 +18460,14 @@ var require_limitItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/equal.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/equal.js
 var require_equal = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var equal = require_fast_deep_equal();
 	equal.code = "require(\"ajv/dist/runtime/equal\").default";
 	exports.default = equal;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/uniqueItems.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/uniqueItems.js
 var require_uniqueItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var dataType_1 = require_dataType();
@@ -19134,7 +18529,7 @@ var require_uniqueItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/const.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/const.js
 var require_const = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -19154,7 +18549,7 @@ var require_const = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/enum.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/enum.js
 var require_enum = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -19196,7 +18591,7 @@ var require_enum = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/index.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/index.js
 var require_validation = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var limitNumber_1 = require_limitNumber();
@@ -19230,7 +18625,7 @@ var require_validation = /* @__PURE__ */ __commonJSMin(((exports) => {
 		enum_1.default
 	];
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/additionalItems.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/additionalItems.js
 var require_additionalItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.validateAdditionalItems = void 0;
@@ -19281,7 +18676,7 @@ var require_additionalItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.validateAdditionalItems = validateAdditionalItems;
 	exports.default = def;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/items.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/items.js
 var require_items = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.validateTuple = void 0;
@@ -19333,7 +18728,7 @@ var require_items = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.validateTuple = validateTuple;
 	exports.default = def;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/prefixItems.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/prefixItems.js
 var require_prefixItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var items_1 = require_items();
@@ -19345,7 +18740,7 @@ var require_prefixItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 		code: (cxt) => (0, items_1.validateTuple)(cxt, "items")
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/items2020.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/items2020.js
 var require_items2020 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -19371,7 +18766,7 @@ var require_items2020 = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/contains.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/contains.js
 var require_contains = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -19454,7 +18849,7 @@ var require_contains = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/dependencies.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/dependencies.js
 var require_dependencies = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.validateSchemaDeps = exports.validatePropertyDeps = exports.error = void 0;
@@ -19534,7 +18929,7 @@ var require_dependencies = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.validateSchemaDeps = validateSchemaDeps;
 	exports.default = def;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/propertyNames.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/propertyNames.js
 var require_propertyNames = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -19569,7 +18964,7 @@ var require_propertyNames = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js
 var require_additionalProperties = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var code_1 = require_code();
@@ -19657,7 +19052,7 @@ var require_additionalProperties = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/properties.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/properties.js
 var require_properties = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var validate_1 = require_validate();
@@ -19701,7 +19096,7 @@ var require_properties = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/patternProperties.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/patternProperties.js
 var require_patternProperties = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var code_1 = require_code();
@@ -19755,7 +19150,7 @@ var require_patternProperties = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/not.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/not.js
 var require_not = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var util_1 = require_util();
@@ -19781,7 +19176,7 @@ var require_not = /* @__PURE__ */ __commonJSMin(((exports) => {
 		error: { message: "must NOT be valid" }
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/anyOf.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/anyOf.js
 var require_anyOf = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.default = {
@@ -19792,7 +19187,7 @@ var require_anyOf = /* @__PURE__ */ __commonJSMin(((exports) => {
 		error: { message: "must match a schema in anyOf" }
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/oneOf.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/oneOf.js
 var require_oneOf = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -19837,7 +19232,7 @@ var require_oneOf = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/allOf.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/allOf.js
 var require_allOf = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var util_1 = require_util();
@@ -19861,7 +19256,7 @@ var require_allOf = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/if.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/if.js
 var require_if = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -19917,7 +19312,7 @@ var require_if = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.default = def;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/thenElse.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/thenElse.js
 var require_thenElse = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var util_1 = require_util();
@@ -19929,7 +19324,7 @@ var require_thenElse = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/index.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/index.js
 var require_applicator = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var additionalItems_1 = require_additionalItems();
@@ -19969,7 +19364,7 @@ var require_applicator = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.default = getApplicator;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/dynamicAnchor.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/dynamicAnchor.js
 var require_dynamicAnchor = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.dynamicAnchor = void 0;
@@ -20007,7 +19402,7 @@ var require_dynamicAnchor = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.default = def;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/dynamicRef.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/dynamicRef.js
 var require_dynamicRef = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.dynamicRef = void 0;
@@ -20045,7 +19440,7 @@ var require_dynamicRef = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.dynamicRef = dynamicRef;
 	exports.default = def;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/recursiveAnchor.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/recursiveAnchor.js
 var require_recursiveAnchor = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var dynamicAnchor_1 = require_dynamicAnchor();
@@ -20059,7 +19454,7 @@ var require_recursiveAnchor = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/recursiveRef.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/recursiveRef.js
 var require_recursiveRef = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var dynamicRef_1 = require_dynamicRef();
@@ -20069,7 +19464,7 @@ var require_recursiveRef = /* @__PURE__ */ __commonJSMin(((exports) => {
 		code: (cxt) => (0, dynamicRef_1.dynamicRef)(cxt, cxt.schema)
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/index.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/index.js
 var require_dynamic = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var dynamicAnchor_1 = require_dynamicAnchor();
@@ -20083,7 +19478,7 @@ var require_dynamic = /* @__PURE__ */ __commonJSMin(((exports) => {
 		recursiveRef_1.default
 	];
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/dependentRequired.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/dependentRequired.js
 var require_dependentRequired = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var dependencies_1 = require_dependencies();
@@ -20095,7 +19490,7 @@ var require_dependentRequired = /* @__PURE__ */ __commonJSMin(((exports) => {
 		code: (cxt) => (0, dependencies_1.validatePropertyDeps)(cxt)
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/dependentSchemas.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/dependentSchemas.js
 var require_dependentSchemas = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var dependencies_1 = require_dependencies();
@@ -20106,7 +19501,7 @@ var require_dependentSchemas = /* @__PURE__ */ __commonJSMin(((exports) => {
 		code: (cxt) => (0, dependencies_1.validateSchemaDeps)(cxt)
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitContains.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitContains.js
 var require_limitContains = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var util_1 = require_util();
@@ -20119,7 +19514,7 @@ var require_limitContains = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/next.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/next.js
 var require_next = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var dependentRequired_1 = require_dependentRequired();
@@ -20131,7 +19526,7 @@ var require_next = /* @__PURE__ */ __commonJSMin(((exports) => {
 		limitContains_1.default
 	];
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedProperties.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedProperties.js
 var require_unevaluatedProperties = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -20183,7 +19578,7 @@ var require_unevaluatedProperties = /* @__PURE__ */ __commonJSMin(((exports) => 
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedItems.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedItems.js
 var require_unevaluatedItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -20223,14 +19618,14 @@ var require_unevaluatedItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/unevaluated/index.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/unevaluated/index.js
 var require_unevaluated = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var unevaluatedProperties_1 = require_unevaluatedProperties();
 	var unevaluatedItems_1 = require_unevaluatedItems();
 	exports.default = [unevaluatedProperties_1.default, unevaluatedItems_1.default];
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/format/format.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/format/format.js
 var require_format$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -20317,12 +19712,12 @@ var require_format$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/format/index.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/format/index.js
 var require_format = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.default = [require_format$1().default];
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/metadata.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/metadata.js
 var require_metadata = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.contentVocabulary = exports.metadataVocabulary = void 0;
@@ -20341,7 +19736,7 @@ var require_metadata = /* @__PURE__ */ __commonJSMin(((exports) => {
 		"contentSchema"
 	];
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/draft2020.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/draft2020.js
 var require_draft2020 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var core_1 = require_core();
@@ -20364,7 +19759,7 @@ var require_draft2020 = /* @__PURE__ */ __commonJSMin(((exports) => {
 		unevaluated_1.default
 	];
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/discriminator/types.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/discriminator/types.js
 var require_types = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.DiscrError = void 0;
@@ -20374,7 +19769,7 @@ var require_types = /* @__PURE__ */ __commonJSMin(((exports) => {
 		DiscrError["Mapping"] = "mapping";
 	})(DiscrError || (exports.DiscrError = DiscrError = {}));
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/discriminator/index.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/discriminator/index.js
 var require_discriminator = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -20466,7 +19861,7 @@ var require_discriminator = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/schema.json
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/schema.json
 var schema_exports = /* @__PURE__ */ __exportAll({
 	$comment: () => $comment,
 	$dynamicAnchor: () => $dynamicAnchor$7,
@@ -20543,7 +19938,7 @@ var init_schema = __esmMin((() => {
 		properties: properties$8
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/applicator.json
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/applicator.json
 var applicator_exports = /* @__PURE__ */ __exportAll({
 	$defs: () => $defs$2,
 	$dynamicAnchor: () => $dynamicAnchor$6,
@@ -20609,7 +20004,7 @@ var init_applicator = __esmMin((() => {
 		$defs: $defs$2
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/unevaluated.json
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/unevaluated.json
 var unevaluated_exports = /* @__PURE__ */ __exportAll({
 	$dynamicAnchor: () => $dynamicAnchor$5,
 	$id: () => $id$6,
@@ -20642,7 +20037,7 @@ var init_unevaluated = __esmMin((() => {
 		properties: properties$6
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/content.json
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/content.json
 var content_exports = /* @__PURE__ */ __exportAll({
 	$dynamicAnchor: () => $dynamicAnchor$4,
 	$id: () => $id$5,
@@ -20676,7 +20071,7 @@ var init_content = __esmMin((() => {
 		properties: properties$5
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/core.json
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/core.json
 var core_exports = /* @__PURE__ */ __exportAll({
 	$defs: () => $defs$1,
 	$dynamicAnchor: () => $dynamicAnchor$3,
@@ -20743,7 +20138,7 @@ var init_core = __esmMin((() => {
 		$defs: $defs$1
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/format-annotation.json
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/format-annotation.json
 var format_annotation_exports = /* @__PURE__ */ __exportAll({
 	$dynamicAnchor: () => $dynamicAnchor$2,
 	$id: () => $id$3,
@@ -20773,7 +20168,7 @@ var init_format_annotation = __esmMin((() => {
 		properties: properties$3
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/meta-data.json
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/meta-data.json
 var meta_data_exports = /* @__PURE__ */ __exportAll({
 	$dynamicAnchor: () => $dynamicAnchor$1,
 	$id: () => $id$2,
@@ -20823,7 +20218,7 @@ var init_meta_data = __esmMin((() => {
 		properties: properties$2
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/validation.json
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/validation.json
 var validation_exports = /* @__PURE__ */ __exportAll({
 	$defs: () => $defs,
 	$dynamicAnchor: () => $dynamicAnchor,
@@ -20924,7 +20319,7 @@ var init_validation = __esmMin((() => {
 		$defs
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/index.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/index.js
 var require_json_schema_2020_12 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var metaSchema = (init_schema(), __toCommonJS(schema_exports).default);
@@ -20954,7 +20349,7 @@ var require_json_schema_2020_12 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.default = addMetaSchema2020;
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/2020.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/2020.js
 var require__2020 = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.MissingRefError = exports.ValidationError = exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = exports.Ajv2020 = void 0;
@@ -21052,7 +20447,7 @@ var require__2020 = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		}
 	});
 }));
-// node_modules/.pnpm/ajv-formats@3.0.1_ajv@8.20.0/node_modules/ajv-formats/dist/formats.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv-formats@3.0.1_ajv@8.20.0/node_modules/ajv-formats/dist/formats.js
 var require_formats = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.formatNames = exports.fastFormats = exports.fullFormats = void 0;
@@ -21239,7 +20634,7 @@ var require_formats = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	}
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/draft7.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/draft7.js
 var require_draft7 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var core_1 = require_core();
@@ -21256,7 +20651,7 @@ var require_draft7 = /* @__PURE__ */ __commonJSMin(((exports) => {
 		metadata_1.contentVocabulary
 	];
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-draft-07.json
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-draft-07.json
 var json_schema_draft_07_exports = /* @__PURE__ */ __exportAll({
 	$id: () => $id,
 	$schema: () => $schema,
@@ -21409,7 +20804,7 @@ var init_json_schema_draft_07 = __esmMin((() => {
 		"default": true
 	};
 }));
-// node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/ajv.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/ajv.js
 var require_ajv = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.MissingRefError = exports.ValidationError = exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = exports.Ajv = void 0;
@@ -21500,7 +20895,7 @@ var require_ajv = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		}
 	});
 }));
-// node_modules/.pnpm/ajv-formats@3.0.1_ajv@8.20.0/node_modules/ajv-formats/dist/limit.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv-formats@3.0.1_ajv@8.20.0/node_modules/ajv-formats/dist/limit.js
 var require_limit = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.formatLimitDefinition = void 0;
@@ -21577,7 +20972,7 @@ var require_limit = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.default = formatLimitPlugin;
 }));
-// node_modules/.pnpm/ajv-formats@3.0.1_ajv@8.20.0/node_modules/ajv-formats/dist/index.js
+// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv-formats@3.0.1_ajv@8.20.0/node_modules/ajv-formats/dist/index.js
 var require_dist = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var formats_1 = require_formats();
@@ -21676,71 +21071,7 @@ var line = object({
 	fields: array(string()),
 	text: string()
 });
-var list = array(unknown());
 var PARSER_CONTRACTS = {
-	"text.raw": string(),
-	"sync.comparison": object({
-		classification: string(),
-		marketplaceVersion: string(),
-		bump: string(),
-		nextVersion: string(),
-		action: string(),
-		report: string()
-	}),
-	"sync.prLine": object({
-		url: string(),
-		branch: string(),
-		commit: string()
-	}),
-	"sync.applied": object({
-		files: array(string()),
-		version: string()
-	}),
-	"csync.capabilities": object({
-		capabilities: list,
-		probable: array(object({
-			id: string(),
-			evidence: string()
-		}))
-	}),
-	"csync.inventory": object({ rows: list }),
-	"csync.verdict": object({
-		verdict: string(),
-		bump: string(),
-		nextVersion: string(),
-		action: string(),
-		report: string()
-	}),
-	"csync.staged": object({
-		name: string(),
-		stagedPath: string(),
-		findings: list,
-		missing: list,
-		entry: unknown(),
-		category: unknown(),
-		blockers: array(string())
-	}),
-	"csync.suggestions": object({ suggestions: array(object({
-		items: array(string()),
-		verdict: string(),
-		evidence: string(),
-		loses: string(),
-		line: string()
-	})) }),
-	"impl.preflight": line,
-	"impl.tests": line,
-	"impl.chunks": object({ chunks: array(object({
-		stack: string(),
-		title: string(),
-		files: array(string()),
-		brief: string()
-	})) }),
-	"impl.chunk": line,
-	"impl.dispute": line,
-	"impl.style": line,
-	"impl.docker": line,
-	"impl.runtime": line,
-	"impl.delivery": line,
 	"wfsync.mapping": line,
 	"wfsync.verify": line
 };
@@ -21913,6 +21244,8 @@ function stateReferenceErrors(spec) {
 		...node.prompt ? [["prompt", node.prompt]] : [],
 		...node.question ? [["question", node.question.text], ["question id", node.question.id]] : [],
 		...(node.dirs ?? []).map((d) => ["dirs", d]),
+		...node.workspace ? [["workspace", node.workspace]] : [],
+		...Object.entries(node.with ?? {}).filter(([, v]) => typeof v === "string" && v.includes("{{")).map(([k, v]) => [`with.${k}`, v]),
 		...Object.values(node.input ?? {}).map((v) => ["input", v])
 	];
 	for (const node of spec.nodes) {
@@ -22034,7 +21367,7 @@ function diffOf(marketplace, commit, file) {
 		return `(commit ${commit.slice(0, 7)} is not in ${marketplace}; full current text follows)\n${fs.existsSync(path.join(marketplace, file)) ? fs.readFileSync(path.join(marketplace, file), "utf8") : ""}`;
 	}
 }
-function copyDir$1(from, to) {
+function copyDir(from, to) {
 	fs.mkdirSync(to, { recursive: true });
 	for (const f of fs.readdirSync(from)) if (f.endsWith(".yaml")) fs.copyFileSync(path.join(from, f), path.join(to, f));
 }
@@ -22072,7 +21405,7 @@ var wfsyncScan = async ({ input }) => {
 		ask: true
 	});
 	const snapshot = fs.mkdtempSync(path.join(os.tmpdir(), "factory-wfsync-"));
-	copyDir$1(workflows, snapshot);
+	copyDir(workflows, snapshot);
 	const lines = [
 		...items.map((i) => `${i.kind} ${i.source}: ${i.kind === "new" ? "no workflow yet" : `${i.workflows.length} workflows`}`),
 		...scan.unlocked.map((w) => `unlocked ${w}: not in the lock`),
@@ -22255,7 +21588,7 @@ var wfsyncApply = async ({ state }) => {
 var wfsyncRevert = async ({ state }) => {
 	const scan = state.scan;
 	for (const f of fs.readdirSync(scan.workflows)) if (f.endsWith(".yaml") && !fs.existsSync(path.join(scan.snapshot, f))) fs.rmSync(path.join(scan.workflows, f));
-	copyDir$1(scan.snapshot, scan.workflows);
+	copyDir(scan.snapshot, scan.workflows);
 	return {
 		state: { reverted: true },
 		metrics: { reverted: 1 },
@@ -22311,126 +21644,10 @@ var WFSYNC_OPERATIONS = {
 	"wfsync.report": wfsyncReport
 };
 // src/ops.ts
-function stateOf(state, key) {
-	const value = state[key];
-	if (value === void 0) throw new Error(`state.${key} is not set`);
-	return value;
-}
-function splitDiff(diff) {
-	const files = [];
-	for (const chunk of diff.split(/^(?=diff --git )/m)) {
-		const header = chunk.match(/^diff --git a\/(.+?) b\/(.+)$/m);
-		if (header?.[2] !== void 0) files.push({
-			path: header[2],
-			diff: chunk
-		});
-	}
-	return files;
-}
-function tierOf$1(finding) {
-	const rule = finding.ruleId;
-	const skillPrefix = (name) => new RegExp(`^${name}[.:]`).test(rule);
-	if (finding.sev === "nit") return "nit";
-	if (rule.startsWith("bug.")) return "bug";
-	if (rule.startsWith("sec.") || /-security[.:]/.test(rule)) return "security";
-	if (rule.startsWith("repo.") || /-testing[.:]/.test(rule)) return "repo-rule";
-	if (skillPrefix("olko-design-rules") || /-architecture[.:]/.test(rule)) return "design";
-	return "style";
-}
 var pass = async () => ({
 	state: { passed: true },
 	output: "verify passed"
 });
-function untrackedDiff(file, text) {
-	const lines = text.replace(/\r\n/g, "\n").replace(/\n$/, "").split("\n");
-	return `diff --git a/${file} b/${file}\nnew file mode 100644\n--- /dev/null\n+++ b/${file}\n@@ -0,0 +1,${lines.length} @@\n${lines.map((l) => `+${l}`).join("\n")}\n`;
-}
-async function localDiff(exec, root, base) {
-	if (!/^[\w./-]+$/.test(base)) throw new Error(`base ${base} is not a git ref`);
-	const mergeBase = await exec("git", [
-		"-C",
-		root,
-		"merge-base",
-		base,
-		"HEAD"
-	]);
-	if (mergeBase.code !== 0) throw new Error(`git merge-base ${base} HEAD failed: ${mergeBase.stderr.slice(-300)}`);
-	const tracked = await exec("git", [
-		"-C",
-		root,
-		"diff",
-		mergeBase.stdout.trim()
-	]);
-	const untracked = await exec("git", [
-		"-C",
-		root,
-		"ls-files",
-		"--others",
-		"--exclude-standard"
-	]);
-	if (tracked.code !== 0 || untracked.code !== 0) throw new Error(`git diff failed: ${(tracked.stderr || untracked.stderr).slice(-300)}`);
-	const added = untracked.stdout.split(/\r?\n/).filter(Boolean).map((f) => untrackedDiff(f, fs.readFileSync(path.join(root, f), "utf8")));
-	return {
-		files: splitDiff(tracked.stdout + added.join("")),
-		added: added.length,
-		mergeBase: mergeBase.stdout.trim()
-	};
-}
-function memoryLists(text) {
-	const counts = /* @__PURE__ */ new Map();
-	for (const line of text.split(/\r?\n/)) {
-		const match = line.trim().replace(/^[-*]\s+/, "").match(/^(confirmed|rejected):(\S+)/);
-		if (!match?.[1] || !match[2]) continue;
-		const entry = counts.get(match[2]) ?? {
-			confirmed: 0,
-			rejected: 0
-		};
-		entry[match[1]] += 1;
-		counts.set(match[2], entry);
-	}
-	return {
-		suppress: [...counts].filter(([, c]) => c.rejected >= 2).map(([p]) => p),
-		prioritize: [...counts].filter(([, c]) => c.confirmed >= 1).map(([p]) => p)
-	};
-}
-function memoryFile(cwd, agent) {
-	if (typeof agent !== "string" || !/^[a-z0-9-]+$/.test(agent)) throw new Error("with.agent must name the agent that owns the memory block");
-	return path.join(cwd ?? process.cwd(), ".opencode", "memory", `${agent}.md`);
-}
-var memoryLoad = async ({ args, cwd }) => {
-	const file = memoryFile(cwd, args.agent);
-	if (!fs.existsSync(file)) return {
-		state: {
-			loaded: false,
-			file,
-			suppressText: "none",
-			prioritizeText: "none"
-		},
-		metrics: {
-			loaded: 0,
-			suppress: 0,
-			prioritize: 0
-		},
-		output: `Memory block ${file} does not exist.`
-	};
-	const { suppress, prioritize } = memoryLists(fs.readFileSync(file, "utf8"));
-	return {
-		state: {
-			loaded: true,
-			file,
-			suppress,
-			prioritize,
-			suppressText: suppress.join(", ") || "none",
-			prioritizeText: prioritize.join(", ") || "none"
-		},
-		metrics: {
-			loaded: 1,
-			suppress: suppress.length,
-			prioritize: prioritize.length
-		},
-		output: `Memory loaded from ${file}: ${suppress.length} suppressed, ${prioritize.length} prioritized patterns.`
-	};
-};
 var listNext = async ({ state, args, nodeId }) => {
 	if (typeof args.over !== "string") throw new Error("with.over must be a state path");
 	const list = args.over.split(".").reduce((value, key) => value && typeof value === "object" ? value[key] : void 0, state);
@@ -22453,1652 +21670,7 @@ var listNext = async ({ state, args, nodeId }) => {
 		output: done ? `All ${list.length} items handled.` : `Item ${index + 1} of ${list.length}.`
 	};
 };
-var MARKETPLACE_FALLBACK = "C:\\Users\\Inny\\Documents\\Git\\marketplace";
-var SEMVER_LINE = /^version:\s*["']?(\d+\.\d+\.\d+)["']?\s*$/m;
-var CLASSIFICATIONS = [
-	"identical",
-	"local-only",
-	"marketplace-only",
-	"project-adapter-only",
-	"adapter-candidate",
-	"portable-local-change",
-	"conflict"
-];
-var ADOPT = [
-	"adopt-patch",
-	"adopt-minor",
-	"adopt-major"
-];
-function readJson$1(file) {
-	return JSON.parse(fs.readFileSync(file, "utf8"));
-}
-function marketplaceRoot(state) {
-	return stateOf(state, "resolve-path").path;
-}
-var resolveMarketplacePath = async ({ input, exec, cwd }) => {
-	if (!exec) throw new Error("sync.resolvePath needs the host exec tool");
-	const adapterFile = path.join(cwd ?? ".", ".opencode", "marketplace-path.local.json");
-	const adapter = fs.existsSync(adapterFile) ? readJson$1(adapterFile).marketplacePath : void 0;
-	const [source, target] = input.marketplace ? ["input", input.marketplace] : process.env.MARKETPLACE_PATH ? ["MARKETPLACE_PATH", process.env.MARKETPLACE_PATH] : adapter ? ["project adapter", adapter] : ["fallback", MARKETPLACE_FALLBACK];
-	if (!fs.existsSync(path.resolve(target))) throw new Error(`marketplace path ${path.resolve(target)} (${source}) does not exist`);
-	const resolved = fs.realpathSync.native(path.resolve(target));
-	const repo = await exec("git", [
-		"-C",
-		resolved,
-		"rev-parse",
-		"--is-inside-work-tree"
-	]);
-	if (repo.code !== 0 || repo.stdout.trim() !== "true") throw new Error(`marketplace path ${resolved} (${source}) is not a Git repository`);
-	return {
-		state: {
-			path: resolved,
-			source,
-			fallback: source === "fallback"
-		},
-		metrics: { fallback: source === "fallback" ? 1 : 0 },
-		output: `Marketplace (${source}): ${resolved}`
-	};
-};
-var safeSource = async ({ state, exec, answers, args, input }) => {
-	if (!exec) throw new Error("sync.safeSource needs the host exec tool");
-	const root = typeof args.path === "string" ? String(args.path.split(".").reduce((v, k) => v && typeof v === "object" ? v[k] : void 0, state) ?? "") : input.path ?? marketplaceRoot(state);
-	if (!root) throw new Error(`with.path ${String(args.path)} is not set in state`);
-	const switchQuestion = typeof args.question === "string" ? args.question : "q-marketplace-main";
-	const git = (...args) => exec("git", [
-		"-C",
-		root,
-		...args
-	]);
-	const label = input.label ?? "Marketplace";
-	const stop = (reason, detail, clean) => ({
-		state: {
-			ok: false,
-			reason,
-			detail
-		},
-		metrics: {
-			clean,
-			ok: 0
-		},
-		output: `${label} not safe: ${detail}`
-	});
-	const status = await git("status", "--porcelain");
-	if (status.code !== 0) return stop("status", status.stderr.trim(), 0);
-	if (status.stdout.trim()) return stop("dirty", `the worktree of ${root} has local changes`, 0);
-	let branch = (await git("branch", "--show-current")).stdout.trim();
-	if (branch !== "main") {
-		if (answers?.[switchQuestion] !== "switch") return {
-			state: {
-				ok: false,
-				reason: "not-main",
-				detail: branch || "detached HEAD",
-				branch
-			},
-			metrics: {
-				clean: 1,
-				ok: 0
-			},
-			output: `Marketplace is on ${branch || "a detached HEAD"}, not main.`
-		};
-		const checkout = await git("checkout", "main");
-		if (checkout.code !== 0) return stop("checkout", checkout.stderr.trim(), 1);
-		branch = "main";
-	}
-	if ((await git("remote", "get-url", "origin")).code !== 0) return stop("no-remote", `${root} has no origin remote`, 1);
-	const fetch = await git("fetch", "origin", "main");
-	if (fetch.code !== 0) return stop("fetch", fetch.stderr.trim(), 1);
-	const pull = await git("pull", "--ff-only", "origin", "main");
-	if (pull.code !== 0) return stop("pull", pull.stderr.trim(), 1);
-	const head = (await git("rev-parse", "HEAD")).stdout.trim();
-	return {
-		state: {
-			ok: true,
-			reason: "ok",
-			branch,
-			head
-		},
-		metrics: {
-			clean: 1,
-			ok: 1
-		},
-		output: `Marketplace ${root} is clean on main at ${head.slice(0, 12)}, fast-forwarded to origin/main.`
-	};
-};
-function frontmatterVersion(file) {
-	return fs.existsSync(file) ? fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n").match(SEMVER_LINE)?.[1] ?? "none" : "none";
-}
-function skillDirIn(root, name) {
-	const skills = path.join(root, "skills");
-	if (!fs.existsSync(skills)) return void 0;
-	return fs.readdirSync(skills).map((c) => path.join(skills, c, name)).find((d) => fs.existsSync(path.join(d, "SKILL.md")));
-}
-function manifestVersion(file, key, name) {
-	if (!fs.existsSync(file)) return "none";
-	return (readJson$1(file)[key]?.find((e) => e.name === name))?.version ?? "none";
-}
-var discoverArtifacts = async ({ input, state, cwd }) => {
-	const project = path.resolve(cwd ?? ".");
-	const root = marketplaceRoot(state);
-	const skillsDir = path.join(project, ".agents", "skills");
-	const agentsDir = path.join(project, ".opencode", "agents");
-	const localSkills = fs.existsSync(skillsDir) ? fs.readdirSync(skillsDir).filter((n) => fs.existsSync(path.join(skillsDir, n, "SKILL.md"))) : [];
-	const localAgents = fs.existsSync(agentsDir) ? fs.readdirSync(agentsDir).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)) : [];
-	const wanted = input.artifacts;
-	if (wanted) {
-		const missing = wanted.filter((n) => !localSkills.includes(n) && !localAgents.includes(n));
-		if (missing.length) throw new Error(`input.artifacts not found in ${project}: ${missing.join(", ")}`);
-	}
-	const pick = (names) => wanted ? names.filter((n) => wanted.includes(n)) : names;
-	const skills = pick(localSkills).map((name) => {
-		const dir = skillDirIn(root, name);
-		return {
-			id: name,
-			type: "skill",
-			name,
-			localPath: path.join(skillsDir, name),
-			marketplacePath: dir ?? "none",
-			manifestPath: path.join(root, "registry.json"),
-			marketplaceVersion: manifestVersion(path.join(root, "registry.json"), "skills", name),
-			localVersion: frontmatterVersion(path.join(skillsDir, name, "SKILL.md"))
-		};
-	});
-	const agents = pick(localAgents).map((name) => {
-		const file = path.join(root, "agents", "opencode", `${name}.md`);
-		return {
-			id: name,
-			type: "agent",
-			name,
-			localPath: path.join(agentsDir, `${name}.md`),
-			marketplacePath: fs.existsSync(file) ? file : "none",
-			manifestPath: path.join(root, "agents", "opencode", "index.json"),
-			marketplaceVersion: manifestVersion(path.join(root, "agents", "opencode", "index.json"), "agents", name),
-			localVersion: manifestVersion(path.join(agentsDir, "index.json"), "agents", name)
-		};
-	});
-	const compare = [...skills, ...agents];
-	return {
-		state: {
-			project,
-			skills,
-			agents,
-			compare
-		},
-		metrics: {
-			artifacts: compare.length,
-			skills: skills.length,
-			agents: agents.length
-		},
-		output: `Discovered ${skills.length} local skills and ${agents.length} local agents to compare in ${project}.`
-	};
-};
-var checkSkillVersions = async ({ state }) => {
-	const skills = stateOf(state, "discover").skills;
-	const missing = skills.filter((s) => frontmatterVersion(path.join(s.localPath, "SKILL.md")) === "none").map((s) => s.name);
-	if (missing.length) throw new Error(`olko-adapt-to-marketplace --local-only left no SemVer version in SKILL.md of: ${missing.join(", ")}. The sync stops here; check these skills and run again.`);
-	const versions = skills.map((s) => `${s.name} ${frontmatterVersion(path.join(s.localPath, "SKILL.md"))}`);
-	return {
-		state: { versions },
-		metrics: { skills: skills.length },
-		output: versions.length ? `Local skill versions: ${versions.join(", ")}.` : "No local skills to version."
-	};
-};
-function parseComparison(text) {
-	const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.startsWith("result |"));
-	if (!line) throw new Error("comparator report has no 'result |' line");
-	const [, classification = "", marketplaceVersion = "none", bump = "none", nextVersion = "none", action = ""] = line.split("|").map((p) => p.trim());
-	if (!CLASSIFICATIONS.includes(classification)) throw new Error(`comparator returned unknown classification '${classification}'`);
-	return {
-		classification,
-		marketplaceVersion,
-		bump,
-		nextVersion,
-		action,
-		report: String(text).trim()
-	};
-}
-function syncOptions(classification) {
-	if (classification === "local-only") return [
-		"create",
-		"reject",
-		"leave"
-	];
-	if (classification === "adapter-candidate") return [
-		"move-to-adapter",
-		...ADOPT,
-		"revert-local",
-		"leave"
-	];
-	return [
-		...ADOPT,
-		"revert-local",
-		"leave"
-	];
-}
-var syncRows = async ({ state }) => {
-	const discovered = stateOf(state, "discover").compare;
-	const compared = stateOf(state, "compare");
-	const rows = discovered.map((a) => {
-		const c = compared[a.id];
-		if (!c) throw new Error(`no comparison for ${a.type} ${a.name}`);
-		const candidate = c.classification === "local-only" ? a.localVersion !== "none" ? a.localVersion : "1.0.0" : c.nextVersion;
-		const line = `${a.type} ${a.name}: ${c.classification}; marketplace ${c.marketplaceVersion}; bump ${c.bump}; proposed ${candidate}; recommended ${c.action || "none"}`;
-		return {
-			type: a.type,
-			name: a.name,
-			classification: c.classification,
-			marketplaceVersion: c.marketplaceVersion,
-			bump: c.bump,
-			nextVersion: candidate,
-			action: c.action,
-			line,
-			options: syncOptions(c.classification)
-		};
-	});
-	const decide = rows.filter((r) => r.classification !== "identical");
-	return {
-		state: {
-			rows,
-			decide,
-			table: rows.map((r) => r.line).join("\n")
-		},
-		metrics: {
-			rows: rows.length,
-			decide: decide.length
-		},
-		output: `${rows.length} artifacts compared, ${decide.length} need a decision.`
-	};
-};
-function bumpVersion(version, bump) {
-	const match = version.match(/^(\d+)\.(\d+)\.(\d+)$/);
-	if (!match) return "1.0.0";
-	const [major, minor, patch] = match.slice(1).map(Number);
-	if (bump === "major") return `${major + 1}.0.0`;
-	if (bump === "minor") return `${major}.${minor + 1}.0`;
-	return `${major}.${minor}.${patch + 1}`;
-}
-var KEEP_LOCAL = "Keep project adapters, secrets, local paths, credentials and runtime settings out of the marketplace.";
-function applyInstruction(row, root, version) {
-	const adapt = path.join(root, "skills", "marketplace", "olko-adapt-to-marketplace", "SKILL.md");
-	if (row.decision === "create" && row.type === "skill") return `Create the marketplace skill ${row.name} from the local skill ${row.localPath}. Read ${adapt} and meet its validation requirements before you add the registry entry. Put it in the fitting category under ${path.join(root, "skills")}, set version ${version} in its SKILL.md frontmatter and add its entry to ${path.join(root, "registry.json")} at version ${version}. ${KEEP_LOCAL}`;
-	if (row.decision === "create") return `Create the marketplace agent ${row.name}: copy the local definition ${row.localPath} to ${path.join(root, "agents", "opencode", `${row.name}.md`)} and add a valid entry for it to ${path.join(root, "agents", "opencode", "index.json")} at version ${version}, with its stack, role and declared skills taken from the definition. ${KEEP_LOCAL}`;
-	if (row.type === "skill") return `Update only the marketplace skill directory ${row.marketplacePath} with the portable changes of the local skill ${row.localPath}. Set version ${version} in its SKILL.md frontmatter and in its entry in ${path.join(root, "registry.json")}. ${KEEP_LOCAL}`;
-	return `Update only ${row.marketplacePath} with the portable changes of the local agent ${row.localPath}, and set version ${version} on its entry in ${path.join(root, "agents", "opencode", "index.json")}. Keep its permissions, declared skills and delegates unless they are the approved change. ${KEEP_LOCAL}`;
-}
-function acceptedRoute(decision) {
-	if (decision === "revert-local") return "revert";
-	if (decision === "move-to-adapter") return "adapter";
-	return "change";
-}
-var syncPlanApply = async ({ state, answers }) => {
-	const { rows, decide } = stateOf(state, "rows");
-	const discovered = stateOf(state, "discover").compare;
-	const root = marketplaceRoot(state);
-	const decisionOf = (name) => {
-		const index = decide.findIndex((d) => d.name === name);
-		return index < 0 ? "none" : answers?.[`q-sync-${index}`] ?? "unanswered";
-	};
-	const decided = rows.map((r) => ({
-		...r,
-		decision: decisionOf(r.name)
-	}));
-	const accepted = decided.filter((r) => ![
-		"none",
-		"leave",
-		"reject",
-		"unanswered"
-	].includes(r.decision)).map((r) => {
-		const artifact = discovered.find((a) => a.name === r.name);
-		const version = r.decision.startsWith("adopt-") ? bumpVersion(r.marketplaceVersion, r.decision.slice(6)) : r.decision === "create" ? r.nextVersion : r.marketplaceVersion;
-		const row = {
-			...r,
-			localPath: artifact.localPath,
-			marketplacePath: artifact.marketplacePath
-		};
-		return {
-			...row,
-			route: acceptedRoute(r.decision),
-			version,
-			instruction: applyInstruction(row, root, version)
-		};
-	});
-	return {
-		state: {
-			decided,
-			accepted
-		},
-		metrics: { accepted: accepted.length },
-		output: accepted.length ? `${accepted.length} accepted decisions to apply: ${accepted.map((a) => `${a.name} ${a.decision}`).join(", ")}.` : "No accepted decisions: nothing to apply, publish or install."
-	};
-};
-function copyDir(from, to, keep) {
-	for (const entry of fs.existsSync(to) ? fs.readdirSync(to) : []) if (!keep.includes(entry)) fs.rmSync(path.join(to, entry), {
-		recursive: true,
-		force: true
-	});
-	fs.cpSync(from, to, {
-		recursive: true,
-		force: true
-	});
-}
-var revertLocal = async ({ state }) => {
-	const row = stateOf(state, "apply-next").item;
-	if (row.marketplacePath === "none" || !fs.existsSync(row.marketplacePath)) throw new Error(`${row.type} ${row.name} has no marketplace counterpart to revert to`);
-	if (row.type === "skill") copyDir(row.marketplacePath, row.localPath, ["project.md"]);
-	else fs.copyFileSync(row.marketplacePath, row.localPath);
-	return {
-		state: { reverted: row.name },
-		metrics: { reverted: 1 },
-		output: `Local ${row.type} ${row.name} replaced with ${row.marketplacePath}.`
-	};
-};
-var validateMarketplace = async ({ state, exec }) => {
-	if (!exec) throw new Error("sync.validate needs the host exec tool");
-	const root = marketplaceRoot(state);
-	const accepted = stateOf(state, "plan").accepted.filter((a) => a.route !== "revert");
-	const results = [];
-	let failed = 0;
-	const run = async (label, command, args, cwd = root) => {
-		const res = await exec(command, args, { cwd });
-		if (res.code !== 0) failed += 1;
-		results.push(`${label}: ${res.code === 0 ? "pass" : `FAIL ${(res.stderr || res.stdout).trim().split(/\r?\n/).slice(-3).join(" ")}`}`);
-	};
-	if (accepted.some((a) => a.type === "skill")) await run("registry --fix", "node", ["scripts/registry.mjs", "--fix"]);
-	for (const agent of accepted.filter((a) => a.type === "agent")) {
-		const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "factory-agent-check-"));
-		await run(`install-opencode-agents ${agent.name}`, "node", [
-			"scripts/install-opencode-agents.mjs",
-			"--project",
-			scratch,
-			"--agent",
-			agent.name
-		]);
-		fs.rmSync(scratch, {
-			recursive: true,
-			force: true
-		});
-	}
-	if (accepted.length) await run("node tests", "node", [
-		"--test",
-		"scripts/registry.test.mjs",
-		"scripts/install-opencode-agents.test.mjs",
-		"scripts/readme.test.mjs"
-	]);
-	const status = (await exec("git", [
-		"-C",
-		root,
-		"status",
-		"--porcelain",
-		"--untracked-files=all"
-	])).stdout.trim();
-	const diffStat = (await exec("git", [
-		"-C",
-		root,
-		"diff",
-		"--stat"
-	])).stdout.trim();
-	const versions = accepted.map((a) => `${a.type} ${a.name} ${a.decision} -> ${a.version}`).join("\n");
-	return {
-		state: {
-			changed: status ? 1 : 0,
-			status,
-			diffStat,
-			versions,
-			summary: results.join("; ") || "nothing to validate",
-			failed
-		},
-		metrics: {
-			changed: status ? status.split(/\r?\n/).length : 0,
-			failed
-		},
-		output: `Validation: ${results.join("; ") || "nothing to validate"}.`
-	};
-};
-function parseApplied(text) {
-	const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => /^(applied|blocked) \|/.test(l));
-	if (!line) throw new Error("apply output has no 'applied |' line");
-	const [status, files = "", version = ""] = line.split("|").map((p) => p.trim());
-	if (status === "blocked") throw new Error(`apply blocked: ${line}`);
-	return {
-		files: files.split(",").map((f) => f.trim()).filter(Boolean),
-		version
-	};
-}
-function parsePrLine(text) {
-	const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.startsWith("pr |"));
-	if (!line) throw new Error("publish output has no 'pr |' line");
-	const [, url = "", branch = "", commit = ""] = line.split("|").map((p) => p.trim());
-	if (!/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/.test(url)) throw new Error(`publish output has no PR URL: ${line}`);
-	if (branch === "main") throw new Error("publish pushed to main; the sync requires a feature branch");
-	return {
-		url,
-		branch,
-		commit
-	};
-}
-var waitForChecks = async ({ state, exec, nodeId, input }) => {
-	if (!exec) throw new Error("sync.waitChecks needs the host exec tool");
-	const res = await exec("gh", [
-		"pr",
-		"checks",
-		(input.prUrl ? { url: input.prUrl } : stateOf(state, "publish-pr").publish).url,
-		"--watch",
-		"--fail-fast"
-	]);
-	const round = ((nodeId ? state[nodeId]?.round : 0) ?? 0) + 1;
-	return {
-		state: {
-			round,
-			passed: res.code === 0
-		},
-		metrics: {
-			round,
-			passed: res.code === 0 ? 1 : 0
-		},
-		output: `CI checks ${res.code === 0 ? "passed" : "did not pass"}: ${(res.stdout || res.stderr).trim().split(/\r?\n/).slice(-3).join(" ")}`
-	};
-};
-var prOf = async ({ state }) => {
-	const parsed = stateOf(state, "publish");
-	const pr = Object.values(parsed)[0];
-	if (!pr) throw new Error("publish returned no PR");
-	return {
-		state: { publish: pr },
-		metrics: { prs: 1 },
-		output: `PR ${pr.url} on branch ${pr.branch}.`
-	};
-};
-var squashMerge = async ({ state, exec, args, input }) => {
-	if (!exec) throw new Error("sync.merge needs the host exec tool");
-	const root = typeof args.path === "string" ? String(args.path.split(".").reduce((v, k) => v && typeof v === "object" ? v[k] : void 0, state) ?? "") : input.path ?? marketplaceRoot(state);
-	const pr = input.prUrl ? {
-		url: input.prUrl,
-		branch: input.prBranch ?? ""
-	} : stateOf(state, "publish-pr").publish;
-	if (JSON.parse((await exec("gh", [
-		"pr",
-		"view",
-		pr.url,
-		"--json",
-		"isDraft"
-	])).stdout || "{}").isDraft) {
-		const ready = await exec("gh", [
-			"pr",
-			"ready",
-			pr.url
-		]);
-		if (ready.code !== 0) throw new Error(`gh pr ready failed: ${(ready.stderr || ready.stdout).trim()}`);
-	}
-	const merge = await exec("gh", [
-		"pr",
-		"merge",
-		pr.url,
-		"--squash",
-		"--delete-branch"
-	], { cwd: root });
-	if (merge.code !== 0) throw new Error(`squash merge failed: ${(merge.stderr || merge.stdout).trim()}`);
-	const commit = JSON.parse((await exec("gh", [
-		"pr",
-		"view",
-		pr.url,
-		"--json",
-		"mergeCommit"
-	])).stdout || "{}").mergeCommit?.oid;
-	if (!commit) throw new Error(`no merge commit for ${pr.url}`);
-	for (const args of [["checkout", "main"], [
-		"pull",
-		"--ff-only",
-		"origin",
-		"main"
-	]]) {
-		const res = await exec("git", [
-			"-C",
-			root,
-			...args
-		]);
-		if (res.code !== 0) throw new Error(`git ${args.join(" ")} failed: ${res.stderr.trim()}`);
-	}
-	await exec("git", [
-		"-C",
-		root,
-		"branch",
-		"-D",
-		pr.branch
-	]);
-	if ((await exec("git", [
-		"-C",
-		root,
-		"merge-base",
-		"--is-ancestor",
-		commit,
-		"origin/main"
-	])).code !== 0) throw new Error(`merge commit ${commit} is not on origin/main`);
-	return {
-		state: { commit },
-		metrics: { merged: 1 },
-		output: `Squash merged ${pr.url} as ${commit.slice(0, 12)}; local main updated, branch ${pr.branch} deleted.`
-	};
-};
-async function openskillsCommand(exec) {
-	if (process.env.OPENSKILLS_CLI) return ["node", [process.env.OPENSKILLS_CLI]];
-	if ((await exec("openskills", ["--help"])).code === 0) return ["openskills", []];
-	for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
-		const cli = path.join(dir, "node_modules", "openskills", "dist", "cli.js");
-		if (fs.existsSync(path.join(dir, "openskills.cmd")) && fs.existsSync(cli)) return ["node", [cli]];
-	}
-	throw new Error("OpenSkills CLI not found: install openskills or set OPENSKILLS_CLI to its dist/cli.js");
-}
-var installArtifacts = async ({ state, exec, cwd }) => {
-	if (!exec) throw new Error("sync.install needs the host exec tool");
-	const root = marketplaceRoot(state);
-	const project = path.resolve(cwd ?? ".");
-	const accepted = stateOf(state, "plan").accepted.filter((a) => a.route !== "revert");
-	const origin = (await exec("git", [
-		"-C",
-		root,
-		"remote",
-		"get-url",
-		"origin"
-	])).stdout.trim();
-	const repo = origin.match(/github\.com[:/]([\w.-]+\/[\w.-]+?)(\.git)?$/)?.[1];
-	if (!repo) throw new Error(`marketplace origin ${origin} is not a GitHub repository`);
-	const [command, prefix] = await openskillsCommand(exec);
-	const help = await exec(command, [
-		...prefix,
-		"install",
-		"--help"
-	]);
-	if (help.code !== 0 || !/--universal/.test(help.stdout) || !/--yes/.test(help.stdout)) throw new Error("the installed OpenSkills CLI has no install --universal --yes");
-	const lines = [];
-	let failed = 0;
-	for (const skill of accepted.filter((a) => a.type === "skill")) {
-		const dir = skillDirIn(root, skill.name);
-		if (!dir) throw new Error(`skill ${skill.name} is not in ${root} after the merge`);
-		const subpath = path.relative(root, dir).split(path.sep).join("/");
-		const res = await exec(command, [
-			...prefix,
-			"install",
-			`${repo}/${subpath}`,
-			"--universal",
-			"--yes"
-		], { cwd: project });
-		const installed = path.join(project, ".agent", "skills", skill.name);
-		if (res.code === 0 && fs.existsSync(installed)) {
-			fs.cpSync(installed, path.join(project, ".agents", "skills", skill.name), {
-				recursive: true,
-				force: true
-			});
-			fs.rmSync(installed, {
-				recursive: true,
-				force: true
-			});
-		}
-		const same = fs.existsSync(path.join(project, ".agents", "skills", skill.name, "SKILL.md")) && fs.readFileSync(path.join(project, ".agents", "skills", skill.name, "SKILL.md"), "utf8") === (await exec("git", [
-			"-C",
-			root,
-			"show",
-			`origin/main:${subpath}/SKILL.md`
-		])).stdout;
-		if (res.code !== 0 || !same) failed += 1;
-		lines.push(`skill ${skill.name}: ${res.code !== 0 ? `FAIL ${res.stderr.trim().slice(-200)}` : same ? "installed, matches origin/main" : "installed, DIFFERS from origin/main"}`);
-	}
-	for (const agent of accepted.filter((a) => a.type === "agent")) {
-		const res = await exec("node", [
-			path.join(root, "scripts", "install-opencode-agents.mjs"),
-			"--project",
-			project,
-			"--agent",
-			agent.name,
-			"--force"
-		]);
-		const local = path.join(project, ".opencode", "agents", `${agent.name}.md`);
-		const same = fs.existsSync(local) && fs.readFileSync(local, "utf8") === (await exec("git", [
-			"-C",
-			root,
-			"show",
-			`origin/main:agents/opencode/${agent.name}.md`
-		])).stdout;
-		if (res.code !== 0 || !same) failed += 1;
-		lines.push(`agent ${agent.name}: ${res.code !== 0 ? `FAIL ${res.stderr.trim().slice(-200)}` : same ? "installed, matches origin/main" : "installed, DIFFERS from origin/main"}`);
-	}
-	return {
-		state: {
-			lines,
-			failed
-		},
-		metrics: {
-			installed: lines.length - failed,
-			failed
-		},
-		output: `Install: ${lines.join("; ")}.`
-	};
-};
-var syncMemorySave = async ({ state }) => {
-	const memory = state.memory;
-	const install = stateOf(state, "install");
-	if (!memory?.file || install.failed) return {
-		state: { written: 0 },
-		metrics: { written: 0 },
-		output: "Memory: nothing verified to record."
-	};
-	const lines = stateOf(state, "plan").accepted.filter((a) => a.route !== "revert").map((a) => `confirmed:sync ${a.decision} ${a.type} ${a.name} ${a.version} installed and verified`);
-	fs.mkdirSync(path.dirname(memory.file), { recursive: true });
-	fs.appendFileSync(memory.file, `${lines.join("\n")}\n`);
-	return {
-		state: { written: lines.length },
-		metrics: { written: lines.length },
-		output: `Memory: ${lines.length} verified sync decisions recorded in ${memory.file}.`
-	};
-};
-var syncReport = async ({ state }) => {
-	const plan = stateOf(state, "plan");
-	const source = state.safe?.["safe-source"] ?? state["safe-source"] ?? {};
-	const lines = plan.decided.map((r) => `${r.type} ${r.name}: ${r.classification} -> ${r.decision}`);
-	const validate = state.validate;
-	const pr = state["publish-pr"]?.publish;
-	const merged = state.merge ?? state.pr?.merge;
-	const install = state.install;
-	const outcome = !validate ? "Marketplace, branches and installs: unchanged." : !validate.changed ? "Marketplace unchanged; local reverts only. Nothing to publish." : !pr ? `Marketplace changes applied in the working tree of ${marketplaceRoot(state)} and not published. Validation: ${validate.summary}.` : !merged ? `Published as ${pr.url}; not merged, nothing installed.` : `Published as ${pr.url}, squash merged as ${merged.commit?.slice(0, 12)}. Install: ${install?.lines?.join("; ") ?? "not run"}.`;
-	return {
-		state: { lines },
-		metrics: { rows: lines.length },
-		output: [
-			`Marketplace sync report (marketplace ${marketplaceRoot(state)} at ${source.head?.slice(0, 12) ?? "unknown"})`,
-			...lines,
-			outcome
-		].join("\n")
-	};
-};
-var DIRECTIONS = [
-	["target", "target->olko"],
-	["olko", "olko->user"],
-	["user", "user->olko"]
-];
-var BUMPS = [
-	"patch",
-	"minor",
-	"major"
-];
-var VERDICT_ACTIONS = {
-	"target-only": [
-		"port-to-olko",
-		"exclude",
-		"leave"
-	],
-	"olko-only": [
-		"install-user",
-		"reject",
-		"exclude",
-		"leave"
-	],
-	"user-only": [
-		"publish-to-olko",
-		"exclude",
-		"leave"
-	],
-	"target-ahead": [
-		...BUMPS.map((b) => `port-to-olko-${b}`),
-		"exclude",
-		"leave"
-	],
-	"olko-ahead": [
-		"update-user",
-		"exclude",
-		"leave"
-	],
-	"user-ahead": [
-		...BUMPS.map((b) => `publish-to-olko-${b}`),
-		"revert-user",
-		"exclude",
-		"leave"
-	],
-	diverged: [
-		"take-target",
-		"take-olko",
-		"exclude",
-		"leave"
-	],
-	"platform-delta-only": ["leave", "exclude"]
-};
-function syncStateScript() {
-	return path.join(marketplaceDir(), "plugins", "olko-sync", "skills", "olko-sync-state", "scripts", "sync-state.mjs");
-}
-async function syncState(exec, stateDir, args) {
-	const res = await exec("node", [
-		syncStateScript(),
-		...args,
-		"--state-dir",
-		stateDir
-	]);
-	if (res.code !== 0) throw new Error(`sync-state ${args.slice(0, 2).join(" ")} failed: ${(res.stderr || res.stdout).trim()}`);
-	return res.stdout;
-}
-function longPathOf(p) {
-	const resolved = path.resolve(p);
-	return fs.existsSync(resolved) ? fs.realpathSync.native(resolved) : resolved;
-}
-var claudeSyncState = async ({ input, exec }) => {
-	if (!exec) throw new Error("csync.state needs the host exec tool");
-	const stateDir = longPathOf(input.stateDir ?? process.env.OLKO_SYNC_HOME ?? path.join(os.homedir(), ".olko-sync"));
-	await syncState(exec, stateDir, ["init"]);
-	if (input.olko) await syncState(exec, stateDir, [
-		"target",
-		"set-olko",
-		"--path",
-		longPathOf(input.olko)
-	]);
-	if (input.target) {
-		if (!input.targetName || !/^[a-z0-9-]+$/.test(input.targetName)) throw new Error("input.targetName must be a kebab-case name for the Claude marketplace in input.target");
-		await syncState(exec, stateDir, [
-			"target",
-			"set",
-			"--name",
-			input.targetName,
-			"--path",
-			longPathOf(input.target)
-		]);
-	}
-	const targets = JSON.parse(await syncState(exec, stateDir, ["target", "get"]));
-	const name = input.targetName ?? targets.default;
-	const target = name ? targets.targets[name]?.path : void 0;
-	if (!targets.olko?.path) throw new Error("no Olko checkout: give input.olko (the Olko marketplace checkout path)");
-	if (!target) throw new Error("no Claude marketplace target: give input.target and input.targetName");
-	const user = longPathOf(input.user ?? path.join(os.homedir(), ".claude"));
-	const stores = [
-		{
-			id: "target",
-			path: target,
-			layout: "plugins/*/skills/*/SKILL.md and plugins/*/agents/*.md"
-		},
-		{
-			id: "olko",
-			path: targets.olko.path,
-			layout: "skills/*/*/SKILL.md, plugins/*/skills/*/SKILL.md, agents/opencode/*.md (versions in agents/opencode/index.json), plugins/*/agents/*.md (version in plugin.json)"
-		},
-		{
-			id: "user",
-			path: user,
-			layout: "skills/*/SKILL.md and agents/*.md"
-		}
-	];
-	return {
-		state: {
-			stateDir,
-			olko: targets.olko.path,
-			target,
-			user,
-			stores,
-			leakTerms: targets.leakTerms,
-			leakTermsText: targets.leakTerms.length ? `${targets.leakTerms.length} saved` : "none saved",
-			script: syncStateScript()
-		},
-		metrics: { leakTerms: targets.leakTerms.length },
-		output: `Sync state ready in ${stateDir}: Olko ${targets.olko.path}, user store ${user}, target set (name and path stay out of logs).`
-	};
-};
-var claudeSyncLeakSave = async ({ state, exec, answers }) => {
-	if (!exec) throw new Error("csync.leakSave needs the host exec tool");
-	const { stateDir } = stateOf(state, "state");
-	const answer = (answers?.["q-claude-sync-leak"] ?? "none").trim();
-	const terms = /^none$/i.test(answer) ? [] : answer.split(",").map((t) => t.trim()).filter(Boolean);
-	for (const term of terms) await syncState(exec, stateDir, [
-		"target",
-		"add-leak-term",
-		"--term",
-		term
-	]);
-	return {
-		state: { added: terms.length },
-		metrics: { added: terms.length },
-		output: terms.length ? `${terms.length} leak terms added.` : "No leak terms added."
-	};
-};
-function lastJsonBlock(text) {
-	const raw = [...String(text).matchAll(/```json\s*([\s\S]*?)```/g)].at(-1)?.[1];
-	if (!raw) throw new Error("matcher output has no ```json block");
-	return JSON.parse(raw);
-}
-function parseCapabilities(text) {
-	const data = lastJsonBlock(text);
-	if (!Array.isArray(data.capabilities)) throw new Error("matcher JSON has no capabilities list");
-	for (const c of data.capabilities) if (!c.id || !["skill", "agent"].includes(c.kind) || typeof c.copies !== "object") throw new Error(`matcher capability is malformed: ${JSON.stringify(c).slice(0, 200)}`);
-	return {
-		capabilities: data.capabilities,
-		probable: data.probable ?? []
-	};
-}
-function normalizeName(name) {
-	return name.toLowerCase().replace(/^[a-z0-9-]+:/, "").replace(/^olko-/, "");
-}
-function parseInventory(text) {
-	const data = lastJsonBlock(text);
-	if (!Array.isArray(data.rows)) throw new Error("inventory JSON has no rows list");
-	const rows = data.rows.filter((r) => r && (r.kind === "skill" || r.kind === "agent") && typeof r.name === "string" && typeof r.path === "string");
-	if (rows.length !== data.rows.length) throw new Error(`inventory JSON has ${data.rows.length - rows.length} malformed rows`);
-	return { rows };
-}
-var STORES = [
-	"target",
-	"olko",
-	"user"
-];
-var claudeSyncInventories = async ({ state }) => {
-	const inventory = stateOf(state, "inventory");
-	const texts = Object.fromEntries(STORES.map((store) => [store, JSON.stringify(inventory[store]?.rows ?? [])]));
-	const counts = Object.fromEntries(STORES.map((store) => [store, inventory[store]?.rows.length ?? 0]));
-	return {
-		state: {
-			...texts,
-			counts
-		},
-		metrics: counts,
-		output: `Inventory: ${STORES.map((st) => `${st} ${counts[st]}`).join(", ")} artifacts.`
-	};
-};
-function buildCapabilities(inventory, roots, linked) {
-	const absolute = (store, p) => path.isAbsolute(p) ? p : path.join(roots[store], p);
-	const key = (store, kind, name) => `${store}|${kind}|${name}`;
-	const rowsByKey = /* @__PURE__ */ new Map();
-	for (const store of STORES) for (const row of inventory[store]?.rows ?? []) rowsByKey.set(key(store, row.kind, row.name), {
-		...row,
-		store
-	});
-	const used = /* @__PURE__ */ new Set();
-	const copyOf = (store, row) => ({
-		name: row.name,
-		path: absolute(store, row.path),
-		...row.version ? { version: row.version } : {},
-		...row.hash ? { hash: row.hash } : {}
-	});
-	const result = [];
-	for (const c of linked) {
-		const copies = {};
-		for (const store of STORES) {
-			const copy = c.copies[store];
-			if (!copy) continue;
-			const row = rowsByKey.get(key(store, c.kind, copy.name));
-			if (!row || used.has(key(store, c.kind, copy.name))) continue;
-			used.add(key(store, c.kind, copy.name));
-			copies[store] = copyOf(store, row);
-		}
-		if (Object.keys(copies).length) result.push({
-			...c,
-			copies
-		});
-	}
-	const byName = /* @__PURE__ */ new Map();
-	for (const [k, row] of rowsByKey) {
-		if (used.has(k)) continue;
-		const name = `${row.kind}|${normalizeName(row.name)}`;
-		byName.set(name, [...byName.get(name) ?? [], row]);
-	}
-	for (const [name, rows] of byName) {
-		const copies = {};
-		for (const row of rows) if (!copies[row.store]) copies[row.store] = copyOf(row.store, row);
-		const stores = Object.keys(copies).length;
-		result.push({
-			id: name.split("|")[1],
-			basis: stores > 1 ? "name" : "single",
-			kind: rows[0].kind,
-			copies
-		});
-	}
-	return result;
-}
-var claudeSyncCapabilities = async ({ state }) => {
-	const parsed = Object.values(stateOf(state, "match"))[0];
-	if (!parsed) throw new Error("the matcher returned nothing");
-	const { target, olko, user } = stateOf(state, "state");
-	const capabilities = buildCapabilities(stateOf(state, "inventory"), {
-		target,
-		olko,
-		user
-	}, parsed.capabilities);
-	const linked = capabilities.filter((c) => Object.keys(c.copies).length > 1).length;
-	return {
-		state: {
-			capabilities,
-			probable: parsed.probable
-		},
-		metrics: {
-			capabilities: capabilities.length,
-			linked,
-			probable: parsed.probable.length
-		},
-		output: `${capabilities.length} capabilities (${linked} across stores), ${parsed.probable.length} probable links.`
-	};
-};
-var claudeSyncSelect = async ({ state, input }) => {
-	const { capabilities, probable } = stateOf(state, "capabilities");
-	const wanted = input.artifacts?.map(normalizeName);
-	const matches = (c) => !wanted || [c.id, ...Object.values(c.copies).map((copy) => copy?.name ?? "")].some((n) => wanted.includes(normalizeName(n)));
-	const selected = capabilities.filter(matches);
-	if (wanted) {
-		const missing = input.artifacts.filter((a) => !selected.some((c) => [c.id, ...Object.values(c.copies).map((copy) => copy?.name ?? "")].some((n) => normalizeName(n) === normalizeName(a))));
-		if (missing.length) throw new Error(`input.artifacts not found in any store: ${missing.join(", ")}`);
-	}
-	const ask = probable.filter((p) => selected.some((c) => c.id === p.id));
-	return {
-		state: {
-			selected,
-			probable: ask
-		},
-		metrics: {
-			selected: selected.length,
-			probable: ask.length
-		},
-		output: `${selected.length} capabilities selected${wanted ? ` from input.artifacts` : ""}; ${ask.length} probable links to confirm.`
-	};
-};
-var claudeSyncExclusions = async ({ state, exec, answers }) => {
-	if (!exec) throw new Error("csync.exclusions needs the host exec tool");
-	const { stateDir } = stateOf(state, "state");
-	const { selected, probable } = stateOf(state, "select");
-	const split = new Set(probable.filter((_, i) => answers?.[`q-claude-sync-probable-${i}`] === "split").map((p) => p.id));
-	const capabilities = selected.flatMap((c) => split.has(c.id) ? Object.entries(c.copies).map(([store, copy]) => ({
-		...c,
-		id: `${c.id}@${store}`,
-		basis: "split",
-		copies: { [store]: copy }
-	})) : [c]);
-	const compare = [];
-	const excluded = [];
-	for (const c of capabilities) {
-		const checks = [];
-		for (const [store, direction] of DIRECTIONS) {
-			const copy = c.copies[store];
-			if (!copy) continue;
-			const out = await syncState(exec, stateDir, [
-				"exclusion",
-				"check",
-				"--artifact",
-				`${c.kind}:${copy.name}`,
-				"--direction",
-				direction,
-				...copy.version && copy.version !== "—" ? ["--version", copy.version] : []
-			]);
-			checks.push(JSON.parse(out));
-		}
-		if (checks.length && checks.every((x) => x.status === "excluded")) excluded.push({
-			id: c.id,
-			reason: checks[0]?.reason ?? "excluded"
-		});
-		else compare.push({
-			...c,
-			copiesText: Object.entries(c.copies).map(([store, copy]) => `${store}: ${copy?.name} ${copy?.path} version ${copy?.version ?? "—"} hash ${copy?.hash ?? "—"}`).join("\n")
-		});
-	}
-	return {
-		state: {
-			compare,
-			excluded
-		},
-		metrics: {
-			compare: compare.length,
-			excluded: excluded.length
-		},
-		output: `${compare.length} capabilities to compare, ${excluded.length} excluded.`
-	};
-};
-function parseVerdict(text) {
-	const line = String(text).split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.startsWith("result |"));
-	if (!line) throw new Error("comparator report has no 'result |' line");
-	const [, verdict = "", bump = "none", nextVersion = "none", action = ""] = line.split("|").map((p) => p.trim());
-	if (verdict !== "identical" && !VERDICT_ACTIONS[verdict]) throw new Error(`comparator returned unknown verdict '${verdict}'`);
-	return {
-		verdict,
-		bump,
-		nextVersion,
-		action,
-		report: String(text).trim()
-	};
-}
-function claudeSyncActions(verdict) {
-	return VERDICT_ACTIONS[verdict] ?? [];
-}
-var claudeSyncRows = async ({ state }) => {
-	const { compare, excluded } = stateOf(state, "exclusions");
-	const verdicts = state.compare ?? {};
-	const rows = compare.map((c) => {
-		const v = verdicts[c.id];
-		if (!v) throw new Error(`no verdict for capability ${c.id}`);
-		const copies = Object.entries(c.copies).map(([store, copy]) => `${store} ${copy?.version ?? "—"}`).join(", ");
-		return {
-			id: c.id,
-			kind: c.kind,
-			verdict: v.verdict,
-			bump: v.bump,
-			nextVersion: v.nextVersion,
-			action: v.action,
-			options: claudeSyncActions(v.verdict),
-			line: `${c.kind} ${c.id}: ${v.verdict}; copies ${copies}; recommended ${v.action || "none"}; proposed Olko version ${v.nextVersion}`
-		};
-	});
-	const decide = rows.filter((r) => r.verdict !== "identical");
-	return {
-		state: {
-			rows,
-			decide,
-			excluded,
-			table: [...rows.map((r) => r.line), ...excluded.map((e) => `${e.id}: excluded (${e.reason})`)].join("\n")
-		},
-		metrics: {
-			rows: rows.length,
-			decide: decide.length
-		},
-		output: `${rows.length} capabilities compared, ${decide.length} need a decision, ${excluded.length} excluded.`
-	};
-};
-var claudeSyncPlan = async ({ state, answers }) => {
-	const { rows, decide } = stateOf(state, "rows");
-	const decided = rows.map((r) => {
-		const index = decide.findIndex((d) => d.id === r.id);
-		return {
-			...r,
-			decision: index < 0 ? "none" : answers?.[`q-claude-sync-${index}`] ?? "unanswered"
-		};
-	});
-	const records = decided.filter((r) => r.decision === "exclude");
-	const rejects = decided.filter((r) => r.decision === "reject");
-	const changes = decided.filter((r) => ![
-		"none",
-		"leave",
-		"exclude",
-		"reject",
-		"unanswered"
-	].includes(r.decision));
-	return {
-		state: {
-			decided,
-			records,
-			rejects,
-			changes
-		},
-		metrics: {
-			records: records.length,
-			rejects: rejects.length,
-			changes: changes.length
-		},
-		output: `${changes.length} rows to apply, ${records.length} exclusions and ${rejects.length} rejections to record.`
-	};
-};
-var claudeSyncRecord = async ({ state, exec, answers }) => {
-	if (!exec) throw new Error("csync.record needs the host exec tool");
-	const { stateDir } = stateOf(state, "state");
-	const { compare } = stateOf(state, "exclusions");
-	const { records, rejects } = stateOf(state, "plan");
-	const lines = [];
-	for (const [i, r] of [...records, ...rejects].entries()) {
-		const c = compare.find((x) => x.id === r.id);
-		const source = c.copies.target ?? c.copies.olko ?? c.copies.user;
-		const artifact = `${r.kind}:${source?.name}`;
-		if (r.decision === "reject") await syncState(exec, stateDir, [
-			"exclusion",
-			"add",
-			"--artifact",
-			artifact,
-			"--reason",
-			"rejected new artifact",
-			"--kind",
-			"rejected-new",
-			"--version",
-			c.copies.olko?.version ?? "0.0.0"
-		]);
-		else {
-			const scope = answers?.[`q-claude-sync-scope-${i}`] ?? "all";
-			await syncState(exec, stateDir, [
-				"exclusion",
-				"add",
-				"--artifact",
-				artifact,
-				"--reason",
-				answers?.[`q-claude-sync-reason-${i}`] ?? "excluded by the user",
-				...scope === "all" ? [] : ["--scope", scope]
-			]);
-		}
-		lines.push(`${artifact} ${r.decision}`);
-	}
-	return {
-		state: { lines },
-		metrics: { recorded: lines.length },
-		output: lines.length ? `Recorded: ${lines.join(", ")}.` : "Nothing to record."
-	};
-};
-var claudeSyncReport = async ({ state }) => {
-	const plan = stateOf(state, "plan");
-	const { excluded } = stateOf(state, "exclusions");
-	const lines = [...plan.decided.map((r) => `row | ${r.id} | ${r.verdict} | ${r.decision}`), ...excluded.map((e) => `row | ${e.id} | excluded | excluded`)];
-	const changes = plan.decided.filter((r) => ![
-		"none",
-		"leave",
-		"exclude",
-		"reject",
-		"unanswered"
-	].includes(r.decision)).length;
-	const applied = state["apply-record"]?.applied ?? [];
-	const pr = state["publish-pr"]?.publish;
-	const merged = state.merge ?? state.pr?.merge;
-	const olkoChanged = state["apply-record"]?.olkoChanged;
-	const published = pr ? merged ? `Published as ${pr.url}, squash merged as ${merged.commit?.slice(0, 12)}.` : `Published as draft ${pr.url}, not merged.` : olkoChanged ? "Olko changes are in the working tree and not published." : "No Olko change to publish.";
-	const outcome = changes ? `Applied ${applied.length} of ${changes} rows: ${applied.join(", ") || "none"}. ${published}` : "Olko, the target and the user scope: unchanged.";
-	const consolidation = state["consolidation-record"];
-	const consolidated = consolidation ? `Consolidation: ${consolidation.accepted} accepted (plan ${consolidation.planFile}), ${consolidation.rejected} rejected.` : "Consolidation: skipped.";
-	return {
-		state: { lines },
-		metrics: { rows: lines.length },
-		output: [
-			"Claude sync report",
-			...lines,
-			outcome,
-			consolidated
-		].join("\n")
-	};
-};
-function directionOf(decision) {
-	if (decision.startsWith("port-to-olko") || decision === "take-target") return {
-		direction: "to-olko",
-		from: "target",
-		overwrite: decision === "take-target"
-	};
-	if (decision.startsWith("publish-to-olko")) return {
-		direction: "to-olko",
-		from: "user",
-		overwrite: false
-	};
-	return {
-		direction: "to-user",
-		from: "olko",
-		overwrite: decision === "take-olko" || decision === "revert-user"
-	};
-}
-var claudeSyncStagePlan = async ({ state, answers, nodeId }) => {
-	const { changes } = stateOf(state, "plan");
-	const { compare } = stateOf(state, "exclusions");
-	const rows = stateOf(state, "rows").rows;
-	const previous = nodeId ? state[nodeId] : void 0;
-	const round = (previous?.round ?? 0) + 1;
-	const added = (state.findings?.missing ?? []).filter((_, i) => answers?.[`q-claude-sync-missing-${previous?.round ?? 0}-${i}`] === "install-user");
-	const items = [];
-	const add = (row) => items.push({
-		...row,
-		stageDir: fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "factory-stage-")))
-	});
-	if (round === 1) for (const change of changes) {
-		const c = compare.find((x) => x.id === change.id);
-		const { direction, from, overwrite } = directionOf(change.decision);
-		const source = c.copies[from];
-		if (!source) throw new Error(`${change.decision} for ${change.id} needs a ${from} copy`);
-		const existing = direction === "to-olko" ? c.copies.olko?.path : c.copies.user?.path;
-		const bump = change.decision.match(/-(patch|minor|major)$/)?.[1];
-		const version = direction === "to-user" ? c.copies.olko?.version ?? "none" : bump ? bumpVersion(c.copies.olko?.version ?? "0.0.0", bump) : rows.find((r) => r.id === change.id)?.nextVersion ?? "1.0.0";
-		add({
-			id: change.id,
-			rowId: change.id,
-			kind: c.kind,
-			decision: change.decision,
-			direction,
-			source: source.path,
-			sourceStore: from,
-			existing: existing ?? "none",
-			overwrite,
-			version: direction === "to-user" || /^\d+\.\d+\.\d+$/.test(version) ? version : "1.0.0"
-		});
-	}
-	else for (const m of added) add({
-		id: `${m.kind}-${m.name}`,
-		rowId: m.id,
-		kind: m.kind,
-		decision: "install-user",
-		direction: "to-user",
-		source: m.olkoPath,
-		sourceStore: "olko",
-		existing: "none",
-		overwrite: false,
-		version: "none"
-	});
-	return {
-		state: {
-			items: [...previous?.items ?? [], ...items],
-			wave: items,
-			round
-		},
-		metrics: {
-			staged: items.length,
-			round
-		},
-		output: `Wave C round ${round}: ${items.length} rows to stage.`
-	};
-};
-function parseStaged(text) {
-	const data = lastJsonBlock(text);
-	if (typeof data.name !== "string" || typeof data.stagedPath !== "string") throw new Error("porter JSON needs name and stagedPath");
-	return {
-		name: data.name,
-		stagedPath: data.stagedPath,
-		findings: data.findings ?? [],
-		missing: data.missing ?? [],
-		entry: data.entry ?? null,
-		category: data.category ?? null,
-		blockers: data.blockers ?? []
-	};
-}
-var claudeSyncFindings = async ({ state }) => {
-	const { wave: items, items: all, round } = stateOf(state, "stage-plan");
-	const staged = stateOf(state, "stage");
-	const olko = stateOf(state, "state").olko;
-	const blocked = items.filter((i) => staged[i.id]?.blockers.length).map((i) => `${i.id}: ${staged[i.id].blockers.join("; ")}`);
-	if (blocked.length) throw new Error(`porter blockers, nothing applied: ${blocked.join(" | ")}`);
-	const findings = items.flatMap((i) => (staged[i.id]?.findings ?? []).map((f) => ({
-		item: i.id,
-		...f,
-		line: `${i.id} ${f.file}:${f.line} — ${f.category} — proposed: ${f.replacement}`
-	})));
-	const missing = items.filter((i) => i.direction === "to-user").flatMap((i) => (staged[i.id]?.missing ?? []).map((ref) => {
-		const [kind, name] = ref.split(":");
-		const olkoPath = kind === "agent" ? path.join(olko, "agents", "opencode", `${name}.md`) : skillDirIn(olko, name) ?? "none";
-		return {
-			id: `${kind}:${name}`,
-			kind,
-			name,
-			olkoPath,
-			for: i.id,
-			line: `${kind} ${name}, needed by ${i.id}`
-		};
-	})).filter((m, i, list) => m.olkoPath !== "none" && list.findIndex((x) => x.id === m.id) === i && !all.some((it) => it.id === `${m.kind}-${m.name}`));
-	return {
-		state: {
-			findings,
-			missing,
-			round
-		},
-		metrics: {
-			findings: findings.length,
-			missing: missing.length
-		},
-		output: `${findings.length} sanitize findings to decide, ${missing.length} missing dependencies.`
-	};
-};
-var claudeSyncFixes = async ({ state, answers, nodeId }) => {
-	const { findings, round } = stateOf(state, "findings");
-	const previous = nodeId ? state[nodeId] : void 0;
-	const decided = findings.map((f, i) => ({
-		...f,
-		decision: answers?.[`q-claude-sync-finding-${round}-${i}`] ?? "skip-row"
-	}));
-	const skipped = [.../* @__PURE__ */ new Set([...previous?.skipped ?? [], ...decided.filter((d) => d.decision === "skip-row").map((d) => d.item)])];
-	const byItem = /* @__PURE__ */ new Map();
-	for (const d of decided.filter((d) => d.decision === "replace" || d.decision === "delete")) byItem.set(d.item, [...byItem.get(d.item) ?? [], `${d.decision}: ${d.line}`]);
-	const { items, wave } = stateOf(state, "stage-plan");
-	const fixes = wave.filter((i) => byItem.has(i.id) && !skipped.includes(i.id)).map((i) => ({
-		...i,
-		decisions: byItem.get(i.id).join("\n")
-	}));
-	const ready = items.filter((i) => !skipped.includes(i.id));
-	return {
-		state: {
-			fixes,
-			ready,
-			skipped
-		},
-		metrics: {
-			fixes: fixes.length,
-			ready: ready.length,
-			skipped: skipped.length
-		},
-		output: `${ready.length} rows ready, ${fixes.length} need staged fixes, ${skipped.length} skipped by a finding.`
-	};
-};
-function olkoCategories(olko) {
-	const skills = path.join(olko, "skills");
-	return fs.existsSync(skills) ? fs.readdirSync(skills).filter((c) => fs.statSync(path.join(skills, c)).isDirectory()).sort() : [];
-}
-var claudeSyncMoreDeps = async ({ state, answers }) => {
-	const { missing, round } = stateOf(state, "findings");
-	const more = round < 2 ? missing.filter((_, i) => answers?.[`q-claude-sync-missing-${round}-${i}`] === "install-user").length : 0;
-	return {
-		state: { more },
-		metrics: { more },
-		output: more ? `${more} missing dependencies to stage in the next wave.` : "No more dependencies to stage."
-	};
-};
-var claudeSyncApplyPlan = async ({ state }) => {
-	const { ready } = stateOf(state, "fixes");
-	const staged = stateOf(state, "stage");
-	const olko = stateOf(state, "state").olko;
-	const categories = olkoCategories(olko);
-	const rows = ready.map((i) => {
-		const s = staged[i.id];
-		const newSkill = i.direction === "to-olko" && i.kind === "skill" && i.existing === "none";
-		const diffFile = path.join(i.stageDir, "diff.patch");
-		const diff = fs.existsSync(diffFile) ? fs.readFileSync(diffFile, "utf8").slice(0, 6e3) : "new file, no existing copy";
-		return {
-			...i,
-			name: s.name,
-			stagedPath: s.stagedPath,
-			needsCategory: newSkill,
-			categories: s.category && categories.includes(s.category) ? [s.category, ...categories.filter((c) => c !== s.category)] : categories,
-			diff
-		};
-	});
-	return {
-		state: { rows },
-		metrics: { rows: rows.length },
-		output: `${rows.length} rows to apply one at a time.`
-	};
-};
-async function contentHash(exec, stateDir, target) {
-	return (await syncState(exec, stateDir, [
-		"hash",
-		"--path",
-		target
-	])).trim().split(/\s+/).at(-1) ?? "";
-}
-async function recordLineage(exec, stateDir, capability, store, target, sourceStore, source) {
-	const hash = await contentHash(exec, stateDir, target);
-	const sourceHash = await contentHash(exec, stateDir, source);
-	await syncState(exec, stateDir, [
-		"lineage",
-		"set",
-		"--capability",
-		capability.replace(/[^a-z0-9-]/g, "-"),
-		"--store",
-		store,
-		"--path",
-		target,
-		"--hash",
-		hash,
-		"--ported-from",
-		`${sourceStore}@${sourceHash}`
-	]);
-	return hash;
-}
-function upsertEntry(file, key, entry) {
-	const json = JSON.parse(fs.readFileSync(file, "utf8"));
-	const list = json[key];
-	const index = list.findIndex((e) => e.name === entry.name);
-	if (index >= 0) list[index] = {
-		...list[index],
-		...entry
-	};
-	else list.push(entry);
-	fs.writeFileSync(file, `${JSON.stringify(json, null, 2)}\n`);
-}
-var claudeSyncApplyOlko = async ({ state, exec, answers }) => {
-	if (!exec) throw new Error("csync.applyOlko needs the host exec tool");
-	const { item, index } = stateOf(state, "apply-next");
-	const { olko, stateDir } = stateOf(state, "state");
-	const staged = stateOf(state, "stage")[item.id];
-	if (item.overwrite && answers?.[`q-claude-sync-overwrite-${index}`] !== "overwrite") return {
-		state: { applied: false },
-		metrics: {
-			applied: 0,
-			failed: 0
-		},
-		output: `${item.id}: overwrite not confirmed, nothing written.`
-	};
-	const results = [];
-	let target;
-	if (item.kind === "skill") {
-		const category = item.needsCategory ? answers?.[`q-claude-sync-category-${index}`] : path.basename(path.dirname(item.existing));
-		if (!category) throw new Error(`no category for ${item.name}`);
-		target = item.existing !== "none" ? item.existing : path.join(olko, "skills", category, item.name);
-		fs.mkdirSync(target, { recursive: true });
-		fs.cpSync(item.stagedPath, target, {
-			recursive: true,
-			force: true,
-			filter: (f) => path.basename(f) !== "diff.patch"
-		});
-		upsertEntry(path.join(olko, "registry.json"), "skills", {
-			...staged.entry ?? {},
-			name: item.name,
-			category,
-			version: item.version
-		});
-		for (const args of [["scripts/registry.mjs", "--fix"], ["scripts/registry.mjs"]]) {
-			const res = await exec("node", args, { cwd: olko });
-			results.push(`${args.join(" ")}: ${res.code === 0 ? "pass" : `FAIL ${(res.stderr || res.stdout).trim().split(/\r?\n/).slice(-2).join(" ")}`}`);
-		}
-	} else {
-		target = path.join(olko, "agents", "opencode", `${item.name}.md`);
-		fs.copyFileSync(fs.statSync(item.stagedPath).isDirectory() ? path.join(item.stagedPath, `${item.name}.md`) : item.stagedPath, target);
-		upsertEntry(path.join(olko, "agents", "opencode", "index.json"), "agents", {
-			...staged.entry ?? {},
-			name: item.name,
-			version: item.version,
-			file: `${item.name}.md`
-		});
-		const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "factory-agent-check-"));
-		const res = await exec("node", [
-			"scripts/install-opencode-agents.mjs",
-			"--project",
-			scratch,
-			"--agent",
-			item.name
-		], { cwd: olko });
-		fs.rmSync(scratch, {
-			recursive: true,
-			force: true
-		});
-		results.push(`install-opencode-agents ${item.name}: ${res.code === 0 ? "pass" : `FAIL ${(res.stderr || res.stdout).trim().split(/\r?\n/).slice(-2).join(" ")}`}`);
-	}
-	await recordLineage(exec, stateDir, item.id, "olko", target, item.sourceStore, item.source);
-	const failed = results.filter((r) => r.includes("FAIL")).length;
-	return {
-		state: {
-			applied: true,
-			target,
-			results,
-			failed
-		},
-		metrics: {
-			applied: 1,
-			failed
-		},
-		output: `${item.id} -> Olko ${path.relative(olko, target)} at ${item.version}. ${results.join("; ")}`
-	};
-};
-var claudeSyncApplyUser = async ({ state, exec, answers }) => {
-	if (!exec) throw new Error("csync.applyUser needs the host exec tool");
-	const { item, index } = stateOf(state, "apply-next");
-	const { user, stateDir } = stateOf(state, "state");
-	if (answers?.[`q-claude-sync-write-${index}`] !== "write") return {
-		state: { applied: false },
-		metrics: { applied: 0 },
-		output: `${item.id}: write to the user scope declined.`
-	};
-	const target = item.kind === "skill" ? path.join(user, "skills", item.name) : path.join(user, "agents", `${item.name}.md`);
-	if (item.kind === "skill") {
-		fs.mkdirSync(target, { recursive: true });
-		fs.cpSync(item.stagedPath, target, {
-			recursive: true,
-			force: true,
-			filter: (f) => path.basename(f) !== "diff.patch"
-		});
-	} else fs.copyFileSync(fs.statSync(item.stagedPath).isDirectory() ? path.join(item.stagedPath, `${item.name}.md`) : item.stagedPath, target);
-	await recordLineage(exec, stateDir, item.id, "user", target, "olko", item.source);
-	return {
-		state: {
-			applied: true,
-			target
-		},
-		metrics: { applied: 1 },
-		output: `${item.id} -> user scope ${target}.`
-	};
-};
-var claudeSyncApplyRecord = async ({ state, nodeId }) => {
-	const previous = nodeId ? state[nodeId] : void 0;
-	const { item } = stateOf(state, "apply-next");
-	const result = item.direction === "to-olko" ? state["apply-olko"] : state["apply-user"];
-	const applied = [...previous?.applied ?? [], ...result?.applied ? [`${item.id} ${item.direction}`] : []];
-	const failed = (previous?.failed ?? 0) + (result?.failed ?? 0);
-	return {
-		state: {
-			applied,
-			failed,
-			olkoChanged: applied.some((a) => a.endsWith("to-olko"))
-		},
-		metrics: {
-			applied: applied.length,
-			failed
-		},
-		output: `${applied.length} rows applied so far.`
-	};
-};
-var claudeSyncOlkoTests = async ({ state, exec }) => {
-	if (!exec) throw new Error("csync.olkoTests needs the host exec tool");
-	const { olko } = stateOf(state, "state");
-	const res = await exec("node", ["--test", "scripts/*.test.mjs"], { cwd: olko });
-	const summary = (res.stdout.match(/^ℹ (pass|fail) \d+$/gm) ?? []).join(", ");
-	return {
-		state: {
-			passed: res.code === 0,
-			summary
-		},
-		metrics: { failed: res.code === 0 ? 0 : 1 },
-		output: `Olko node tests: ${res.code === 0 ? "pass" : "FAIL"} (${summary || (res.stderr || res.stdout).trim().split(/\r?\n/).slice(-2).join(" ")}).`
-	};
-};
-var claudeSyncLeakCheck = async ({ state, exec, input }) => {
-	if (!exec) throw new Error("csync.leakCheck needs the host exec tool");
-	const { olko, target, leakTerms } = stateOf(state, "state");
-	const plugins = fs.existsSync(path.join(target, "plugins")) ? fs.readdirSync(path.join(target, "plugins")) : [];
-	const portedPlugins = new Set(stateOf(state, "apply-plan").rows.filter((r) => r.sourceStore === "target").map((r) => path.relative(path.join(target, "plugins"), r.source).split(path.sep)[0]));
-	const terms = [
-		...leakTerms,
-		input.targetName ?? "",
-		target,
-		path.basename(target),
-		...plugins.filter((p) => !portedPlugins.has(p))
-	].filter((t) => t.length > 2).map((t) => t.toLowerCase());
-	const changed = (await exec("git", [
-		"-C",
-		olko,
-		"status",
-		"--porcelain",
-		"--untracked-files=all"
-	])).stdout.split(/\r?\n/).filter(Boolean).map((l) => l.slice(3).trim());
-	const hits = [];
-	for (const file of changed) {
-		const full = path.join(olko, file);
-		if (!fs.existsSync(full) || fs.statSync(full).isDirectory()) continue;
-		const added = file.endsWith(".json") ? (await exec("git", [
-			"-C",
-			olko,
-			"diff",
-			"--",
-			file
-		])).stdout.split(/\r?\n/).filter((l) => l.startsWith("+")).join("\n") : fs.readFileSync(full, "utf8");
-		terms.forEach((t, n) => {
-			if (added.toLowerCase().includes(t)) hits.push(`${file}: leak term #${n + 1}`);
-		});
-	}
-	if (hits.length) throw new Error(`leak check failed, nothing published: ${hits.join("; ")}`);
-	return {
-		state: {
-			changed,
-			files: changed.join("\n")
-		},
-		metrics: {
-			leaks: 0,
-			changed: changed.length
-		},
-		output: `Leak check passed on ${changed.length} changed Olko files.`
-	};
-};
-var claudeSyncPublish = async ({ state, exec }) => {
-	if (!exec) throw new Error("csync.publish needs the host exec tool");
-	const { olko } = stateOf(state, "state");
-	const { changed } = stateOf(state, "leak-check");
-	const rows = stateOf(state, "apply-plan").rows.filter((r) => !r.decision.includes("user"));
-	const tests = stateOf(state, "olko-tests");
-	const branch = `feat/claude-sync-${rows.map((r) => r.name.replace(/^olko-/, "")).join("-").slice(0, 40).replace(/-+$/, "")}`;
-	const git = async (...args) => {
-		const res = await exec("git", [
-			"-C",
-			olko,
-			...args
-		]);
-		if (res.code !== 0) throw new Error(`git ${args[0]} failed: ${(res.stderr || res.stdout).trim()}`);
-		return res.stdout.trim();
-	};
-	await git("checkout", "-b", branch);
-	await git("add", "--", ...changed);
-	const subject = `feat(sync): port ${rows.map((r) => `${r.name} ${r.version}`).join(", ")}`;
-	await git("commit", "-m", subject);
-	await git("push", "-u", "origin", branch);
-	const pr = await exec("gh", [
-		"pr",
-		"create",
-		"--draft",
-		"--head",
-		branch,
-		"--base",
-		"main",
-		"--title",
-		subject,
-		"--body",
-		[`Artifacts: ${rows.map((r) => `${r.name} ${r.version} (${r.decision})`).join(", ")}`, `Validation: ${tests.passed ? "node tests pass" : "node tests FAIL"} ${tests.summary}`].join("\n\n")
-	], { cwd: olko });
-	if (pr.code !== 0) throw new Error(`gh pr create failed: ${(pr.stderr || pr.stdout).trim()}`);
-	const url = pr.stdout.trim().split(/\r?\n/).at(-1);
-	return {
-		state: { publish: {
-			url,
-			branch,
-			commit: await git("rev-parse", "HEAD")
-		} },
-		metrics: { prs: 1 },
-		output: `Draft PR ${url} on ${branch}.`
-	};
-};
-var claudeSyncConsolidationRecord = async ({ state, exec, answers }) => {
-	if (!exec) throw new Error("csync.consolidationRecord needs the host exec tool");
-	const { stateDir } = stateOf(state, "state");
-	const suggestions = Object.values(stateOf(state, "consolidate"))[0]?.suggestions ?? [];
-	const accepted = [];
-	const rejected = [];
-	for (const [i, s] of suggestions.entries()) {
-		const answer = answers?.[`q-claude-sync-suggestion-${i}`];
-		if (answer === "reject") {
-			await syncState(exec, stateDir, [
-				"rejection",
-				"add",
-				"--items",
-				s.items.join(","),
-				"--suggestion",
-				s.verdict,
-				"--reason",
-				answers?.[`q-claude-sync-suggestion-reason-${i}`] ?? "declined"
-			]);
-			rejected.push(s.items.join(","));
-		} else if (answer === "accept") accepted.push(`- ${s.verdict}: ${s.items.join(", ")}\n  evidence: ${s.evidence}\n  loses: ${s.loses}`);
-	}
-	const planFile = path.join(stateDir, `consolidation-plan-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.md`);
-	if (accepted.length) fs.appendFileSync(planFile, `${accepted.join("\n")}\n`);
-	return {
-		state: {
-			accepted: accepted.length,
-			rejected: rejected.length,
-			planFile: accepted.length ? planFile : "none"
-		},
-		metrics: {
-			accepted: accepted.length,
-			rejected: rejected.length
-		},
-		output: `Consolidation: ${accepted.length} accepted${accepted.length ? ` (plan ${planFile})` : ""}, ${rejected.length} rejected.`
-	};
-};
-function parseSuggestions(text) {
-	return { suggestions: (lastJsonBlock(text).suggestions ?? []).filter((s) => [
-		"merge",
-		"remove",
-		"extend"
-	].includes(s.verdict) && Array.isArray(s.items) && s.items.length >= 2).map((s, i) => ({
-		...s,
-		line: `${i + 1}. ${s.verdict}: ${s.items.join(" + ")} — ${s.evidence} — loses: ${s.loses}`
-	})) };
-}
 var OPERATIONS = {
-	...IMPL_OPERATIONS,
 	"builtin.pass": pass,
 	"builtin.count": async ({ state, nodeId }) => {
 		const count = ((nodeId ? state[nodeId]?.count : 0) ?? 0) + 1;
@@ -24108,8 +21680,12 @@ var OPERATIONS = {
 			output: `Round ${count}.`
 		};
 	},
-	"builtin.stop": async ({ args }) => {
-		throw new Error(String(args.reason ?? "stopped by the user"));
+	"builtin.stop": async ({ args, state, input, answers }) => {
+		throw new Error(mustache.render(String(args.reason ?? "stopped by the user"), withEach({
+			state,
+			input,
+			answers
+		})).trim());
 	},
 	"builtin.values": async ({ args }) => {
 		if (!Array.isArray(args.values)) throw new Error("with.values must be a list");
@@ -24140,61 +21716,9 @@ var OPERATIONS = {
 			output: enabled ? `Subgraph ${String(args.subgraph)} runs (${when}).` : skipped
 		};
 	},
-	"list.next": listNext,
-	"memory.load": memoryLoad,
-	"sync.resolvePath": resolveMarketplacePath,
-	"sync.safeSource": safeSource,
-	"sync.discover": discoverArtifacts,
-	"sync.checkVersions": checkSkillVersions,
-	"sync.rows": syncRows,
-	"sync.plan": syncPlanApply,
-	"sync.revertLocal": revertLocal,
-	"sync.validate": validateMarketplace,
-	"sync.prOf": prOf,
-	"sync.waitChecks": waitForChecks,
-	"sync.merge": squashMerge,
-	"sync.install": installArtifacts,
-	"sync.memorySave": syncMemorySave,
-	"csync.state": claudeSyncState,
-	"csync.leakSave": claudeSyncLeakSave,
-	"csync.inventories": claudeSyncInventories,
-	"csync.capabilities": claudeSyncCapabilities,
-	"csync.select": claudeSyncSelect,
-	"csync.exclusions": claudeSyncExclusions,
-	"csync.rows": claudeSyncRows,
-	"csync.plan": claudeSyncPlan,
-	"csync.record": claudeSyncRecord,
-	"csync.report": claudeSyncReport,
-	"csync.stagePlan": claudeSyncStagePlan,
-	"csync.findings": claudeSyncFindings,
-	"csync.fixes": claudeSyncFixes,
-	"csync.applyPlan": claudeSyncApplyPlan,
-	"csync.moreDeps": claudeSyncMoreDeps,
-	"csync.applyOlko": claudeSyncApplyOlko,
-	"csync.applyUser": claudeSyncApplyUser,
-	"csync.applyRecord": claudeSyncApplyRecord,
-	"csync.olkoTests": claudeSyncOlkoTests,
-	"csync.leakCheck": claudeSyncLeakCheck,
-	"csync.publish": claudeSyncPublish,
-	"csync.consolidationRecord": claudeSyncConsolidationRecord,
-	"sync.report": syncReport,
-	"sync.stopUnsafe": async ({ state, args, input }) => {
-		const source = stateOf(state, typeof args.from === "string" ? args.from : "safe-source");
-		throw new Error(`Sync stopped before any comparison: ${input.label ?? "the marketplace"} checkout is not safe: ${source.detail ?? "unknown reason"}.`);
-	}
+	"list.next": listNext
 };
-var PARSERS = {
-	...IMPL_PARSERS,
-	"text.raw": (text) => String(text).trim(),
-	"sync.comparison": parseComparison,
-	"sync.prLine": parsePrLine,
-	"sync.applied": parseApplied,
-	"csync.capabilities": parseCapabilities,
-	"csync.inventory": parseInventory,
-	"csync.verdict": parseVerdict,
-	"csync.staged": parseStaged,
-	"csync.suggestions": parseSuggestions
-};
+var PARSERS = {};
 function operationNamed(name) {
 	return OPERATIONS[name] ?? WFSYNC_OPERATIONS[name];
 }
@@ -24308,6 +21832,7 @@ function buildNode(workflow, spec) {
 		const dirs = spec.dirs.map(render);
 		node.dirs = (context) => dirs.map((dir) => dir(context)).filter(Boolean);
 	}
+	if (spec.workspace) node.workspace = render(spec.workspace);
 	if (spec.agents) node.agents = spec.agents.map((a) => ({
 		id: a.id,
 		...a.role ? { role: a.role } : {},
@@ -25302,6 +22827,14 @@ var Factory = class {
 	advance(run, node) {
 		const workflow = workflowOf(run);
 		const view = this.view(run, node);
+		if (node.workspace) this.moveWorkspace(run, node, node.workspace({
+			goal: run.goal,
+			input: view.input,
+			state: view.state,
+			agent: { id: node.localId ?? node.id },
+			answers: view.answers,
+			steps: run.steps
+		}).trim());
 		const context = {
 			...view.state,
 			answers: view.answers,
@@ -25328,6 +22861,15 @@ var Factory = class {
 		run.visits[edge.to] = visits;
 		if (run.nodeAgents) delete run.nodeAgents[edge.to];
 		run.cursor = workflow.nodes.findIndex((n) => n.id === edge.to);
+	}
+	moveWorkspace(run, node, target) {
+		if (!target || target === run.workspace) return;
+		if (!fs.existsSync(target) || !fs.statSync(target).isDirectory()) throw new Error(`node ${node.path}: workspace ${target} is not a directory`);
+		run.workspace = target;
+		this.event(run, "workspace_changed", {
+			node: node.path,
+			workspace: target
+		});
 	}
 	async step(run) {
 		if (run.answers["q-budget-pause"] === "stop") {

@@ -1,5 +1,5 @@
 name: olko-skill-optimizer
-version: 0.2.0
+version: 0.3.0
 description: "Optimizes one AI instruction resource (agent or SKILL.md) for tokens and cache, or lists every agent in a directory for a cost audit (audit; the cost ranking needs the measure step). It asks for the mode and the exact path, checks the optimizer skill permission, drafts one proposal, and edits nothing until you approve that exact text. Audit changes nothing. Split moves sections into on-demand skills only after approval."
 source: "agents/opencode/olko-skill-optimizer.md"
 entry: memory-read
@@ -16,7 +16,7 @@ nodes:
     role: reader
     agent: olko-skill-optimizer
     tools: [read]
-    parse: text.raw
+    parse: text
     maxVisits: 1
     prompt: |
       Read only. Do not write any file or memory in this step.
@@ -37,18 +37,30 @@ nodes:
       id: q-skill-optimizer-target
       text: "Give the exact path. For optimize or split: the one agent .md or SKILL.md file. For audit: the agents directory. Do not give a Cave Crew resource; those are out of scope."
   - id: resolve-path
-    description: "Finds the marketplace checkout (input, MARKETPLACE_PATH, project adapter or the built-in fallback). The target checks and the edit steps read and write the selected path inside it."
-    kind: script
-    op: sync.resolvePath
+    description: "Read only, from the given path alone: names the directory that holds the selected resource and its companion files (the repository root above its agents/ or skills/ tree). The target checks and the edit steps read and write the selected path inside it."
+    kind: llm
+    role: reader
+    agent: olko-skill-optimizer
+    tools: [read]
+    parse: { json: [path] }
     maxVisits: 3
+    prompt: |
+      Read only. Do not open any file and do not write anything; decide from the path text alone.
+      Mode: {{state.ask-mode.answer}}
+      Given path: {{state.ask-target.answer}}
+      {{#input.marketplace}}The marketplace checkout of this run: {{input.marketplace}}. Use it when the given path is inside it.{{/input.marketplace}}
+      Name the absolute directory that holds the selected resource and the companion files an approved edit or split may touch: when the path lies under an `agents/` or `skills/` directory, the directory that contains that `agents/` or `skills/` directory; otherwise the given directory for audit, or the parent directory of the given file.
+
+      End with one ```json block:
+      {"path": "<absolute directory>"}
   - id: target-check
     description: "Read only: confirms the given path is exact and points to one existing file (or one directory for audit); replies ok or ask."
     kind: llm
     role: reader
     agent: olko-skill-optimizer
     tools: [read]
-    dirs: ["{{state.resolve-path.path}}"]
-    parse: text.raw
+    dirs: ["{{state.resolve-path.resolve-path.path}}"]
+    parse: text
     maxVisits: 3
     prompt: |
       Read only. Do not open the content of the target and do not write anything.
@@ -65,7 +77,7 @@ nodes:
     role: reader
     agent: olko-skill-optimizer
     tools: [read]
-    parse: text.raw
+    parse: text
     maxVisits: 1
     prompt: |
       Read only. Do not write anything.
@@ -78,7 +90,7 @@ nodes:
     role: reader
     agent: olko-skill-optimizer
     tools: [read]
-    parse: text.raw
+    parse: text
     maxVisits: 1
     prompt: |
       Read only. Do not write anything and do not load any other skill.

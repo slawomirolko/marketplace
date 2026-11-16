@@ -1,26 +1,37 @@
 name: olko-impl-editor
-version: 0.1.0
-description: "Step 8c: opens the worktree in a new VS Code window; you confirm that the editor shows no syntax or structure problem before the merge. Never skipped while the switch is on."
+version: 0.2.0
+description: "Step 8c: the orchestrator opens the worktree in a new VS Code window; you confirm that the editor shows no syntax or structure problem before the merge. A failed launch is a blocker. Never skipped while the switch is on."
 source: "skills/*/olko-implementation-pr-gates (OBLIGATORY EDITOR VERIFICATION GATE)"
+roles:
+  orchestrator: medium
 entry: open
 nodes:
   - id: open
-    description: "Runs code --new-window on the worktree."
-    kind: script
-    op: impl.openEditor
+    description: "The implementation orchestrator runs code --new-window on the worktree by direct bash invocation and records the command in the journal."
+    kind: llm
+    role: orchestrator
+    agent: olko-implementation-orchestrator
+    tools: [read, edit, bash]
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: { line: [gate, verdict, detail] }
+    prompt: |
+      Step 8c, OBLIGATORY EDITOR VERIFICATION GATE of olko-implementation-pr-gates, launch part only: run `code --new-window {{state.worktree.worktree.path}}` yourself by direct bash invocation. Never pass --wait, never target the main checkout and never substitute another editor. Delegate nothing and ask nothing; the workflow asks the user for the confirmation.
+      Record the command and the worktree path in the implementation journal of {{state.task.task.taskFile}}. If the code CLI is absent or the launch fails, record the exact error as a blocker.
+      End with one line, the verdict in lowercase: `editor | <opened|failed> | <command, or the exact error>`
   - id: ask-editor
     description: "Asks for your editor verification."
     kind: interrupt
     question:
       id: q-impl-editor
-      text: "The worktree {{state.worktree.path}} is open in a new VS Code window (or run code --new-window on it). Check the changed files for syntax and structure problems. Verified, or stop?"
+      text: "The worktree {{state.worktree.worktree.path}} is open in a new VS Code window. Check the changed files for syntax and structure problems. Verified, or stop?"
       allowed: [verified, stop]
   - id: stop-editor
-    description: "Stops before merge: the editor check failed."
+    description: "Stops before merge: the editor could not be launched or the editor check failed."
     kind: script
-    op: impl.stop
-    with: { reason: "the editor verification did not pass" }
+    op: builtin.stop
+    with: { reason: "Implementation stopped before merge: the editor verification did not pass ({{#state.ask-editor.answer}}you answered {{state.ask-editor.answer}}{{/state.ask-editor.answer}}{{^state.ask-editor.answer}}the launch failed: {{state.open.open.detail}}{{/state.ask-editor.answer}})." }
 edges:
-  - { from: open, to: ask-editor }
+  - { from: open, to: ask-editor, when: 'open.open.verdict == "opened"', description: "the editor window is open" }
+  - { from: open, to: stop-editor, description: "the code CLI is absent or the launch failed: a blocker, no merge" }
   - { from: ask-editor, to: END, when: 'ask-editor.answer == "verified"', description: "you verified the files" }
   - { from: ask-editor, to: stop-editor, description: "you chose stop" }

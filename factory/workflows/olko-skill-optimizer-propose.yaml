@@ -1,5 +1,5 @@
 name: olko-skill-optimizer-propose
-version: 0.1.0
+version: 0.1.1
 description: "Propose phase for optimize and split: runs the optimizer skill on the selected resource (read only), applies the language profile after the structural decisions, drafts one proposal with findings, wording changes, split plan and expected size, and puts the exact text to you. Revise runs the analysis again; approve or stop ends the phase. Nothing is edited here."
 source: "agents/opencode/olko-skill-optimizer.md (required skill sequence, steps 2-4, approval and editing)"
 roles:
@@ -14,9 +14,9 @@ nodes:
     role: optimizer
     skill: olko-agents-optimizer
     tools: [read]
-    dirs: ["{{state.resolve-path.path}}"]
+    dirs: ["{{state.resolve-path.resolve-path.path}}"]
     maxVisits: 4
-    parse: text.raw
+    parse: text
     prompt: |
       Read only. Do not edit, create or delete any file in this step.
       Mode: {{state.ask-mode.answer}}
@@ -34,9 +34,9 @@ nodes:
     role: optimizer
     skill: olko-ste100-skill-adapter
     tools: [read]
-    dirs: ["{{state.resolve-path.path}}"]
+    dirs: ["{{state.resolve-path.resolve-path.path}}"]
     maxVisits: 4
-    parse: text.raw
+    parse: text
     prompt: |
       Read only. Do not edit any file.
       Limits: Do not inspect or recommend edits to Cave Crew resources. Do not read or search `plans/` unless the user named a plan file.
@@ -52,9 +52,9 @@ nodes:
     role: optimizer
     agent: olko-skill-optimizer
     tools: [read]
-    dirs: ["{{state.resolve-path.path}}"]
+    dirs: ["{{state.resolve-path.resolve-path.path}}"]
     maxVisits: 4
-    parse: text.raw
+    parse: text
     prompt: |
       Read only. Do not edit any file. Write the proposal text only.
       Limits: Do not inspect or recommend edits to Cave Crew resources. Do not read or search `plans/` unless the user named a plan file.

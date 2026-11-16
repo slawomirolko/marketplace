@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { z } from "zod";
 import { expandWorkflowDir, loadWorkflowDir } from "../src/workflow-yaml.ts";
 import { stateReferenceErrors } from "../src/state-refs.ts";
 import { contractJson, missingField, PARSER_CONTRACTS } from "../src/contract.ts";
@@ -24,7 +25,7 @@ entry: draft
 roles: { writer: low }
 nodes:
   - { id: draft, kind: llm, role: writer, prompt: "Write." }
-  - { id: check, kind: llm, role: writer, parse: sync.prLine, prompt: "Draft {{state.draft.text}}, ok {{state.check.check.url}}, wrong {{state.check.consistency.url}}, field {{state.check.check.verdict}}" }
+  - { id: check, kind: llm, role: writer, parse: { line: [marker, url, branch, commit] }, prompt: "Draft {{state.draft.text}}, ok {{state.check.check.url}}, wrong {{state.check.consistency.url}}, field {{state.check.check.verdict}}" }
   - { id: ask, kind: interrupt, question: { id: q-a, text: "{{state.ask.answer}} {{state.ask.reason}} {{state.gone.text}} {{#each.state.lost}}{{key}}{{/each.state.lost}}" } }
 edges:
   - { from: draft, to: check }
@@ -37,7 +38,7 @@ edges:
   assert.deepEqual(errors, [
     "main: check prompt reads state.draft.text: draft has no parse:, so it stores nothing in state",
     "main: check prompt reads state.check.consistency.url: check stores results by agent id (check), not consistency",
-    "main: check prompt reads state.check.check.verdict: parser sync.prLine does not set verdict",
+    'main: check prompt reads state.check.check.verdict: parser {"line":["marker","url","branch","commit"]} does not set verdict',
     "main: ask question reads state.ask.reason: ask is a question; it sets only answer",
     "main: ask question reads state.gone.text: no step gone in this scope sets state",
     "main: ask question reads state.lost: no step lost in this scope sets state",
@@ -79,13 +80,35 @@ edges:
   assert.throws(() => loadWorkflowDir(clash), /step open is used twice/);
 });
 
+test("a stop reason and a workspace template are checked like prompts", () => {
+  const dir = workflowDir({
+    "main.yaml": `
+name: main
+version: 1.0.0
+entry: create
+roles: { worker: low }
+nodes:
+  - { id: create, kind: llm, role: worker, prompt: "Create.", parse: { json: [path] }, workspace: "{{state.create.create.dir}}" }
+  - { id: stop, kind: script, op: builtin.stop, with: { reason: "stopped in {{state.create.create.path}} and {{state.gone.x}}" } }
+edges:
+  - { from: create, to: stop }
+  - { from: stop, to: END }
+`,
+  });
+  assert.deepEqual(stateReferenceErrors(expandWorkflowDir(dir).get("main")!), [
+    'main: create workspace reads state.create.create.dir: parser {"json":["path"]} does not set dir',
+    "main: stop with.reason reads state.gone.x: no step gone in this scope sets state",
+  ]);
+});
+
 test("the contract describes every parser and walks object, array and string fields", () => {
-  assert.equal(missingField(PARSER_CONTRACTS["csync.suggestions"]!, ["suggestions", "0", "items", "length"]), null);
-  assert.equal(missingField(PARSER_CONTRACTS["csync.suggestions"]!, ["suggestions", "0", "verdict", "length"]), null);
-  assert.equal(missingField(PARSER_CONTRACTS["csync.suggestions"]!, ["suggestions", "0", "owner"]), "suggestions.0.owner");
-  assert.equal(missingField(PARSER_CONTRACTS["impl.chunks"]!, ["chunks", "first"]), "chunks.first");
+  const chunks = z.object({ chunks: z.array(z.object({ title: z.string(), files: z.array(z.string()) })) });
+  assert.equal(missingField(chunks, ["chunks", "0", "files", "length"]), null);
+  assert.equal(missingField(chunks, ["chunks", "0", "title", "length"]), null);
+  assert.equal(missingField(chunks, ["chunks", "0", "owner"]), "chunks.0.owner");
+  assert.equal(missingField(chunks, ["chunks", "first"]), "chunks.first");
   assert.deepEqual(Object.keys(PARSER_CONTRACTS).sort(), [...Object.keys(PARSERS), ...Object.keys(WFSYNC_PARSERS)].sort());
   const json = contractJson();
   assert.deepEqual(Object.keys(json.parsers).sort(), Object.keys(PARSER_CONTRACTS).sort());
-  assert.equal((json.parsers["sync.prLine"] as { type: string }).type, "object");
+  assert.equal((json.parsers["wfsync.verify"] as { type: string }).type, "object");
 });

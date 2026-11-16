@@ -13,7 +13,7 @@ nodes:
     agent: olko-obsidian-knowledge-manager
     tools: [read, bash]
     dirs: ["{{input.project}}", "{{input.worktree}}"]
-    parse: text.raw
+    parse: text
     prompt: |
       Read only. Do not write any file or note in this step.
       Approved proposal:

@@ -1,5 +1,5 @@
 name: olko-impl-closure
-version: 0.1.0
+version: 0.2.0
 description: "Steps 11-13 after the merge, in this order: acceptance E2E of the merge commit in a disposable checkout (11), post-merge runtime in the main checkout (12); only then the Task worktree, its disposable E2E resources and the Task plan file are removed (13); after that the Feature completion audit (12a) runs and records pending until every child Task is merged and reviewed; Feature plan files are deleted only after your approval of the exact paths (12b)."
 source: "skills/workflow/olko-implementation-closure/SKILL.md (steps 11, 12, 13, 12a, 12b)"
 roles:
@@ -14,61 +14,61 @@ nodes:
     role: reviewer
     skill: olko-implementation-closure
     tools: [read, edit]
-    dirs: ["{{input.project}}", "{{state.task.featureDir}}"]
-    parse: impl.runtime
+    dirs: ["{{input.project}}", "{{state.task.task.featureDir}}"]
+    parse: { line: [phase, verdict, detail] }
     prompt: |
-      Decide step 11 (post-merge acceptance E2E) for Task {{state.task.taskName}} from the MAIN checkout {{input.project}}. Read postMergeE2E in .agents/skill-config.md. The default is required. Only an explicit off skips step 11.
-      If it is required or not set: do not create a checkout, do not run any E2E and do not change any file. End with: `runtime | required | postMergeE2E required, step 11 runs next`.
-      If it is explicitly off: record the skip with its reason in the implementation journal of {{state.task.taskFile}} and in the Feature tracker {{state.task.tracker}}, run nothing else, and end with: `runtime | off | skipped: postMergeE2E off, <reason>`.
+      Decide step 11 (post-merge acceptance E2E) for Task {{state.task.task.taskName}} from the MAIN checkout {{input.project}}. Read postMergeE2E in .agents/skill-config.md. The default is required. Only an explicit off skips step 11.
+      If it is required or not set: do not create a checkout, do not run any E2E and do not change any file. End with: `closure | required | postMergeE2E required, step 11 runs next`.
+      If it is explicitly off: record the skip with its reason in the implementation journal of {{state.task.task.taskFile}} and in the Feature tracker {{state.task.task.tracker}}, run nothing else, and end with: `closure | off | skipped: postMergeE2E off, <reason>`.
   - id: post-merge-e2e
     description: "Step 11: the acceptance E2E runner runs the acceptance E2E of the merge commit from merge-retain in a separate disposable checkout, with a unique Compose project and project-scoped data. Mandatory unless the decision switched it off. Runs before the worktree is removed."
     kind: llm
     role: runner
     agent: olko-e2e-acceptance-runner
     tools: [read, bash]
-    dirs: ["{{input.project}}", "{{state.task.featureDir}}"]
-    parse: impl.runtime
+    dirs: ["{{input.project}}", "{{state.task.task.featureDir}}"]
+    parse: { line: [phase, verdict, detail] }
     prompt: |
-      Phase post-merge E2E for Task {{state.task.taskName}} (Task ID and URL in {{state.task.taskFile}}) on the merge commit {{state.merge-retain.merge-retain}} reported by merge-retain. Approved acceptance-to-E2E matrix and manifest: {{state.task.taskFile}}.
-      Create a separate disposable checkout at that merge SHA under the system temp directory. Never use the main checkout {{input.project}} or the Task worktree {{state.worktree.path}} for the run. Use a unique Compose project with project-scoped database and volumes; reject shared or externally named volumes and shared container names. Never mark tests skipped and never reuse a prior run. Do not change any file in the repository.
+      Phase post-merge E2E for Task {{state.task.task.taskName}} (Task ID and URL in {{state.task.task.taskFile}}) on the merge commit {{state.merge-retain.merge-retain}} reported by merge-retain. Approved acceptance-to-E2E matrix and manifest: {{state.task.task.taskFile}}.
+      Create a separate disposable checkout at that merge SHA under the system temp directory. Never use the main checkout {{input.project}} or the Task worktree {{state.worktree.worktree.path}} for the run. Use a unique Compose project with project-scoped database and volumes; reject shared or externally named volumes and shared container names. Never mark tests skipped and never reuse a prior run. Do not change any file in the repository.
       PASS only if every criterion passes, raw and annotated screenshots are uploaded to the Task, and cleanup of the checkout, Compose project, database records, networks and volumes is verified. On FAIL or NOT VERIFIED, report the first actionable failure. Report PASS, FAIL or NOT VERIFIED per criterion. Do not remove the Task worktree and do not delete any plan or Feature file.
-      End with one line: `runtime | <pass|fail|not verified> | <first failing criterion or blocker>; checkout <absolute path>; compose project <name>; report dir <absolute path>; cleanup proof <what was removed and verified>`
+      End with one line, the verdict in lowercase: `closure | <pass|fail|not verified> | <first failing criterion or blocker>; checkout <absolute path>; compose project <name>; report dir <absolute path>; cleanup proof <what was removed and verified>`
   - id: stop-post-merge-e2e
     description: "Stops the closure: step 11 did not PASS and was not switched off. The worktree and plan are kept and step 12 does not run."
     kind: script
-    op: impl.stop
-    with: { reason: "step 11 post-merge acceptance E2E not PASS: worktree and plan kept, step 12 and cleanup did not run" }
+    op: builtin.stop
+    with: { reason: "Implementation stopped: step 11 post-merge acceptance E2E not PASS: worktree and plan kept, step 12 and cleanup did not run" }
   - id: post-merge
     description: "Step 12: post-merge runtime in the main checkout, only after step 11 passed or was explicitly switched off. Records the merge SHA and the real Compose project evidence. The Feature completion audit (12a) runs after cleanup as a separate node."
     kind: llm
     role: reviewer
     skill: olko-implementation-closure
     tools: [read, edit, bash]
-    dirs: ["{{input.project}}", "{{state.task.featureDir}}"]
-    parse: impl.runtime
+    dirs: ["{{input.project}}", "{{state.task.task.featureDir}}"]
+    parse: { line: [phase, verdict, detail] }
     prompt: |
-      Run step 12 (post-merge runtime) for Task {{state.task.taskName}} from the MAIN checkout {{input.project}}, only if step 11 passed (step 11 report: {{state.post-merge-e2e.post-merge-e2e.text}}) or was switched off by postMergeE2E off (decision: {{state.e2e-decision.e2e-decision.text}}; then there is no step 11 report). If step 11 did not pass and was not switched off, report that step 12 did not run and stop.
-      First journal in the implementation journal of {{state.task.taskFile}} that you will use the REAL main Compose project. Rebuild and verify the merged code with the real project name, containers and ports. Do not use the worktree override or port offset. Do not run acceptance scenarios against shared development data.
-      Confirm that this is the project that received the merge, then record the merge SHA ({{state.merge-retain.merge-retain}}) and the evidence in the journal. Follow the verification contract of {{state.task.taskFile}}. Do not delete any file.
-      End with one line: `runtime | <pass|fail|not verified> | <step 12 result only; the step 12a audit is reported separately>`
+      Run step 12 (post-merge runtime) for Task {{state.task.task.taskName}} from the MAIN checkout {{input.project}}, only if step 11 passed (step 11 report: {{state.post-merge-e2e.post-merge-e2e.text}}) or was switched off by postMergeE2E off (decision: {{state.e2e-decision.e2e-decision.text}}; then there is no step 11 report). If step 11 did not pass and was not switched off, report that step 12 did not run and stop.
+      First journal in the implementation journal of {{state.task.task.taskFile}} that you will use the REAL main Compose project. Rebuild and verify the merged code with the real project name, containers and ports. Do not use the worktree override or port offset. Do not run acceptance scenarios against shared development data.
+      Confirm that this is the project that received the merge, then record the merge SHA ({{state.merge-retain.merge-retain}}) and the evidence in the journal. Follow the verification contract of {{state.task.task.taskFile}}. Do not delete any file.
+      End with one line, the verdict in lowercase: `closure | <pass|fail|not verified> | <step 12 result only; the step 12a audit is reported separately>`
   - id: stop-post-merge
     description: "Stops the closure: step 12 did not PASS. The worktree and plan are kept and cleanup does not run."
     kind: script
-    op: impl.stop
-    with: { reason: "step 12 post-merge runtime not PASS: worktree and plan kept, cleanup did not run" }
+    op: builtin.stop
+    with: { reason: "Implementation stopped: step 12 post-merge runtime not PASS: worktree and plan kept, cleanup did not run" }
   - id: cleanup
     description: "Step 13: only after steps 11 and 12 passed, copies the Task evidence into the Feature tracker, then the worktree lifecycle manager removes the disposable E2E checkout and its Compose resources, the Task worktree, and this Task's exact plan file."
     kind: llm
     role: publisher
     agent: olko-worktree-lifecycle-manager
     tools: [read, edit, bash]
-    dirs: ["{{input.project}}", "{{state.task.featureDir}}"]
-    parse: text.raw
+    dirs: ["{{input.project}}", "{{state.task.task.featureDir}}"]
+    parse: text
     prompt: |
-      Run step 13 (cleanup) for Task {{state.task.taskName}}, only if steps 11 and 12 both passed (step 11 report: {{state.post-merge-e2e.post-merge-e2e.text}}; step 12 report: {{state.post-merge.post-merge.text}}). If either did not pass, remove nothing and report why. If step 11 was switched off by postMergeE2E off, there is no E2E checkout to remove.
-      First copy the final implementation journal, the Task review, the runtime, log, trace and DB evidence, the PR and the merge details (merge commit {{state.merge-retain.merge-retain}}) of {{state.task.taskFile}} into the Feature tracker {{state.task.tracker}}.
-      Then phase cleanup-after-e2e: remove the disposable E2E checkout, its Compose project, volumes, database records and networks, using the checkout path, Compose project and report dir in the step 11 detail: {{state.post-merge-e2e.post-merge-e2e.detail}}. Remove what remains and report what was already gone. Then remove the Task worktree {{state.worktree.path}} from the main checkout {{input.project}}.
-      Then remove only the exact Task implementation plan file {{state.task.taskFile}}. If that file is missing, stop and report that Feature planning is needed. Never delete business.md, feature-tracker.md, another Task's plan or any containing directory. If the path is ambiguous, retain it and report the ambiguity. This deletion is authorized by the flow; do not ask for a second approval.
+      Run step 13 (cleanup) for Task {{state.task.task.taskName}}, only if steps 11 and 12 both passed (step 11 report: {{state.post-merge-e2e.post-merge-e2e.text}}; step 12 report: {{state.post-merge.post-merge.text}}). If either did not pass, remove nothing and report why. If step 11 was switched off by postMergeE2E off, there is no E2E checkout to remove.
+      First copy the final implementation journal, the Task review, the runtime, log, trace and DB evidence, the PR and the merge details (merge commit {{state.merge-retain.merge-retain}}) of {{state.task.task.taskFile}} into the Feature tracker {{state.task.task.tracker}}.
+      Then phase cleanup-after-e2e: remove the disposable E2E checkout, its Compose project, volumes, database records and networks, using the checkout path, Compose project and report dir in the step 11 detail: {{state.post-merge-e2e.post-merge-e2e.detail}}. Remove what remains and report what was already gone. Then remove the Task worktree {{state.worktree.worktree.path}} from the main checkout {{input.project}}.
+      Then remove only the exact Task implementation plan file {{state.task.task.taskFile}}. If that file is missing, stop and report that Feature planning is needed. Never delete business.md, feature-tracker.md, another Task's plan or any containing directory. If the path is ambiguous, retain it and report the ambiguity. This deletion is authorized by the flow; do not ask for a second approval.
       If any cleanup check fails, retain the remaining evidence and report the exact resources.
   - id: feature-audit
     description: "Step 12a: after cleanup, the Feature completion audit. If any child Task is still open, blocked, without evidence or failed, it records FEATURE_AUDIT_PENDING with the missing items and reports pending. Only when every child Task is merged and reviewed it audits the whole Feature and reports pass, fail or pending. Never claims Feature completion without its PASS."
@@ -76,36 +76,36 @@ nodes:
     role: reviewer
     skill: olko-implementation-closure
     tools: [read, edit, bash]
-    dirs: ["{{input.project}}", "{{state.task.featureDir}}"]
-    parse: impl.runtime
+    dirs: ["{{input.project}}", "{{state.task.task.featureDir}}"]
+    parse: { line: [phase, verdict, detail] }
     prompt: |
-      Run step 12a (Feature completion audit) for Feature {{state.task.featureId}} with tracker {{state.task.tracker}}, after Task {{state.task.taskName}}.
+      Run step 12a (Feature completion audit) for Feature {{state.task.task.featureId}} with tracker {{state.task.task.tracker}}, after Task {{state.task.task.taskName}}.
       Read all child Tasks of the Feature from YouTrack and the Feature tracker. Check them first: if any Task is open, blocked, lacks evidence or failed, record FEATURE_AUDIT_PENDING with the missing items in the tracker, report `pending` and stop; never claim Feature completion. Only if every child Task is merged and has a passing Task review (step 7c) and post-merge verification, run the audit.
       When ready, capture the Feature base commit (recorded before the first Task PR) and the current main commit. Audit the cumulative Task PR merge commits; use base..HEAD only when it contains no unrelated mainline changes. Run each applicable stack auditor once over that combined scope and the full Feature acceptance criteria, focusing on cross-Task integration, shared contracts and domain models, regressions, completeness and end-to-end acceptance; do not repeat individual Task reviews. Run the Feature end-to-end acceptance and runtime checks and inspect logs, traces and DB evidence across the combined behavior.
       Record all audit evidence and a final PASS or FAIL in the Feature tracker. Do not delete any file.
-      End with one line: `runtime | <pass|fail|pending|not verified> | <audit result or missing items>`
+      End with one line, the verdict in lowercase: `closure | <pass|fail|pending|not verified> | <audit result or missing items>`
   - id: corrective-task
     description: "Step 12a FAIL: the backlog writer identifies the affected Task(s) and creates or revises the corrective Task through the approved backlog workflow. It does not implement it; the corrective PR with the full Task review gate comes later, and the audit reruns after that PR merges."
     kind: llm
     role: publisher
     agent: olko-feature-backlog-writer
     tools: [read, edit, bash]
-    dirs: ["{{state.task.featureDir}}"]
-    parse: text.raw
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: text
     prompt: |
-      The Feature completion audit of Feature {{state.task.featureId}} (tracker {{state.task.tracker}}) recorded FAIL. Audit result: {{state.feature-audit.feature-audit.text}}
+      The Feature completion audit of Feature {{state.task.task.featureId}} (tracker {{state.task.task.tracker}}) recorded FAIL. Audit result: {{state.feature-audit.feature-audit.text}}
       Identify the affected Task(s) from the audit evidence. Create or revise the corrective Task through the approved backlog workflow and record it in the Feature tracker. Do not implement it and do not mark the Feature complete. Say that the corrective Task is delivered as its own PR with the full Task review gate (step 7c), and that the Feature audit reruns only after that PR merges.
   - id: stop-feature-audit
     description: "Stops the closure: the Feature audit is not PASS (pending, not verified or unexpected). The Feature is not complete and the tracker keeps the missing items."
     kind: script
-    op: impl.stop
-    with: { reason: "step 12a Feature completion audit not PASS (FEATURE_AUDIT_PENDING or not verified): Feature not complete, see the Feature tracker" }
+    op: builtin.stop
+    with: { reason: "Implementation stopped: step 12a Feature completion audit not PASS (FEATURE_AUDIT_PENDING or not verified): Feature not complete, see the Feature tracker" }
   - id: ask-cleanup
     description: "Step 12b: asks before deleting any Feature-level plan files. Only reached after a PASS audit. Lists the exact paths and what disappears."
     kind: interrupt
     question:
       id: q-impl-feature-cleanup
-      text: "Feature {{state.task.featureId}} audit PASS. Post-merge result:\n{{state.post-merge.post-merge.text}}\nFeature audit result:\n{{state.feature-audit.feature-audit.text}}\nExact absolute path to delete: {{state.task.featureDir}} (the whole Feature plan folder: Feature business plan, technical/implementation plan, stack plan, every remaining Task plan, and the shared Feature delivery tracker {{state.task.tracker}}).\nWhat disappears with it: the Feature base commit, the ordered Task/PR list, the Task reviews, the post-merge runtime evidence and the final audit verdict. The closure record is first copied into the Feature issue in YouTrack.\nAnswer delete to remove exactly that folder, or keep to retain everything."
+      text: "Feature {{state.task.task.featureId}} audit PASS. Post-merge result:\n{{state.post-merge.post-merge.text}}\nFeature audit result:\n{{state.feature-audit.feature-audit.text}}\nExact absolute path to delete: {{state.task.task.featureDir}} (the whole Feature plan folder: Feature business plan, technical/implementation plan, stack plan, every remaining Task plan, and the shared Feature delivery tracker {{state.task.task.tracker}}).\nWhat disappears with it: the Feature base commit, the ordered Task/PR list, the Task reviews, the post-merge runtime evidence and the final audit verdict. The closure record is first copied into the Feature issue in YouTrack.\nAnswer delete to remove exactly that folder, or keep to retain everything."
       allowed: [delete, keep]
   - id: delete-plans
     description: "Step 12b, after your approval: copies the closure record into the Feature issue in YouTrack, deletes exactly the approved Feature folder, confirms it is gone and reports the removed paths."
@@ -113,20 +113,20 @@ nodes:
     role: publisher
     skill: olko-implementation-closure
     tools: [read, edit, bash]
-    dirs: ["{{state.task.featureDir}}"]
-    parse: text.raw
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: text
     prompt: |
-      The user approved step 12b for exactly this path: {{state.task.featureDir}}. Only if the Feature audit in {{state.task.tracker}} records PASS: first copy the closure record (base and final commits, Task/PR list, audit verdict, YouTrack states) into the owning Feature issue in YouTrack. Then delete exactly {{state.task.featureDir}} and nothing else. Confirm the folder is gone, and report the approval and the removed paths. If the audit does not record PASS, delete nothing and report why.
+      The user approved step 12b for exactly this path: {{state.task.task.featureDir}}. Only if the Feature audit in {{state.task.task.tracker}} records PASS: first copy the closure record (base and final commits, Task/PR list, audit verdict, YouTrack states) into the owning Feature issue in YouTrack. Then delete exactly {{state.task.task.featureDir}} and nothing else. Confirm the folder is gone, and report the approval and the removed paths. If the audit does not record PASS, delete nothing and report why.
   - id: record-declined
     description: "Step 12b declined: you kept the files or gave no approval. Records DECLINED in the Feature tracker and deletes nothing."
     kind: llm
     role: publisher
     skill: olko-implementation-closure
     tools: [read, edit]
-    dirs: ["{{state.task.featureDir}}"]
-    parse: text.raw
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: text
     prompt: |
-      The user did not approve deleting {{state.task.featureDir}} (answer: {{state.ask-cleanup.answer}}). Record the Feature plan-file decision DECLINED with the final audit verdict in the Feature tracker {{state.task.tracker}}. Delete nothing and retain everything.
+      The user did not approve deleting {{state.task.task.featureDir}} (answer: {{state.ask-cleanup.answer}}). Record the Feature plan-file decision DECLINED with the final audit verdict in the Feature tracker {{state.task.task.tracker}}. Delete nothing and retain everything.
 edges:
   - { from: e2e-decision, to: post-merge, when: 'e2e-decision.e2e-decision.verdict == "off"', description: "postMergeE2E explicitly off: step 11 is skipped and recorded, step 12 runs" }
   - { from: e2e-decision, to: post-merge-e2e, description: "postMergeE2E required (default): the acceptance E2E runner runs step 11" }

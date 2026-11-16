@@ -19,7 +19,7 @@ nodes:
     skill: grill-with-docs
     tools: [read]
     dirs: ["{{input.project}}"]
-    parse: text.raw
+    parse: text
     prompt: |
       Compose the one routing question for the project {{input.project}}: what the user wants: discovery (create or refine Epic/Feature/Task issues), planning (implementation plans for an accepted Feature), or both. Offer exactly these three choices. Return the question text only; the workflow puts it to the user. Read only.
       Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely.

@@ -11,7 +11,7 @@ nodes:
     kind: llm
     role: planner
     skill: olko-plan-change-triage
-    parse: text.raw
+    parse: text
     prompt: |
       Run step 8c for the Feature plan folder {{state.feature.feature.featureDir}}: decide whether the grill and blocker decisions changed Task scope enough to need a tracker change. Draft the issue-level change only; do not publish and do not ask the user.
       Reply with the draft or `no tracker change`.

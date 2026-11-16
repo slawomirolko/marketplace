@@ -1,5 +1,5 @@
 name: olko-impl-deliver
-version: 0.1.0
+version: 0.2.0
 description: "Steps 8-9: commit, push and a draft PR only after your explicit yes; PR check where you choose which findings to fix; Obsidian and editor gates; PR merge only after your yes, which leaves the Task worktree intact. Then the closure group (steps 11-13). Answering no ends the run with the work left in the worktree."
 source: "agents/opencode/olko-implementation-orchestrator.md (steps 8-9, merge-retain; steps 11-13 in olko-impl-closure) and skills/*/olko-implementation-pr-gates, olko-implementation-closure"
 roles:
@@ -15,7 +15,7 @@ nodes:
     kind: interrupt
     question:
       id: q-impl-commit
-      text: "Task {{state.task.taskName}} is implemented in {{state.worktree.path}} ({{state.scope-gate.count}} code paths, review: {{state.review-gate.blocking}} blocking findings). Commit, push and open a draft PR now?"
+      text: "Task {{state.task.task.taskName}} is implemented in {{state.worktree.worktree.path}} ({{state.scope-gate.scope-gate.count}} code paths, review: {{state.review-gate.review-gate.blocking.length}} blocking findings). Commit, push and open a draft PR now?"
       allowed: [commit, "no"]
   - id: commit
     description: "Git delivery manager runs the style and Docker checks again, commits, pushes and opens a draft PR."
@@ -23,11 +23,13 @@ nodes:
     role: publisher
     agent: olko-git-delivery-manager
     tools: [read, bash]
-    parse: impl.delivery
+    parse: { line: [result, commit, url, count] }
     prompt: |
-      The user explicitly approved commit, push and a DRAFT pull request for Task {{state.task.taskName}} of Feature {{state.task.featureId}} (milestone: the Feature), estimated file budget 15, plan {{state.task.taskFile}}, worktree {{state.worktree.path}}, branch {{state.worktree.branch}} into {{state.worktree.base}}.
-      Changed code paths:
-      {{state.scope-gate.paths}}
+      The user explicitly approved commit, push and a DRAFT pull request for Task {{state.task.task.taskName}} of Feature {{state.task.task.featureId}} (milestone: the Feature), estimated file budget 15, plan {{state.task.task.taskFile}}, worktree {{state.worktree.worktree.path}}, branch {{state.worktree.worktree.branch}} into {{state.worktree.worktree.base}}.
+      Changed code paths ({{state.scope-gate.scope-gate.count}}; documentation paths {{state.scope-gate.scope-gate.docs}}):
+      {{#state.scope-gate.scope-gate.paths}}
+      - {{.}}
+      {{/state.scope-gate.scope-gate.paths}}
       Open the PR as a draft; never mark it ready and never request reviewers. Do not merge. Do not add CI/CD workflow files.
       End with one line: `delivery | <commit hash> | <PR url> | <code-path count>`
   - id: pr-check
@@ -37,9 +39,9 @@ nodes:
     skill: olko-pr-check
     tools: [read, bash]
     maxVisits: 3
-    parse: text.raw
+    parse: text
     prompt: |
-      Read only: check the PR of branch {{state.worktree.branch}} (worktree {{state.worktree.path}}): CI state, the required review bot, the newest inline and issue comments, reviews and thread status. Classify each finding as actionable, question, nit or info. Do not fix, resolve threads or merge.
+      Read only: check the PR of branch {{state.worktree.worktree.branch}} (worktree {{state.worktree.worktree.path}}): CI state, the required review bot, the newest inline and issue comments, reviews and thread status. Classify each finding as actionable, question, nit or info. Do not fix, resolve threads or merge.
   - id: ask-fix
     description: "Asks which PR findings to fix; nothing is fixed automatically."
     kind: interrupt
@@ -56,19 +58,19 @@ nodes:
     description: "The stack implementers fix the findings you selected; the checks run again and the delivery manager pushes a follow-up commit."
     kind: llm
     role: implementer
-    agentsFrom: state.stacks.implementers
+    agentsFrom: state.stacks.stacks.implementers
     tools: [read, edit, bash]
     maxVisits: 2
-    parse: text.raw
+    parse: text
     prompt: |
-      Fix only these PR findings the user selected, for the {{agent.id}} stack in this worktree (Task plan {{state.task.taskFile}}). No comments or plan ids in code, no test-first test changes, no CI/CD workflow files.
+      Fix only these PR findings the user selected, for the {{agent.id}} stack in this worktree (Task plan {{state.task.task.taskFile}}). No comments or plan ids in code, no test-first test changes, no CI/CD workflow files.
       {{state.ask-fix.answer}}
   - id: pr-recheck
     description: "Calls the shared checks step after the PR fixes."
     kind: call
     workflow: olko-impl-checks
     maxVisits: 2
-    input: { plan: "{{state.task.taskFile}}", base: "{{state.worktree.base}}" }
+    input: { plan: "{{state.task.task.taskFile}}", featureDir: "{{state.task.task.featureDir}}", base: "{{state.worktree.worktree.base}}" }
   - id: pr-push
     description: "Git delivery manager commits and pushes the follow-up."
     kind: llm
@@ -76,9 +78,9 @@ nodes:
     agent: olko-git-delivery-manager
     tools: [read, bash]
     maxVisits: 2
-    parse: text.raw
+    parse: text
     prompt: |
-      The user approved this follow-up: commit and push the PR fixes in worktree {{state.worktree.path}} on branch {{state.worktree.branch}}. Do not merge, mark the PR ready or request reviewers.
+      The user approved this follow-up: commit and push the PR fixes in worktree {{state.worktree.worktree.path}} on branch {{state.worktree.worktree.branch}}. Do not merge, mark the PR ready or request reviewers.
   - id: obsidian
     description: "Obsidian knowledge-base gate; skipped when switches.obsidian is off."
     kind: subgraph
@@ -96,7 +98,7 @@ nodes:
     kind: interrupt
     question:
       id: q-impl-merge
-      text: "Task {{state.task.taskName}}: PR {{state.commit.commit.fields.1}} for branch {{state.worktree.branch}}. Merge it now? The Task worktree stays intact. Answer merge, or leave to keep the PR open."
+      text: "Task {{state.task.task.taskName}}: PR {{state.commit.commit.url}} for branch {{state.worktree.worktree.branch}}. Merge it now? The Task worktree stays intact. Answer merge, or leave to keep the PR open."
       allowed: [merge, "leave"]
   - id: merge-retain
     description: "Step 9: after your yes, the worktree lifecycle manager merges the PR with merge-retain and keeps the Task worktree and branch."
@@ -104,9 +106,9 @@ nodes:
     role: publisher
     agent: olko-worktree-lifecycle-manager
     tools: [read, bash]
-    parse: text.raw
+    parse: text
     prompt: |
-      The user approved the merge of PR {{state.commit.commit.fields.1}} for branch {{state.worktree.branch}} into {{state.worktree.base}}. Phase merge-retain only. Merge the PR, update the target branch, and keep the Task worktree {{state.worktree.path}} and its branch intact: do not remove the worktree or the branch and do not delete any plan.
+      The user approved the merge of PR {{state.commit.commit.url}} for branch {{state.worktree.worktree.branch}} into {{state.worktree.worktree.base}}. Phase merge-retain only. Merge the PR, update the target branch, and keep the Task worktree {{state.worktree.worktree.path}} and its branch intact: do not remove the worktree or the branch and do not delete any plan.
       Return the PR URL and the merge commit.
   - id: closure
     description: "Closure after a merge: acceptance E2E (11), post-merge runtime (12), worktree cleanup (13), then the Feature steps (12a, 12b)."

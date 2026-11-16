@@ -1,7 +1,9 @@
 name: olko-impl-entry
-version: 0.1.0
+version: 0.2.0
 description: "Entry gate: start only from a Task with acceptance criteria and an approved implementation plan; a missing plan routes to plan documentation once, then the gate runs again."
 source: "agents/opencode/olko-implementation-orchestrator.md (ENTRY GATE)"
+roles:
+  orchestrator: medium
 entry: tracker-task
 nodes:
   - id: tracker-task
@@ -10,10 +12,24 @@ nodes:
     workflow: olko-impl-tracker-task
     enabledWhen: "switches.tracker == true"
   - id: task
-    description: "Finds the Task plan under plans/features/<featureId>/tasks and requires acceptance criteria and Ready for implementation: yes."
-    kind: script
-    op: impl.task
+    description: "The implementation orchestrator runs its ENTRY GATE: it finds the Task plan under plans/features/<featureId>/tasks and requires acceptance criteria and Ready for implementation: yes."
+    kind: llm
+    role: orchestrator
+    agent: olko-implementation-orchestrator
+    tools: [read]
     maxVisits: 2
+    dirs: ["{{input.project}}"]
+    parse: { json: [ok, reason, featureId, featureDir, featurePlan, tracker, taskFile, taskName, criteria] }
+    prompt: |
+      Do only the ENTRY GATE of your workflow, read only, for the main checkout {{input.project}}. Delegate nothing, ask nothing and change no file.
+      Feature: {{#input.featureId}}{{input.featureId}}{{/input.featureId}}{{^input.featureId}}{{#state.plan.feature.feature.featureId}}{{state.plan.feature.feature.featureId}} (planned by plan documentation in this run){{/state.plan.feature.feature.featureId}}{{^state.plan.feature.feature.featureId}}not given{{/state.plan.feature.feature.featureId}}{{/input.featureId}}.
+      Task: {{#input.taskId}}the Task plan whose file name starts with {{input.taskId}}{{/input.taskId}}{{^input.taskId}}the first Task plan by file name{{/input.taskId}} in plans/features/<featureId>/tasks/*-implementation.md.
+      {{#state.read-task.read-task}}
+      The Task as the tracker shows it (read only):
+      {{state.read-task.read-task}}
+      {{/state.read-task.read-task}}
+      The gate passes only when that Task plan exists, has an acceptance criteria section and states `Ready for implementation: yes`. Never guess a criterion.
+      End with one ```json block, with absolute paths: {"ok": <true|false>, "reason": "<why the gate failed, or empty>", "featureId": "", "featureDir": "<main checkout>/plans/features/<featureId>", "featurePlan": "<featureDir>/implementation.md", "tracker": "<featureDir>/feature-tracker.md", "taskFile": "<the Task plan, or empty>", "taskName": "<the Task plan file name without -implementation.md>", "criteria": "<the acceptance criteria section, as written>"}
   - id: plan
     description: "No approved plan: runs plan documentation (discovery and planning) for input.idea, once."
     kind: call
@@ -22,11 +38,11 @@ nodes:
   - id: stop-no-plan
     description: "Stops: never implement from a guessed criterion or without an approved plan."
     kind: script
-    op: impl.stop
-    with: { from: task }
+    op: builtin.stop
+    with: { reason: "Implementation stopped: {{state.task.task.reason}}" }
 edges:
   - { from: tracker-task, to: task }
-  - { from: task, to: END, when: "task.ok == true", description: "the Task plan is approved and has acceptance criteria" }
-  - { from: task, to: plan, when: "task.canPlan == true", description: "no approved plan yet and input.idea is given: plan it first" }
+  - { from: task, to: END, when: "task.task.ok == true", description: "the Task plan is approved and has acceptance criteria" }
+  - { from: task, to: plan, when: "input.idea != null && plan == null", description: "no approved plan yet and input.idea is given: plan it first, once" }
   - { from: task, to: stop-no-plan, description: "still no approved plan" }
   - { from: plan, to: task }

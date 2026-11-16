@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { evaluateWhen, loadWorkflowDir, loadWorkflowFile, negateWhen } from "../src/workflow-yaml.ts";
 import { claudeAgentsFile, claudeTools, marketplaceDir, readMarketplaceAgent } from "../src/marketplace-agents.ts";
-import { buildCapabilities, bumpVersion, claudeSyncActions, normalizeName, parseCapabilities, parseComparison, parsePrLine, parseVerdict, syncOptions } from "../src/ops.ts";
+import { operationNamed } from "../src/ops.ts";
 
 function writeYaml(text: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-yaml-"));
@@ -93,23 +93,6 @@ test("a prompt reads every answer and iterates a map of agent results with each"
   assert.equal(text, "yes|dotnet=ok;react=fail;");
 });
 
-test("the comparator result line becomes a classification with versions and action", () => {
-  const parsed = parseComparison("Report text\nresult | portable-local-change | 1.0.0 | minor | 1.1.0 | adopt minor\n");
-  assert.deepEqual({ ...parsed, report: undefined }, { classification: "portable-local-change", marketplaceVersion: "1.0.0", bump: "minor", nextVersion: "1.1.0", action: "adopt minor", report: undefined });
-  assert.equal(parseComparison("`result | identical | 2.0.0 | none | none | none`").classification, "identical");
-});
-
-test("a comparator report without a result line or with an unknown classification is rejected", () => {
-  assert.throws(() => parseComparison("no result here"), /no 'result \|' line/);
-  assert.throws(() => parseComparison("result | maybe | 1.0.0 | none | none | leave"), /unknown classification 'maybe'/);
-});
-
-test("decision options follow the classification as the source agent lists them", () => {
-  assert.deepEqual(syncOptions("local-only"), ["create", "reject", "leave"]);
-  assert.deepEqual(syncOptions("adapter-candidate"), ["move-to-adapter", "adopt-patch", "adopt-minor", "adopt-major", "revert-local", "leave"]);
-  assert.deepEqual(syncOptions("conflict"), ["adopt-patch", "adopt-minor", "adopt-major", "revert-local", "leave"]);
-});
-
 test("node tools map to Claude Code tools; the Skill tool is never allowed, so installed skill copies are never used", () => {
   assert.deepEqual(claudeTools(["read"]).allowed, ["Read", "Grep", "Glob"]);
   assert.ok(claudeTools(["read", "edit", "bash"]).disallowed.includes("Skill"));
@@ -160,21 +143,7 @@ test("the marketplace skill sync workflow loads from YAML with its phase groups"
   const workflow = loadWorkflowDir(path.join(import.meta.dirname, "..", "workflows")).get("olko-marketplace-skill-sync")!;
   assert.equal(workflow.name, "olko-marketplace-skill-sync");
   assert.equal(workflow.nodes.find((n) => n.id === "adapt")?.agent, "olko-adapt-to-marketplace");
-  assert.deepEqual(workflow.nodes.find((n) => n.id === "compare")?.tools, undefined);
-});
-
-test("an adopt decision bumps the marketplace version by its part", () => {
-  assert.equal(bumpVersion("1.2.3", "patch"), "1.2.4");
-  assert.equal(bumpVersion("1.2.3", "minor"), "1.3.0");
-  assert.equal(bumpVersion("1.2.3", "major"), "2.0.0");
-  assert.equal(bumpVersion("none", "patch"), "1.0.0");
-});
-
-test("the publish result line gives the PR; a push to main or a missing PR URL is rejected", () => {
-  assert.deepEqual(parsePrLine("done\npr | https://github.com/o/r/pull/7 | feat/sync-x | abc123"), { url: "https://github.com/o/r/pull/7", branch: "feat/sync-x", commit: "abc123" });
-  assert.throws(() => parsePrLine("pr | https://github.com/o/r/pull/7 | main | abc"), /feature branch/);
-  assert.throws(() => parsePrLine("pr | none | feat/x | abc"), /no PR URL/);
-  assert.throws(() => parsePrLine("no line"), /no 'pr \|' line/);
+  assert.deepEqual(workflow.nodes.find((n) => n.id === "compare")?.tools, ["read", "bash"]);
 });
 
 test("an agent's declared skills are read from the marketplace checkout, not from installed copies", () => {
@@ -214,39 +183,6 @@ test("a Claude Code plugin agent loads with its plugin root and its namespaced p
   assert.ok(!agent.prompt.includes("${CLAUDE_PLUGIN_ROOT}/skills"), "the plugin root is filled in");
   assert.ok(agent.prompt.includes(`CLAUDE_PLUGIN_ROOT is ${root}`));
   assert.ok(agent.dirs.includes(root));
-});
-
-test("the matcher's last json block becomes capabilities; a malformed one is rejected", () => {
-  const text = 'table...\n```json\n{"capabilities":[{"id":"design-rules","basis":"name","kind":"skill","copies":{"olko":{"name":"olko-design-rules","path":"skills/workflow/olko-design-rules","version":"1.0.0"}}}],"probable":[]}\n```';
-  assert.equal(parseCapabilities(text).capabilities[0]!.id, "design-rules");
-  assert.throws(() => parseCapabilities("no json"), /no ```json block/);
-  assert.throws(() => parseCapabilities('```json\n{"capabilities":[{"id":"x","kind":"tool","copies":{}}]}\n```'), /malformed/);
-});
-
-test("names match across stores without the olko- prefix or a plugin namespace", () => {
-  assert.equal(normalizeName("olko-design-rules"), "design-rules");
-  assert.equal(normalizeName("frontend-design:frontend-design"), "frontend-design");
-});
-
-test("comparator verdicts map to the actions of the source table", () => {
-  assert.equal(parseVerdict("x\nresult | target-ahead | minor | 1.1.0 | port").verdict, "target-ahead");
-  assert.throws(() => parseVerdict("result | newer | none | none | x"), /unknown verdict 'newer'/);
-  assert.deepEqual(claudeSyncActions("olko-only"), ["install-user", "reject", "exclude", "leave"]);
-  assert.deepEqual(claudeSyncActions("platform-delta-only"), ["leave", "exclude"]);
-  assert.deepEqual(claudeSyncActions("identical"), []);
-});
-
-test("capabilities keep the matcher's links, add name links and single-store artifacts, and make paths absolute", () => {
-  const inventory = {
-    target: { rows: [{ kind: "skill" as const, name: "frontend-design", path: "plugins/frontend-design/skills/frontend-design" }] },
-    olko: { rows: [{ kind: "skill" as const, name: "olko-design-rules", path: "skills/workflow/olko-design-rules", version: "1.0.0" }, { kind: "agent" as const, name: "olko-review-verifier", path: "agents/opencode/olko-review-verifier.md" }] },
-    user: { rows: [{ kind: "skill" as const, name: "olko-design-rules", path: "skills/olko-design-rules" }, { kind: "agent" as const, name: "scan-verifier", path: "agents/scan-verifier.md" }] },
-  };
-  const roots = { target: "/t", olko: "/o", user: "/u" };
-  const linked = [{ id: "verifier", basis: "probable", kind: "agent" as const, copies: { olko: { name: "olko-review-verifier", path: "" }, user: { name: "scan-verifier", path: "" } } }];
-  const caps = buildCapabilities(inventory, roots, linked);
-  assert.deepEqual(caps.map((c) => `${c.id}:${c.basis}:${Object.keys(c.copies).join(",")}`).sort(), ["design-rules:name:olko,user", "frontend-design:single:target", "verifier:probable:olko,user"]);
-  assert.equal(caps.find((c) => c.id === "design-rules")!.copies.olko!.path, path.join("/o", "skills/workflow/olko-design-rules"));
 });
 
 test("a switched subgraph gets a gate: switch on enters it, switch off goes straight to its exits", async () => {
@@ -316,4 +252,24 @@ edges:
   assert.deepEqual(main.edges.filter((e) => e.to === "next").map((e) => e.from).sort(), ["ask", "record"]);
   fs.writeFileSync(path.join(dir, "main.yaml"), fs.readFileSync(path.join(dir, "main.yaml"), "utf8").replace("  - { id: next, kind: script, op: builtin.pass }", "  - { id: record, kind: script, op: builtin.pass }").replace(/next/g, "record"));
   assert.throws(() => loadWorkflowDir(dir), /node id record is used twice/);
+});
+
+test("a node workspace template renders over state, and a stop reason is a template over state, input and answers", async () => {
+  const file = writeYaml(`
+name: moves
+version: 1.0.0
+entry: create
+roles: { worker: low }
+nodes:
+  - { id: create, kind: llm, role: worker, agent: olko-review-verifier, prompt: "Create it.", parse: { json: [path] }, workspace: "{{state.create.create.path}}" }
+  - { id: stop, kind: script, op: builtin.stop, with: { reason: "stopped in {{state.create.create.path}} for {{input.taskId}}: {{#each.state.checks}}{{key}}={{value}} {{/each.state.checks}}" } }
+edges:
+  - { from: create, to: stop }
+  - { from: stop, to: END }
+`);
+  const create = loadWorkflowFile(file).nodes.find((n) => n.id === "create")!;
+  assert.equal(create.workspace?.({ goal: "", input: {}, state: { create: { create: { path: "/tmp/wt" } } }, agent: { id: "create" } }), "/tmp/wt");
+  assert.equal(create.workspace?.({ goal: "", input: {}, state: {}, agent: { id: "create" } }), "");
+  const stop = operationNamed("builtin.stop")!;
+  await assert.rejects(stop({ state: { create: { create: { path: "/tmp/wt" } }, checks: { flow: "PASS", test: "BLOCKED" } }, input: { taskId: "t1" }, answers: {}, args: { reason: "stopped in {{state.create.create.path}} for {{input.taskId}}: {{#each.state.checks}}{{key}}={{value}} {{/each.state.checks}}" } } as never), { message: "stopped in /tmp/wt for t1: flow=PASS test=BLOCKED" });
 });

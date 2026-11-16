@@ -20,7 +20,7 @@ nodes:
       - { id: runtime, agent: olko-investigation-runtime-worker }
       - { id: test, agent: olko-investigation-test-worker }
       - { id: readiness, agent: olko-investigation-readiness-worker }
-    parse: text.raw
+    parse: text
     prompt: |
       Project: {{input.project}}. Read only; change no file and no vault note.
       Feature to plan (plan folder {{state.feature.feature.featureDir}}):
@@ -34,7 +34,7 @@ nodes:
     role: writer
     agent: olko-plan-business-writer
     tools: [read, edit]
-    parse: text.raw
+    parse: text
     prompt: |
       Write the business document {{state.feature.feature.featureDir}}/business.md for this Feature in the project {{input.project}}. Edit only that file.
       {{state.feature.feature.feature}}
@@ -46,7 +46,7 @@ nodes:
     role: planner
     skill: olko-plan-editor
     tools: [read, edit]
-    parse: text.raw
+    parse: text
     prompt: |
       Step 2 of the planning cycle in the project {{input.project}}: from the verified evidence below, create {{state.feature.feature.featureDir}}/implementation.md and one {{state.feature.feature.featureDir}}/tasks/<task-id>-implementation.md for EVERY Task ({{#state.feature.feature.taskIds}}{{.}} {{/state.feature.feature.taskIds}}), with `## Implementation readiness` ending in `Ready for implementation: yes|no` and `## Open items` in each. Keep business.md as the business writer wrote it unless a verified fact requires a correction. Write only inside {{state.feature.feature.featureDir}}; update its tracker.md with the decisions and evidence.
       Feature: {{state.feature.feature.feature}}

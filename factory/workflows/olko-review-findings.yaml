@@ -1,5 +1,5 @@
 name: olko-review-findings
-version: 0.3.0
+version: 0.3.1
 description: "Runs the lenses in parallel on the diff, merges their findings and lets the verifier confirm or reject each one."
 source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE, steps 4 to 6: lenses, merge and verification)"
 roles:
@@ -33,7 +33,7 @@ nodes:
       - {{.}}
       {{/agent.paths}}
 
-      Suppress: {{state.memory.suppressText}}. Prioritize: {{state.memory.prioritizeText}}.
+      Suppress: {{state.memory.memory.suppressText}}. Prioritize: {{state.memory.memory.prioritizeText}}.
       {{#state.scope.scope.stale}}
       The current branch is not the PR head: the working-tree files are stale. Judge changed lines from the hunks only.
       {{/state.scope.scope.stale}}

@@ -46,7 +46,7 @@ nodes:
     skill: olko-plan-editor
     tools: [read, edit]
     maxVisits: 50
-    parse: text.raw
+    parse: text
     prompt: |
       Fold every confirmed plan review finding below into the plan files it names (project {{input.project}}, folder {{state.feature.feature.featureDir}}), and record the review result of {{state.plan-next.item.path}} in tracker.md. Add every confirmed project violation, every `ask` verdict and every vague criterion to the step 7 question batch in tracker.md; resolve none of them yourself. Edit only that folder.
       {{#state.plan-review.plan-report.plan-report.kept}}

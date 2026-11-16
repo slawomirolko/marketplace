@@ -1,5 +1,5 @@
 name: olko-skill-optimizer-apply
-version: 0.1.0
+version: 0.1.1
 description: "Apply phase: after your approval of the exact proposal, edits only the selected resource and the companion files the approval names, re-reads every changed file and reports paths and test results. For split it also creates the approved new skills with their registry entries. Then it records verified, reusable learning in the memory layer, or reports that learning was skipped."
 source: "agents/opencode/olko-skill-optimizer.md (split execution, approval and editing, finish)"
 roles:
@@ -13,8 +13,8 @@ nodes:
     role: writer
     agent: olko-skill-optimizer
     tools: [read, edit, bash]
-    dirs: ["{{state.resolve-path.path}}"]
-    parse: text.raw
+    dirs: ["{{state.resolve-path.resolve-path.path}}"]
+    parse: text
     prompt: |
       The user approved this exact proposal. Apply exactly the approved edits, without rewording them:
       {{state.draft.draft}}
@@ -36,7 +36,7 @@ nodes:
     role: writer
     agent: olko-skill-optimizer
     tools: [read, edit]
-    parse: text.raw
+    parse: text
     prompt: |
       Load `olko-memory-layer` through the skill tool before any memory read or write; it owns the storage and retention policy.
       Apply result of this run: {{state.apply.apply}}

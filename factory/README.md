@@ -123,8 +123,8 @@ Every workflow is a YAML file in `workflows/` (`FACTORY_WORKFLOWS_DIR` changes t
 
 | Node kind | Fields | What the engine does |
 |---|---|---|
-| `llm` | `role`, `prompt` (Mustache: `goal`, `input`, `state`, `agent`, `answer`, `steps`), `agent` or `skill` or `agents` or `agentsFrom: state.<path>`, optional `parse`, `tools` (`read`, `edit`, `bash`; default `read`), `dirs` (Mustache paths the agent may use besides the workspace) | runs each agent through the backend (`cli`, `delegate`), prices its tokens, stores the parsed output in `state.<node id>.<agent id>` |
-| `script` | `op` (a named operation), `with` (its arguments) | runs the operation, stores its result in `state.<node id>` |
+| `llm` | `role`, `prompt` (Mustache: `goal`, `input`, `state`, `agent`, `answer`, `steps`), `agent` or `skill` or `agents` or `agentsFrom: state.<path>`, optional `parse`, `tools` (`read`, `edit`, `bash`; default `read`), `dirs` (Mustache paths the agent may use besides the workspace), `workspace` (a Mustache path, for example a worktree the agent created: when the node completes and it names an existing directory, every later step runs there) | runs each agent through the backend (`cli`, `delegate`), prices its tokens, stores the parsed output in `state.<node id>.<agent id>` |
+| `script` | `op` (a named operation), `with` (its arguments) | runs the operation, stores its result in `state.<node id>`; `builtin.stop` ends the run with `with.reason`, a Mustache template over `state`, `input` and `answers` |
 | `interrupt` | `question` (`id`, `text`, `allowed` or `allowedFrom: state.<path>`) | stops the run and asks the user; the answer goes to `state.<node id>.answer` |
 | `subgraph` | `workflow` | inlines that workflow; its node paths are `<workflow>/<node>/<sub-node>` |
 | `subgraph` with `enabledWhen` | `workflow`, `enabledWhen: switches.<name> == true` | a gate: the run enters the subgraph only when the switch holds, else goes straight to its exits; switches come from `config/factory.yaml` and run input `switches` |

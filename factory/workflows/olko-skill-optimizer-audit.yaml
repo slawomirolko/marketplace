@@ -1,5 +1,5 @@
 name: olko-skill-optimizer-audit
-version: 0.1.0
+version: 0.1.1
 description: "Audit phase: lists every agent file in the given directory in directory order, with the fields it can read (model, allowed skills, description length), and proposes the next targets. The cost ranking, words, estimated tokens and prefix issues need the measure step, which is not available yet and is shown as needs engine op. It changes nothing."
 source: "agents/opencode/olko-skill-optimizer.md (audit mode)"
 roles:
@@ -12,8 +12,8 @@ nodes:
     role: reader
     agent: olko-skill-optimizer
     tools: [read]
-    dirs: ["{{state.resolve-path.path}}"]
-    parse: text.raw
+    dirs: ["{{state.resolve-path.resolve-path.path}}"]
+    parse: text
     prompt: |
       Audit mode, read only. Do not edit, create or delete any file, and do not write memory.
       Directory: {{state.ask-target.answer}}

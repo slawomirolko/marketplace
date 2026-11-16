@@ -1,41 +1,82 @@
 name: olko-skill-sync-compare
-version: 0.1.0
-description: "Phase 2: discovers local skills and agents, adapts the skills locally, checks their versions and compares every artifact with its marketplace copy in parallel."
-source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 2)"
+version: 0.2.0
+description: "Phase 2: the sync manager discovers local skills and agents, the adapter versions every skill locally, the manager checks the versions, one comparator per artifact compares it with its marketplace copy in parallel, and the manager builds the decision table."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 2 and phase 3 table)"
 roles:
+  sync: medium
   comparator: medium
 entry: discover
 limits:
   maxCycleIterations: 3
 nodes:
   - id: discover
-    description: "Lists local skills (.agents/skills) and agents (.opencode/agents), limited by input artifacts."
+    description: "The sync manager lists local skills (.agents/skills) and agents (.opencode/agents), limited by input artifacts, with their marketplace paths and versions. Writes nothing."
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    tools: [read, bash]
+    dirs: ["{{state.resolve-path.resolve-path.path}}"]
+    parse: { json: [project, skills, agents, compare, missing] }
+    prompt: |
+      Do only the discovery part of Phase 2. Read only: do not edit, commit, install, launch comparators or adapt anything.
+      Local project: the current directory{{#input.project}} ({{input.project}}){{/input.project}}.
+      Marketplace: {{state.resolve-path.resolve-path.path}}
+      {{#input.artifacts.length}}Limit discovery to these names: {{#input.artifacts}}{{.}} {{/input.artifacts}}. List every requested name that is neither a local skill nor a local agent in `missing`.{{/input.artifacts.length}}{{^input.artifacts.length}}Discover every local skill and agent; `missing` is empty.{{/input.artifacts.length}}
+
+      Local skills: directories under `.agents/skills/` that contain `SKILL.md`. Local agents: `.opencode/agents/*.md`.
+      For each skill: its marketplace directory is `skills/<category>/<name>` in the marketplace (or `none`), its manifest is the marketplace `registry.json`, its marketplace version is the version of its `registry.json` entry (or `none`), its local version is the SemVer `version` of its local SKILL.md frontmatter (or `none`).
+      For each agent: its marketplace file is `agents/opencode/<name>.md` (or `none`), its manifest is the marketplace `agents/opencode/index.json`, its marketplace version is the version of its entry there (or `none`), its local version is the version of its entry in the local `.opencode/agents/index.json` (or `none`).
+
+      End with one ```json block. Use absolute paths. `compare` lists the skills first, then the agents; every item uses the artifact name as `id`:
+      {"project": "<absolute local project path>", "skills": [<items of type skill>], "agents": [<items of type agent>], "compare": [<every item>], "missing": ["<requested name not found>"]}
+      Item: {"id": "<name>", "type": "<skill|agent>", "name": "<name>", "localPath": "<path>", "marketplacePath": "<path or none>", "manifestPath": "<path>", "marketplaceVersion": "<x.y.z or none>", "localVersion": "<x.y.z or none>"}
+  - id: stop-missing
+    description: "Stops the run: a requested artifact is not in the local project."
     kind: script
-    op: sync.discover
+    op: builtin.stop
+    with: { reason: "Some requested artifacts are not local skills or agents of the project; the discover step lists them." }
   - id: adapt-loop
     description: "Runs olko-adapt-to-marketplace --local-only on every local skill so it carries a SemVer version before comparison."
     kind: group
     workflow: olko-skill-sync-adapt
   - id: versions
-    description: "Requires a SemVer version in every local SKILL.md; stops otherwise."
+    description: "The sync manager requires a SemVer version in every local SKILL.md after the local-only adaptation. Writes nothing."
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    tools: [read]
+    parse: { json: [versions, missing] }
+    prompt: |
+      Check the deliverable of the mandatory local-only adaptation. Read only.
+      Read the frontmatter of each local SKILL.md below and find its SemVer `version`:
+      {{#state.discover.discover.skills}}
+      - {{name}}: {{localPath}}
+      {{/state.discover.discover.skills}}
+
+      End with one ```json block:
+      {"versions": ["<name> <x.y.z>"], "missing": ["<name of every skill without a valid SemVer version>"]}
+  - id: stop-versions
+    description: "Stops the run (stop-and-surface rule): a local skill still has no SemVer version after the local-only adaptation."
     kind: script
-    op: sync.checkVersions
+    op: builtin.stop
+    with: { reason: "olko-adapt-to-marketplace --local-only left no SemVer version in SKILL.md of some skills (the versions step lists them). The sync stops here; check these skills and run again." }
   - id: compare
     description: "One comparator per artifact classifies it against its marketplace copy, in parallel."
     kind: llm
     role: comparator
     agent: olko-marketplace-skill-sync-comparator
-    agentsFrom: state.discover.compare
-    dirs: ["{{state.resolve-path.path}}"]
-    parse: sync.comparison
+    agentsFrom: state.discover.discover.compare
+    tools: [read, bash]
+    dirs: ["{{state.resolve-path.resolve-path.path}}"]
+    parse: { line: [marker, classification, marketplaceVersion, bump, nextVersion, action] }
     prompt: |
-      Compare exactly one artifact. Use only read tools.
+      Compare exactly one artifact.
       Artifact type: {{agent.type}}
       Artifact name: {{agent.name}}
-      Local project: {{state.discover.project}}
+      Local project: {{state.discover.discover.project}}
       Local path: {{agent.localPath}}
       Local version: {{agent.localVersion}}
-      Marketplace: {{state.resolve-path.path}}
+      Marketplace: {{state.resolve-path.resolve-path.path}}
       Marketplace path: {{agent.marketplacePath}}
       Marketplace registry or agent manifest: {{agent.manifestPath}}
       Current marketplace manifest version: {{agent.marketplaceVersion}}
@@ -43,12 +84,36 @@ nodes:
       Return your structured report. End it with exactly one line:
       result | <identical|local-only|marketplace-only|project-adapter-only|adapter-candidate|portable-local-change|conflict> | <current marketplace version or none> | <none|patch|minor|major> | <exact proposed next version or none> | <recommended action>
   - id: rows
-    description: "Builds the decision table with the actions each classification allows."
-    kind: script
-    op: sync.rows
+    description: "Phase 3 table: the sync manager builds one row per artifact with its candidate version and the decisions its classification allows. Changes nothing."
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    parse: { json: [rows, decide, table] }
+    prompt: |
+      Do only the aggregation of Phase 3. Change nothing and ask nothing: the factory asks the user.
+      Discovered artifacts:
+      {{#state.discover.discover.compare}}
+      - {{type}} {{name}}: local version {{localVersion}}
+      {{/state.discover.discover.compare}}
+      Comparator results by artifact:
+      {{#each.state.compare}}
+      - {{key}}: {{value.classification}}; marketplace {{value.marketplaceVersion}}; bump {{value.bump}}; next {{value.nextVersion}}; recommended {{value.action}}
+      {{/each.state.compare}}
+
+      For each artifact derive the proposed version: for `local-only` the candidate version of your instructions (the skill's declared SemVer; for an agent its local manifest version, or `1.0.0`), otherwise the comparator's next version.
+      Allowed decisions, exactly these strings: `local-only` -> create, reject, leave. `adapter-candidate` -> move-to-adapter, adopt-patch, adopt-minor, adopt-major, revert-local, leave. Every other non-identical classification -> adopt-patch, adopt-minor, adopt-major, revert-local, leave. `identical` -> none.
+      `decide` holds the non-identical rows in table order; give the n-th of them (from 0) the question `q-sync-<n>`.
+
+      End with one ```json block:
+      {"rows": [<row>], "decide": [<row with question>], "table": "<one line per artifact>"}
+      Row: {"type": "<skill|agent>", "name": "<name>", "classification": "<classification>", "marketplaceVersion": "<x.y.z or none>", "bump": "<none|patch|minor|major>", "nextVersion": "<proposed version>", "action": "<recommended action>", "line": "<type> <name>: <classification>; marketplace <version>; bump <bump>; proposed <version>; recommended <action>", "options": ["<allowed decision>"], "question": "<q-sync-n, decide rows only>"}
 edges:
-  - { from: discover, to: adapt-loop }
+  - { from: discover, to: stop-missing, when: "discover.discover.missing > 0", description: "a requested artifact is not in the project" }
+  - { from: discover, to: adapt-loop, description: "every requested artifact found" }
+  - { from: stop-missing, to: END, description: "never reached: stop-missing fails the run" }
   - { from: adapt-loop, to: versions }
-  - { from: versions, to: compare }
+  - { from: versions, to: stop-versions, when: "versions.versions.missing > 0", description: "a local skill has no SemVer version" }
+  - { from: versions, to: compare, description: "every local skill has a SemVer version" }
+  - { from: stop-versions, to: END, description: "never reached: stop-versions fails the run" }
   - { from: compare, to: rows }
   - { from: rows, to: END }

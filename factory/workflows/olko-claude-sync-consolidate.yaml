@@ -1,8 +1,9 @@
 name: olko-claude-sync-consolidate
-version: 0.1.0
-description: "Phase 6: offers the skill consolidator once; its suggestions are accepted into a plan file or rejected with a reason."
-source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 6)"
+version: 0.2.0
+description: "Phase 6: offers the skill consolidator once; it pairs overlapping artifacts, one consolidation analyst per group gives a verdict (Wave D), and each suggestion is accepted into a plan file or rejected with a reason."
+source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 6) and plugins/olko-sync/skills/olko-skill-consolidator/SKILL.md"
 roles:
+  sync-worker: low
   sync: medium
 entry: ask-consolidate
 limits:
@@ -15,29 +16,62 @@ nodes:
       id: q-claude-sync-consolidate
       text: "Run the skill consolidator once over the stores (suggestions only, nothing is edited)?"
       allowed: [run, skip]
-  - id: consolidate
-    description: "The consolidator suggests merge, remove or extend for overlapping skills (no edits)."
+  - id: candidates
+    description: "The consolidator inventories the stores and pairs overlapping skills and agents into candidate groups (steps 1 to 4)."
     kind: llm
     role: sync
     skill: olko-skill-consolidator
     tools: [read, bash]
-    dirs: ["{{state.state.target}}", "{{state.state.olko}}", "{{state.state.user}}", "{{state.state.stateDir}}"]
-    parse: csync.suggestions
+    dirs: ["{{state.setup.setup.target}}", "{{state.setup.setup.olko}}", "{{state.setup.setup.user}}", "{{state.setup.setup.stateDir}}"]
+    parse: { json: [groups] }
     prompt: |
-      Run steps 1-6 of the skill for the stores user ({{state.state.user}}), olko ({{state.state.olko}}) and target ({{state.state.target}}), with --state-dir {{state.state.stateDir}} for sync-state.mjs. You have no Agent tool: evaluate each candidate yourself. Do not ask the user and do not record anything; the factory asks and records.
-      End with one ```json block: {"suggestions": [{"items": ["<store>:<skill|agent>:<name>", "..."], "verdict": "merge|remove|extend", "evidence": "<file:line pairs>", "loses": "<what would be lost>"}]}
+      Run steps 1 to 4 of the skill for the stores user ({{state.setup.setup.user}}, which `~/.claude` means), olko ({{state.setup.setup.olko}}) and target ({{state.setup.setup.target}}). Pass `--state-dir {{state.setup.setup.stateDir}}` to sync-state.mjs. Do not analyze, suggest or ask: the factory dispatches one olko-claude-consolidation-analyst per group (step 5) and asks the user.
+      End with one ```json block, one item per remaining candidate group:
+      {"groups": [{"id": "g<n>", "items": ["<store>:<skill|agent>:<name>"], "paths": ["<absolute path>"], "reason": "<why they were paired>", "suppressed": "<suppressed sub-pairs, or empty>"}]}
+  - id: analyze
+    description: "One consolidation analyst per candidate group returns merge, remove, extend or keep with evidence (Wave D)."
+    kind: llm
+    role: sync-worker
+    agent: olko-claude-consolidation-analyst
+    agentsFrom: state.candidates.candidates.groups
+    dirs: ["{{state.setup.setup.target}}", "{{state.setup.setup.olko}}", "{{state.setup.setup.user}}"]
+    parse: { json: [verdict, survivor, evidence, loses, confidence] }
+    prompt: |
+      Candidate group {{agent.id}}: {{#agent.items}}{{.}} {{/agent.items}}
+      Paths: {{#agent.paths}}{{.}} {{/agent.paths}}
+      Paired because: {{agent.reason}}
+
+      After your report, end with one ```json block: {"verdict": "merge|remove|extend|keep", "survivor": "<artifact id or none>", "evidence": "<file:line pairs>", "loses": "<what would be lost>", "references": "<references to update>", "confidence": "high|medium|low"}
+  - id: suggest
+    description: "The consolidator turns the analyst verdicts into ranked suggestions, dropping keep (step 6)."
+    kind: llm
+    role: sync
+    skill: olko-skill-consolidator
+    parse: { json: [suggestions] }
+    prompt: |
+      Do only step 6 of the skill with these analyst verdicts; read nothing more and ask nothing.
+      Candidate groups:
+      {{#state.candidates.candidates.groups}}
+      - {{id}}: {{#items}}{{.}} {{/items}}{{#suppressed}} (suppressed sub-pairs: {{suppressed}}){{/suppressed}}
+      {{/state.candidates.candidates.groups}}
+      Analyst verdicts:
+      {{#each.state.analyze}}
+      - {{key}}: {{value.verdict}}, survivor {{value.survivor}}, evidence {{value.evidence}}, loses {{value.loses}}, confidence {{value.confidence}}
+      {{/each.state.analyze}}
+      End with one ```json block, suggestions ranked:
+      {"suggestions": [{"id": "<group id>", "items": ["<store>:<skill|agent>:<name>"], "verdict": "merge|remove|extend", "evidence": "<file:line pairs>", "loses": "<what would be lost>", "line": "<rank>. <verdict>: <items joined by +> — <evidence> — loses: <loses>"}]}
   - id: suggestion-next
     description: "Takes the next suggestion."
     kind: script
     op: list.next
     maxVisits: 200
-    with: { over: consolidate.consolidate.suggestions }
+    with: { over: suggest.suggest.suggestions }
   - id: ask-suggestion
     description: "Asks accept, reject or skip."
     kind: interrupt
     maxVisits: 200
     question:
-      id: "q-claude-sync-suggestion-{{state.suggestion-next.index}}"
+      id: "q-claude-sync-suggestion-{{state.suggestion-next.item.id}}"
       text: "Consolidation suggestion {{state.suggestion-next.number}} of {{state.suggestion-next.total}}:\n{{state.suggestion-next.item.line}}"
       allowed: [accept, reject, skip]
   - id: ask-suggestion-reason
@@ -45,19 +79,37 @@ nodes:
     kind: interrupt
     maxVisits: 200
     question:
-      id: "q-claude-sync-suggestion-reason-{{state.suggestion-next.index}}"
+      id: "q-claude-sync-suggestion-reason-{{state.suggestion-next.item.id}}"
       text: "Why reject it? One line."
   - id: consolidation-record
-    description: "Writes accepted suggestions to a plan file and rejections to the sync state."
-    kind: script
-    op: csync.consolidationRecord
+    description: "The consolidator records rejections in the sync state and appends accepted suggestions to a plan file (step 8)."
+    kind: llm
+    role: sync
+    skill: olko-skill-consolidator
+    tools: [read, edit, bash]
+    dirs: ["{{state.setup.setup.stateDir}}"]
+    parse: { json: [accepted, rejected, planFile] }
+    prompt: |
+      Do only step 8 of the skill for the user's decisions below; ask nothing. Pass `--state-dir {{state.setup.setup.stateDir}}` to sync-state.mjs. The plan file path the user gives is {{state.setup.setup.stateDir}}/consolidation-plan-<YYYY-MM-DD>.md.
+      Suggestions:
+      {{#state.suggest.suggest.suggestions}}
+      - {{id}}: {{line}}
+      {{/state.suggest.suggest.suggestions}}
+      The user's answers. q-claude-sync-suggestion-<id> is accept, reject or skip; q-claude-sync-suggestion-reason-<id> is the reason of a rejection.
+      {{#each.answers}}
+      - {{key}}: {{value}}
+      {{/each.answers}}
+      End with one ```json block: {"accepted": <count>, "rejected": <count>, "planFile": "<plan file path, or none>"}
 edges:
-  - { from: ask-consolidate, to: consolidate, when: 'ask-consolidate.answer == "run"', description: "you chose run" }
+  - { from: ask-consolidate, to: candidates, when: 'ask-consolidate.answer == "run"', description: "you chose run" }
   - { from: ask-consolidate, to: END, when: 'ask-consolidate.answer == "skip"', description: "you chose skip" }
-  - { from: consolidate, to: suggestion-next }
+  - { from: candidates, to: END, when: "candidates.candidates.groups == 0", description: "no overlapping artifacts" }
+  - { from: candidates, to: analyze, description: "candidate groups found" }
+  - { from: analyze, to: suggest }
+  - { from: suggest, to: suggestion-next }
   - { from: suggestion-next, to: ask-suggestion, when: "suggestion-next.done == false", description: "a suggestion is left" }
   - { from: suggestion-next, to: consolidation-record, when: "suggestion-next.done == true", description: "all suggestions decided" }
   - { from: ask-suggestion, to: ask-suggestion-reason, when: 'ask-suggestion.answer == "reject"', description: "you rejected it" }
-  - { from: ask-suggestion, to: suggestion-next, description: "suggestion accepted: next suggestion" }
+  - { from: ask-suggestion, to: suggestion-next, description: "accepted or skipped: next suggestion" }
   - { from: ask-suggestion-reason, to: suggestion-next }
   - { from: consolidation-record, to: END }

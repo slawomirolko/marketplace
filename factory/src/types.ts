@@ -201,6 +201,7 @@ export interface WorkflowNode {
   parallel?: number;
   tools?: AgentTool[];
   dirs?: (context: PromptContext) => string[];
+  workspace?: (context: PromptContext) => string;
   scope?: string;
   localId?: string;
   enterScope?: { workflow: string; input: Record<string, string> };
@@ -418,6 +419,7 @@ export interface WorkflowSpecNode {
   skill?: string;
   tools?: AgentTool[];
   dirs?: string[];
+  workspace?: string;
   enabledWhen?: string;
   required?: boolean;
   input?: Record<string, string>;

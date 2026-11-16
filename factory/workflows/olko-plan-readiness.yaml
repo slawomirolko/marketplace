@@ -15,7 +15,7 @@ nodes:
     role: planner
     skill: olko-plan-editor
     tools: [read, edit]
-    parse: text.raw
+    parse: text
     prompt: |
       Step 8 cleanup of {{state.feature.feature.featureDir}}/implementation.md and the Task files (project {{input.project}}): remove denied, rejected, superseded or unchosen options only after checking their approved replacement is concrete; keep scope, ordered actions, validation, acceptance criteria and blockers. Update tracker.md with the final decisions. Edit only that folder.
   - id: gate-cleanup
@@ -80,7 +80,7 @@ nodes:
     skill: olko-plan-editor
     tools: [read, edit]
     maxVisits: 4
-    parse: text.raw
+    parse: text
     prompt: |
       Apply ALL decisions of blocker batch {{state.blocker-round.count}}, as recorded in {{state.feature.feature.featureDir}}/tracker.md, together to {{state.feature.feature.featureDir}} (project {{input.project}}), refresh `## Implementation readiness`, and record them as locked decisions in tracker.md. Edit only that folder.
       Keep each recorded decision as tracker.md states it, and add no new decision.

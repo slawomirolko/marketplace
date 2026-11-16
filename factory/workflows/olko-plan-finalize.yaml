@@ -19,7 +19,7 @@ nodes:
     kind: llm
     role: plan-worker
     agent: olko-obsidian-knowledge-manager
-    parse: text.raw
+    parse: text
     prompt: |
       Write-free post-implementation Obsidian recommendation for the approved plan {{state.feature.feature.featureDir}} (project {{input.project}}): list the affected note paths, whether each needs creation or an update, and the related mechanism. Do not change the vault.
   - id: domain
@@ -28,7 +28,7 @@ nodes:
     role: plan-gate
     agent: olko-plan-documentation-orchestrator
     tools: [read, edit]
-    parse: text.raw
+    parse: text
     prompt: |
       Do only step 9 of olko-plan-finalization: add or replace the `## Domain changes` section of {{state.feature.feature.featureDir}}/business.md (project {{input.project}}) from this verified recommendation, stating that vault changes stay separately approval-gated after implementation. Edit only that section.
       {{state.knowledge-final.knowledge-final}}
@@ -38,7 +38,7 @@ nodes:
     role: plan-gate
     agent: olko-plan-documentation-orchestrator
     tools: [read, edit]
-    parse: text.raw
+    parse: text
     prompt: |
       Do only step 10 of olko-plan-finalization in the project {{input.project}}: append verified flow improvements from this planning run to your own memory block .opencode/memory/olko-plan-documentation-orchestrator.md (create it when missing), then update the gate status in {{state.feature.feature.featureDir}}/tracker.md. Edit only those two files.
   - id: editor

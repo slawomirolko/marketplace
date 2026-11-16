@@ -100,13 +100,14 @@ function runSubagent(work: Payload, cwd: string): Promise<SubagentResult> {
   });
 }
 
-test("a harness drives the YAML claude sync over stdio in delegate mode: three inventories at once, only requested capabilities compared, leave changes no store", async () => {
+test("a harness drives the YAML claude sync over stdio in delegate mode on marketplace agents only: three inventories at once, only requested capabilities compared, leave changes no store and no real sync state", async () => {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "factory-claude-sync-ts-")));
   const [target, olko, user, state] = ["target", "olko", "user", "state"].map((d) => path.join(root, d)) as [string, string, string, string];
   execFileSync("gh", ["repo", "clone", TARGET, target, "--", "--depth", "50"]);
   execFileSync("gh", ["repo", "clone", MARKETPLACE, olko, "--", "--depth", "50"]);
   copyUserStore(user, leakTerms());
-  const before = { target: snapshot(target), olko: snapshot(olko), user: treeHash(user) };
+  const realState = () => (fs.existsSync(REAL_SYNC_HOME) ? treeHash(REAL_SYNC_HOME) : "absent");
+  const before = { target: snapshot(target), olko: snapshot(olko), user: treeHash(user), realState: realState() };
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-delegate-"));
   const env = { ...process.env, FACTORY_DATA_DIR: dataDir, FACTORY_VIEWER_PORT: String(await freePort()) } as Record<string, string>;
   const client = new Client({ name: "claude-code", version: "0.0.0" });
@@ -146,8 +147,12 @@ test("a harness drives the YAML claude sync over stdio in delegate mode: three i
     assert.ok(inventory?.every((w) => w.agentInstructions.includes("olko-sync-state")), "plugin agents carry their preloaded skill from the marketplace");
     const compared = batches.flat().filter((w) => w.agentName === "olko-claude-sync-comparator");
     assert.ok(compared.length <= ARTIFACTS.length, JSON.stringify(compared.map((w) => w.agentId)));
-    assert.ok(asked.filter((q) => /^q-claude-sync-\d+$/.test(q.id)).every((q) => q.allowed.includes("leave")));
-    assert.deepEqual({ target: snapshot(target), olko: snapshot(olko), user: treeHash(user) }, before);
+    assert.ok(asked.filter((q) => q.id.startsWith("q-claude-sync-row-")).every((q) => q.allowed.includes("leave")));
+    const manager = batches.flat().filter((w) => w.agentName === "olko-claude-sync-manager");
+    assert.ok(manager.some((w) => w.prompt.includes("Phase 0")) && manager.some((w) => w.prompt.includes("Phase 6")), "the sync manager runs the state setup and the report");
+    for (const work of batches.flat().filter((w) => (w.tools as string[]).includes("bash"))) assert.ok(work.prompt.includes(state) || work.prompt.includes("Do not run the state script"), `${work.nodePath} runs the state script only against the test state directory`);
+    assert.ok(fs.existsSync(path.join(state, "targets.json")), "the sync state is written into the test state directory");
+    assert.deepEqual({ target: snapshot(target), olko: snapshot(olko), user: treeHash(user), realState: realState() }, before);
     const agents = Object.values(report.byNode).flatMap((node: any) => Object.values(node.byAgent)).filter((a: any) => a.tier !== null) as any[];
     assert.equal(agents.length, submitted.length);
     for (const agent of agents) assert.equal(agent.costSource, "reported", JSON.stringify(agent));
