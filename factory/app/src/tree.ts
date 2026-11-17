@@ -1,4 +1,4 @@
-import type { AgentInfo, Cost, Coverage, FactoryConfig, GroupItem, Item, Level, LevelEdge, LedgerRecord, RunData, RunIndex, RunReport, Workflow, WorkflowAgent } from "./types.ts";
+import type { AgentInfo, AskedQuestion, Cost, Coverage, FactoryConfig, GroupItem, Item, Level, LevelEdge, LedgerRecord, RunData, RunIndex, RunReport, Workflow, WorkflowAgent } from "./types.ts";
 
 export const START_KEY = "__start";
 export const END_KEY = "__end";
@@ -241,10 +241,15 @@ export function stepName(key: string): string {
   return key.slice(Math.max(key.lastIndexOf("/"), key.lastIndexOf("#")) + 1);
 }
 
+/** The stored questions of a graph node: the ones it asked, the ones it passed on, or for a group every one inside it. */
+export function questionsFor(key: string, questions: AskedQuestion[]): AskedQuestion[] {
+  return questions.filter((q) => [q.askedBy, q.node].some((path) => path !== null && touches(key, path)));
+}
+
 export function humanLabel(icon: HumanIcon): string {
-  if (icon.role === "relays") return `Passes on a question to you from: ${[...new Set(icon.sources.map(stepName))].join(", ")}`;
+  if (icon.role === "relays") return `Passes on a question to you from: ${[...new Set(icon.sources.map(stepName))].join(", ")}. Click to see the questions and your answers in this run`;
   const asked = icon.questions.map((q) => `${q.id} (through ${stepName(q.node)})`);
-  return [asked.length ? `Asks you: ${asked.join(", ")}` : null, icon.permission ? `May ask you itself (${icon.permission})` : null].filter(Boolean).join(". ");
+  return [asked.length ? `Asks you: ${asked.join(", ")}` : null, icon.permission ? `May ask you itself (${icon.permission})` : null].filter(Boolean).join(". ") + ". Click to see the questions and your answers in this run";
 }
 
 export function ranIn(item: Item, run: RunData | null): boolean {

@@ -7,6 +7,7 @@ import { ViewerContext } from "./context.ts";
 import type { ViewerState } from "./context.ts";
 import { Details } from "./Details.tsx";
 import { CallsList } from "./Calls.tsx";
+import { QuestionsList } from "./Questions.tsx";
 import { SupervisorRing } from "./SupervisorRing.tsx";
 import { layoutGraph, scriptsHeight } from "./layout.ts";
 import { agentsOnly } from "./agents-only.ts";
@@ -98,7 +99,7 @@ function Viewer() {
   const [updateNote, setUpdateNote] = useState<string | null>(null);
   const [showCounts, setShowCounts] = useState(() => readFlag(SHOW_COUNTS_KEY));
   const [onlyAgents, setOnlyAgents] = useState(() => readFlag(AGENTS_ONLY_KEY));
-  const [tab, setTab] = useState<"node" | "calls">("node");
+  const [tab, setTab] = useState<"node" | "calls" | "questions">("node");
   const changeShowCounts = useCallback((value: boolean) => {
     setShowCounts(value);
     writeFlag(SHOW_COUNTS_KEY, value);
@@ -274,9 +275,13 @@ function Viewer() {
 
   const shown = mode === "workflows" ? null : detail;
   const humans = useMemo(() => (level ? humanIcons(level, agents) : new Map()), [level, agents]);
+  const openQuestions = useCallback((item: Item) => {
+    setSelected(item);
+    setTab("questions");
+  }, []);
   const disabled = useMemo(() => (mode === "workflows" ? configDisabledKeys(level, config) : disabledKeys(detail?.run ?? null)), [mode, level, config, detail]);
   const workflow = useMemo(() => workflows?.find((w) => w.name === rootName) ?? null, [workflows, rootName]);
-  const context = useMemo((): ViewerState => ({ config, report: shown?.report ?? null, run: shown?.run ?? null, toggle, focusKey, index: runIndex, disabled, mode, workflow, workflows: workflows ?? [], agents, live, onlyAgents, stale, showCounts, humans }), [config, shown, toggle, focusKey, runIndex, disabled, mode, workflow, workflows, agents, live, onlyAgents, stale, showCounts, humans]);
+  const context = useMemo((): ViewerState => ({ config, report: shown?.report ?? null, run: shown?.run ?? null, toggle, focusKey, index: runIndex, disabled, mode, workflow, workflows: workflows ?? [], agents, live, onlyAgents, stale, showCounts, humans, questions: shown?.questions ?? [], openQuestions }), [config, shown, toggle, focusKey, runIndex, disabled, mode, workflow, workflows, agents, live, onlyAgents, stale, showCounts, humans, openQuestions]);
   const total = detail?.report.cost;
 
   if (error) return <p className="error" role="alert">Could not load factory data: {error}</p>;
@@ -395,9 +400,12 @@ function Viewer() {
               <button type="button" role="tab" id="tab-calls" aria-selected={tab === "calls"} aria-controls="panel-calls" className={tab === "calls" ? "active" : ""} onClick={() => setTab("calls")}>
                 All calls
               </button>
+              <button type="button" role="tab" id="tab-questions" aria-selected={tab === "questions"} aria-controls="panel-questions" className={tab === "questions" ? "active" : ""} onClick={() => setTab("questions")}>
+                Questions
+              </button>
             </div>
-            <div role="tabpanel" id={tab === "node" ? "panel-node" : "panel-calls"} aria-labelledby={tab === "node" ? "tab-node" : "tab-calls"}>
-              {tab === "node" ? <Details item={selected} /> : <CallsList selectedKey={selected?.key ?? null} teamNodes={teamNodes} onSelect={selectKey} />}
+            <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+              {tab === "node" ? <Details item={selected} /> : tab === "calls" ? <CallsList selectedKey={selected?.key ?? null} teamNodes={teamNodes} onSelect={selectKey} /> : <QuestionsList item={selected} />}
             </div>
           </aside>
         </main>

@@ -9,7 +9,7 @@ import type { DataApi } from "../app/data.ts";
 import type { Run } from "../src/types.ts";
 import type { Cost, Item, Level, RunData } from "../app/src/types.ts";
 import { supervisorRing } from "../app/src/supervisor.ts";
-import { agentScripts, allItems, buildLevel, costOf, failureOf, formatTokens, humanIcons, humanLabel, isEngineScript, ledgerOf, formatUsd, END_KEY, START_KEY } from "../app/src/tree.ts";
+import { agentScripts, allItems, buildLevel, costOf, failureOf, formatTokens, humanIcons, humanLabel, isEngineScript, questionsFor, ledgerOf, formatUsd, END_KEY, START_KEY } from "../app/src/tree.ts";
 import { agentsOnly } from "../app/src/agents-only.ts";
 import { layoutGraph, scriptsHeight } from "../app/src/layout.ts";
 
@@ -478,11 +478,11 @@ test("the step an interrupt names in askedBy asks you; the interrupt and every g
     "main/hello": "asks",
   });
   assert.equal(icons.has("main/inner/plain"), false, "an interrupt without askedBy is the engine's own question");
-  assert.equal(humanLabel(icons.get("main/inner/gate")!), "Asks you: q-scope (through ask-scope)");
-  assert.equal(humanLabel(icons.get("main/inner/ask-scope")!), "Passes on a question to you from: gate");
-  assert.equal(humanLabel(icons.get("main/team#a")!), "May ask you itself (question: allow)");
-  assert.equal(humanLabel(icons.get("main/hello")!), "Asks you: q-hello (through hello)");
-  assert.equal(humanLabel(icons.get("main/shared")!), "Passes on a question to you from: team");
+  assert.equal(humanLabel(icons.get("main/inner/gate")!), "Asks you: q-scope (through ask-scope). Click to see the questions and your answers in this run");
+  assert.equal(humanLabel(icons.get("main/inner/ask-scope")!), "Passes on a question to you from: gate. Click to see the questions and your answers in this run");
+  assert.equal(humanLabel(icons.get("main/team#a")!), "May ask you itself (question: allow). Click to see the questions and your answers in this run");
+  assert.equal(humanLabel(icons.get("main/hello")!), "Asks you: q-hello (through hello). Click to see the questions and your answers in this run");
+  assert.equal(humanLabel(icons.get("main/shared")!), "Passes on a question to you from: team. Click to see the questions and your answers in this run");
 
   const reduced = agentsOnly(level);
   const shown = new Set(allItems(reduced).map((i) => i.key));
@@ -505,4 +505,15 @@ test("every askedBy in the shipped workflows reaches a drawn llm step", () => {
     }
   }
   assert.ok(checked >= 31, `checked ${checked}`);
+});
+
+test("a step's questions are the ones it asked or passed on; a group shows every question inside it", () => {
+  const question = (questionId: string, node: string, askedBy: string | null) => ({ runId: "r-00000001", questionId, node, askedBy, text: "?", allowed: null, askedAt: "2026-11-17T10:00:00.000Z", answer: null, answeredAt: null });
+  const questions = [question("q-scope", "main/inner/ask-scope", "main/inner/gate"), question("q-hello", "main/hello", "main/hello"), question("q-plain", "main/inner/plain", null), question("q-other", "main/inner/gate-2/ask", "main/inner/gate-2/x")];
+  const ids = (key: string) => questionsFor(key, questions).map((q) => q.questionId);
+  assert.deepEqual(ids("main/inner/gate"), ["q-scope"]);
+  assert.deepEqual(ids("main/inner/ask-scope"), ["q-scope"]);
+  assert.deepEqual(ids("main/hello"), ["q-hello"]);
+  assert.deepEqual(ids("main/inner"), ["q-scope", "q-plain", "q-other"]);
+  assert.deepEqual(ids("main/team#a"), []);
 });

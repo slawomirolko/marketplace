@@ -5,6 +5,8 @@ import { parse as parseYaml } from "yaml";
 import { Factory, errorMessage, runReport } from "../src/engine.ts";
 import { homeDataDir, readSources } from "../src/paths.ts";
 import { describeAgent, marketplaceDir } from "../src/marketplace-agents.ts";
+import { readQuestions } from "../src/questions.ts";
+import type { AskedQuestion } from "../src/questions.ts";
 import { standaloneNames, workflowsThatRan } from "../src/standalone.ts";
 import { readLock, scanMarketplace, updateMarketplace } from "../src/sources-lock.ts";
 import type { MarketplaceScan, UpdateResult } from "../src/sources-lock.ts";
@@ -41,6 +43,7 @@ export interface RunListItem {
 export interface RunDetail {
   run: Pick<Run, "runId" | "goal" | "status" | "config" | "answers" | "ledger" | "events" | "pendingQuestion" | "pendingWorkItems">;
   report: Report;
+  questions: AskedQuestion[];
 }
 
 export interface DataApi {
@@ -181,7 +184,7 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo }: DataApi
       if (!file || !fs.existsSync(file)) return null;
       const run = readJson(file) as Run;
       const { runId: id, goal, status, config, answers, ledger, events, pendingQuestion, pendingWorkItems } = run;
-      return { run: { runId: id, goal, status, config, answers, ledger, events, pendingQuestion, pendingWorkItems }, report: runReport(run) };
+      return { run: { runId: id, goal, status, config, answers, ledger, events, pendingQuestion, pendingWorkItems }, report: runReport(run), questions: readQuestions(path.dirname(path.dirname(file)), id) };
     },
 
     stale() {

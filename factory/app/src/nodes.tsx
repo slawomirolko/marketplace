@@ -125,16 +125,26 @@ function RunBadge({ item }: { item: Item }) {
 }
 
 function HumanMark({ item }: { item: Item }) {
-  const icon = useViewer().humans.get(item.key);
+  const { humans, openQuestions } = useViewer();
+  const icon = humans.get(item.key);
   if (!icon) return null;
   const label = humanLabel(icon);
   return (
-    <span className={`human-icon human-${icon.role}`} title={label} aria-label={label} role="img">
+    <button
+      type="button"
+      className={`human-icon human-${icon.role} nodrag`}
+      title={label}
+      aria-label={label}
+      onClick={(event) => {
+        event.stopPropagation();
+        openQuestions(item);
+      }}
+    >
       <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
         <circle cx="8" cy="4.5" r="3" />
         <path d="M2 15c0-3.6 2.7-6 6-6s6 2.4 6 6z" />
       </svg>
-    </span>
+    </button>
   );
 }
 

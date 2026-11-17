@@ -6,6 +6,7 @@ import { evaluateWhen, loadWorkflowDir, readPath, withEach } from "./workflow-ya
 import { FACTORY_DIR } from "./paths.ts";
 import { loadFactoryConfig } from "./config.ts";
 import { readMarketplaceAgent } from "./marketplace-agents.ts";
+import { recordAnswer, recordQuestion } from "./questions.ts";
 import { SUPERVISOR_PATH, parseSupervisorLine, summarizeRun } from "./run-summary.ts";
 import type { RunSummary } from "./run-summary.ts";
 import Mustache from "mustache";
@@ -23,6 +24,7 @@ import type {
   LedgerRecord,
   ModelUsage,
   NodeCost,
+  PendingQuestion,
   PendingWork,
   Report,
   Run,
@@ -230,6 +232,13 @@ export class Factory {
     this.event(run, "ledger_record", { node: record.nodePath, costUsd: record.costUsd, costSource: record.costSource });
   }
 
+  /** Puts a question to the user: the run waits for it, and the question store keeps its text for the viewer. */
+  askUser(run: Run, question: PendingQuestion, askedBy: string | null): void {
+    run.status = "waiting_for_user";
+    run.pendingQuestion = question;
+    recordQuestion(this.dataDir, { runId: run.runId, questionId: question.id, node: question.node ?? null, askedBy, text: question.text, allowed: question.allowed ?? null, askedAt: new Date().toISOString() });
+  }
+
   event(run: Run, type: string, data: Omit<RunEvent, "at" | "type"> = {}): void {
     run.events.push({ at: new Date().toISOString(), type, ...data });
   }
@@ -310,6 +319,7 @@ export class Factory {
     run.pendingQuestion = null;
     run.status = "running";
     this.event(run, "run_resumed", { questionId, answer });
+    recordAnswer(this.dataDir, run.runId, questionId, answer, run.events.at(-1)!.at);
     this.checkpoint(run);
     this.schedule(run);
     return { run, duplicate: false };
@@ -416,8 +426,7 @@ export class Factory {
     }
     if (ratio >= pauseRatio && !run.thresholdsHit.includes("pause")) {
       run.thresholdsHit.push("pause");
-      run.status = "waiting_for_user";
-      run.pendingQuestion = { id: "q-budget-pause", text: `The factory run has used ${Math.round(ratio * 100)}% of its budget. Continue or stop?`, allowed: ["continue", "stop"] };
+      this.askUser(run, { id: "q-budget-pause", text: `The factory run has used ${Math.round(ratio * 100)}% of its budget. Continue or stop?`, allowed: ["continue", "stop"] }, null);
       this.event(run, "budget_threshold", { level: "pause", ratio });
       return false;
     }
@@ -541,8 +550,7 @@ export class Factory {
       const question = { ...fixed, id: view.prefix + Mustache.render(node.question.id, context), text: Mustache.render(node.question.text, context), ...(allowedFrom ? { allowed: allowedOf(view.state, allowedFrom) } : {}) };
       const answer = run.answers[question.id];
       if (answer === undefined) {
-        run.status = "waiting_for_user";
-        run.pendingQuestion = { ...question, node: node.path };
+        this.askUser(run, { ...question, node: node.path }, node.askedBy ?? null);
         this.event(run, "needs_input", { node: node.path, questionId: question.id });
         return;
       }
@@ -578,8 +586,7 @@ export class Factory {
     const backend = config.backend.kind;
     const askNow = backend === "fake" ? run.nodeTurn === node.askAfterTurn : true;
     if (node.question && askNow && run.answers[node.question.id] === undefined) {
-      run.status = "waiting_for_user";
-      run.pendingQuestion = { ...node.question, node: node.path };
+      this.askUser(run, { ...node.question, node: node.path }, node.path);
       this.event(run, "needs_input", { node: node.path, questionId: node.question.id });
       return;
     }

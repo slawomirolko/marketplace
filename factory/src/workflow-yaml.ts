@@ -110,6 +110,7 @@ function buildNode(workflow: WorkflowSpec, spec: WorkflowSpecNode): WorkflowNode
   if (spec.workspace) node.workspace = render(spec.workspace);
   if (spec.agents) node.agents = spec.agents.map((a) => ({ id: a.id, ...(a.role ? { role: a.role } : {}), ...(a.agent ? { agentName: a.agent } : {}) }));
   if (spec.question) node.question = spec.question;
+  if (spec.askedBy) node.askedBy = `${workflow.name}/${spec.id.slice(0, spec.id.lastIndexOf("/") + 1)}${spec.askedBy}`;
   if (spec.turns) node.turns = spec.turns;
   if (spec.askAfterTurn) node.askAfterTurn = spec.askAfterTurn;
   if (spec.maxVisits) node.maxVisits = spec.maxVisits;

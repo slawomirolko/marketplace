@@ -190,6 +190,7 @@ export interface WorkflowNode {
   turns?: number;
   askAfterTurn?: number;
   question?: Question;
+  askedBy?: string;
   prompt?: (context: PromptContext) => string;
   agents?: Agent[];
   agentsFrom?: (state: WorkflowState | undefined) => Agent[];

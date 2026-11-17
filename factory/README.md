@@ -86,6 +86,7 @@ After `pnpm install` (once, from `factory/`) it starts Vite on <http://127.0.0.1
 - per node and per agent: role, tier, model, cost, tokens, steps and cost source; an unknown cost is shown as "unknown", never as $0;
 - on click, a side panel with the agents table, every ledger record (input, output, cache tokens, cost, source), the question to the user and its answer, and the last output preview;
 - a run selector and run totals by tier, model and cost source.
+- a human icon on a step that asks you (green: the step asks, through `askedBy`, `askAfterTurn` or its agent's permission to ask; black: an interrupt or group that passes the question on); a click opens the Questions tab with every question of that step in the selected run and your answers. The factory stores each question with its rendered text and the answer in `questions.sqlite` in the data directory (built-in `node:sqlite`), so only runs started after that store was added show their questions.
 
 Data comes read-only from the factory data directory. Without `FACTORY_DATA_DIR` the app uses `factory/.viewer-data` (git-ignored) and creates one finished demo run with the fake model on first start. To look at real runs, set `FACTORY_DATA_DIR` to the directory the factory writes to (it holds `runs/*.json`). The Vite server listens on 127.0.0.1 only and serves GET requests only. HTML responses carry a Content-Security-Policy with a new nonce per request (`app/csp.ts`): no unsafe-inline, no unsafe-eval.
 

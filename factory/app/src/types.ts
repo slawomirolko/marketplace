@@ -210,9 +210,22 @@ export interface RunData {
   pendingWorkItems?: { nodePath: string; agentId: string }[];
 }
 
+export interface AskedQuestion {
+  runId: string;
+  questionId: string;
+  node: string | null;
+  askedBy: string | null;
+  text: string;
+  allowed: string[] | null;
+  askedAt: string;
+  answer: string | null;
+  answeredAt: string | null;
+}
+
 export interface RunDetail {
   run: RunData;
   report: RunReport;
+  questions?: AskedQuestion[];
 }
 
 export interface RunListItem {
