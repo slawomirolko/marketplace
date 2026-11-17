@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -84,4 +86,21 @@ test("a run stores every question with its rendered text, the step that asks it,
   assert.ok(stored.every((q) => q.answeredAt && q.answeredAt >= q.askedAt));
   const api = createDataApi({ factoryDir: path.join(import.meta.dirname, ".."), dataDir, configFile: path.join(import.meta.dirname, "..", "spec", "examples", "valid", "factory-config.json"), demo: false });
   assert.deepEqual(api.run(run.runId)?.questions, stored, "the viewer gets the questions with the run");
+
+  const { viewerHandler } = await import("../src/viewer-routes.ts");
+  const server = http.createServer();
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = (server.address() as AddressInfo).port;
+  const handle = viewerHandler({ viewerDir: dataDir, dataDir, factoryDir: path.join(import.meta.dirname, ".."), configFile: path.join(import.meta.dirname, "..", "spec", "examples", "valid", "factory-config.json"), allowedHosts: new Set([`127.0.0.1:${port}`]) });
+  server.on("request", (req, res) => {
+    if (!handle(req, res)) res.writeHead(404).end();
+  });
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/viewer/api/runs/${run.runId}`);
+    assert.equal(response.status, 200);
+    const body = (await response.json()) as { questions: unknown };
+    assert.deepEqual(body.questions, stored, "the viewer server sends the stored questions over HTTP");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
