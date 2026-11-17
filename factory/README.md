@@ -173,6 +173,14 @@ Schema tests only (mounting the sources into the image):
 docker run --rm --network none -v "${PWD}/factory/spec:/app/spec:ro" -v "${PWD}/factory/src:/app/src:ro" -v "${PWD}/factory/test:/app/test:ro" --entrypoint node skill-factory-poc:0.3 --test /app/test/spec.test.ts
 ```
 
+Viewer render tests (Vitest, jsdom, Testing Library, MSW for the `/api` calls) run locally only, with a coverage report; the run fails when statements, branches, functions or lines of `app/src/*.tsx` drop below 60%:
+
+```powershell
+pnpm --dir factory test:viewer
+```
+
+They live in `app/tests`, mirror `app/src`, and render through `tests/testUtils` (`renderFlow` draws a workflow through the viewer's own layout into React Flow; `renderWithViewer` wraps one component in the viewer context).
+
 ## Verified so far
 
 | Client | Result |
