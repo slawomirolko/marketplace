@@ -183,6 +183,12 @@ export function agentScripts(item: Item, agents: Record<string, AgentInfo>): Age
   return name ? (agents[name]?.scripts ?? []) : [];
 }
 
+/** True when the agent behind this step or team member declares the configured memory-layer skill. */
+export function hasMemoryLayer(item: Item, agents: Record<string, AgentInfo>): boolean {
+  const name = agentNameOf(item);
+  return name ? agents[name]?.memoryLayer === true : false;
+}
+
 export interface HumanQuestion {
   node: string;
   id: string;

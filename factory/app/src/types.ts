@@ -23,6 +23,7 @@ export interface AgentInfo {
   scripts: { skill: string; name: string; file: string }[];
   missing: string[];
   asks?: string | null;
+  memoryLayer?: boolean;
 }
 
 export interface WorkflowNode {
@@ -98,6 +99,7 @@ export interface FactoryConfig {
   roles?: Record<string, string>;
   budget?: Budget;
   switches?: Record<string, boolean>;
+  memoryLayer?: string;
 }
 
 export interface Coverage {

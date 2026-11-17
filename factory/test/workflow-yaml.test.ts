@@ -265,6 +265,33 @@ test("an agent that may ask the user itself names its permission: OpenCode quest
   }
 });
 
+test("an agent has the memory layer attached when it declares the configured memory skill", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "factory-marketplace-"));
+  const write = (rel: string, text: string) => {
+    fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+    fs.writeFileSync(path.join(root, rel), text);
+  };
+  write("skills/ai/olko-memory-layer/SKILL.md", "---\ndescription: memory\n---\nbody\n");
+  write("skills/ai/notes/SKILL.md", "---\ndescription: notes\n---\nbody\n");
+  write("agents/opencode/rememberer.md", "---\ndescription: rememberer\npermission:\n  skill:\n    \"*\": deny\n    olko-memory-layer: allow\n---\nbody\n");
+  write("agents/opencode/denied.md", "---\ndescription: denied\npermission:\n  skill:\n    olko-memory-layer: deny\n    notes: allow\n---\nbody\n");
+  write("agents/opencode/listed.md", "---\ndescription: listed\n---\nbody\n");
+  write("agents/opencode/index.json", JSON.stringify({ agents: [{ name: "listed", skills: ["notes"] }] }));
+  const previous = process.env.FACTORY_MARKETPLACE_DIR;
+  process.env.FACTORY_MARKETPLACE_DIR = root;
+  try {
+    assert.equal(describeAgent("rememberer")?.memoryLayer, true);
+    assert.equal(describeAgent("denied")?.memoryLayer, false, "a denied skill is not attached");
+    assert.equal(describeAgent("olko-memory-layer")?.memoryLayer, false, "the memory skill itself is not an agent with memory");
+    assert.equal(describeAgent("rememberer", "notes")?.memoryLayer, false);
+    assert.equal(describeAgent("denied", "notes")?.memoryLayer, true, "the memory skill name comes from the caller");
+    assert.equal(describeAgent("listed", "notes")?.memoryLayer, true, "a skill listed in index.json counts too");
+  } finally {
+    if (previous === undefined) delete process.env.FACTORY_MARKETPLACE_DIR;
+    else process.env.FACTORY_MARKETPLACE_DIR = previous;
+  }
+});
+
 test("a switched subgraph gets a gate: switch on enters it, switch off goes straight to its exits", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-yaml-"));
   fs.writeFileSync(path.join(dir, "tracker.yaml"), `

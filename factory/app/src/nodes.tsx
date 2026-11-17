@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Handle, Position } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import { useViewer } from "./context.ts";
-import { agentScripts, formatDuration, formatTokens, formatUsd, humanLabel, isDisabled, isGroup, isLive, ranIn } from "./tree.ts";
+import { agentScripts, formatDuration, formatTokens, formatUsd, hasMemoryLayer, humanLabel, isDisabled, isGroup, isLive, ranIn } from "./tree.ts";
 import type { CardFlowNode, ClusterFlowNode, Item, RunIndexEntry, RunReport, TerminalFlowNode } from "./types.ts";
 
 const EMPTY_ENTRY: RunIndexEntry = { cost: null, tier: null, model: null, failure: null, runs: null, timeMs: null };
@@ -165,6 +165,21 @@ function AgentScripts({ item }: { item: Item }) {
   );
 }
 
+function MemoryMark({ item }: { item: Item }) {
+  const { agents, config } = useViewer();
+  if (!hasMemoryLayer(item, agents)) return null;
+  const label = `memory layer attached: ${config?.memoryLayer ?? "olko-memory-layer"}`;
+  return (
+    <svg className="memory-mark" viewBox="0 0 16 16" width="16" height="16" role="img" aria-label={label}>
+      <title>{label}</title>
+      <path d="M1.5 1.5h10l3 3v10h-13z" fill="#000" />
+      <rect x="4" y="2" width="6" height="4" fill="#fff" />
+      <rect x="8" y="2.8" width="1.3" height="2.4" fill="#000" />
+      <rect x="3.5" y="8.5" width="9" height="5.5" rx="0.5" fill="#fff" />
+    </svg>
+  );
+}
+
 export function CardNode({ data, selected }: NodeProps<CardFlowNode>) {
   const { item } = data;
   const { tier, model } = useEntry(item);
@@ -190,6 +205,7 @@ export function CardNode({ data, selected }: NodeProps<CardFlowNode>) {
         <AgentScripts item={item} />
         <Toggle item={item} expanded={false} />
       </div>
+      <MemoryMark item={item} />
       <RunBadge item={item} />
     </>
   );

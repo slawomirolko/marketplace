@@ -7,6 +7,7 @@ import { homeDataDir, readSources } from "../src/paths.ts";
 import { describeAgent, marketplaceDir } from "../src/marketplace-agents.ts";
 import { readQuestions } from "../src/questions.ts";
 import type { AskedQuestion } from "../src/questions.ts";
+import { memoryLayerOf } from "../src/config.ts";
 import { standaloneNames, workflowsThatRan } from "../src/standalone.ts";
 import { readLock, scanMarketplace, updateMarketplace } from "../src/sources-lock.ts";
 import type { MarketplaceScan, UpdateResult } from "../src/sources-lock.ts";
@@ -87,6 +88,10 @@ async function finishFakeRun(factory: Factory, goal: string): Promise<Run> {
 }
 
 export function createDataApi({ factoryDir, dataDir, configFile, demo }: DataApiOptions): DataApi {
+  const readConfig = (): FactoryConfigFile => {
+    const text = fs.readFileSync(configFile, "utf8");
+    return (/\.ya?ml$/i.test(configFile) ? parseYaml(text) : JSON.parse(text)) as FactoryConfigFile;
+  };
   const runsDir = path.join(dataDir, "runs");
 
   function runFiles(): string[] {
@@ -130,6 +135,7 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo }: DataApi
     },
 
     agents() {
+      const memoryLayer = memoryLayerOf(readConfig());
       const names = new Set<string>();
       for (const w of loadWorkflowSpecs(path.join(factoryDir, "workflows"))) {
         for (const n of w.nodes) {
@@ -139,14 +145,13 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo }: DataApi
         }
       }
       return Object.fromEntries([...names].sort().flatMap((name) => {
-        const info = describeAgent(name);
+        const info = describeAgent(name, memoryLayer);
         return info ? [[name, info]] : [];
       }));
     },
 
     config() {
-      const text = fs.readFileSync(configFile, "utf8");
-      return (/\.ya?ml$/i.test(configFile) ? parseYaml(text) : JSON.parse(text)) as FactoryConfigFile;
+      return readConfig();
     },
 
     runs() {

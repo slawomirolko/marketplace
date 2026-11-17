@@ -9,7 +9,7 @@ import type { DataApi } from "../app/data.ts";
 import type { Run } from "../src/types.ts";
 import type { Cost, Item, Level, RunData } from "../app/src/types.ts";
 import { supervisorRing } from "../app/src/supervisor.ts";
-import { agentScripts, allItems, buildLevel, costOf, failureOf, formatTokens, humanIcons, humanLabel, isEngineScript, questionsFor, ledgerOf, formatUsd, END_KEY, START_KEY } from "../app/src/tree.ts";
+import { agentScripts, allItems, buildLevel, costOf, failureOf, formatTokens, hasMemoryLayer, humanIcons, humanLabel, isEngineScript, questionsFor, ledgerOf, formatUsd, END_KEY, START_KEY } from "../app/src/tree.ts";
 import { agentsOnly } from "../app/src/agents-only.ts";
 import { layoutGraph, scriptsHeight } from "../app/src/layout.ts";
 
@@ -434,6 +434,41 @@ test("the supervisor ring has a state for every supervisor status", () => {
   const improve = supervisorRing({ status: "done", agent: "a", verdict: "improve", bottleneck: "w/fix", idea: "low tier", output: "x\nsupervise | improve | w/fix | low tier", costUsd: 0.0123, model: "claude-haiku-5-5" });
   assert.deepEqual([improve.tone, improve.headline, improve.model], ["improve", "bottleneck: w/fix · idea: low tier", "claude-haiku-5-5"]);
   assert.equal(supervisorRing({ status: "done", agent: "a", output: "free text\nlast line" }).headline, "last line", "no parseable line: the last line");
+});
+
+test("agents served to the viewer carry the memory-layer flag for the skill the config names", () => {
+  const agents = api(false).agents();
+  assert.equal(agents["olko-review-orchestrator"]?.memoryLayer, true, "declares olko-memory-layer in permission.skill");
+  assert.equal(agents["olko-workflow-mapper"]?.memoryLayer, false, "declares no memory skill");
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-app-"));
+  const custom = path.join(dataDir, "config.json");
+  fs.writeFileSync(custom, JSON.stringify({ ...JSON.parse(fs.readFileSync(configFile, "utf8")), memoryLayer: "olko-agents-optimizer" }));
+  const renamed = createDataApi({ factoryDir, dataDir, configFile: custom, demo: false }).agents();
+  assert.equal(renamed["olko-review-orchestrator"]?.memoryLayer, false);
+  assert.equal(renamed["olko-implementation-orchestrator"]?.memoryLayer, true, "declares olko-agents-optimizer");
+});
+
+test("only an agent step or team member shows the memory mark; a team, subgraph or script never does, even when a child has it", () => {
+  const info = (name: string, memoryLayer: boolean) => ({ name, kind: "agent" as const, description: "", file: "", skills: [], missing: [], scripts: [], memoryLayer });
+  const agents = { keeper: info("keeper", true), plain: info("plain", false) };
+  const workflows = [
+    { name: "main", version: "1", entry: "run", nodes: [{ id: "run", kind: "llm", agent: "keeper" }, { id: "team", kind: "llm", agents: [{ id: "a", agent: "keeper" }, { id: "b", agent: "plain" }, { id: "c" }] }, { id: "sub", kind: "subgraph", workflow: "child" }, { id: "dynamic", kind: "llm", agentsFrom: "state.run.agents" }, { id: "stop", kind: "script", op: "builtin.stop" }], edges: [{ from: "run", to: "team" }, { from: "team", to: "sub" }, { from: "sub", to: "dynamic" }, { from: "dynamic", to: "stop" }, { from: "stop", to: "END" }] },
+    { name: "child", version: "1", entry: "inner", nodes: [{ id: "inner", kind: "llm", agent: "keeper" }], edges: [{ from: "inner", to: "END" }] },
+  ];
+  const level = buildLevel(workflows, "main");
+  const item = (key: string) => level.items.find((i) => i.key === key)!;
+  const team = item("main/team");
+  assert.ok(team.kind === "team");
+  assert.equal(hasMemoryLayer(item("main/run"), agents), true);
+  assert.deepEqual(team.inner.items.map((i) => hasMemoryLayer(i, agents)), [true, false, false]);
+  assert.equal(hasMemoryLayer(team, agents), false, "a team is not marked although its member a has the memory layer");
+  const sub = item("main/sub");
+  assert.ok(sub.kind === "subgraph");
+  assert.deepEqual(sub.inner.items.filter((i) => i.kind === "step").map((i) => hasMemoryLayer(i, agents)), [true], "the agent inside the subgraph is marked");
+  assert.equal(hasMemoryLayer(sub, agents), false, "a subgraph is not marked although its agent has the memory layer");
+  assert.equal(hasMemoryLayer(item("main/dynamic"), agents), false, "a step whose agents come from state names no agent");
+  assert.equal(hasMemoryLayer(item("main/stop"), agents), false, "an engine script is never marked");
+  assert.equal(hasMemoryLayer(item("main/run"), {}), false, "an unknown agent has no mark");
 });
 
 test("an agent's skill scripts belong to its step or team member; a script step is an engine script", () => {

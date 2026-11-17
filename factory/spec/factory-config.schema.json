@@ -84,6 +84,12 @@
       "additionalProperties": {
         "type": "boolean"
       }
+    },
+    "memoryLayer": {
+      "description": "Marketplace skill that gives an agent persistent memory. An agent that declares it has the memory layer attached. Default olko-memory-layer.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*(:[a-z][a-z0-9-]*)?$",
+      "default": "olko-memory-layer"
     }
   },
   "$defs": {

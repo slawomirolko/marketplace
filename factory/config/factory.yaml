@@ -38,3 +38,5 @@ switches:
   docker: true
   obsidian: true
   adopt: false
+# Marketplace skill that gives an agent persistent memory; the viewer marks agents that declare it.
+memoryLayer: olko-memory-layer
