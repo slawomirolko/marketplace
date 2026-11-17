@@ -107,6 +107,8 @@ describe("App", () => {
       fireEvent.click(within(await card("run")).getByRole("button", { name: /^Asks you: ask/ }));
 
       expect(await screen.findByRole("heading", { name: "Questions of run" })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: "Questions" })).toHaveAttribute("aria-selected", "true");
+      expect(screen.getByRole("tab", { name: "Node" })).toHaveAttribute("aria-selected", "false");
       expect(screen.getByText("Allowed answers: yes, no")).toBeInTheDocument();
       expect(screen.getByText("Your answer:").parentElement).toHaveTextContent("Your answer: yes");
     });

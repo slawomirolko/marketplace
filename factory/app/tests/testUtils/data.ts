@@ -12,6 +12,7 @@ export function agentInfo(name: string, extra: Partial<AgentInfo> = {}): AgentIn
 export const agents: Record<string, AgentInfo> = {
   syncer: agentInfo("syncer", { skills: [{ name: "sync", description: "keeps sources in sync", file: "skills/demo/sync/SKILL.md" }], scripts: SYNC_SCRIPTS }),
   reviewer: agentInfo("reviewer"),
+  asker: agentInfo("asker", { asks: "question: allow" }),
 };
 
 export const mainWorkflow: Workflow = {
@@ -32,6 +33,27 @@ export const mainWorkflow: Workflow = {
     { from: "team", to: "ask" },
     { from: "ask", to: "stop" },
     { from: "stop", to: "END" },
+  ],
+};
+
+export const askingWorkflow: Workflow = {
+  name: "asking",
+  version: "1.0.0",
+  standalone: true,
+  entry: "plan",
+  nodes: [
+    { id: "plan", kind: "llm", agent: "syncer", askAfterTurn: 1, question: { id: "q-plan", text: "Is the plan right?" } },
+    { id: "team", kind: "llm", agents: [{ id: "one", agent: "asker" }, { id: "two", agent: "syncer" }] },
+    { id: "confirm", kind: "interrupt", askedBy: "plan", question: { id: "q-confirm", text: "Apply the plan?" } },
+    { id: "note", kind: "interrupt", question: { id: "q-note", text: "Anything else?" } },
+    { id: "done", kind: "script", op: "builtin.stop" },
+  ],
+  edges: [
+    { from: "plan", to: "team" },
+    { from: "team", to: "confirm" },
+    { from: "confirm", to: "note" },
+    { from: "note", to: "done" },
+    { from: "done", to: "END" },
   ],
 };
 
