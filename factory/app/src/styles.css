@@ -137,6 +137,7 @@ select hr { border: none; border-top: 3px solid var(--fg); margin: 6px 0; }
 
 .show-numbers { display: inline-flex; gap: 6px; align-items: center; font-size: 0.9em; }
 .run-badge { position: absolute; top: -10px; right: -10px; z-index: 1; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; display: grid; place-items: center; background: #ffffff; color: #1b1b1f; border: 1.5px solid var(--neutral-line); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); font-size: 12px; font-weight: 700; line-height: 1; pointer-events: none; }
+.memory-mark { position: absolute; right: 6px; bottom: 4px; z-index: 1; font-size: 15px; line-height: 1; filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.9)); }
 .run-badge-sum { border-style: dashed; }
 .run-badge:has(.run-time) { display: flex; gap: 5px; align-items: center; }
 .run-time { font-weight: 500; padding-left: 5px; border-left: 1px solid var(--neutral-line); white-space: nowrap; }

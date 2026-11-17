@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
+import { DEFAULT_MEMORY_LAYER } from "./config.ts";
 import { FACTORY_DIR } from "./paths.ts";
 import type { AgentTool } from "./types.ts";
 
@@ -135,6 +136,7 @@ export interface AgentInfo {
   skills: { name: string; description: string; file: string }[];
   scripts: SkillScript[];
   missing: string[];
+  memoryLayer: boolean;
 }
 
 function skillDescription(file: string): string {
@@ -154,7 +156,7 @@ function skillScripts(skill: string, skillFile: string): { skill: string; name: 
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function describeAgent(name: string): AgentInfo | null {
+export function describeAgent(name: string, memoryLayer: string = DEFAULT_MEMORY_LAYER): AgentInfo | null {
   let agent: MarketplaceAgent;
   try {
     agent = readMarketplaceAgent(name);
@@ -175,6 +177,7 @@ export function describeAgent(name: string): AgentInfo | null {
     skills: declared.map((s) => ({ name: s.name, description: skillDescription(s.file), file: rel(s.file) })),
     scripts: scripts.map((s) => ({ skill: s.skill, name: s.name, file: rel(s.path) })),
     missing: fromPrompt,
+    memoryLayer: kind !== "skill" && [...declared.map((s) => s.name), ...fromPrompt].includes(memoryLayer),
   };
 }
 

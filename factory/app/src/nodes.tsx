@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Handle, Position } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import { useViewer } from "./context.ts";
-import { agentScripts, formatDuration, formatTokens, formatUsd, isDisabled, isGroup, isLive, ranIn } from "./tree.ts";
+import { agentScripts, formatDuration, hasMemoryLayer, formatTokens, formatUsd, isDisabled, isGroup, isLive, ranIn } from "./tree.ts";
 import type { CardFlowNode, ClusterFlowNode, Item, RunIndexEntry, RunReport, TerminalFlowNode } from "./types.ts";
 
 const EMPTY_ENTRY: RunIndexEntry = { cost: null, tier: null, model: null, failure: null, runs: null, timeMs: null };
@@ -141,6 +141,17 @@ function AgentScripts({ item }: { item: Item }) {
   );
 }
 
+function MemoryMark({ item }: { item: Item }) {
+  const { agents, config } = useViewer();
+  if (!hasMemoryLayer(item, agents)) return null;
+  const label = `memory layer attached: ${config?.memoryLayer ?? "olko-memory-layer"}`;
+  return (
+    <span className="memory-mark" role="img" title={label} aria-label={label}>
+      {"\u{1F4BE}"}
+    </span>
+  );
+}
+
 export function CardNode({ data, selected }: NodeProps<CardFlowNode>) {
   const { item } = data;
   const { tier, model } = useEntry(item);
@@ -163,6 +174,7 @@ export function CardNode({ data, selected }: NodeProps<CardFlowNode>) {
         <AgentScripts item={item} />
         <Toggle item={item} expanded={false} />
       </div>
+      <MemoryMark item={item} />
       <RunBadge item={item} />
     </>
   );

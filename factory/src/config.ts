@@ -9,6 +9,14 @@ export interface FactoryConfig {
   roles: Record<string, Tier>;
   budget: { maxCostUsd: number; infoRatio: number; pauseRatio: number };
   switches: Record<string, boolean>;
+  memoryLayer: string;
+}
+
+export const DEFAULT_MEMORY_LAYER = "olko-memory-layer";
+
+/** The marketplace skill that gives an agent persistent memory, from a parsed config file. */
+export function memoryLayerOf(raw: { memoryLayer?: string } | null | undefined): string {
+  return raw?.memoryLayer ?? DEFAULT_MEMORY_LAYER;
 }
 
 export function configFile(): string {
@@ -16,12 +24,13 @@ export function configFile(): string {
 }
 
 export function loadFactoryConfig(file = configFile()): FactoryConfig {
-  const raw = parseYaml(fs.readFileSync(file, "utf8")) as { roles: Record<string, Tier>; budget: { maxCostUsd: number; infoRatio?: number; pauseRatio?: number }; switches?: Record<string, boolean> };
+  const raw = parseYaml(fs.readFileSync(file, "utf8")) as { roles: Record<string, Tier>; budget: { maxCostUsd: number; infoRatio?: number; pauseRatio?: number }; switches?: Record<string, boolean>; memoryLayer?: string };
   const result = validate("factory-config", raw);
   if (!result.valid) throw new Error(`${file}: ${result.errors.join("; ")}`);
   return {
     roles: raw.roles,
     budget: { maxCostUsd: raw.budget.maxCostUsd, infoRatio: raw.budget.infoRatio ?? 0.5, pauseRatio: raw.budget.pauseRatio ?? 0.8 },
     switches: raw.switches ?? {},
+    memoryLayer: memoryLayerOf(raw),
   };
 }

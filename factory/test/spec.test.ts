@@ -3,7 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import os from "node:os";
 import { validate } from "../src/spec.ts";
+import { DEFAULT_MEMORY_LAYER, loadFactoryConfig } from "../src/config.ts";
 
 const examplesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "spec", "examples");
 const read = (kind: string, file: string) => JSON.parse(fs.readFileSync(path.join(examplesDir, kind, file), "utf8"));
@@ -32,6 +34,25 @@ test("config rejects an api backend that would hold a literal key", () => {
   const config = read("valid", "factory-config.json");
   config.backends = [{ id: "direct-api", kind: "api", protocol: "anthropic", apiKeyEnv: "ANTHROPIC_API_KEY", apiKey: "literal" }];
   assert.equal(validate("factory-config", config).valid, false);
+});
+
+test("config names the memory-layer skill, olko-memory-layer when it is left out", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-config-"));
+  const write = (name: string, config: object) => {
+    const file = path.join(dir, name);
+    fs.writeFileSync(file, JSON.stringify(config));
+    return file;
+  };
+  const config = read("valid", "factory-config.json");
+  assert.equal(DEFAULT_MEMORY_LAYER, "olko-memory-layer");
+  assert.equal(loadFactoryConfig(write("default.json", config)).memoryLayer, "olko-memory-layer");
+  assert.equal(loadFactoryConfig(write("custom.json", { ...config, memoryLayer: "team-memory" })).memoryLayer, "team-memory");
+  assert.equal(validate("factory-config", { ...config, memoryLayer: "olko-sync:olko-sync-state" }).valid, true, "a plugin skill name is allowed");
+  assert.throws(() => loadFactoryConfig(write("bad.json", { ...config, memoryLayer: "Memory Layer" })), /memoryLayer/);
+});
+
+test("the shipped factory config attaches the marketplace memory skill", () => {
+  assert.equal(loadFactoryConfig().memoryLayer, "olko-memory-layer");
 });
 
 test("workflow rejects edges to unknown nodes and a missing END", () => {
