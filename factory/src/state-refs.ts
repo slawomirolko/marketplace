@@ -1,5 +1,5 @@
 import Mustache from "mustache";
-import { missingField, OPERATION_CONTRACTS, PARSER_CONTRACTS } from "./contract.ts";
+import { missingField, OPERATION_CONTRACTS } from "./contract.ts";
 import { isParseSpec, parseContract } from "./parse-spec.ts";
 import type { WorkflowSpec, WorkflowSpecNode } from "./types.ts";
 import { whenClauses } from "./workflow-yaml.ts";
@@ -47,7 +47,7 @@ function checkFields(spec: WorkflowSpec, node: WorkflowSpecNode, segments: strin
     if (segments.length === 0) return null;
     const ids = agentIds(node);
     if (ids && !ids.includes(segments[0]!)) return `${keyOf(node)} stores results by agent id (${ids.join(", ")}), not ${segments[0]}`;
-    const contract = isParseSpec(node.parse) ? parseContract(node.parse) : PARSER_CONTRACTS[node.parse];
+    const contract = isParseSpec(node.parse) ? parseContract(node.parse) : undefined;
     const missing = contract ? missingField(contract, segments.slice(1)) : null;
     return missing ? `parser ${typeof node.parse === "string" ? node.parse : JSON.stringify(node.parse)} does not set ${missing}` : null;
   }

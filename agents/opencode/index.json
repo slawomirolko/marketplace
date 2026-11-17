@@ -649,12 +649,23 @@
     },
     {
       "name": "olko-workflow-mapper",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "file": "olko-workflow-mapper.md",
       "stack": "software-factory",
       "role": "writer",
       "skills": [
-        "olko-factory-workflow-yaml"
+        "olko-factory-workflow-yaml",
+        "olko-factory-workflow-sync"
+      ]
+    },
+    {
+      "name": "olko-workflow-sync-orchestrator",
+      "version": "0.1.0",
+      "file": "olko-workflow-sync-orchestrator.md",
+      "stack": "software-factory",
+      "role": "orchestrator",
+      "skills": [
+        "olko-factory-workflow-sync"
       ]
     },
     {

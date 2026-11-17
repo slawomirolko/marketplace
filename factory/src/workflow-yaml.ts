@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import Mustache from "mustache";
 import { parse as parseYaml, YAMLParseError } from "yaml";
-import { operationNamed, parserNamed } from "./ops.ts";
+import { operationNamed } from "./ops.ts";
 import { buildParser, isParseSpec } from "./parse-spec.ts";
 import { validate } from "./spec.ts";
 import type { Agent, PromptContext, Tier, Workflow, WorkflowNode, WorkflowSpec, WorkflowSpecNode, WorkflowState } from "./types.ts";
@@ -117,11 +117,7 @@ function buildNode(workflow: WorkflowSpec, spec: WorkflowSpecNode): WorkflowNode
   if (spec.prompt) node.prompt = render(spec.prompt);
   if (spec.agentsFrom) node.agentsFrom = agentsFromPath(spec.agentsFrom);
   if (isParseSpec(spec.parse)) node.parse = buildParser(spec.parse);
-  else if (spec.parse) {
-    const parser = parserNamed(spec.parse);
-    if (!parser) throw new Error(`node ${spec.id}: unknown parser ${spec.parse}`);
-    node.parse = parser;
-  }
+  else if (spec.parse) throw new Error(`node ${spec.id}: unknown parser ${JSON.stringify(spec.parse)}; use text, {json: [...]} or {line: [...]}`);
   if (spec.op) {
     const operation = operationNamed(spec.op);
     if (!operation) throw new Error(`node ${spec.id}: unknown operation ${spec.op}`);

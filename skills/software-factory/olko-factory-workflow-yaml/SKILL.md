@@ -1,6 +1,6 @@
 ---
 name: olko-factory-workflow-yaml
-version: 0.1.0
+version: 0.2.0
 description: "Rules for the Software Factory workflow YAML in factory/workflows: how an Olko agent's steps map to phase groups, nodes, edges and conditions, which engine operations exist, how a workflow names its sources, and how to validate it. Use when you write, update or verify a factory workflow from an Olko agent or skill. Triggers: 'factory workflow', 'map agent to yaml', 'update factory yaml', 'verify factory workflow', 'olko-factory-workflow-yaml'."
 ---
 
@@ -18,23 +18,35 @@ Rules for writing and checking Software Factory workflow YAML (`factory/workflow
 - `group`: a phase in its own file, inlined; node ids stay the same, so ids must be unique across the root and all its groups. Leave a group with `END`; end the whole run with `FINISH`.
 - `call`: a reusable step with its own input (`input: { key: "{{state.x.y}}" }`) and its own state; use it for steps shared by workflows (`olko-safe-source`, `olko-pr-merge`, `olko-review`, `olko-impl-checks`).
 - `subgraph` with `enabledWhen: "switches.<name> == true"`: a part the user can switch off (tracker, editor, docker, obsidian, adopt). Switches are a factory feature the user chose for tests: never remove a switch. When the agent text says the step must never be skipped, keep the switch and add `required: true`; a run that switches it off is then marked with a warning.
-- `llm`: one agent (`agent:`), several (`agents:` list or `agentsFrom: state.<path>`), or a skill as the agent (`skill:`). Give `role:` (a tier key), `tools: [read, edit, bash]` only when the step writes or runs commands, `dirs:` for folders outside the workspace, `parse:` for its last line, and `maxVisits:` when it is in a loop.
-- `script`: a deterministic engine operation (`op:`, arguments in `with:`). Use it for git, counting, gates, file checks and journals.
+- `llm`: one agent (`agent:`), several agents (`agents:` list or `agentsFrom: state.<path>`), or a skill as the agent (`skill:`). Set these fields:
+  - `role:`: a tier key.
+  - `tools: [read, edit, bash]`: only when the step writes files or runs commands.
+  - `dirs:`: folders outside the workspace.
+  - `parse:`: how the answer becomes state.
+  - `maxVisits:`: when the step is in a loop.
+- A script that belongs to an agent or skill runs inside that agent's `llm` step. The prompt names the command. The script is never a separate step.
+- `parse:` has three forms:
+  - `text`: the trimmed answer.
+  - `{ json: [field, optional?] }`: the last ```json block (the whole answer when there is no block). A field that ends in `?` is optional and is `null` when missing. Never name a field `text`.
+  - `{ line: [field, ...] }`: the last line with at least that many `|`-separated parts. Extra parts go into the last field. Line fields cannot be optional.
+  - `json` and `line` also set `text` to the whole answer.
+- `script`: a generic engine operation (`op:`, arguments in `with:`). Use it only for counts, list steps, gates, values and stops. Agents and their skills do all agent work, git work and file changes.
 - `interrupt`: a question to the user (`question: { id, text, allowed }`); without `allowed` the answer is free text. Its answer is `state.<node>.answer`.
 
 ## Conditions
-- `when:` is ONE comparison: `<state path> <==|!=|>|<|>=|<=> <value>`; no `&&` or `||`. Join paths with a boolean the operation sets.
-- Every path in a `when:` must exist when the edge is checked, or the run fails. Operations set every field they branch on.
+- `when:` is one or more comparisons `<state path> <==|!=|>|<|>=|<=> <value>` joined with `&&` and `||` (`&&` binds tighter). Values are numbers, `true`, `false`, `null` or quoted strings. A list compares by its length.
+- A path that does not exist reads as `null`. Thus `x.y == null` tests that a step has not run yet.
+- `>`, `<`, `>=` and `<=` are false when one side is `null`.
 
 ## State contract
 - A step stores state under its id: a question sets `<id>.answer`; an `llm` step with `parse:` sets `<id>.<agent id>.<parser fields>` (one agent: the agent id is the step id, so `state.check.check.pass`); an `llm` step without `parse:` stores nothing; a script sets the fields of its operation.
 - Steps inside a subgraph keep their own ids as state keys; steps inside a `call` read only their own scope.
-- `node factory/src/contract.ts` prints the fields of every parser (and of the operations that declare them) as JSON Schema. Read only fields listed there.
+- An `llm` step sets the fields its `parse:` names plus `text`. `node factory/src/contract.ts` prints, as JSON Schema, the fields that each operation declares. Read only fields that this contract declares.
 - The validator checks every `{{state...}}`, `when:`, `agentsFrom` and `allowedFrom` against this contract; fix each `state reference:` error it prints.
 - Edges from one node are checked in order; the last one has no `when:`. Only one unconditional edge per node pair.
 
 ## Engine operations and parsers
-- Only operations and parsers that exist in `factory/src/ops.ts` and `factory/src/impl-ops.ts` may be used. Never invent a name.
+- Only operations that exist in `factory/src/ops.ts` may be used (`builtin.pass`, `builtin.count`, `builtin.stop`, `builtin.values`, `builtin.gate`, `list.next`). Never invent a name.
 - A step in the agent text that needs a new operation or parser: do not fake it with an llm node. Report it as `needs engine op: <proposed name>: <what it must do>`.
 
 ## Mapping an agent change

@@ -1,6 +1,5 @@
 import Mustache from "mustache";
 import { evaluateWhen, withEach } from "./workflow-yaml.ts";
-import * as wfsync from "./wfsync-ops.ts";
 import type { Operation } from "./types.ts";
 
 const pass: Operation = async () => ({ state: { passed: true }, output: "verify passed" });
@@ -38,13 +37,6 @@ export const OPERATIONS: Record<string, Operation> = {
   "list.next": listNext,
 };
 
-export const PARSERS: Record<string, (text: string) => unknown> = {
-};
-
 export function operationNamed(name: string): Operation | undefined {
-  return OPERATIONS[name] ?? wfsync.WFSYNC_OPERATIONS[name];
-}
-
-export function parserNamed(name: string): ((text: string) => unknown) | undefined {
-  return PARSERS[name] ?? wfsync.WFSYNC_PARSERS[name];
+  return OPERATIONS[name];
 }

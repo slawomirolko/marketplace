@@ -2,20 +2,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
-const line = z.object({ verdict: z.string(), detail: z.string(), fields: z.array(z.string()), text: z.string() });
-
-export const PARSER_CONTRACTS: Record<string, z.ZodType> = {
-  "wfsync.mapping": line,
-  "wfsync.verify": line,
-};
-
 export const OPERATION_CONTRACTS: Record<string, z.ZodType> = {
   "builtin.gate": z.object({ enabled: z.boolean(), required: z.boolean() }),
 };
 
-export function contractJson(): { parsers: Record<string, unknown>; operations: Record<string, unknown> } {
+export function contractJson(): { operations: Record<string, unknown> } {
   const toJson = (contracts: Record<string, z.ZodType>) => Object.fromEntries(Object.entries(contracts).map(([name, schema]) => [name, z.toJSONSchema(schema, { unrepresentable: "any" })]));
-  return { parsers: toJson(PARSER_CONTRACTS), operations: toJson(OPERATION_CONTRACTS) };
+  return { operations: toJson(OPERATION_CONTRACTS) };
 }
 
 function unwrap(schema: z.ZodType): z.ZodType {

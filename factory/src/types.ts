@@ -408,7 +408,7 @@ export interface WorkflowSpecNode {
   op?: string;
   with?: Record<string, unknown>;
   prompt?: string;
-  parse?: string | ParseSpec;
+  parse?: ParseSpec;
   turns?: number;
   askAfterTurn?: number;
   maxVisits?: number;

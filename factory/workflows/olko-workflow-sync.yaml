@@ -1,8 +1,9 @@
 name: olko-workflow-sync
-version: 0.1.0
-description: "Keeps the factory workflows in step with the Olko marketplace: finds sources that changed, were removed or are new main agents; the mapper updates or writes the YAML from the diff, a script validates it and the verifier checks it against the agent text, up to three rounds per source; you approve the whole YAML diff before the lock is updated, or everything is reverted."
-source: "factory software-factory section: agents/opencode/olko-workflow-mapper.md and agents/opencode/olko-workflow-verifier.md with skills/software-factory/olko-factory-workflow-yaml"
+version: 0.2.0
+description: "Keeps the factory workflows synchronized with the Olko marketplace. The sync orchestrator scans the lock for changed, removed, and new sources. For each source, the mapper updates the YAML and ends its round with the sync script (count and validate). Then the verifier compares the YAML with the agent text. Each source gets a maximum of three rounds. You approve the full YAML diff before the lock is updated. If you do not approve, all changes are reverted."
+source: "agents/opencode/olko-workflow-sync-orchestrator.md (LOOP), agents/opencode/olko-workflow-mapper.md, agents/opencode/olko-workflow-verifier.md, skills/software-factory/olko-factory-workflow-sync, skills/software-factory/olko-factory-workflow-yaml"
 roles:
+  orchestrator: low
   writer: medium
   verifier: medium
 entry: scan
@@ -10,134 +11,115 @@ limits:
   maxCycleIterations: 3
 nodes:
   - id: scan
-    description: "Compares the lock with the marketplace: changed and removed sources with their git diff, main agents without a workflow, workflows missing from the lock, and nodes that name an agent or skill the marketplace no longer has. Saves a copy of the YAML for a revert."
-    kind: script
-    op: wfsync.scan
+    description: "The sync orchestrator runs the scan command of its script. The command finds changed and removed sources with their diff, main agents that have no workflow, and workflows that are not in the lock. It also saves a copy of the YAML for a revert."
+    kind: llm
+    role: orchestrator
+    agent: olko-workflow-sync-orchestrator
+    tools: [read, bash]
+    parse: { json: [stateDir, workflows, marketplace, factory, head, items, pending, summary] }
+    prompt: |
+      Do only step 1 (SCAN) of your LOOP. Do not delegate. Do not ask questions. Run the `scan` command of `scripts/workflow-sync.mjs` in the olko-factory-workflow-sync skill{{#input.marketplace}} with `--marketplace {{input.marketplace}}`{{/input.marketplace}}{{#input.workflowsDir}} and `--workflows {{input.workflowsDir}}`{{/input.workflowsDir}}.
+      End with one ```json block that holds the command's stdout exactly as printed.
   - id: item-next
-    description: "Takes the next source to handle."
+    description: "Selects the next source to process."
     kind: script
     op: list.next
     maxVisits: 60
-    with: { over: scan.items }
-  - id: item
-    description: "Prepares the source, its diff and the YAML files that name it."
-    kind: script
-    op: wfsync.item
-    maxVisits: 60
+    with: { over: scan.scan.items }
   - id: ask-new
-    description: "A main agent has no workflow yet: asks whether to map it now (a new workflow costs more than an update)."
+    description: "A main agent has no workflow. Asks you if you want to map it now. A new workflow costs more than an update."
     kind: interrupt
     maxVisits: 30
     question:
       id: "q-wfsync-new-{{state.item-next.index}}"
-      text: "{{state.item.source}} is a main agent with no factory workflow. Map it into a new workflow now, or skip it for this run?"
+      text: "{{state.item-next.item.source}} is a main agent that has no factory workflow. Map it to a new workflow now, or skip it in this run?"
       allowed: [map, skip]
   - id: map
-    description: "olko-workflow-mapper changes the smallest part of the named YAML files that covers the diff, or writes a new workflow; steps that need new engine code are reported, not faked."
+    description: "olko-workflow-mapper changes the smallest part of the YAML that covers the diff, or writes a new workflow. Then it validates the YAML. It ends the round with the round command of the sync script. That command records the previous verifier verdict, counts the round, and validates."
     kind: llm
     role: writer
     agent: olko-workflow-mapper
     tools: [read, edit, bash]
     maxVisits: 90
-    dirs: ["{{state.scan.workflows}}", "{{state.scan.marketplace}}", "{{state.scan.factory}}"]
-    parse: wfsync.mapping
+    dirs: ["{{state.scan.scan.workflows}}", "{{state.scan.scan.stateDir}}", "{{state.scan.scan.marketplace}}", "{{state.scan.scan.factory}}"]
+    parse: { line: [marker, outcome, round, valid, summary] }
     prompt: |
-      Source ({{state.item.kind}}): {{state.scan.marketplace}}/{{state.item.source}}
-      Workflows folder (edit only YAML files here): {{state.scan.workflows}}
-      YAML files that name this source:
-      {{state.item.yamlList}}
-      Every file of the workflows that contain them (you may change any of these when the diff affects them):
-      {{state.item.familyList}}
-      Validate with: node {{state.scan.factory}}/src/validate-workflows.ts {{state.scan.workflows}}
-      Diff of the source since the YAML was written ({{state.item.kind}} == new means the full text of a new main agent):
-      {{state.item.diff}}
-      Findings of the last check of {{state.check.source}} (use them only when that is this source):
-      {{state.check.findings}}
-  - id: validate
-    description: "Script check of every YAML file: schema, names, descriptions, known operations and parsers, agents and skills that exist, and a full load."
-    kind: script
-    op: wfsync.validate
-    maxVisits: 90
+      Sync run. Source ({{state.item-next.item.kind}}): {{state.scan.scan.marketplace}}/{{state.item-next.item.source}}
+      Item file (the YAML files that name it, every file of their workflows, and the diff file): {{state.item-next.item.itemFile}}
+      Workflows folder (edit only YAML files here): {{state.scan.scan.workflows}}
+      Validate with: node {{state.scan.scan.factory}}/src/validate-workflows.ts {{state.scan.scan.workflows}}
+      End the round with the `round` command of the olko-factory-workflow-sync script: `--state-dir {{state.scan.scan.stateDir}} --source {{state.item-next.item.source}}{{#state.verify}} --last-verdict {{state.verify.verify.verdict}} --last-engine-gaps {{state.verify.verify.engineGaps}}{{/state.verify}}`. Add one `--needs-op` for each `needs engine op` line in your report.
+      {{#state.verify}}
+      Report of the last verifier. Use its `yaml:` lines only when they name this source:
+      {{state.verify.verify.text}}
+      {{/state.verify}}
   - id: verify
-    description: "olko-workflow-verifier compares the YAML with the current agent text and lists every gap (read only)."
+    description: "olko-workflow-verifier compares the YAML with the current agent text and lists every gap. It does not change files."
     kind: llm
     role: verifier
     agent: olko-workflow-verifier
     maxVisits: 90
-    dirs: ["{{state.scan.workflows}}", "{{state.scan.marketplace}}"]
-    parse: wfsync.verify
+    dirs: ["{{state.scan.scan.workflows}}", "{{state.scan.scan.stateDir}}", "{{state.scan.scan.marketplace}}"]
+    parse: { line: [marker, verdict, yamlGaps, engineGaps] }
     prompt: |
-      Current source: {{state.scan.marketplace}}/{{state.item.source}} ({{state.item.kind}})
-      YAML files in {{state.scan.workflows}} that implement it:
-      {{state.item.yamlList}}
-      Every file of the workflows that contain them (read these before you call a step missing):
-      {{state.item.familyList}}
-      Diff of the source:
-      {{state.item.diff}}
+      Current source: {{state.scan.scan.marketplace}}/{{state.item-next.item.source}} ({{state.item-next.item.kind}})
+      Item file (the YAML files that implement it, every file of their workflows, and the diff file): {{state.item-next.item.itemFile}}
       Mapper report:
       {{state.map.map.text}}
-      Script validation: {{state.validate.errors}}
-  - id: check
-    description: "Passes when the validation is clean and the verifier passes; otherwise the mapper gets the findings, up to three rounds per source."
-    kind: script
-    op: wfsync.check
-    maxVisits: 90
   - id: ask-open
-    description: "After three rounds the source is still open: shows the findings; it stays unlocked so it is marked stale again."
+    description: "The source is still open after three rounds. Shows the findings. The source stays unlocked, so it is marked stale again."
     kind: interrupt
     maxVisits: 30
     question:
       id: "q-wfsync-open-{{state.item-next.index}}"
-      text: "{{state.item.source}} is still open after three rounds:\n{{state.check.findings}}\nContinue with the next source (this one stays marked stale), or stop?"
+      text: "{{state.item-next.item.source}} is still open after three rounds (validation: {{state.map.map.valid}}):\n{{state.verify.verify.text}}\nContinue with the next source (this one stays marked stale), or stop?"
       allowed: [continue, stop]
   - id: stop
-    description: "Stops the run; the YAML edits stay on disk for you to inspect, the lock is unchanged."
+    description: "Stops the run. The YAML edits stay on disk for you to examine. The lock does not change."
     kind: script
     op: builtin.stop
-    with: { reason: "stopped by the user during the workflow sync; YAML edits are on disk, the lock is unchanged" }
+    with: { reason: "stopped by the user during the workflow sync; YAML edits are on disk in {{state.scan.scan.workflows}}, the lock is unchanged" }
   - id: diff
-    description: "Builds the diff of every YAML file against the copy taken at the start."
-    kind: script
-    op: wfsync.diff
+    description: "The sync orchestrator runs the diff command of its script. The command records the last verifier verdict. Then it makes a diff of each YAML file against the copy from the scan."
+    kind: llm
+    role: orchestrator
+    agent: olko-workflow-sync-orchestrator
+    tools: [read, bash]
+    parse: { json: [stat, changed, diffFile, needsOp, open] }
+    prompt: |
+      Do only the command of step 3 (DIFF) of your LOOP. Do not delegate. Do not ask questions. Run the `diff` command of the olko-factory-workflow-sync script with `--state-dir {{state.scan.scan.stateDir}}`{{#state.verify}} `--last-verdict {{state.verify.verify.verdict}} --last-engine-gaps {{state.verify.verify.engineGaps}}`{{/state.verify}}.
+      End with one ```json block that holds the command's stdout exactly as printed.
   - id: ask-apply
-    description: "Shows the whole YAML diff and the steps that need engine work; nothing is kept without your approval."
+    description: "Shows the YAML diff, the sources that are still open, and the steps that need engine work. No change is kept without your approval."
     kind: interrupt
     question:
       id: q-wfsync-apply
-      text: "YAML changes:\n{{state.diff.stat}}\nSources that need engine work:\n{{state.diff.needsOp}}\nApprove (keep the YAML, update the lock for the verified sources) or revert everything?"
+      text: "YAML changes:\n{{state.diff.diff.stat}}\nFull diff: {{state.diff.diff.diffFile}}\nSources still open (not locked): {{state.diff.diff.open}}\nNeeds engine work:\n{{state.diff.diff.needsOp}}\nApprove (keep the YAML and lock the verified sources) or revert everything?"
       allowed: [approve, revert]
-  - id: apply
-    description: "Updates the lock for the verified sources and the unlocked workflows, at the current marketplace commit."
-    kind: script
-    op: wfsync.apply
-  - id: revert
-    description: "Puts every YAML file back from the copy; the lock is unchanged."
-    kind: script
-    op: wfsync.revert
-  - id: report
-    description: "Lists what was found, what was mapped and verified, what needs engine work, and what the lock now says."
-    kind: script
-    op: wfsync.report
+  - id: finish
+    description: "The sync orchestrator runs the finish command of its script with your decision. The command locks the verified sources or reverts every YAML file. Then the orchestrator reports the result."
+    kind: llm
+    role: orchestrator
+    agent: olko-workflow-sync-orchestrator
+    tools: [read, bash]
+    parse: { json: [decision, locked, report] }
+    prompt: |
+      Do only step 4 (FINISH) of your LOOP. Do not delegate. Do not ask questions. Run the `finish` command of the olko-factory-workflow-sync script with `--state-dir {{state.scan.scan.stateDir}} --decision {{state.ask-apply.answer}}`.
+      End with one ```json block that holds the command's stdout exactly as printed.
 edges:
-  - { from: scan, to: item-next }
-  - { from: item-next, to: item, when: "item-next.done == false", description: "a source is left" }
-  - { from: item-next, to: report, when: "scan.pending == 0", description: "nothing to update" }
+  - { from: scan, to: END, when: "scan.scan.pending == 0", description: "nothing to update" }
+  - { from: scan, to: item-next, description: "sources or workflows to update" }
+  - { from: item-next, to: ask-new, when: "item-next.done == false && item-next.item.ask == true", description: "a new main agent" }
+  - { from: item-next, to: map, when: "item-next.done == false", description: "a changed or removed source" }
   - { from: item-next, to: diff, description: "every source handled" }
-  - { from: item, to: ask-new, when: "item.ask == true", description: "a new main agent" }
-  - { from: item, to: map, description: "a changed or removed source" }
   - { from: ask-new, to: map, when: 'ask-new.answer == "map"', description: "you chose map" }
   - { from: ask-new, to: item-next, description: "you skipped it" }
-  - { from: map, to: validate }
-  - { from: validate, to: verify }
-  - { from: verify, to: check }
-  - { from: check, to: item-next, when: 'check.next == "pass"', description: "valid and verified" }
-  - { from: check, to: map, when: 'check.next == "retry"', description: "findings left and rounds left" }
-  - { from: check, to: ask-open, description: "still open after three rounds" }
+  - { from: map, to: verify }
+  - { from: verify, to: item-next, when: 'map.map.valid == "true" && verify.verify.verdict == "pass"', description: "valid and verified" }
+  - { from: verify, to: map, when: "map.map.round < 3", description: "findings left and rounds left" }
+  - { from: verify, to: ask-open, description: "still open after three rounds" }
   - { from: ask-open, to: item-next, when: 'ask-open.answer == "continue"', description: "you chose continue" }
   - { from: ask-open, to: stop, description: "you chose stop" }
   - { from: diff, to: ask-apply }
-  - { from: ask-apply, to: apply, when: 'ask-apply.answer == "approve"', description: "you approved" }
-  - { from: ask-apply, to: revert, description: "you chose revert" }
-  - { from: apply, to: report }
-  - { from: revert, to: report }
-  - { from: report, to: END }
+  - { from: ask-apply, to: finish }
+  - { from: finish, to: END }

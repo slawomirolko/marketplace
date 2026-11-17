@@ -782,10 +782,12 @@
       "id": "software-factory",
       "skills": [
         "olko-factory-run-supervision",
+        "olko-factory-workflow-sync",
         "olko-factory-workflow-yaml"
       ],
       "related": [
         "software-factory.factory.run.supervision",
+        "software-factory.factory.workflow.sync",
         "software-factory.factory.workflow.yaml"
       ],
       "prerequisites": []
@@ -794,6 +796,16 @@
       "id": "software-factory.factory.run.supervision",
       "skills": [
         "olko-factory-run-supervision"
+      ],
+      "related": [
+        "software-factory"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "software-factory.factory.workflow.sync",
+      "skills": [
+        "olko-factory-workflow-sync"
       ],
       "related": [
         "software-factory"

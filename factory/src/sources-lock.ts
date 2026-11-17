@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { marketplaceDir } from "./marketplace-agents.ts";
+import { describeAgent, marketplaceDir } from "./marketplace-agents.ts";
 import { loadWorkflowSpecs } from "./workflow-yaml.ts";
 import type { HostExec, WorkflowSpec } from "./types.ts";
 
@@ -159,10 +159,43 @@ export async function updateMarketplace(exec: HostExec, marketplace: string): Pr
   return { marketplace, before, after, changedFiles };
 }
 
+export function lockWorkflows(workflows: string, marketplace: string, commit: string, names: string[], sources: string[]): string[] {
+  const specs = loadWorkflowSpecs(workflows);
+  const accepted = new Set(names);
+  for (const spec of specs) if (sourceFiles(spec, marketplace).some((f) => sources.includes(f))) accepted.add(spec.name);
+  const file = path.join(path.dirname(workflows), "workflows.lock.json");
+  const lock = readLock(file);
+  for (const spec of specs.filter((s) => accepted.has(s.name))) {
+    const entry = lockEntry(spec, marketplace, commit);
+    if (entry) lock[spec.name] = entry;
+  }
+  writeLock(lock, file);
+  return specs.map((s) => s.name).filter((name) => accepted.has(name)).sort();
+}
+
+function flag(args: string[], name: string): string | undefined {
+  const index = args.indexOf(`--${name}`);
+  return index >= 0 ? args[index + 1] : undefined;
+}
+
+function list(value: string | undefined): string[] {
+  return (value ?? "").split(",").map((v) => v.trim()).filter(Boolean);
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const marketplace = marketplaceDir();
-  const commit = process.argv[2] ?? execFileSync("git", ["-C", marketplace, "rev-parse", "HEAD"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
-  const lock = buildLock(loadWorkflowSpecs(path.join(FACTORY_DIR, "workflows")), marketplace, commit);
-  writeLock(lock);
-  console.log(`${Object.keys(lock).length} workflows locked against ${marketplace} at ${commit} in ${LOCK_FILE}`);
+  const [command, ...args] = process.argv.slice(2);
+  const marketplace = path.resolve(flag(args, "marketplace") ?? marketplaceDir());
+  const workflows = path.resolve(flag(args, "workflows") ?? path.join(FACTORY_DIR, "workflows"));
+  const head = () => execFileSync("git", ["-C", marketplace, "rev-parse", "HEAD"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  if (command === "scan") {
+    const lock = readLock(path.join(path.dirname(workflows), "workflows.lock.json"));
+    console.log(JSON.stringify(scanMarketplace(loadWorkflowSpecs(workflows), lock, marketplace, head(), (name) => describeAgent(name) !== null)));
+  } else if (command === "lock") {
+    console.log(JSON.stringify({ locked: lockWorkflows(workflows, marketplace, flag(args, "commit") ?? head(), list(flag(args, "names")), list(flag(args, "sources"))) }));
+  } else {
+    const commit = command ?? head();
+    const lock = buildLock(loadWorkflowSpecs(workflows), marketplace, commit);
+    writeLock(lock);
+    console.log(`${Object.keys(lock).length} workflows locked against ${marketplace} at ${commit} in ${LOCK_FILE}`);
+  }
 }

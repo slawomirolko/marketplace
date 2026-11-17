@@ -6,9 +6,7 @@ import test from "node:test";
 import { z } from "zod";
 import { expandWorkflowDir, loadWorkflowDir } from "../src/workflow-yaml.ts";
 import { stateReferenceErrors } from "../src/state-refs.ts";
-import { contractJson, missingField, PARSER_CONTRACTS } from "../src/contract.ts";
-import { PARSERS } from "../src/ops.ts";
-import { WFSYNC_PARSERS } from "../src/wfsync-ops.ts";
+import { contractJson, missingField, OPERATION_CONTRACTS } from "../src/contract.ts";
 
 function workflowDir(files: Record<string, string>): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "state-refs-"));
@@ -101,14 +99,13 @@ edges:
   ]);
 });
 
-test("the contract describes every parser and walks object, array and string fields", () => {
+test("the contract describes every operation that declares fields and walks object, array and string fields", () => {
   const chunks = z.object({ chunks: z.array(z.object({ title: z.string(), files: z.array(z.string()) })) });
   assert.equal(missingField(chunks, ["chunks", "0", "files", "length"]), null);
   assert.equal(missingField(chunks, ["chunks", "0", "title", "length"]), null);
   assert.equal(missingField(chunks, ["chunks", "0", "owner"]), "chunks.0.owner");
   assert.equal(missingField(chunks, ["chunks", "first"]), "chunks.first");
-  assert.deepEqual(Object.keys(PARSER_CONTRACTS).sort(), [...Object.keys(PARSERS), ...Object.keys(WFSYNC_PARSERS)].sort());
   const json = contractJson();
-  assert.deepEqual(Object.keys(json.parsers).sort(), Object.keys(PARSER_CONTRACTS).sort());
-  assert.equal((json.parsers["wfsync.verify"] as { type: string }).type, "object");
+  assert.deepEqual(Object.keys(json.operations).sort(), Object.keys(OPERATION_CONTRACTS).sort());
+  assert.equal((json.operations["builtin.gate"] as { type: string }).type, "object");
 });
