@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { evaluateWhen, loadWorkflowDir, loadWorkflowFile, negateWhen } from "../src/workflow-yaml.ts";
-import { claudeAgentsFile, claudeTools, marketplaceDir, readMarketplaceAgent } from "../src/marketplace-agents.ts";
+import { claudeAgentsFile, claudeTools, describeAgent, marketplaceDir, readMarketplaceAgent } from "../src/marketplace-agents.ts";
 import { operationNamed } from "../src/ops.ts";
 
 function writeYaml(text: string): string {
@@ -183,6 +183,30 @@ test("a Claude Code plugin agent loads with its plugin root and its namespaced p
   assert.ok(!agent.prompt.includes("${CLAUDE_PLUGIN_ROOT}/skills"), "the plugin root is filled in");
   assert.ok(agent.prompt.includes(`CLAUDE_PLUGIN_ROOT is ${root}`));
   assert.ok(agent.dirs.includes(root));
+});
+
+test("an agent lists the scripts of the skills it loads, and a skill its own, without test files", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "factory-marketplace-"));
+  const write = (rel: string, text: string) => {
+    fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+    fs.writeFileSync(path.join(root, rel), text);
+  };
+  write("skills/demo/sync/SKILL.md", "---\ndescription: sync\n---\nbody\n");
+  write("skills/demo/sync/scripts/sync.mjs", "");
+  write("skills/demo/sync/scripts/sync.test.mjs", "");
+  write("skills/demo/sync/scripts/watch.Tests.ps1", "");
+  write("skills/demo/plain/SKILL.md", "---\ndescription: plain\n---\nbody\n");
+  write("agents/opencode/syncer.md", "---\ndescription: syncer\npermission:\n  skill:\n    sync: allow\n    plain: allow\n---\nbody\n");
+  const previous = process.env.FACTORY_MARKETPLACE_DIR;
+  process.env.FACTORY_MARKETPLACE_DIR = root;
+  try {
+    assert.deepEqual(describeAgent("syncer")?.scripts, [{ skill: "sync", name: "sync.mjs", file: "skills/demo/sync/scripts/sync.mjs" }]);
+    assert.deepEqual(describeAgent("sync")?.scripts, [{ skill: "sync", name: "sync.mjs", file: "skills/demo/sync/scripts/sync.mjs" }]);
+    assert.deepEqual(describeAgent("plain")?.scripts, []);
+  } finally {
+    if (previous === undefined) delete process.env.FACTORY_MARKETPLACE_DIR;
+    else process.env.FACTORY_MARKETPLACE_DIR = previous;
+  }
 });
 
 test("a switched subgraph gets a gate: switch on enters it, switch off goes straight to its exits", async () => {

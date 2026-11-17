@@ -8,6 +8,14 @@ const TERMINAL = { width: 90, height: 40 };
 const AGENT = { width: 220, height: 124 };
 const PAD = 20;
 const HEADER = 72;
+const SCRIPT_BOX = 26;
+const SCRIPT_LIST = 34;
+
+/** Extra card height for an agent's scripts: one box per script inside the card, or a two-line name list. */
+export function scriptsHeight(count: number, listed: boolean): number {
+  if (count === 0) return 0;
+  return listed ? SCRIPT_LIST : count * SCRIPT_BOX + 8;
+}
 
 interface LevelLayout {
   nodes: FlowNode[];
@@ -29,19 +37,19 @@ function nodeTypeOf(box: Box): FlowNode["type"] {
   return "card";
 }
 
-function sizeOf(item: Item): { width: number; height: number } {
+function sizeOf(item: Item, extra: (item: Item) => number): { width: number; height: number } {
   if (item.kind === "terminal") return TERMINAL;
-  if (item.kind === "agent") return AGENT;
-  return STEP;
+  const base = item.kind === "agent" ? AGENT : STEP;
+  return { width: base.width, height: base.height + extra(item) };
 }
 
-function layoutLevel(level: Level, expanded: Set<string>, parentKey: string | null): LevelLayout {
+function layoutLevel(level: Level, expanded: Set<string>, parentKey: string | null, extra: (item: Item) => number): LevelLayout {
   const sized = level.items.map((item): Box => {
     if (isGroup(item) && expanded.has(item.key)) {
-      const inner = layoutLevel(item.inner, expanded, item.key);
+      const inner = layoutLevel(item.inner, expanded, item.key, extra);
       return { item, inner, width: Math.max(inner.width + PAD * 2, STEP.width), height: inner.height + PAD * 2 + HEADER };
     }
-    return { item, ...sizeOf(item) };
+    return { item, ...sizeOf(item, extra) };
   });
 
   const graph = new dagre.graphlib.Graph();
@@ -89,7 +97,7 @@ function layoutLevel(level: Level, expanded: Set<string>, parentKey: string | nu
   };
 }
 
-export function layoutGraph(level: Level, expanded: Set<string>): { nodes: FlowNode[]; edges: FlowEdge[]; bounds: Bounds } {
-  const { nodes, edges, width, height } = layoutLevel(level, expanded, null);
+export function layoutGraph(level: Level, expanded: Set<string>, extra: (item: Item) => number = () => 0): { nodes: FlowNode[]; edges: FlowEdge[]; bounds: Bounds } {
+  const { nodes, edges, width, height } = layoutLevel(level, expanded, null, extra);
   return { nodes, edges, bounds: { x: 0, y: 0, width, height } };
 }

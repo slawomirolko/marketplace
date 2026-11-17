@@ -1,4 +1,4 @@
-import { END_KEY, START_KEY } from "./tree.ts";
+import { END_KEY, START_KEY, isEngineScript } from "./tree.ts";
 import type { Item, Level, LevelEdge, SubgraphItem } from "./types.ts";
 
 interface Place {
@@ -12,8 +12,8 @@ interface Hop {
   optional: boolean;
 }
 
-function isAgent(item: Item): boolean {
-  return item.kind === "team" || (item.kind === "step" && item.node.kind === "llm");
+function isShown(item: Item): boolean {
+  return item.kind === "team" || (item.kind === "step" && item.node.kind === "llm") || isEngineScript(item);
 }
 
 function isSwitchable(item: SubgraphItem): boolean {
@@ -29,11 +29,11 @@ function indexPlaces(level: Level, container: SubgraphItem | null, path: string[
 }
 
 /**
- * Reduces a workflow level tree to its agent steps (`llm` steps and agent teams). Script, question and
- * missing steps are hidden: each kept step is linked to the next kept steps reachable through hidden
+ * Reduces a workflow level tree to its agent steps (`llm` steps and agent teams) and engine scripts. Question
+ * and missing steps are hidden: each kept step is linked to the next kept steps reachable through hidden
  * steps, once per pair. A link is optional (dashed) when every path it replaces has a condition, an
  * `otherwise` branch, or enters a subgraph that a switch can skip. Subgraphs stay as containers when
- * they still hold an agent; a link between containers is lifted to their common level, as in the full view.
+ * they still hold a shown step; a link between containers is lifted to their common level, as in the full view.
  */
 export function agentsOnly(root: Level): Level {
   const places = new Map<string, Place>();
@@ -41,7 +41,7 @@ export function agentsOnly(root: Level): Level {
   indexPlaces(root, null, [], places, items);
   const hasEnd = items.has(END_KEY);
   const isFinish = (key: string) => items.get(key)?.kind === "terminal" && key !== START_KEY && key !== END_KEY;
-  const kept = (key: string) => key === START_KEY || key === END_KEY || isAgent(items.get(key)!);
+  const kept = (key: string) => key === START_KEY || key === END_KEY || isShown(items.get(key)!);
 
   const target = (key: string, optional: boolean, out: Hop[]): void => {
     const item = items.get(key);
@@ -108,10 +108,10 @@ export function agentsOnly(root: Level): Level {
     }
   }
 
-  const holdsAgent = (item: Item): boolean => (item.kind === "subgraph" ? item.inner.items.some(holdsAgent) : isAgent(item));
+  const holdsShown = (item: Item): boolean => (item.kind === "subgraph" ? item.inner.items.some(holdsShown) : isShown(item));
   const reduce = (level: Level): Level => {
     const shown = level.items.flatMap((item): Item[] => {
-      if (item.kind === "subgraph") return holdsAgent(item) ? [{ ...item, inner: reduce(item.inner) }] : [];
+      if (item.kind === "subgraph") return holdsShown(item) ? [{ ...item, inner: reduce(item.inner) }] : [];
       return kept(item.key) ? [item] : [];
     });
     return { items: shown, edges: [...(lifted.get(level)?.values() ?? [])], ...(level.entry ? { entry: level.entry } : {}) };

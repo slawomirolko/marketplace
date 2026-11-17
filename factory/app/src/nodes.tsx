@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Handle, Position } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import { useViewer } from "./context.ts";
-import { formatDuration, formatTokens, formatUsd, isDisabled, isGroup, isLive, ranIn } from "./tree.ts";
+import { agentScripts, formatDuration, formatTokens, formatUsd, isDisabled, isGroup, isLive, ranIn } from "./tree.ts";
 import type { CardFlowNode, ClusterFlowNode, Item, RunIndexEntry, RunReport, TerminalFlowNode } from "./types.ts";
 
 const EMPTY_ENTRY: RunIndexEntry = { cost: null, tier: null, model: null, failure: null, runs: null, timeMs: null };
@@ -26,7 +26,7 @@ function title(item: Item): string {
   return item.node.id;
 }
 
-function subtitle(item: Item, mainAgent: string | null = null): string {
+function subtitle(item: Item): string {
   if (item.kind === "terminal") return item.label;
   if (item.kind === "agent") return `agent · ${item.agent.role}`;
   if (item.kind === "team") return `llm · ${item.inner.items.length} agents`;
@@ -35,7 +35,7 @@ function subtitle(item: Item, mainAgent: string | null = null): string {
   if (item.kind === "subgraph") return `${item.node.kind === "call" ? "call" : item.node.kind === "group" ? "group" : "subgraph"} · ${item.node.workflow}${item.node.enabledWhen ? ` · when ${item.node.enabledWhen}` : ""}${item.node.required ? " · required" : ""}`;
   if (item.node.skill) return `llm · skill ${item.node.skill}`;
   if (item.kind === "missing") return `subgraph · ${item.node.workflow} (not found)`;
-  if (item.node.kind === "script") return mainAgent ? `script · run for ${mainAgent}` : "script · run by the factory";
+  if (item.node.kind === "script") return item.node.op ? `engine script · ${item.node.op}` : "engine script";
   return item.node.role ? `${item.node.kind} · ${item.node.role}` : item.node.kind;
 }
 
@@ -52,7 +52,7 @@ function CostLine({ item }: { item: Item }) {
   if (failure) return <div className="cost cost-unknown">failed: {failure.slice(0, 90)}</div>;
   if (!cost && ranIn(item, run)) return <div className="cost muted">ran · no model cost</div>;
   if (cost && item.kind === "step" && (item.node.kind === "script" || item.node.kind === "interrupt") && cost.costUsd === 0) {
-    return <div className="cost muted">{item.node.kind === "interrupt" ? "question" : "script"} · no model cost</div>;
+    return <div className="cost muted">{item.node.kind === "interrupt" ? "question" : "engine script"} · no model cost</div>;
   }
   return (
     <div className={`cost ${cost?.costSource === "unknown" ? "cost-unknown" : ""}`}>
@@ -124,13 +124,29 @@ function RunBadge({ item }: { item: Item }) {
   );
 }
 
+function AgentScripts({ item }: { item: Item }) {
+  const { agents, onlyAgents } = useViewer();
+  const scripts = agentScripts(item, agents);
+  if (!scripts.length) return null;
+  const names = scripts.map((s) => s.name).join(", ");
+  if (onlyAgents) return <div className="card-sub agent-script-list" title={names}>scripts: {names}</div>;
+  return (
+    <ul className="agent-scripts" aria-label="scripts of this agent">
+      {scripts.map((s) => (
+        <li key={s.file} className="agent-script" title={s.file}>
+          {s.name} <span className="muted">· {s.skill}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function CardNode({ data, selected }: NodeProps<CardFlowNode>) {
   const { item } = data;
   const { tier, model } = useEntry(item);
   const off = useOff(item);
   const live = useLive(item);
   const notRun = useNotRun(item) && !off;
-  const { mainAgent } = useViewer();
   const staleSource = useStale(item);
   return (
     <>
@@ -140,10 +156,11 @@ export function CardNode({ data, selected }: NodeProps<CardFlowNode>) {
         {live.label && <div className="card-sub live-label">● {live.label}</div>}
         {staleSource && <div className="card-sub stale-label">⚠ source changed</div>}
         {off && <div className={`card-sub off-label${item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? " required-off" : ""}`}>{item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? "required step switched off" : "switched off"}</div>}
-        <div className="card-sub">{subtitle(item, mainAgent)}</div>
+        <div className="card-sub">{subtitle(item)}</div>
         {item.kind !== "terminal" && item.kind !== "agent" && item.node.description && <div className="card-desc">{item.node.description}</div>}
         {tier && <div className="card-sub">{tier}{model ? ` · ${model}` : ""}</div>}
         <CostLine item={item} />
+        <AgentScripts item={item} />
         <Toggle item={item} expanded={false} />
       </div>
       <RunBadge item={item} />
@@ -156,7 +173,6 @@ export function GroupNode({ data, selected }: NodeProps<ClusterFlowNode>) {
   const off = useOff(item);
   const live = useLive(item);
   const notRun = useNotRun(item) && !off;
-  const { mainAgent } = useViewer();
   const staleSource = useStale(item);
   return (
     <>
@@ -167,7 +183,7 @@ export function GroupNode({ data, selected }: NodeProps<ClusterFlowNode>) {
           {live.label && <span className="card-sub live-label"> ● {live.label}</span>}
           {staleSource && <div className="card-sub stale-label">⚠ source changed since the YAML was written: {staleSource}</div>}
           {off && <span className={`card-sub off-label${item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? " required-off" : ""}`}> {item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? "required step switched off" : "switched off"}</span>}
-          <span className="card-sub"> {subtitle(item, mainAgent)}</span>
+          <span className="card-sub"> {subtitle(item)}</span>
           {item.kind !== "terminal" && item.kind !== "agent" && item.node.description && <div className="card-desc">{item.node.description}</div>}
           <CostLine item={item} />
           <Toggle item={item} expanded />

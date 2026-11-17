@@ -1,4 +1,4 @@
-import type { Cost, Coverage, FactoryConfig, GroupItem, Item, Level, LevelEdge, LedgerRecord, RunData, RunIndex, RunReport, Workflow, WorkflowAgent } from "./types.ts";
+import type { AgentInfo, Cost, Coverage, FactoryConfig, GroupItem, Item, Level, LevelEdge, LedgerRecord, RunData, RunIndex, RunReport, Workflow, WorkflowAgent } from "./types.ts";
 
 export const START_KEY = "__start";
 export const END_KEY = "__end";
@@ -165,8 +165,22 @@ export function containedWorkflows(workflows: Workflow[], root: string): Set<str
   return found;
 }
 
-export function mainAgentOf(workflow: Workflow | null): string | null {
-  return workflow?.source?.match(/agents\/opencode\/([a-z0-9-]+)\.md/)?.[1] ?? null;
+/** A script step: an engine operation that belongs to no agent, drawn as its own step. */
+export function isEngineScript(item: Item): boolean {
+  return item.kind === "step" && item.node.kind === "script";
+}
+
+/** The marketplace agent or skill that runs this step or team member, if it names one. */
+export function agentNameOf(item: Item): string | null {
+  if (item.kind === "agent") return item.agent.agentName ?? item.node.agent ?? null;
+  if (item.kind === "step" && item.node.kind === "llm") return item.node.agent ?? item.node.skill ?? null;
+  return null;
+}
+
+/** The skill scripts an agent may run: part of the agent, so drawn inside its box. */
+export function agentScripts(item: Item, agents: Record<string, AgentInfo>): AgentInfo["scripts"] {
+  const name = agentNameOf(item);
+  return name ? (agents[name]?.scripts ?? []) : [];
 }
 
 export function ranIn(item: Item, run: RunData | null): boolean {

@@ -20,6 +20,7 @@ export interface AgentInfo {
   description: string;
   file: string;
   skills: { name: string; description: string; file: string }[];
+  scripts: { skill: string; name: string; file: string }[];
   missing: string[];
 }
 

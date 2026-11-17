@@ -6,6 +6,7 @@ import type { Item, LedgerRecord, TeamItem, Workflow, WorkflowAgent, WorkflowIte
 function kindLabel(item: WorkflowItem): string {
   if (item.kind === "team") return `llm, ${item.inner.items.length} agents`;
   if (item.kind === "agent") return "agent";
+  if (item.node.kind === "script") return "engine script";
   return item.node.kind;
 }
 

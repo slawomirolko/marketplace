@@ -8,10 +8,10 @@ import type { ViewerState } from "./context.ts";
 import { Details } from "./Details.tsx";
 import { CallsList } from "./Calls.tsx";
 import { SupervisorRing } from "./SupervisorRing.tsx";
-import { layoutGraph } from "./layout.ts";
+import { layoutGraph, scriptsHeight } from "./layout.ts";
 import { agentsOnly } from "./agents-only.ts";
 import { nodeAriaLabel, nodeTypes } from "./nodes.tsx";
-import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost, disabledKeys, configDisabledKeys, liveAncestors, liveState, LIVE_STATUSES, mainAgentOf, containedWorkflows, findItem, ancestorKeys, allItems } from "./tree.ts";
+import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost, disabledKeys, configDisabledKeys, liveAncestors, liveState, LIVE_STATUSES, agentScripts, containedWorkflows, findItem, ancestorKeys, allItems } from "./tree.ts";
 import type { StaleWorkflow } from "./types.ts";
 import type { AgentInfo, Bounds, FactoryConfig, FlowEdge, FlowNode, Item, Level, RunDetail, RunIndex, RunListItem, Workflow } from "./types.ts";
 
@@ -221,7 +221,7 @@ function Viewer() {
   }, [workflows, rootName, detail]);
   const level = built?.level ?? null;
   const drawn = useMemo(() => (level && onlyAgents ? agentsOnly(level) : level), [level, onlyAgents]);
-  const graph = useMemo(() => (drawn ? layoutGraph(drawn, expanded) : { nodes: [], edges: [], bounds: null }), [drawn, expanded]);
+  const graph = useMemo(() => (drawn ? layoutGraph(drawn, expanded, (item) => scriptsHeight(agentScripts(item, agents).length, onlyAgents)) : { nodes: [], edges: [], bounds: null }), [drawn, expanded, agents, onlyAgents]);
   const runIndex: RunIndex = useMemo(() => (level ? buildRunIndex(level, config, detail?.report ?? null, detail?.run ?? null) : new Map()), [level, config, detail]);
   const nodes = useMemo(
     (): FlowNode[] => graph.nodes.map((n) => ({ ...n, selected: n.id === selected?.key, ariaLabel: nodeAriaLabel(n.data.item, detail?.report ?? null, runIndex.get(n.id)) })),
@@ -275,7 +275,7 @@ function Viewer() {
   const shown = mode === "workflows" ? null : detail;
   const disabled = useMemo(() => (mode === "workflows" ? configDisabledKeys(level, config) : disabledKeys(detail?.run ?? null)), [mode, level, config, detail]);
   const workflow = useMemo(() => workflows?.find((w) => w.name === rootName) ?? null, [workflows, rootName]);
-  const context = useMemo((): ViewerState => ({ config, report: shown?.report ?? null, run: shown?.run ?? null, toggle, focusKey, index: runIndex, disabled, mode, workflow, workflows: workflows ?? [], agents, live, mainAgent: mainAgentOf(workflow), stale, showCounts }), [config, shown, toggle, focusKey, runIndex, disabled, mode, workflow, workflows, agents, live, stale, showCounts]);
+  const context = useMemo((): ViewerState => ({ config, report: shown?.report ?? null, run: shown?.run ?? null, toggle, focusKey, index: runIndex, disabled, mode, workflow, workflows: workflows ?? [], agents, live, onlyAgents, stale, showCounts }), [config, shown, toggle, focusKey, runIndex, disabled, mode, workflow, workflows, agents, live, onlyAgents, stale, showCounts]);
   const total = detail?.report.cost;
 
   if (error) return <p className="error" role="alert">Could not load factory data: {error}</p>;

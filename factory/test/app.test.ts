@@ -9,7 +9,8 @@ import type { DataApi } from "../app/data.ts";
 import type { Run } from "../src/types.ts";
 import type { Cost, Item, Level, RunData } from "../app/src/types.ts";
 import { supervisorRing } from "../app/src/supervisor.ts";
-import { buildLevel, costOf, failureOf, formatTokens, ledgerOf, formatUsd, END_KEY, START_KEY } from "../app/src/tree.ts";
+import { agentScripts, buildLevel, costOf, failureOf, formatTokens, isEngineScript, ledgerOf, formatUsd, END_KEY, START_KEY } from "../app/src/tree.ts";
+import { layoutGraph, scriptsHeight } from "../app/src/layout.ts";
 
 function itemAt(level: Level, key: string): Item {
   const item = level.items.find((i) => i.key === key);
@@ -432,4 +433,25 @@ test("the supervisor ring has a state for every supervisor status", () => {
   const improve = supervisorRing({ status: "done", agent: "a", verdict: "improve", bottleneck: "w/fix", idea: "low tier", output: "x\nsupervise | improve | w/fix | low tier", costUsd: 0.0123, model: "claude-haiku-5-5" });
   assert.deepEqual([improve.tone, improve.headline, improve.model], ["improve", "bottleneck: w/fix · idea: low tier", "claude-haiku-5-5"]);
   assert.equal(supervisorRing({ status: "done", agent: "a", output: "free text\nlast line" }).headline, "last line", "no parseable line: the last line");
+});
+
+test("an agent's skill scripts belong to its step or team member; a script step is an engine script", () => {
+  const agents = { syncer: { name: "syncer", kind: "agent" as const, description: "", file: "", skills: [], missing: [], scripts: [{ skill: "sync", name: "sync.mjs", file: "skills/demo/sync/scripts/sync.mjs" }] } };
+  const workflows = [
+    { name: "main", version: "1", entry: "run", nodes: [{ id: "run", kind: "llm", agent: "syncer" }, { id: "team", kind: "llm", agents: [{ id: "a", agent: "syncer" }, { id: "b" }] }, { id: "stop", kind: "script", op: "builtin.stop" }], edges: [{ from: "run", to: "team" }, { from: "team", to: "stop" }, { from: "stop", to: "END" }] },
+  ];
+  const level = buildLevel(workflows, "main");
+  const item = (key: string) => level.items.find((i) => i.key === key)!;
+  const team = item("main/team");
+  assert.ok(team.kind === "team");
+  assert.deepEqual(agentScripts(item("main/run"), agents).map((s) => s.name), ["sync.mjs"]);
+  assert.deepEqual(agentScripts(team.inner.items[0]!, agents).map((s) => s.name), ["sync.mjs"]);
+  assert.deepEqual(agentScripts(team.inner.items[1]!, agents), []);
+  assert.deepEqual(agentScripts(item("main/stop"), agents), []);
+  assert.equal(isEngineScript(item("main/stop")), true);
+  assert.equal(isEngineScript(item("main/run")), false);
+  const height = (listed: boolean) => layoutGraph(level, new Set(), (i) => scriptsHeight(agentScripts(i, agents).length, listed)).nodes.find((n) => n.id === "main/run")!.height!;
+  const plain = layoutGraph(level, new Set()).nodes.find((n) => n.id === "main/run")!.height!;
+  assert.ok(height(false) > plain, "a script box inside the card makes it taller");
+  assert.ok(height(true) > plain, "a script list in the card makes it taller");
 });

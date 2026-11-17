@@ -25,20 +25,38 @@ function links(level: Level): string[] {
   return level.edges.map((e) => `${e.from} ${e.dashed ? "-->" : "->"} ${e.to}`).sort();
 }
 
-test("hidden script and question steps are bridged by one solid link", () => {
-  const level = reduced([wf("main", "a", [llm("a"), script("s"), ask("q"), llm("b")], [{ from: "a", to: "s" }, { from: "s", to: "q" }, { from: "q", to: "b" }, { from: "b", to: "END" }])]);
+test("hidden question steps are bridged by one solid link", () => {
+  const level = reduced([wf("main", "a", [llm("a"), ask("s"), ask("q"), llm("b")], [{ from: "a", to: "s" }, { from: "s", to: "q" }, { from: "q", to: "b" }, { from: "b", to: "END" }])]);
   assert.deepEqual(keys(level), [START_KEY, "main/a", "main/b", END_KEY]);
   assert.deepEqual(links(level), [`${START_KEY} -> main/a`, "main/a -> main/b", `main/b -> ${END_KEY}`].sort());
 });
 
-test("start reaches the first agent through leading scripts", () => {
-  const level = reduced([wf("main", "s", [script("s"), llm("a")], [{ from: "s", to: "a" }, { from: "a", to: "END" }])]);
+test("start reaches the first agent through leading questions", () => {
+  const level = reduced([wf("main", "s", [ask("s"), llm("a")], [{ from: "s", to: "a" }, { from: "a", to: "END" }])]);
   assert.deepEqual(links(level), [`${START_KEY} -> main/a`, `main/a -> ${END_KEY}`].sort());
+});
+
+test("engine scripts stay as their own steps between the agents", () => {
+  const level = reduced([wf("main", "s", [script("s"), llm("a"), ask("q"), script("t")], [{ from: "s", to: "a" }, { from: "a", to: "q" }, { from: "q", to: "t" }, { from: "t", to: "END" }])]);
+  assert.deepEqual(keys(level), [START_KEY, "main/s", "main/a", "main/t", END_KEY]);
+  assert.deepEqual(links(level), [`${START_KEY} -> main/s`, "main/s -> main/a", "main/a -> main/t", `main/t -> ${END_KEY}`].sort());
+});
+
+test("a container holding only an engine script stays", () => {
+  const workflows = [
+    wf("main", "a", [llm("a"), sub("gate", "inner")], [{ from: "a", to: "gate" }, { from: "gate", to: "END" }]),
+    wf("inner", "s", [script("s")], [{ from: "s", to: "END" }]),
+  ];
+  const level = reduced(workflows);
+  assert.deepEqual(keys(level), [START_KEY, "main/a", "main/gate", END_KEY]);
+  const gate = level.items.find((i) => i.key === "main/gate");
+  assert.ok(gate?.kind === "subgraph");
+  assert.deepEqual(keys(gate.inner), ["main/gate/s"]);
 });
 
 test("a condition anywhere on a hidden path makes the link dashed", () => {
   const level = reduced([
-    wf("main", "a", [llm("a"), script("s"), llm("b"), llm("c")], [
+    wf("main", "a", [llm("a"), ask("s"), llm("b"), llm("c")], [
       { from: "a", to: "s" },
       { from: "s", to: "b", when: 's.x == "1"' },
       { from: "s", to: "c" },
@@ -58,7 +76,7 @@ test("a direct conditional edge keeps its label and is dashed", () => {
 
 test("two branches to one agent give one link, dashed because both are branches", () => {
   const level = reduced([
-    wf("main", "a", [llm("a"), script("s"), script("t"), llm("b")], [
+    wf("main", "a", [llm("a"), ask("s"), ask("t"), llm("b")], [
       { from: "a", to: "s", when: 'a.x == "1"' },
       { from: "a", to: "t" },
       { from: "s", to: "b" },
@@ -73,7 +91,7 @@ test("two branches to one agent give one link, dashed because both are branches"
 
 test("a cycle through hidden steps ends and drops the self link", () => {
   const level = reduced([
-    wf("main", "a", [llm("a"), script("s"), script("t"), llm("b")], [
+    wf("main", "a", [llm("a"), ask("s"), ask("t"), llm("b")], [
       { from: "a", to: "s" },
       { from: "s", to: "t" },
       { from: "t", to: "s", when: 't.again == "yes"' },
@@ -88,7 +106,7 @@ test("a cycle through hidden steps ends and drops the self link", () => {
 test("a switchable subgraph is entered and skipped by dashed links; its inner agents stay inside", () => {
   const workflows = [
     wf("main", "a", [llm("a"), sub("opt", "inner", { enabledWhen: "switches.x == true" }), llm("c")], [{ from: "a", to: "opt" }, { from: "opt", to: "c" }, { from: "c", to: "END" }]),
-    wf("inner", "s", [script("s"), llm("x"), llm("y")], [{ from: "s", to: "x" }, { from: "x", to: "y" }, { from: "y", to: "END" }]),
+    wf("inner", "s", [ask("s"), llm("x"), llm("y")], [{ from: "s", to: "x" }, { from: "x", to: "y" }, { from: "y", to: "END" }]),
   ];
   const level = reduced(workflows);
   assert.deepEqual(keys(level), [START_KEY, "main/a", "main/opt", "main/c", END_KEY]);
@@ -107,10 +125,10 @@ test("a required switched subgraph is mandatory and has no skip link", () => {
   assert.deepEqual(links(reduced(workflows)), [`${START_KEY} -> main/a`, "main/a -> main/must", "main/must -> main/c", `main/c -> ${END_KEY}`].sort());
 });
 
-test("a container left without agents is dropped and the flow passes through it", () => {
+test("a container left with only questions is dropped and the flow passes through it", () => {
   const workflows = [
     wf("main", "a", [llm("a"), sub("scripts", "inner"), llm("c")], [{ from: "a", to: "scripts" }, { from: "scripts", to: "c" }, { from: "c", to: "END" }]),
-    wf("inner", "s", [script("s"), ask("q")], [{ from: "s", to: "q" }, { from: "q", to: "END", when: 'q.go == "yes"' }, { from: "q", to: "FINISH" }]),
+    wf("inner", "s", [ask("s"), ask("q")], [{ from: "s", to: "q" }, { from: "q", to: "END", when: 'q.go == "yes"' }, { from: "q", to: "FINISH" }]),
   ];
   const level = reduced(workflows);
   assert.deepEqual(keys(level), [START_KEY, "main/a", "main/c", END_KEY]);
@@ -120,7 +138,7 @@ test("a container left without agents is dropped and the flow passes through it"
 test("teams and agentsFrom steps count as agents", () => {
   const team: WorkflowNode = { id: "team", kind: "llm", role: "r", agents: [{ id: "one" }, { id: "two" }] };
   const from: WorkflowNode = { id: "dyn", kind: "llm", role: "r", agentsFrom: "list.items" };
-  const level = reduced([wf("main", "team", [team, script("s"), from], [{ from: "team", to: "s" }, { from: "s", to: "dyn" }, { from: "dyn", to: "END" }])]);
+  const level = reduced([wf("main", "team", [team, ask("s"), from], [{ from: "team", to: "s" }, { from: "s", to: "dyn" }, { from: "dyn", to: "END" }])]);
   assert.deepEqual(keys(level), [START_KEY, "main/team", "main/dyn", END_KEY]);
   assert.deepEqual(links(level), [`${START_KEY} -> main/team`, "main/team -> main/dyn", `main/dyn -> ${END_KEY}`].sort());
 });

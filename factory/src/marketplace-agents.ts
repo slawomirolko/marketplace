@@ -121,12 +121,19 @@ export function readMarketplaceAgent(name: string): MarketplaceAgent {
   return { name, description: front.description ?? name, prompt, file: skillFile, frontmatter: "", skills: [], dirs: pluginRoot ? [pluginRoot, skillDir] : [skillDir], skillDir, ...(pluginRoot ? { pluginRoot } : {}) };
 }
 
+export interface SkillScript {
+  skill: string;
+  name: string;
+  file: string;
+}
+
 export interface AgentInfo {
   name: string;
   kind: "agent" | "plugin-agent" | "skill";
   description: string;
   file: string;
   skills: { name: string; description: string; file: string }[];
+  scripts: SkillScript[];
   missing: string[];
 }
 
@@ -136,6 +143,15 @@ function skillDescription(file: string): string {
   } catch {
     return "";
   }
+}
+
+function skillScripts(skill: string, skillFile: string): { skill: string; name: string; path: string }[] {
+  const dir = path.join(path.dirname(skillFile), "scripts");
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && !/\.tests?\.[a-z0-9]+$/i.test(entry.name))
+    .map((entry) => ({ skill, name: entry.name, path: path.join(dir, entry.name) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function describeAgent(name: string): AgentInfo | null {
@@ -149,6 +165,7 @@ export function describeAgent(name: string): AgentInfo | null {
   const rel = (f: string) => path.relative(root, f).split(path.sep).join("/");
   const kind = agent.skillDir ? "skill" : agent.pluginRoot ? "plugin-agent" : "agent";
   const declared = kind === "skill" ? [] : agent.skills;
+  const scripts = kind === "skill" ? skillScripts(name, agent.file) : declared.flatMap((s) => skillScripts(s.name, s.file));
   const fromPrompt = agent.prompt.match(/Not in the marketplace, so not available in this run: ([^\n]+)\./)?.[1]?.split(", ") ?? [];
   return {
     name,
@@ -156,6 +173,7 @@ export function describeAgent(name: string): AgentInfo | null {
     description: String(agent.description).replace(/\s+/g, " ").trim(),
     file: rel(agent.file),
     skills: declared.map((s) => ({ name: s.name, description: skillDescription(s.file), file: rel(s.file) })),
+    scripts: scripts.map((s) => ({ skill: s.skill, name: s.name, file: rel(s.path) })),
     missing: fromPrompt,
   };
 }

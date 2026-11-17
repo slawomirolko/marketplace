@@ -92,6 +92,10 @@ pre { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line
   padding: 13px 14px 12px;
 }
 .card.node-script .card-title::before { content: "\1F4DC\00a0"; }
+.agent-scripts { list-style: none; margin: 6px 0 0; padding: 0; }
+.agent-script { height: 22px; margin-top: 4px; padding: 2px 8px; border: 1px solid var(--scroll-line); border-radius: 8px / 4px; background: var(--scroll); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agent-script::before { content: "\1F4DC\00a0"; }
+.agent-script-list { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card.selected, .group.selected { outline: 3px solid var(--accent); outline-offset: 2px; }
 .card-title { font-weight: 600; }
 .card-sub { color: var(--muted); font-size: 12px; }
