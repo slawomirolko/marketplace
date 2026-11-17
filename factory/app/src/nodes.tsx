@@ -146,9 +146,13 @@ function MemoryMark({ item }: { item: Item }) {
   if (!hasMemoryLayer(item, agents)) return null;
   const label = `memory layer attached: ${config?.memoryLayer ?? "olko-memory-layer"}`;
   return (
-    <span className="memory-mark" role="img" title={label} aria-label={label}>
-      {"\u{1F4BE}"}
-    </span>
+    <svg className="memory-mark" viewBox="0 0 16 16" width="16" height="16" role="img" aria-label={label}>
+      <title>{label}</title>
+      <path d="M1.5 1.5h10l3 3v10h-13z" fill="#000" />
+      <rect x="4" y="2" width="6" height="4" fill="#fff" />
+      <rect x="8" y="2.8" width="1.3" height="2.4" fill="#000" />
+      <rect x="3.5" y="8.5" width="9" height="5.5" rx="0.5" fill="#fff" />
+    </svg>
   );
 }
 
