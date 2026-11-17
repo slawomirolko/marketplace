@@ -73,11 +73,112 @@ const INVALID: [string, string, RegExp][] = [
   ["broken YAML", "name: [", /YAML/],
   ["question asked by a script step", ASKED.replace("askedBy: second", "askedBy: first"), /askedBy first is not an llm step of this workflow/],
   ["question asked by an unknown step", ASKED.replace("askedBy: second", "askedBy: nobody"), /askedBy nobody is not an llm step of this workflow/],
+  ["a list with a script step", ASKED.replace("askedBy: second", "askedBy: [second, first]"), /askedBy first is not an llm step of this workflow/],
   ["askedBy on an llm step", VALID.replace("agent: olko-review-verifier", "agent: olko-review-verifier\n    askedBy: second"),/askedBy is only for interrupt steps/],
 ];
 
 test("an interrupt names the llm step whose question it passes on", () => {
   assert.doesNotThrow(() => loadWorkflowFile(writeYaml(ASKED)));
+});
+
+test("an interrupt may name several llm steps of its workflow", () => {
+  const workflow = loadWorkflowFile(writeYaml(ASKED.replace("askedBy: second", "askedBy: [second, second]")));
+  assert.deepEqual(workflow.nodes.find((n) => n.id === "ask")?.askedBy, ["asked/second", "asked/second"]);
+});
+
+function partsDir(files: Record<string, string>): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-parts-"));
+  for (const [name, text] of Object.entries(files)) fs.writeFileSync(path.join(dir, `${name}.yaml`), text);
+  return dir;
+}
+
+const COMPARE = `
+name: compare
+version: 1.0.0
+entry: rows
+roles: { worker: low }
+nodes:
+  - { id: rows, kind: llm, role: worker, prompt: "Build the rows" }
+  - { id: count, kind: script, op: builtin.pass }
+edges:
+  - { from: rows, to: count }
+  - { from: count, to: END }
+`;
+
+const DECIDE = (ref: string) => `
+name: decide
+version: 1.0.0
+entry: decide
+nodes:
+  - id: decide
+    kind: interrupt
+    askedBy: ${ref}
+    question: { id: q-decide, text: "Which row?" }
+edges:
+  - { from: decide, to: END }
+`;
+
+const SYNC = (kind: string) => `
+name: sync
+version: 1.0.0
+entry: cmp
+nodes:
+  - { id: cmp, kind: ${kind}, workflow: compare }
+  - { id: dec, kind: subgraph, workflow: decide }
+edges:
+  - { from: cmp, to: dec }
+  - { from: dec, to: END }
+`;
+
+test("an interrupt names a step of a sibling workflow; it resolves through the workflow that inlines both", () => {
+  const dir = partsDir({ compare: COMPARE, decide: DECIDE("{ workflow: compare, step: rows }"), sync: SYNC("subgraph") });
+  const workflows = loadWorkflowDir(dir);
+  assert.deepEqual(workflows.get("sync")?.nodes.find((n) => n.id === "dec/decide")?.askedBy, ["sync/cmp/rows"]);
+  assert.ok(workflows.get("sync")?.nodes.some((n) => n.path === "sync/cmp/rows" && n.kind === "llm"));
+  assert.equal(workflows.get("decide")?.nodes.find((n) => n.id === "decide")?.askedBy, undefined, "a part loaded alone names no step it cannot reach");
+});
+
+test("a step of a sibling group keeps its own id", () => {
+  const workflows = loadWorkflowDir(partsDir({ compare: COMPARE, decide: DECIDE("{ workflow: compare, step: rows }"), sync: SYNC("group") }));
+  assert.deepEqual(workflows.get("sync")?.nodes.find((n) => n.id === "dec/decide")?.askedBy, ["sync/rows"]);
+});
+
+test("an interrupt names a step of the workflow that inlines it, together with a step of its own", () => {
+  const parent = `
+name: parent
+version: 1.0.0
+entry: match
+roles: { worker: low }
+nodes:
+  - { id: match, kind: llm, role: worker, prompt: "Match" }
+  - { id: loop, kind: subgraph, workflow: child }
+edges:
+  - { from: match, to: loop }
+  - { from: loop, to: END }
+`;
+  const child = `
+name: child
+version: 1.0.0
+entry: own
+roles: { worker: low }
+nodes:
+  - { id: own, kind: llm, role: worker, prompt: "Own" }
+  - id: ask
+    kind: interrupt
+    askedBy: [own, { workflow: parent, step: match }]
+    question: { id: q-ask, text: "Confirm?" }
+edges:
+  - { from: own, to: ask }
+  - { from: ask, to: END }
+`;
+  const workflows = loadWorkflowDir(partsDir({ parent, child }));
+  assert.deepEqual(workflows.get("parent")?.nodes.find((n) => n.id === "loop/ask")?.askedBy, ["parent/loop/own", "parent/match"]);
+  assert.deepEqual(workflows.get("child")?.nodes.find((n) => n.id === "ask")?.askedBy, ["child/own"]);
+});
+
+test("a step of another workflow must exist and be an llm step", () => {
+  assert.throws(() => loadWorkflowDir(partsDir({ compare: COMPARE, decide: DECIDE("{ workflow: nowhere, step: rows }") })), /askedBy names unknown workflow nowhere/);
+  assert.throws(() => loadWorkflowDir(partsDir({ compare: COMPARE, decide: DECIDE("{ workflow: compare, step: count }") })), /askedBy compare\/count is not an llm step of that workflow/);
 });
 
 for (const [label, text, error] of INVALID) {

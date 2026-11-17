@@ -88,6 +88,7 @@ nodes:
   - id: plan-ask-rule
     description: "Asks which holds for the plan: the finding or the store entry."
     kind: interrupt
+    askedBy: [plan-rules-violations, plan-rules-merge]
     maxVisits: 100
     question:
       id: "q-plan-rule-{{state.plan-next-decision.index}}{{state.plan-next-decision-ask.index}}"

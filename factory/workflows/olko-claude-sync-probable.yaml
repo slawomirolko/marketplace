@@ -15,6 +15,7 @@ nodes:
   - id: ask-probable
     description: "Asks to confirm the link or split it per store."
     kind: interrupt
+    askedBy: { workflow: olko-claude-sync-inventories, step: match }
     maxVisits: 200
     question:
       id: "q-claude-sync-probable-{{state.probable-next.item.id}}"

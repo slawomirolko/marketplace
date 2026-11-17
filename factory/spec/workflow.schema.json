@@ -82,6 +82,20 @@
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]*$"
     },
+    "askedByRef": {
+      "oneOf": [
+        { "$ref": "#/$defs/id" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["workflow", "step"],
+          "properties": {
+            "workflow": { "type": "string", "minLength": 1 },
+            "step": { "$ref": "#/$defs/id" }
+          }
+        }
+      ]
+    },
     "question": {
       "type": "object",
       "required": [
@@ -156,8 +170,11 @@
           "$ref": "#/$defs/question"
         },
         "askedBy": {
-          "$ref": "#/$defs/id",
-          "description": "interrupt: the llm step of this workflow whose output this question passes on to the user. The viewer draws that step as the one that asks the user."
+          "description": "interrupt: the llm step whose output this question passes on to the user. The viewer draws that step as the one that asks the user. A step of this workflow by id, a step of another workflow as {workflow, step} (resolved through the nearest workflow that inlines both), or a list of them when the text comes from more than one step.",
+          "oneOf": [
+            { "$ref": "#/$defs/askedByRef" },
+            { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/askedByRef" } }
+          ]
         },
         "outputSchema": {
           "type": "string",

@@ -190,7 +190,7 @@ export interface WorkflowNode {
   turns?: number;
   askAfterTurn?: number;
   question?: Question;
-  askedBy?: string;
+  askedBy?: string[];
   prompt?: (context: PromptContext) => string;
   agents?: Agent[];
   agentsFrom?: (state: WorkflowState | undefined) => Agent[];
@@ -399,6 +399,17 @@ export interface WorkflowSpecAgent {
   agent?: string;
 }
 
+/** A step of another workflow, found through the nearest workflow that inlines both. */
+export interface AskedByStep {
+  workflow: string;
+  step: string;
+}
+
+export type AskedByRef = string | AskedByStep;
+
+/** The llm step or steps whose output an interrupt passes on to the user. */
+export type AskedBy = AskedByRef | AskedByRef[];
+
 export interface WorkflowSpecNode {
   id: string;
   kind: string;
@@ -417,7 +428,7 @@ export interface WorkflowSpecNode {
   workflow?: string;
   over?: string;
   question?: Question;
-  askedBy?: string;
+  askedBy?: AskedBy;
   skill?: string;
   tools?: AgentTool[];
   dirs?: string[];

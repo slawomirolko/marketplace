@@ -96,6 +96,7 @@ nodes:
   - id: ask-rule
     description: "Asks which holds: the finding or the store entry."
     kind: interrupt
+    askedBy: [rules-violations, rules-merge]
     maxVisits: 100
     question:
       id: "q-rule-{{state.next-decision.index}}{{state.next-decision-ask.index}}"

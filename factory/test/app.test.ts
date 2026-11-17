@@ -534,21 +534,46 @@ test("every askedBy in the shipped workflows reaches a drawn llm step", () => {
     const items = new Map(allItems(level).map((i) => [i.key, i]));
     for (const [key, icon] of humanIcons(level, agents)) {
       if (icon.role !== "relays" || items.get(key)?.kind !== "step") continue;
-      const source = items.get(icon.sources[0]!);
-      assert.ok(source && source.kind !== "terminal" && source.node.kind === "llm", `${workflow.name}: ${key} -> ${icon.sources[0]}`);
-      checked++;
+      assert.ok(icon.sources.length + icon.external.length > 0, `${workflow.name}: ${key} names no step`);
+      for (const path of icon.sources) {
+        const source = items.get(path);
+        assert.ok(source && source.kind !== "terminal" && source.node.kind === "llm", `${workflow.name}: ${key} -> ${path}`);
+        checked++;
+      }
     }
   }
-  assert.ok(checked >= 31, `checked ${checked}`);
+  assert.ok(checked >= 45, `checked ${checked}`);
 });
 
 test("a step's questions are the ones it asked or passed on; a group shows every question inside it", () => {
-  const question = (questionId: string, node: string, askedBy: string | null) => ({ runId: "r-00000001", questionId, node, askedBy, text: "?", allowed: null, askedAt: "2026-11-17T10:00:00.000Z", answer: null, answeredAt: null });
-  const questions = [question("q-scope", "main/inner/ask-scope", "main/inner/gate"), question("q-hello", "main/hello", "main/hello"), question("q-plain", "main/inner/plain", null), question("q-other", "main/inner/gate-2/ask", "main/inner/gate-2/x")];
+  const question = (questionId: string, node: string, askedBy: string[]) => ({ runId: "r-00000001", questionId, node, askedBy, text: "?", allowed: null, askedAt: "2026-11-17T10:00:00.000Z", answer: null, answeredAt: null });
+  const questions = [question("q-scope", "main/inner/ask-scope", ["main/inner/gate"]), question("q-hello", "main/hello", ["main/hello"]), question("q-plain", "main/inner/plain", []), question("q-other", "main/inner/gate-2/ask", ["main/inner/gate-2/x"]), question("q-two", "main/rules/ask", ["main/rules/violations", "main/rules/merge"])];
   const ids = (key: string) => questionsFor(key, questions).map((q) => q.questionId);
   assert.deepEqual(ids("main/inner/gate"), ["q-scope"]);
   assert.deepEqual(ids("main/inner/ask-scope"), ["q-scope"]);
   assert.deepEqual(ids("main/hello"), ["q-hello"]);
   assert.deepEqual(ids("main/inner"), ["q-scope", "q-plain", "q-other"]);
   assert.deepEqual(ids("main/team#a"), []);
+  assert.deepEqual(ids("main/rules/violations"), ["q-two"]);
+  assert.deepEqual(ids("main/rules/merge"), ["q-two"]);
+});
+
+test("an interrupt naming several steps makes each of them ask; a step of another workflow asks where the diagram draws it", () => {
+  const workflows = [
+    { name: "sync", version: "1", entry: "cmp", nodes: [{ id: "cmp", kind: "subgraph", workflow: "compare" }, { id: "dec", kind: "subgraph", workflow: "decide" }], edges: [{ from: "cmp", to: "dec" }, { from: "dec", to: "END" }] },
+    { name: "compare", version: "1", entry: "rows", nodes: [{ id: "rows", kind: "llm" }, { id: "merge", kind: "llm" }], edges: [{ from: "rows", to: "merge" }, { from: "merge", to: "END" }] },
+    { name: "decide", version: "1", entry: "decide", nodes: [{ id: "own", kind: "llm" }, { id: "decide", kind: "interrupt", askedBy: ["own", { workflow: "compare", step: "rows" }], question: { id: "q-decide", text: "Which row?" } }], edges: [{ from: "own", to: "decide" }, { from: "decide", to: "END" }] },
+  ];
+  const icons = humanIcons(buildLevel(workflows, "sync"), {});
+  assert.equal(icons.get("sync/dec/own")?.role, "asks");
+  assert.equal(icons.get("sync/cmp/rows")?.role, "asks");
+  assert.equal(icons.has("sync/cmp/merge"), false);
+  assert.deepEqual(icons.get("sync/dec/decide")?.sources, ["sync/dec/own", "sync/cmp/rows"]);
+  assert.equal(icons.get("sync/cmp")?.role, "relays", "the group holding the other workflow's step passes the question on");
+  assert.equal(humanLabel(icons.get("sync/cmp/rows")!), "Asks you: q-decide (through decide). Click to see the questions and your answers in this run");
+
+  const alone = humanIcons(buildLevel(workflows, "decide"), {});
+  assert.deepEqual(alone.get("decide/decide")?.sources, ["decide/own"]);
+  assert.deepEqual(alone.get("decide/decide")?.external, ["compare/rows"]);
+  assert.equal(humanLabel(alone.get("decide/decide")!), "Passes on a question to you from: own, compare/rows (not in this diagram). Click to see the questions and your answers in this run");
 });

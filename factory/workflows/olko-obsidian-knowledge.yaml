@@ -16,6 +16,7 @@ nodes:
   - id: ask-approval
     description: "Puts the exact proposal to you; only approve writes, and approval covers only the listed notes."
     kind: interrupt
+    askedBy: { workflow: olko-obsidian-knowledge-compare, step: propose }
     question:
       id: q-obsidian-knowledge-approve
       text: "Obsidian proposal (draft for your review):\n{{state.propose.propose}}\n\nWrite exactly these notes (approve), or decline (nothing is written)?"

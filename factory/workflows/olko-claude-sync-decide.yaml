@@ -17,6 +17,7 @@ nodes:
   - id: decide
     description: "Asks your decision for this row (port, install, publish, exclude, leave...)."
     kind: interrupt
+    askedBy: { workflow: olko-claude-sync-compare, step: rows }
     maxVisits: 200
     question:
       id: "q-claude-sync-row-{{state.decide-next.item.id}}"

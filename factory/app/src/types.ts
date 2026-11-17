@@ -26,6 +26,16 @@ export interface AgentInfo {
   memoryLayer?: boolean;
 }
 
+/** A step of another workflow, found through the nearest workflow that inlines both. */
+export interface AskedByStep {
+  workflow: string;
+  step: string;
+}
+
+export type AskedByRef = string | AskedByStep;
+
+export type AskedBy = AskedByRef | AskedByRef[];
+
 export interface WorkflowNode {
   id: string;
   kind: string;
@@ -37,7 +47,7 @@ export interface WorkflowNode {
   run?: string;
   maxTurns?: number;
   question?: WorkflowQuestion;
-  askedBy?: string;
+  askedBy?: AskedBy;
   askAfterTurn?: number;
   enabledWhen?: string;
   required?: boolean;
@@ -216,7 +226,7 @@ export interface AskedQuestion {
   runId: string;
   questionId: string;
   node: string | null;
-  askedBy: string | null;
+  askedBy: string[];
   text: string;
   allowed: string[] | null;
   askedAt: string;

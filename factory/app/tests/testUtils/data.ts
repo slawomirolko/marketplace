@@ -116,7 +116,7 @@ export const report: RunReport = {
 };
 
 export const questions: AskedQuestion[] = [
-  { runId: RUN_ID, questionId: "ask", node: "main/ask", askedBy: "main/run", text: "Continue?", allowed: ["yes", "no"], askedAt: at(61), answer: "yes", answeredAt: at(121) },
+  { runId: RUN_ID, questionId: "ask", node: "main/ask", askedBy: ["main/run"], text: "Continue?", allowed: ["yes", "no"], askedAt: at(61), answer: "yes", answeredAt: at(121) },
 ];
 
 export const runDetail: RunDetail = { run, report, questions };

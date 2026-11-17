@@ -233,7 +233,7 @@ export class Factory {
   }
 
   /** Puts a question to the user: the run waits for it, and the question store keeps its text for the viewer. */
-  askUser(run: Run, question: PendingQuestion, askedBy: string | null): void {
+  askUser(run: Run, question: PendingQuestion, askedBy: string[]): void {
     run.status = "waiting_for_user";
     run.pendingQuestion = question;
     recordQuestion(this.dataDir, { runId: run.runId, questionId: question.id, node: question.node ?? null, askedBy, text: question.text, allowed: question.allowed ?? null, askedAt: new Date().toISOString() });
@@ -426,7 +426,7 @@ export class Factory {
     }
     if (ratio >= pauseRatio && !run.thresholdsHit.includes("pause")) {
       run.thresholdsHit.push("pause");
-      this.askUser(run, { id: "q-budget-pause", text: `The factory run has used ${Math.round(ratio * 100)}% of its budget. Continue or stop?`, allowed: ["continue", "stop"] }, null);
+      this.askUser(run, { id: "q-budget-pause", text: `The factory run has used ${Math.round(ratio * 100)}% of its budget. Continue or stop?`, allowed: ["continue", "stop"] }, []);
       this.event(run, "budget_threshold", { level: "pause", ratio });
       return false;
     }
@@ -550,7 +550,7 @@ export class Factory {
       const question = { ...fixed, id: view.prefix + Mustache.render(node.question.id, context), text: Mustache.render(node.question.text, context), ...(allowedFrom ? { allowed: allowedOf(view.state, allowedFrom) } : {}) };
       const answer = run.answers[question.id];
       if (answer === undefined) {
-        this.askUser(run, { ...question, node: node.path }, node.askedBy ?? null);
+        this.askUser(run, { ...question, node: node.path }, node.askedBy ?? []);
         this.event(run, "needs_input", { node: node.path, questionId: question.id });
         return;
       }
@@ -586,7 +586,7 @@ export class Factory {
     const backend = config.backend.kind;
     const askNow = backend === "fake" ? run.nodeTurn === node.askAfterTurn : true;
     if (node.question && askNow && run.answers[node.question.id] === undefined) {
-      this.askUser(run, { ...node.question, node: node.path }, node.path);
+      this.askUser(run, { ...node.question, node: node.path }, [node.path]);
       this.event(run, "needs_input", { node: node.path, questionId: node.question.id });
       return;
     }

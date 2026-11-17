@@ -27,7 +27,7 @@ describe("QuestionsList", () => {
   });
 
   test("shows an answered question with its id, source, allowed answers and the answer", () => {
-    renderWithViewer(<QuestionsList item={item("main/ask")} />, { mode: "runs", run, questions, humans: new Map([["main/ask", { role: "relays", sources: ["main/run"], questions: [], permission: null }]]) });
+    renderWithViewer(<QuestionsList item={item("main/ask")} />, { mode: "runs", run, questions, humans: new Map([["main/ask", { role: "relays", sources: ["main/run"], external: [], questions: [], permission: null }]]) });
 
     const entry = screen.getByRole("listitem");
     expect(within(entry).getByText("ask", { selector: "code" })).toBeInTheDocument();
@@ -47,6 +47,13 @@ describe("QuestionsList", () => {
     expect(screen.getByText("Waiting for your answer")).toBeInTheDocument();
   });
 
+  test("names every step a question was passed on from", () => {
+    const passed = { ...questions[0]!, askedBy: ["main/run", "main/team#one"] };
+    renderWithViewer(<QuestionsList item={item("main/ask")} />, { mode: "runs", run, questions: [passed] });
+
+    expect(within(screen.getByRole("listitem")).getByText(/asked by run, one/)).toBeInTheDocument();
+  });
+
   test("says when the run stored no question of the step", () => {
     renderWithViewer(<QuestionsList item={item("main/stop")} />, { mode: "runs", run, questions });
 
@@ -55,7 +62,7 @@ describe("QuestionsList", () => {
   });
 
   test("adds the permission line when the step's agent may ask by itself", () => {
-    const humans = new Map([["main/stop", { role: "asks" as const, sources: ["main/stop"], questions: [], permission: "question: allow" }]]);
+    const humans = new Map([["main/stop", { role: "asks" as const, sources: ["main/stop"], external: [], questions: [], permission: "question: allow" }]]);
     renderWithViewer(<QuestionsList item={item("main/stop")} />, { mode: "runs", run, questions, humans });
 
     expect(screen.getByText(/A question the agent asks itself through its own permission \(question: allow\) is not stored by the factory\./)).toBeInTheDocument();

@@ -7,7 +7,8 @@ export interface AskedQuestion {
   runId: string;
   questionId: string;
   node: string | null;
-  askedBy: string | null;
+  /** The llm steps whose output the question passes on; empty when the engine asks on its own. */
+  askedBy: string[];
   text: string;
   allowed: string[] | null;
   askedAt: string;
@@ -41,6 +42,16 @@ create table if not exists questions (
   primary key (run_id, question_id)
 )`;
 
+function storedAskedBy(askedBy: string[]): string | null {
+  if (askedBy.length === 0) return null;
+  return askedBy.length === 1 ? askedBy[0]! : JSON.stringify(askedBy);
+}
+
+function readAskedBy(stored: string | null): string[] {
+  if (stored === null) return [];
+  return stored.startsWith("[") ? (JSON.parse(stored) as string[]) : [stored];
+}
+
 export function questionsFile(dataDir: string): string {
   return path.join(dataDir, "questions.sqlite");
 }
@@ -60,7 +71,7 @@ function withStore<T>(dataDir: string, use: (db: DatabaseSync) => T): T {
 export function recordQuestion(dataDir: string, question: Omit<AskedQuestion, "answer" | "answeredAt">): void {
   withStore(dataDir, (db) => {
     db.prepare("insert or ignore into questions (run_id, question_id, node, asked_by, text, allowed, asked_at) values (?, ?, ?, ?, ?, ?, ?)")
-      .run(question.runId, question.questionId, question.node, question.askedBy, question.text, question.allowed ? JSON.stringify(question.allowed) : null, question.askedAt);
+      .run(question.runId, question.questionId, question.node, storedAskedBy(question.askedBy), question.text, question.allowed ? JSON.stringify(question.allowed) : null, question.askedAt);
   });
 }
 
@@ -81,7 +92,7 @@ export function readQuestions(dataDir: string, runId: string): AskedQuestion[] {
       runId: r.run_id,
       questionId: r.question_id,
       node: r.node,
-      askedBy: r.asked_by,
+      askedBy: readAskedBy(r.asked_by),
       text: r.text,
       allowed: r.allowed ? (JSON.parse(r.allowed) as string[]) : null,
       askedAt: r.asked_at,

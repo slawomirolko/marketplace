@@ -84,6 +84,7 @@ nodes:
   - id: ask-revert
     description: "Final confirmation before the local copy is overwritten."
     kind: interrupt
+    askedBy: { workflow: olko-marketplace-skill-sync, step: plan }
     maxVisits: 200
     question:
       id: "q-sync-revert-{{state.apply-next.index}}"

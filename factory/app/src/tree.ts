@@ -1,4 +1,4 @@
-import type { AgentInfo, AskedQuestion, Cost, Coverage, FactoryConfig, GroupItem, Item, Level, LevelEdge, LedgerRecord, RunData, RunIndex, RunReport, Workflow, WorkflowAgent } from "./types.ts";
+import type { AgentInfo, AskedBy, AskedByRef, AskedQuestion, Cost, Coverage, FactoryConfig, GroupItem, Item, Level, LevelEdge, LedgerRecord, RunData, RunIndex, RunReport, Workflow, WorkflowAgent } from "./types.ts";
 
 export const START_KEY = "__start";
 export const END_KEY = "__end";
@@ -199,12 +199,37 @@ export interface HumanQuestion {
 export interface HumanIcon {
   role: "asks" | "relays";
   sources: string[];
+  /** Asking steps named as workflow/step that this diagram does not draw. */
+  external: string[];
   questions: HumanQuestion[];
   permission: string | null;
 }
 
 function parentPath(key: string): string {
   return key.slice(0, key.lastIndexOf("/"));
+}
+
+function askedByRefs(askedBy: AskedBy | undefined): AskedByRef[] {
+  if (askedBy === undefined) return [];
+  return Array.isArray(askedBy) ? askedBy : [askedBy];
+}
+
+/** The workflow each drawn item comes from: the root workflow, or the one a subgraph, call or group draws inside it. */
+function ownerWorkflows(level: Level, owner: string | null, owners: Map<string, string>): Map<string, string> {
+  for (const item of level.items) {
+    if (item.kind === "terminal") continue;
+    const own = owner ?? item.key.split("/")[0]!;
+    owners.set(item.key, own);
+    if (item.kind === "subgraph") ownerWorkflows(item.inner, item.node.workflow ?? own, owners);
+    if (item.kind === "team") ownerWorkflows(item.inner, own, owners);
+  }
+  return owners;
+}
+
+function sharedPrefix(a: string, b: string): number {
+  let at = 0;
+  while (at < a.length && at < b.length && a[at] === b[at]) at++;
+  return at;
 }
 
 /**
@@ -214,17 +239,30 @@ function parentPath(key: string): string {
  */
 export function humanIcons(level: Level, agents: Record<string, AgentInfo>): Map<string, HumanIcon> {
   const items = allItems(level).filter((i): i is Exclude<Item, { kind: "terminal" }> => i.kind !== "terminal");
+  const owners = ownerWorkflows(level, null, new Map());
   const icons = new Map<string, HumanIcon>();
   const asker = (key: string): HumanIcon => {
-    const icon = icons.get(key) ?? { role: "asks" as const, sources: [key], questions: [], permission: null };
+    const icon = icons.get(key) ?? { role: "asks" as const, sources: [key], external: [], questions: [], permission: null };
     icons.set(key, icon);
     return icon;
   };
+  const drawnStep = (from: string, ref: AskedByRef): string | null => {
+    if (typeof ref === "string") return `${parentPath(from)}/${ref}`;
+    const found = items.filter((i) => i.kind === "step" && i.node.kind === "llm" && i.node.id === ref.step && owners.get(i.key) === ref.workflow);
+    return found.sort((a, b) => sharedPrefix(b.key, from) - sharedPrefix(a.key, from))[0]?.key ?? null;
+  };
   for (const item of items) {
     if (item.kind === "step" && item.node.kind === "interrupt" && item.node.askedBy && item.node.question) {
-      const source = `${parentPath(item.key)}/${item.node.askedBy}`;
-      asker(source).questions.push({ node: item.key, id: item.node.question.id, text: item.node.question.text });
-      icons.set(item.key, { role: "relays", sources: [source], questions: [{ node: item.key, id: item.node.question.id, text: item.node.question.text }], permission: null });
+      const question = { node: item.key, id: item.node.question.id, text: item.node.question.text };
+      const sources: string[] = [];
+      const external: string[] = [];
+      for (const ref of askedByRefs(item.node.askedBy)) {
+        const source = drawnStep(item.key, ref);
+        if (source) sources.push(source);
+        else if (typeof ref !== "string") external.push(`${ref.workflow}/${ref.step}`);
+      }
+      for (const source of sources) asker(source).questions.push(question);
+      icons.set(item.key, { role: "relays", sources, external, questions: [question], permission: null });
     }
     if (item.kind === "step" && item.node.kind === "llm" && item.node.askAfterTurn && item.node.question) {
       asker(item.key).questions.push({ node: item.key, id: item.node.question.id, text: item.node.question.text });
@@ -237,7 +275,7 @@ export function humanIcons(level: Level, agents: Record<string, AgentInfo>): Map
     if (!isGroup(item) || icons.get(item.key)?.role === "asks") continue;
     const asking = allItems(item.inner).filter((i) => icons.get(i.key)?.role === "asks");
     const inside = asking.filter((i) => !asking.some((o) => o !== i && (i.key.startsWith(`${o.key}/`) || i.key.startsWith(`${o.key}#`))));
-    if (inside.length) icons.set(item.key, { role: "relays", sources: inside.map((i) => i.key), questions: inside.flatMap((i) => icons.get(i.key)!.questions), permission: null });
+    if (inside.length) icons.set(item.key, { role: "relays", sources: inside.map((i) => i.key), external: [], questions: inside.flatMap((i) => icons.get(i.key)!.questions), permission: null });
   }
   return icons;
 }
@@ -249,11 +287,14 @@ export function stepName(key: string): string {
 
 /** The stored questions of a graph node: the ones it asked, the ones it passed on, or for a group every one inside it. */
 export function questionsFor(key: string, questions: AskedQuestion[]): AskedQuestion[] {
-  return questions.filter((q) => [q.askedBy, q.node].some((path) => path !== null && touches(key, path)));
+  return questions.filter((q) => [...q.askedBy, q.node].some((path) => path !== null && touches(key, path)));
 }
 
 export function humanLabel(icon: HumanIcon): string {
-  if (icon.role === "relays") return `Passes on a question to you from: ${[...new Set(icon.sources.map(stepName))].join(", ")}. Click to see the questions and your answers in this run`;
+  if (icon.role === "relays") {
+    const from = [...new Set(icon.sources.map(stepName)), ...icon.external.map((step) => `${step} (not in this diagram)`)];
+    return `Passes on a question to you from: ${from.join(", ")}. Click to see the questions and your answers in this run`;
+  }
   const asked = icon.questions.map((q) => `${q.id} (through ${stepName(q.node)})`);
   return [asked.length ? `Asks you: ${asked.join(", ")}` : null, icon.permission ? `May ask you itself (${icon.permission})` : null].filter(Boolean).join(". ") + ". Click to see the questions and your answers in this run";
 }

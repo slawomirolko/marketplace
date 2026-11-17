@@ -28,7 +28,7 @@ export function QuestionsList({ item }: { item: Item | null }) {
               <div className="question-head">
                 <code>{q.questionId}</code>
                 {q.node && q.node !== item.key && <span className="muted"> · through {stepName(q.node)}</span>}
-                {q.askedBy && q.askedBy !== item.key && <span className="muted"> · asked by {stepName(q.askedBy)}</span>}
+                {q.askedBy.some((by) => by !== item.key) && <span className="muted"> · asked by {q.askedBy.filter((by) => by !== item.key).map(stepName).join(", ")}</span>}
                 <span className="muted"> · {when(q.askedAt)}</span>
               </div>
               <pre className="question-text">{q.text}</pre>

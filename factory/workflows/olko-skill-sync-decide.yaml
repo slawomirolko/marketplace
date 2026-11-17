@@ -15,6 +15,7 @@ nodes:
   - id: decide
     description: "Asks your decision for this artifact (create, adopt, revert-local, move-to-adapter, leave...)."
     kind: interrupt
+    askedBy: { workflow: olko-skill-sync-compare, step: rows }
     maxVisits: 200
     question:
       id: "q-sync-{{state.decide-next.index}}"

@@ -36,6 +36,17 @@ describe("HumanMark", () => {
     expect(confirm).toHaveAccessibleName(`Passes on a question to you from: plan. ${CLICK}`);
   });
 
+  test("an interrupt naming several steps makes each of them ask, and names a step this diagram does not draw", () => {
+    const listed = {
+      ...askingWorkflow,
+      nodes: askingWorkflow.nodes.map((n) => (n.id === "confirm" ? { ...n, askedBy: ["plan", { workflow: "elsewhere", step: "rows" }] } : n)),
+    };
+    renderFlow({ workflows: [listed], root: "asking" });
+
+    expect(icon("plan")).toHaveClass("human-asks");
+    expect(icon("confirm")).toHaveAccessibleName(`Passes on a question to you from: plan, elsewhere/rows (not in this diagram). ${CLICK}`);
+  });
+
   test("an interrupt without askedBy and an engine script get no icon", () => {
     flow();
 

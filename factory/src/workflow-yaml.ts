@@ -5,7 +5,7 @@ import { parse as parseYaml, YAMLParseError } from "yaml";
 import { operationNamed } from "./ops.ts";
 import { buildParser, isParseSpec } from "./parse-spec.ts";
 import { validate } from "./spec.ts";
-import type { Agent, PromptContext, Tier, Workflow, WorkflowNode, WorkflowSpec, WorkflowSpecNode, WorkflowState } from "./types.ts";
+import type { Agent, AskedBy, AskedByRef, AskedByStep, PromptContext, Tier, Workflow, WorkflowNode, WorkflowSpec, WorkflowSpecNode, WorkflowState } from "./types.ts";
 
 Mustache.escape = (text: string) => text;
 
@@ -90,6 +90,34 @@ function render(template: string): (context: PromptContext) => string {
   return (context) => Mustache.render(template, withEach(context));
 }
 
+export function askedByRefs(askedBy: AskedBy | undefined): AskedByRef[] {
+  if (askedBy === undefined) return [];
+  return Array.isArray(askedBy) ? askedBy : [askedBy];
+}
+
+function isOwnStep(ref: AskedByRef): ref is string {
+  return typeof ref === "string";
+}
+
+/** Rewrites the askedBy of an inlined node: its own step ids get the inlining prefix, steps of other workflows wait for a workflow that inlines them. */
+function prefixAskedBy(node: WorkflowSpecNode, prefix: (id: string) => string): WorkflowSpecNode {
+  if (node.askedBy === undefined) return node;
+  return { ...node, askedBy: askedByRefs(node.askedBy).map((ref) => (isOwnStep(ref) ? prefix(ref) : ref)) };
+}
+
+/** The step id, in this workflow's own id space, of a step of another workflow: this workflow itself, or a subgraph, call or group of it that inlines that workflow. */
+function resolveStep(spec: WorkflowSpec, ref: AskedByStep): string | null {
+  if (spec.name === ref.workflow) return ref.step;
+  const inliner = spec.nodes.find((n) => (n.kind === "subgraph" || n.kind === "call" || n.kind === "group") && n.workflow === ref.workflow);
+  if (!inliner) return null;
+  return inliner.kind === "group" ? ref.step : `${inliner.id}/${ref.step}`;
+}
+
+function resolveAskedBy(node: WorkflowSpecNode, spec: WorkflowSpec): WorkflowSpecNode {
+  if (node.askedBy === undefined) return node;
+  return { ...node, askedBy: askedByRefs(node.askedBy).map((ref) => (isOwnStep(ref) ? ref : (resolveStep(spec, ref) ?? ref))) };
+}
+
 function buildNode(workflow: WorkflowSpec, spec: WorkflowSpecNode): WorkflowNode {
   if (spec.kind === "call") {
     const inputs = Object.fromEntries(Object.entries(spec.input ?? {}).map(([k, v]) => { Mustache.parse(v); return [k, v]; }));
@@ -110,7 +138,8 @@ function buildNode(workflow: WorkflowSpec, spec: WorkflowSpecNode): WorkflowNode
   if (spec.workspace) node.workspace = render(spec.workspace);
   if (spec.agents) node.agents = spec.agents.map((a) => ({ id: a.id, ...(a.role ? { role: a.role } : {}), ...(a.agent ? { agentName: a.agent } : {}) }));
   if (spec.question) node.question = spec.question;
-  if (spec.askedBy) node.askedBy = `${workflow.name}/${spec.id.slice(0, spec.id.lastIndexOf("/") + 1)}${spec.askedBy}`;
+  const askedBy = askedByRefs(spec.askedBy).filter(isOwnStep);
+  if (askedBy.length) node.askedBy = askedBy.map((id) => `${workflow.name}/${id}`);
   if (spec.turns) node.turns = spec.turns;
   if (spec.askAfterTurn) node.askAfterTurn = spec.askAfterTurn;
   if (spec.maxVisits) node.maxVisits = spec.maxVisits;
@@ -145,7 +174,9 @@ function readSpec(file: string): WorkflowSpec {
     }
     if (node.askedBy !== undefined) {
       if (node.kind !== "interrupt") throw new Error(`${file}: node ${node.id}: askedBy is only for interrupt steps`);
-      if (spec.nodes.find((n) => n.id === node.askedBy)?.kind !== "llm") throw new Error(`${file}: node ${node.id}: askedBy ${node.askedBy} is not an llm step of this workflow`);
+      for (const ref of askedByRefs(node.askedBy).filter(isOwnStep)) {
+        if (spec.nodes.find((n) => n.id === ref)?.kind !== "llm") throw new Error(`${file}: node ${node.id}: askedBy ${ref} is not an llm step of this workflow`);
+      }
     }
   }
   return spec;
@@ -198,7 +229,7 @@ function expandSubgraphs(spec: WorkflowSpec, specs: Map<string, WorkflowSpec>, s
       const clash = sub.nodes.find((n) => !n.scope && (spec.nodes.some((o) => o.id === (n.localId ?? n.id)) || nodes.some((o) => !o.scope && (o.localId ?? o.id) === (n.localId ?? n.id))));
       if (clash) throw new Error(`subgraph ${node.id}: step ${clash.localId ?? clash.id} is used twice; a subgraph shares its state keys with its parent`);
     }
-    nodes = nodes.concat(sub.nodes.map((n) => ({ ...n, id: prefix(n.id), ...(scoped ? { scope: n.scope ? prefix(n.scope) : node.id } : {}), ...(scoped || !n.scope ? { localId: n.localId ?? n.id } : {}) })));
+    nodes = nodes.concat(sub.nodes.map((n) => ({ ...prefixAskedBy(n, prefix), id: prefix(n.id), ...(scoped ? { scope: n.scope ? prefix(n.scope) : node.id } : {}), ...(scoped || !n.scope ? { localId: n.localId ?? n.id } : {}) })));
     for (const [role, tier] of Object.entries(sub.roles ?? {})) roles[role] ??= tier;
     const exits = edges.filter((e) => e.from === node.id);
     if (node.enabledWhen) {
@@ -228,7 +259,7 @@ function expandSubgraphs(spec: WorkflowSpec, specs: Map<string, WorkflowSpec>, s
     edges = edges.filter((e) => e.from !== node.id).map((e) => (e.to === node.id ? { ...e, to: prefix(sub.entry) } : e)).concat(inner);
     if (entry === node.id) entry = prefix(sub.entry);
   }
-  return { ...spec, roles, entry, nodes, edges };
+  return { ...spec, roles, entry, nodes: nodes.map((n) => resolveAskedBy(n, spec)), edges };
 }
 
 function buildWorkflow(spec: WorkflowSpec, file: string): Workflow {
@@ -263,6 +294,16 @@ function readSpecDir(dir: string): { specs: Map<string, WorkflowSpec>; files: Ma
     if (specs.has(spec.name)) throw new Error(`${file}: workflow name ${spec.name} is used twice`);
     specs.set(spec.name, spec);
     files.set(spec.name, full);
+  }
+  for (const [name, spec] of specs) {
+    for (const node of spec.nodes) {
+      for (const ref of askedByRefs(node.askedBy)) {
+        if (isOwnStep(ref)) continue;
+        const target = specs.get(ref.workflow);
+        if (!target) throw new Error(`${path.basename(files.get(name) ?? name)}: node ${node.id}: askedBy names unknown workflow ${ref.workflow}`);
+        if (target.nodes.find((n) => n.id === ref.step)?.kind !== "llm") throw new Error(`${path.basename(files.get(name) ?? name)}: node ${node.id}: askedBy ${ref.workflow}/${ref.step} is not an llm step of that workflow`);
+      }
+    }
   }
   return { specs, files };
 }
