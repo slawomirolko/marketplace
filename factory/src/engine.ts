@@ -37,6 +37,21 @@ import type {
   WorkflowNode,
 } from "./types.ts";
 
+const LOCKED_FILE_CODES = new Set(["EPERM", "EBUSY", "EACCES"]);
+
+/** Renames a file, retrying for a short time while Windows holds the target open for a reader. */
+function renameWithRetry(from: string, to: string, attempts = 10): void {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      fs.renameSync(from, to);
+      return;
+    } catch (error) {
+      if (attempt >= attempts || !LOCKED_FILE_CODES.has((error as NodeJS.ErrnoException).code ?? "")) throw error;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20 * attempt);
+    }
+  }
+}
+
 const FAKE_PRICE_PER_MTOK: Record<Tier, { input: number; output: number }> = {
   low: { input: 0.8, output: 4 },
   medium: { input: 3, output: 15 },
@@ -176,7 +191,7 @@ export class Factory {
     const file = path.join(this.dataDir, "runs", `${run.runId}.json`);
     const temp = `${file}.${process.pid}.tmp`;
     fs.writeFileSync(temp, JSON.stringify(run, null, 2));
-    fs.renameSync(temp, file);
+    renameWithRetry(temp, file);
     if (run.status !== "running") this.notify(run);
   }
 
