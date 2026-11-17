@@ -35,6 +35,7 @@ nodes:
   - id: ask-publish
     description: "Shows the Olko changes and validation; asks before branch, commit, push and draft PR."
     kind: interrupt
+    askedBy: check
     question:
       id: q-claude-sync-publish
       text: "Olko changes:\n{{#state.check.check.files}}{{.}}\n{{/state.check.check.files}}\nApplied: {{#state.apply.apply.applied}}{{.}}; {{/state.apply.apply.applied}}\nValidation: {{state.check.check.summary}} (passed: {{state.check.check.passed}})\n\nCommit on a new feature branch, push and open a draft PR?"

@@ -34,6 +34,7 @@ nodes:
   - id: fb-reply-ask
     description: "Asks post or skip for the drafted reply."
     kind: interrupt
+    askedBy: fb-draft
     maxVisits: 200
     question:
       id: "q-reply-{{state.fb-reply-next.index}}"

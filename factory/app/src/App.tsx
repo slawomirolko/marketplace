@@ -11,7 +11,7 @@ import { SupervisorRing } from "./SupervisorRing.tsx";
 import { layoutGraph, scriptsHeight } from "./layout.ts";
 import { agentsOnly } from "./agents-only.ts";
 import { nodeAriaLabel, nodeTypes } from "./nodes.tsx";
-import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost, disabledKeys, configDisabledKeys, liveAncestors, liveState, LIVE_STATUSES, agentScripts, containedWorkflows, findItem, ancestorKeys, allItems } from "./tree.ts";
+import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost, disabledKeys, configDisabledKeys, liveAncestors, liveState, LIVE_STATUSES, agentScripts, containedWorkflows, findItem, ancestorKeys, allItems, humanIcons } from "./tree.ts";
 import type { StaleWorkflow } from "./types.ts";
 import type { AgentInfo, Bounds, FactoryConfig, FlowEdge, FlowNode, Item, Level, RunDetail, RunIndex, RunListItem, Workflow } from "./types.ts";
 
@@ -273,9 +273,10 @@ function Viewer() {
   );
 
   const shown = mode === "workflows" ? null : detail;
+  const humans = useMemo(() => (level ? humanIcons(level, agents) : new Map()), [level, agents]);
   const disabled = useMemo(() => (mode === "workflows" ? configDisabledKeys(level, config) : disabledKeys(detail?.run ?? null)), [mode, level, config, detail]);
   const workflow = useMemo(() => workflows?.find((w) => w.name === rootName) ?? null, [workflows, rootName]);
-  const context = useMemo((): ViewerState => ({ config, report: shown?.report ?? null, run: shown?.run ?? null, toggle, focusKey, index: runIndex, disabled, mode, workflow, workflows: workflows ?? [], agents, live, onlyAgents, stale, showCounts }), [config, shown, toggle, focusKey, runIndex, disabled, mode, workflow, workflows, agents, live, onlyAgents, stale, showCounts]);
+  const context = useMemo((): ViewerState => ({ config, report: shown?.report ?? null, run: shown?.run ?? null, toggle, focusKey, index: runIndex, disabled, mode, workflow, workflows: workflows ?? [], agents, live, onlyAgents, stale, showCounts, humans }), [config, shown, toggle, focusKey, runIndex, disabled, mode, workflow, workflows, agents, live, onlyAgents, stale, showCounts, humans]);
   const total = detail?.report.cost;
 
   if (error) return <p className="error" role="alert">Could not load factory data: {error}</p>;

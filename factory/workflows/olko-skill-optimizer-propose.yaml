@@ -79,6 +79,7 @@ nodes:
   - id: approve
     description: "Puts the exact proposal to you. Approve allows the listed edits only; revise runs the analysis again; stop changes nothing."
     kind: interrupt
+    askedBy: draft
     maxVisits: 4
     question:
       id: q-skill-optimizer-approve

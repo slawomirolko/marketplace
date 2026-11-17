@@ -34,6 +34,7 @@ nodes:
   - id: ask-leak
     description: "Asks once for more leak terms (free text, or none)."
     kind: interrupt
+    askedBy: setup
     question:
       id: q-claude-sync-leak
       text: "Leak terms are words that must never reach Olko ({{state.setup.setup.leakTermsText}}). Add more? Reply with comma-separated words, or none."

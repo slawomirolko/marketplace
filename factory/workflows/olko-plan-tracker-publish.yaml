@@ -29,6 +29,7 @@ nodes:
   - id: ask-publish
     description: "Puts the publish question composed by grill-with-docs to the user; the explicit approval is required before anything is published."
     kind: interrupt
+    askedBy: publish-grill
     question:
       id: q-plan-publish
       text: "{{state.publish-grill.publish-grill}}"
@@ -50,6 +51,7 @@ nodes:
   - id: ask-existing
     description: "Puts the existing-issue question composed by grill-with-docs to the user; an existing issue is changed only after approve-existing."
     kind: interrupt
+    askedBy: existing-grill
     question:
       id: q-plan-publish-existing
       text: "{{state.existing-grill.existing-grill}}"

@@ -68,6 +68,7 @@ nodes:
   - id: ask-gap
     description: "Puts the accept-or-stop question composed by grill-with-docs to the user, after three failed rounds."
     kind: interrupt
+    askedBy: gap-grill
     question:
       id: q-plan-gap
       text: "{{state.gap-grill.gap-grill}}"

@@ -142,6 +142,10 @@ function readSpec(file: string): WorkflowSpec {
     for (const agent of node.agents ?? []) {
       if (agent.role && !(spec.roles ?? {})[agent.role]) throw new Error(`${file}: node ${node.id}: role ${agent.role} has no tier in roles`);
     }
+    if (node.askedBy !== undefined) {
+      if (node.kind !== "interrupt") throw new Error(`${file}: node ${node.id}: askedBy is only for interrupt steps`);
+      if (spec.nodes.find((n) => n.id === node.askedBy)?.kind !== "llm") throw new Error(`${file}: node ${node.id}: askedBy ${node.askedBy} is not an llm step of this workflow`);
+    }
   }
   return spec;
 }

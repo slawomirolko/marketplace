@@ -52,6 +52,7 @@ nodes:
   - id: ask-adapter
     description: "Asks before writing the adapter and the marketplace keys."
     kind: interrupt
+    askedBy: adapter-draft
     maxVisits: 200
     question:
       id: "q-sync-adapter-{{state.apply-next.index}}"

@@ -9,7 +9,8 @@ import type { DataApi } from "../app/data.ts";
 import type { Run } from "../src/types.ts";
 import type { Cost, Item, Level, RunData } from "../app/src/types.ts";
 import { supervisorRing } from "../app/src/supervisor.ts";
-import { agentScripts, buildLevel, costOf, failureOf, formatTokens, isEngineScript, ledgerOf, formatUsd, END_KEY, START_KEY } from "../app/src/tree.ts";
+import { agentScripts, allItems, buildLevel, costOf, failureOf, formatTokens, humanIcons, humanLabel, isEngineScript, ledgerOf, formatUsd, END_KEY, START_KEY } from "../app/src/tree.ts";
+import { agentsOnly } from "../app/src/agents-only.ts";
 import { layoutGraph, scriptsHeight } from "../app/src/layout.ts";
 
 function itemAt(level: Level, key: string): Item {
@@ -454,4 +455,54 @@ test("an agent's skill scripts belong to its step or team member; a script step 
   const plain = layoutGraph(level, new Set()).nodes.find((n) => n.id === "main/run")!.height!;
   assert.ok(height(false) > plain, "a script box inside the card makes it taller");
   assert.ok(height(true) > plain, "a script list in the card makes it taller");
+});
+
+test("the step an interrupt names in askedBy asks you; the interrupt and every group around the step pass the question on", () => {
+  const agents = { asker: { name: "asker", kind: "agent" as const, description: "", file: "", skills: [], missing: [], scripts: [], asks: "question: allow" } };
+  const workflows = [
+    { name: "main", version: "1", entry: "inner", nodes: [{ id: "inner", kind: "subgraph", workflow: "check" }, { id: "shared", kind: "group", workflow: "pick" }, { id: "hello", kind: "llm", turns: 3, askAfterTurn: 2, question: { id: "q-hello", text: "Go on?" } }], edges: [{ from: "inner", to: "shared" }, { from: "shared", to: "hello" }, { from: "hello", to: "END" }] },
+    { name: "check", version: "1", entry: "gate", nodes: [{ id: "gate", kind: "llm", skill: "olko-task-scope-gates" }, { id: "ask-scope", kind: "interrupt", askedBy: "gate", question: { id: "q-scope", text: "Extend?" } }, { id: "plain", kind: "interrupt", question: { id: "q-plain", text: "Merge?" } }], edges: [{ from: "gate", to: "ask-scope" }, { from: "ask-scope", to: "plain" }, { from: "plain", to: "END" }] },
+    { name: "pick", version: "1", entry: "team", nodes: [{ id: "team", kind: "llm", agents: [{ id: "a", agent: "asker" }, { id: "b" }] }, { id: "ask-team", kind: "interrupt", askedBy: "team", question: { id: "q-team", text: "Which?" } }], edges: [{ from: "team", to: "ask-team" }, { from: "ask-team", to: "END" }] },
+  ];
+  const level = buildLevel(workflows, "main");
+  const icons = humanIcons(level, agents);
+  const roles = Object.fromEntries([...icons].map(([key, icon]) => [key, icon.role]));
+  assert.deepEqual(roles, {
+    "main/inner/gate": "asks",
+    "main/inner/ask-scope": "relays",
+    "main/inner": "relays",
+    "main/team": "asks",
+    "main/ask-team": "relays",
+    "main/shared": "relays",
+    "main/team#a": "asks",
+    "main/hello": "asks",
+  });
+  assert.equal(icons.has("main/inner/plain"), false, "an interrupt without askedBy is the engine's own question");
+  assert.equal(humanLabel(icons.get("main/inner/gate")!), "Asks you: q-scope (through ask-scope)");
+  assert.equal(humanLabel(icons.get("main/inner/ask-scope")!), "Passes on a question to you from: gate");
+  assert.equal(humanLabel(icons.get("main/team#a")!), "May ask you itself (question: allow)");
+  assert.equal(humanLabel(icons.get("main/hello")!), "Asks you: q-hello (through hello)");
+  assert.equal(humanLabel(icons.get("main/shared")!), "Passes on a question to you from: team");
+
+  const reduced = agentsOnly(level);
+  const shown = new Set(allItems(reduced).map((i) => i.key));
+  assert.deepEqual([...icons.keys()].filter((k) => shown.has(k)).sort(), ["main/hello", "main/inner", "main/inner/gate", "main/shared", "main/team", "main/team#a"], "the agents-only view keeps every icon except the hidden interrupts");
+});
+
+test("every askedBy in the shipped workflows reaches a drawn llm step", () => {
+  const data = api(false);
+  const workflows = data.workflows();
+  const agents = data.agents();
+  let checked = 0;
+  for (const workflow of workflows) {
+    const level = buildLevel(workflows, workflow.name);
+    const items = new Map(allItems(level).map((i) => [i.key, i]));
+    for (const [key, icon] of humanIcons(level, agents)) {
+      if (icon.role !== "relays" || items.get(key)?.kind !== "step") continue;
+      const source = items.get(icon.sources[0]!);
+      assert.ok(source && source.kind !== "terminal" && source.node.kind === "llm", `${workflow.name}: ${key} -> ${icon.sources[0]}`);
+      checked++;
+    }
+  }
+  assert.ok(checked >= 31, `checked ${checked}`);
 });

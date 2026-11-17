@@ -26,6 +26,7 @@ nodes:
   - id: ask-fallback
     description: "Asks before using the built-in fallback path."
     kind: interrupt
+    askedBy: resolve-path
     question:
       id: q-marketplace-fallback
       text: "The marketplace path comes from the built-in fallback: {{state.resolve-path.resolve-path.path}}. Use it?"

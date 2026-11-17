@@ -45,6 +45,7 @@ nodes:
   - id: ask-fix
     description: "Asks which PR findings to fix; nothing is fixed automatically."
     kind: interrupt
+    askedBy: pr-check
     maxVisits: 3
     question:
       id: "q-impl-pr-fix-{{state.ask-fix-round.count}}"

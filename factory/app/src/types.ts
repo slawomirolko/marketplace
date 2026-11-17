@@ -22,6 +22,7 @@ export interface AgentInfo {
   skills: { name: string; description: string; file: string }[];
   scripts: { skill: string; name: string; file: string }[];
   missing: string[];
+  asks?: string | null;
 }
 
 export interface WorkflowNode {
@@ -35,6 +36,8 @@ export interface WorkflowNode {
   run?: string;
   maxTurns?: number;
   question?: WorkflowQuestion;
+  askedBy?: string;
+  askAfterTurn?: number;
   enabledWhen?: string;
   required?: boolean;
   skill?: string;

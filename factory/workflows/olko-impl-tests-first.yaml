@@ -68,6 +68,7 @@ nodes:
   - id: ask-unclear
     description: "Asks you to settle the unclear criteria and blocked choices (free text)."
     kind: interrupt
+    askedBy: tests-check
     maxVisits: 3
     question:
       id: "q-impl-unclear-{{state.tests-round.count}}"

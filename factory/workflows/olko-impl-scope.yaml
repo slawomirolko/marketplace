@@ -20,6 +20,7 @@ nodes:
   - id: ask-scope
     description: "More than 15 code paths: extend the budget for this Task, or stop and re-scope."
     kind: interrupt
+    askedBy: scope-gate
     question:
       id: q-impl-scope
       text: "The Task diff has {{state.scope-gate.scope-gate.count}} code paths (budget 15):\n{{#state.scope-gate.scope-gate.paths}}{{.}}\n{{/state.scope-gate.scope-gate.paths}}Extend the budget for this Task and PR, or stop and re-scope?"

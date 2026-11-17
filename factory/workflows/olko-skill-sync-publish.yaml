@@ -31,6 +31,7 @@ nodes:
   - id: ask-publish
     description: "Shows the diff, versions and validation; asks before commit and push."
     kind: interrupt
+    askedBy: validate
     question:
       id: q-sync-publish
       text: "Marketplace diff:\n{{state.validate.validate.status}}\n{{state.validate.validate.diffStat}}\n\nVersions:\n{{state.validate.validate.versions}}\n\nValidation: {{state.validate.validate.summary}}\n\nCommit and push on a feature branch and open a PR? Stop: no marketplace PR is made and the run ends without a local delivery, so it is not reported complete."

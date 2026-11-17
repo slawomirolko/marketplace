@@ -100,6 +100,7 @@ nodes:
   - id: ask-questions
     description: "Puts the whole batch of open draft questions, composed by grill-with-docs, to the user (free text)."
     kind: interrupt
+    askedBy: questions-grill
     maxVisits: 20
     question:
       id: "q-plan-questions-{{state.draft-round.count}}"
@@ -122,6 +123,7 @@ nodes:
   - id: ask-draft
     description: "Puts the one content review of the draft, composed by grill-with-docs, to the user: approve or revise."
     kind: interrupt
+    askedBy: review-grill
     maxVisits: 3
     question:
       id: "q-plan-draft-review-{{state.draft-round.count}}"
@@ -145,6 +147,7 @@ nodes:
   - id: ask-revise
     description: "Puts the what-should-change question composed by grill-with-docs to the user (free text)."
     kind: interrupt
+    askedBy: revise-grill
     maxVisits: 20
     question:
       id: "q-plan-revise-{{state.draft-round.count}}"

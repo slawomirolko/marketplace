@@ -416,6 +416,7 @@ export interface WorkflowSpecNode {
   workflow?: string;
   over?: string;
   question?: Question;
+  askedBy?: string;
   skill?: string;
   tools?: AgentTool[];
   dirs?: string[];

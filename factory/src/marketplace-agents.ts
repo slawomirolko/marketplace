@@ -135,6 +135,16 @@ export interface AgentInfo {
   skills: { name: string; description: string; file: string }[];
   scripts: SkillScript[];
   missing: string[];
+  asks: string | null;
+}
+
+/** The permission that lets an agent ask the user itself: OpenCode `question: allow` or a Claude Code `AskUserQuestion` tool. */
+function askPermission(frontmatter: string): string | null {
+  if (!frontmatter) return null;
+  const front = parseYaml(frontmatter) as { permission?: { question?: unknown }; tools?: unknown };
+  if (front.permission?.question === "allow") return "question: allow";
+  const tools = Array.isArray(front.tools) ? front.tools.map(String) : String(front.tools ?? "").split(",").map((t) => t.trim());
+  return tools.includes("AskUserQuestion") ? "AskUserQuestion tool" : null;
 }
 
 function skillDescription(file: string): string {
@@ -175,6 +185,7 @@ export function describeAgent(name: string): AgentInfo | null {
     skills: declared.map((s) => ({ name: s.name, description: skillDescription(s.file), file: rel(s.file) })),
     scripts: scripts.map((s) => ({ skill: s.skill, name: s.name, file: rel(s.path) })),
     missing: fromPrompt,
+    asks: askPermission(agent.frontmatter),
   };
 }
 

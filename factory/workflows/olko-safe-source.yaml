@@ -27,6 +27,7 @@ nodes:
   - id: ask-main
     description: "Asks whether to switch the checkout to main."
     kind: interrupt
+    askedBy: safe-source
     question:
       id: q-safe-source-main
       text: "The {{input.label}} checkout is on {{state.safe-source.safe-source.detail}}, not main. Switch it to main?"

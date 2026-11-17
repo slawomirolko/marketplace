@@ -32,6 +32,7 @@ nodes:
   - id: ask-route
     description: "Puts the routing question composed by grill-with-docs to the user."
     kind: interrupt
+    askedBy: route-grill
     question:
       id: q-plan-route
       text: "{{state.route-grill.route-grill}}"

@@ -91,6 +91,7 @@ nodes:
   - id: ask-blocked
     description: "A child is blocked on a dependency or convention: you choose one of its options."
     kind: interrupt
+    askedBy: child-check
     maxVisits: 20
     question:
       id: "q-impl-blocked-{{state.blocked-round.count}}"
@@ -118,6 +119,7 @@ nodes:
   - id: ask-dispute
     description: "Shows both positions verbatim; you decide which holds."
     kind: interrupt
+    askedBy: dispute
     maxVisits: 20
     question:
       id: "q-impl-dispute-{{state.dispute-round.count}}"

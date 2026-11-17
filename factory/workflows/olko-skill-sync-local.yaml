@@ -27,6 +27,7 @@ nodes:
   - id: ask-local
     description: "Shows the local diff and asks before any commit: commit on a feature branch and open the local pull request, or stop. When the diff says no local file was written, the answer is stop and no local pull request is made."
     kind: interrupt
+    askedBy: local-diff
     maxVisits: 20
     question:
       id: q-sync-local-publish

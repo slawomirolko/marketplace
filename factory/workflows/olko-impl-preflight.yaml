@@ -51,6 +51,7 @@ nodes:
   - id: ask-preflight
     description: "Shows the verdicts and asks for your decision on every open point (free text); stop ends the run."
     kind: interrupt
+    askedBy: workers
     maxVisits: 3
     question:
       id: "q-impl-preflight-{{state.preflight-round.count}}"

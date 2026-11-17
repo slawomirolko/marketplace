@@ -21,6 +21,7 @@ nodes:
   - id: ask-context
     description: "Asks before any edit of a context file."
     kind: interrupt
+    askedBy: context-files
     question:
       id: q-impl-context
       text: "The Task changed these agent-context files:\n{{#state.context-files.context-files.files}}{{.}}\n{{/state.context-files.context-files.files}}Optimize them with olko-agents-optimizer (remove discoverable content, compress, add gotchas; never remove a non-inferable rule), or skip?"

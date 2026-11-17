@@ -17,6 +17,7 @@ nodes:
   - id: ask-obsidian
     description: "Asks whether to write the proposed notes; declining blocks the merge."
     kind: interrupt
+    askedBy: propose
     question:
       id: q-impl-obsidian
       text: "Obsidian proposal:\n{{state.propose.propose}}\nWrite these notes (approve), or decline (the merge is blocked)?"

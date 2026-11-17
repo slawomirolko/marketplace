@@ -103,6 +103,7 @@ nodes:
   - id: ask-cleanup
     description: "Step 12b: asks before deleting any Feature-level plan files. Only reached after a PASS audit. Lists the exact paths and what disappears."
     kind: interrupt
+    askedBy: feature-audit
     question:
       id: q-impl-feature-cleanup
       text: "Feature {{state.task.task.featureId}} audit PASS. Post-merge result:\n{{state.post-merge.post-merge.text}}\nFeature audit result:\n{{state.feature-audit.feature-audit.text}}\nExact absolute path to delete: {{state.task.task.featureDir}} (the whole Feature plan folder: Feature business plan, technical/implementation plan, stack plan, every remaining Task plan, and the shared Feature delivery tracker {{state.task.task.tracker}}).\nWhat disappears with it: the Feature base commit, the ordered Task/PR list, the Task reviews, the post-merge runtime evidence and the final audit verdict. The closure record is first copied into the Feature issue in YouTrack.\nAnswer delete to remove exactly that folder, or keep to retain everything."

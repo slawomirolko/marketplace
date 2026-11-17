@@ -183,6 +183,70 @@ export function agentScripts(item: Item, agents: Record<string, AgentInfo>): Age
   return name ? (agents[name]?.scripts ?? []) : [];
 }
 
+export interface HumanQuestion {
+  node: string;
+  id: string;
+  text: string;
+}
+
+/** The human icon of a graph node: green when the step asks you itself, black when it only passes on a question another step asks. */
+export interface HumanIcon {
+  role: "asks" | "relays";
+  sources: string[];
+  questions: HumanQuestion[];
+  permission: string | null;
+}
+
+function parentPath(key: string): string {
+  return key.slice(0, key.lastIndexOf("/"));
+}
+
+/**
+ * Marks the steps that ask the user. A step asks when an interrupt names it in `askedBy`, when it asks
+ * after a turn itself (`askAfterTurn`), or when its marketplace agent has a permission to ask. The interrupt
+ * that passes the question on, and every group or team holding a step that asks, relay it.
+ */
+export function humanIcons(level: Level, agents: Record<string, AgentInfo>): Map<string, HumanIcon> {
+  const items = allItems(level).filter((i): i is Exclude<Item, { kind: "terminal" }> => i.kind !== "terminal");
+  const icons = new Map<string, HumanIcon>();
+  const asker = (key: string): HumanIcon => {
+    const icon = icons.get(key) ?? { role: "asks" as const, sources: [key], questions: [], permission: null };
+    icons.set(key, icon);
+    return icon;
+  };
+  for (const item of items) {
+    if (item.kind === "step" && item.node.kind === "interrupt" && item.node.askedBy && item.node.question) {
+      const source = `${parentPath(item.key)}/${item.node.askedBy}`;
+      asker(source).questions.push({ node: item.key, id: item.node.question.id, text: item.node.question.text });
+      icons.set(item.key, { role: "relays", sources: [source], questions: [{ node: item.key, id: item.node.question.id, text: item.node.question.text }], permission: null });
+    }
+    if (item.kind === "step" && item.node.kind === "llm" && item.node.askAfterTurn && item.node.question) {
+      asker(item.key).questions.push({ node: item.key, id: item.node.question.id, text: item.node.question.text });
+    }
+    const name = agentNameOf(item);
+    const permission = name ? (agents[name]?.asks ?? null) : null;
+    if (permission) asker(item.key).permission = permission;
+  }
+  for (const item of items) {
+    if (!isGroup(item) || icons.get(item.key)?.role === "asks") continue;
+    const asking = allItems(item.inner).filter((i) => icons.get(i.key)?.role === "asks");
+    const inside = asking.filter((i) => !asking.some((o) => o !== i && (i.key.startsWith(`${o.key}/`) || i.key.startsWith(`${o.key}#`))));
+    if (inside.length) icons.set(item.key, { role: "relays", sources: inside.map((i) => i.key), questions: inside.flatMap((i) => icons.get(i.key)!.questions), permission: null });
+  }
+  return icons;
+}
+
+/** The step name in a graph key: the node id, or the agent id of a team member. */
+export function stepName(key: string): string {
+  return key.slice(Math.max(key.lastIndexOf("/"), key.lastIndexOf("#")) + 1);
+}
+
+export function humanLabel(icon: HumanIcon): string {
+  if (icon.role === "relays") return `Passes on a question to you from: ${[...new Set(icon.sources.map(stepName))].join(", ")}`;
+  const asked = icon.questions.map((q) => `${q.id} (through ${stepName(q.node)})`);
+  return [asked.length ? `Asks you: ${asked.join(", ")}` : null, icon.permission ? `May ask you itself (${icon.permission})` : null].filter(Boolean).join(". ");
+}
+
 export function ranIn(item: Item, run: RunData | null): boolean {
   if (!run || item.kind === "terminal") return false;
   if (item.kind === "agent") {

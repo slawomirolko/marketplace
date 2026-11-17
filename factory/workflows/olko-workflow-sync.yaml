@@ -69,6 +69,7 @@ nodes:
   - id: ask-open
     description: "The source is still open after three rounds. Shows the findings. The source stays unlocked, so it is marked stale again."
     kind: interrupt
+    askedBy: verify
     maxVisits: 30
     question:
       id: "q-wfsync-open-{{state.item-next.index}}"
@@ -92,6 +93,7 @@ nodes:
   - id: ask-apply
     description: "Shows the YAML diff, the sources that are still open, and the steps that need engine work. No change is kept without your approval."
     kind: interrupt
+    askedBy: diff
     question:
       id: q-wfsync-apply
       text: "YAML changes:\n{{state.diff.diff.stat}}\nFull diff: {{state.diff.diff.diffFile}}\nSources still open (not locked): {{state.diff.diff.open}}\nNeeds engine work:\n{{state.diff.diff.needsOp}}\nApprove (keep the YAML and lock the verified sources) or revert everything?"

@@ -41,13 +41,44 @@ test("a valid YAML workflow loads with node paths, roles and edges", () => {
   assert.equal(workflow.entry, "first");
 });
 
+const ASKED = `
+name: asked
+version: 1.0.0
+entry: first
+roles: { worker: low }
+nodes:
+  - id: first
+    kind: script
+    op: builtin.pass
+  - id: second
+    kind: llm
+    role: worker
+    agent: olko-review-verifier
+    prompt: "Check {{goal}}"
+  - id: ask
+    kind: interrupt
+    askedBy: second
+    question: { id: q-ask, text: "{{state.second.second}}" }
+edges:
+  - { from: first, to: second }
+  - { from: second, to: ask }
+  - { from: ask, to: END }
+`;
+
 const INVALID: [string, string, RegExp][] = [
   ["unknown operation", VALID.replace("builtin.pass", "builtin.nothing"), /unknown operation builtin\.nothing/],
   ["edge to a missing node", VALID.replace("{ from: second, to: END }", "{ from: second, to: third }"), /edge to unknown node 'third'/],
   ["llm node role without a tier", VALID.replace("roles: { worker: low }", "roles: { other: low }"), /role worker has no tier/],
   ["schema violation", VALID.replace("kind: script", "kind: shell"), /kind/],
   ["broken YAML", "name: [", /YAML/],
+  ["question asked by a script step", ASKED.replace("askedBy: second", "askedBy: first"), /askedBy first is not an llm step of this workflow/],
+  ["question asked by an unknown step", ASKED.replace("askedBy: second", "askedBy: nobody"), /askedBy nobody is not an llm step of this workflow/],
+  ["askedBy on an llm step", VALID.replace("agent: olko-review-verifier", "agent: olko-review-verifier\n    askedBy: second"),/askedBy is only for interrupt steps/],
 ];
+
+test("an interrupt names the llm step whose question it passes on", () => {
+  assert.doesNotThrow(() => loadWorkflowFile(writeYaml(ASKED)));
+});
 
 for (const [label, text, error] of INVALID) {
   test(`a workflow with ${label} is rejected with a clear error`, () => {
@@ -203,6 +234,31 @@ test("an agent lists the scripts of the skills it loads, and a skill its own, wi
     assert.deepEqual(describeAgent("syncer")?.scripts, [{ skill: "sync", name: "sync.mjs", file: "skills/demo/sync/scripts/sync.mjs" }]);
     assert.deepEqual(describeAgent("sync")?.scripts, [{ skill: "sync", name: "sync.mjs", file: "skills/demo/sync/scripts/sync.mjs" }]);
     assert.deepEqual(describeAgent("plain")?.scripts, []);
+  } finally {
+    if (previous === undefined) delete process.env.FACTORY_MARKETPLACE_DIR;
+    else process.env.FACTORY_MARKETPLACE_DIR = previous;
+  }
+});
+
+test("an agent that may ask the user itself names its permission: OpenCode question allow or the AskUserQuestion tool", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "factory-marketplace-"));
+  const write = (rel: string, text: string) => {
+    fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+    fs.writeFileSync(path.join(root, rel), text);
+  };
+  write("agents/opencode/asker.md", "---\ndescription: asker\npermission:\n  question: allow\n---\nbody\n");
+  write("agents/opencode/silent.md", "---\ndescription: silent\npermission:\n  question: deny\n---\nbody\n");
+  write("plugins/demo/agents/claude-asker.md", "---\nname: claude-asker\ndescription: asks\ntools: Read, Bash, AskUserQuestion\n---\nbody\n");
+  write("plugins/demo/agents/claude-reader.md", "---\nname: claude-reader\ndescription: reads\ntools: Read, Grep\n---\nbody\n");
+  write("skills/demo/plain/SKILL.md", "---\ndescription: plain\n---\nbody\n");
+  const previous = process.env.FACTORY_MARKETPLACE_DIR;
+  process.env.FACTORY_MARKETPLACE_DIR = root;
+  try {
+    assert.equal(describeAgent("asker")?.asks, "question: allow");
+    assert.equal(describeAgent("silent")?.asks, null);
+    assert.equal(describeAgent("claude-asker")?.asks, "AskUserQuestion tool");
+    assert.equal(describeAgent("claude-reader")?.asks, null);
+    assert.equal(describeAgent("plain")?.asks, null);
   } finally {
     if (previous === undefined) delete process.env.FACTORY_MARKETPLACE_DIR;
     else process.env.FACTORY_MARKETPLACE_DIR = previous;

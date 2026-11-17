@@ -18,6 +18,9 @@
   --scroll-roll: #e2cf9f;
   --scroll-shine: #fbf4df;
   --scroll-line: #a8864a;
+  --human-asks: #1a7f37;
+  --human-relays: #000000;
+  --human-halo: transparent;
   color-scheme: light;
 }
 
@@ -42,6 +45,8 @@
     --scroll-shine: #66553a;
     --scroll-line: #b8975a;
     --unknown: #ff6b81;
+    --human-asks: #3fb950;
+    --human-halo: #e8eaed;
     color-scheme: dark;
   }
 }
@@ -98,6 +103,10 @@ pre { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line
 .agent-script-list { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card.selected, .group.selected { outline: 3px solid var(--accent); outline-offset: 2px; }
 .card-title { font-weight: 600; }
+.human-icon { display: inline-block; margin-right: 4px; vertical-align: -2px; line-height: 0; }
+.human-icon svg { stroke-width: 1; }
+.human-asks svg { fill: var(--human-asks); stroke: var(--human-asks); }
+.human-relays svg { fill: var(--human-relays); stroke: var(--human-halo); }
 .card-sub { color: var(--muted); font-size: 12px; }
 .cost { font-size: 12px; margin-top: 2px; }
 .cost-unknown { color: var(--unknown); font-weight: 600; }

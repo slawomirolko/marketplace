@@ -28,6 +28,7 @@ nodes:
   - id: ask-memory
     description: "Asks whether to continue without a memory block."
     kind: interrupt
+    askedBy: memory
     question:
       id: q-memory-missing
       text: "The review memory block {{state.memory.memory.file}} does not exist. Fix: install the agent memory with `node scripts/install-opencode-agents.mjs --project <project> --agent olko-review-orchestrator`. Continue this review without memory, or stop?"

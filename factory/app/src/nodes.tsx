@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Handle, Position } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import { useViewer } from "./context.ts";
-import { agentScripts, formatDuration, formatTokens, formatUsd, isDisabled, isGroup, isLive, ranIn } from "./tree.ts";
+import { agentScripts, formatDuration, formatTokens, formatUsd, humanLabel, isDisabled, isGroup, isLive, ranIn } from "./tree.ts";
 import type { CardFlowNode, ClusterFlowNode, Item, RunIndexEntry, RunReport, TerminalFlowNode } from "./types.ts";
 
 const EMPTY_ENTRY: RunIndexEntry = { cost: null, tier: null, model: null, failure: null, runs: null, timeMs: null };
@@ -124,6 +124,20 @@ function RunBadge({ item }: { item: Item }) {
   );
 }
 
+function HumanMark({ item }: { item: Item }) {
+  const icon = useViewer().humans.get(item.key);
+  if (!icon) return null;
+  const label = humanLabel(icon);
+  return (
+    <span className={`human-icon human-${icon.role}`} title={label} aria-label={label} role="img">
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+        <circle cx="8" cy="4.5" r="3" />
+        <path d="M2 15c0-3.6 2.7-6 6-6s6 2.4 6 6z" />
+      </svg>
+    </span>
+  );
+}
+
 function AgentScripts({ item }: { item: Item }) {
   const { agents, onlyAgents } = useViewer();
   const scripts = agentScripts(item, agents);
@@ -152,7 +166,10 @@ export function CardNode({ data, selected }: NodeProps<CardFlowNode>) {
     <>
       <div className={`${notRun ? "not-run " : ""}${staleSource ? "stale " : ""}card tier-${tier ?? "none"} kind-${item.kind} ${item.kind === "step" ? `node-${item.node.kind}` : ""} ${selected ? "selected" : ""} ${off ? "disabled" : ""} ${live.className}`} title={off ? "switched off in this run" : undefined}>
         <Handles />
-        <div className="card-title">{title(item)}</div>
+        <div className="card-title">
+          <HumanMark item={item} />
+          {title(item)}
+        </div>
         {live.label && <div className="card-sub live-label">● {live.label}</div>}
         {staleSource && <div className="card-sub stale-label">⚠ source changed</div>}
         {off && <div className={`card-sub off-label${item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? " required-off" : ""}`}>{item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? "required step switched off" : "switched off"}</div>}
@@ -179,7 +196,10 @@ export function GroupNode({ data, selected }: NodeProps<ClusterFlowNode>) {
       <div className={`${notRun ? "not-run " : ""}${staleSource ? "stale " : ""}group kind-${item.kind} ${selected ? "selected" : ""} ${off ? "disabled" : ""} ${live.className}`} title={off ? "switched off in this run" : undefined}>
         <Handles />
         <div className="group-header">
-          <span className="card-title">{title(item)}</span>
+          <span className="card-title">
+            <HumanMark item={item} />
+            {title(item)}
+          </span>
           {live.label && <span className="card-sub live-label"> ● {live.label}</span>}
           {staleSource && <div className="card-sub stale-label">⚠ source changed since the YAML was written: {staleSource}</div>}
           {off && <span className={`card-sub off-label${item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? " required-off" : ""}`}> {item.kind !== "terminal" && item.kind !== "agent" && item.node.required ? "required step switched off" : "switched off"}</span>}

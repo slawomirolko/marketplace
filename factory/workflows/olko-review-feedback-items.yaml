@@ -55,6 +55,7 @@ nodes:
   - id: fb-decide
     description: "Asks your decision for this item: fix, wont-fix, question or skip."
     kind: interrupt
+    askedBy: fb-assess
     maxVisits: 200
     question:
       id: "q-feedback-{{state.fb-next.index}}"

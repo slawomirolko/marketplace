@@ -155,6 +155,10 @@
         "question": {
           "$ref": "#/$defs/question"
         },
+        "askedBy": {
+          "$ref": "#/$defs/id",
+          "description": "interrupt: the llm step of this workflow whose output this question passes on to the user. The viewer draws that step as the one that asks the user."
+        },
         "outputSchema": {
           "type": "string",
           "minLength": 1
