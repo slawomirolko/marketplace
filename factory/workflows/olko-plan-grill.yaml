@@ -41,6 +41,7 @@ nodes:
   - id: ask-grill
     description: "Asks one grill question with three options, the recommended one first."
     kind: interrupt
+    askedBy: grill
     maxVisits: 100
     question:
       id: "q-plan-grill-{{state.grill-round.count}}-{{state.grill-next.index}}"

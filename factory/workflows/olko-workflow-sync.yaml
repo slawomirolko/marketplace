@@ -29,6 +29,7 @@ nodes:
   - id: ask-new
     description: "A main agent has no workflow. Asks you if you want to map it now. A new workflow costs more than an update."
     kind: interrupt
+    askedBy: scan
     maxVisits: 30
     question:
       id: "q-wfsync-new-{{state.item-next.index}}"

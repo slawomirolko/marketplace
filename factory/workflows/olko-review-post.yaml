@@ -52,6 +52,7 @@ nodes:
   - id: ask-post
     description: "Asks post or skip for this finding."
     kind: interrupt
+    askedBy: rank
     maxVisits: 200
     question:
       id: "q-post-{{state.next-finding.index}}"

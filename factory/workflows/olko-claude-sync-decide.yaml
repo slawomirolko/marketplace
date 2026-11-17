@@ -49,6 +49,7 @@ nodes:
   - id: ask-scope
     description: "Asks the exclusion scope: all or one direction."
     kind: interrupt
+    askedBy: plan
     maxVisits: 200
     question:
       id: "q-claude-sync-scope-{{state.record-next.item.id}}"
@@ -57,6 +58,7 @@ nodes:
   - id: ask-reason
     description: "Asks the reason for the exclusion."
     kind: interrupt
+    askedBy: plan
     maxVisits: 200
     question:
       id: "q-claude-sync-reason-{{state.record-next.item.id}}"

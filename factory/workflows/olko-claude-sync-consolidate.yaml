@@ -69,6 +69,7 @@ nodes:
   - id: ask-suggestion
     description: "Asks accept, reject or skip."
     kind: interrupt
+    askedBy: suggest
     maxVisits: 200
     question:
       id: "q-claude-sync-suggestion-{{state.suggestion-next.item.id}}"

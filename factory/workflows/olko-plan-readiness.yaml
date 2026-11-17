@@ -53,6 +53,7 @@ nodes:
   - id: ask-blocker
     description: "Puts one blocker question with three options, composed by grill-with-docs and the recommended one first, to the user."
     kind: interrupt
+    askedBy: readiness
     maxVisits: 100
     question:
       id: "q-plan-blocker-{{state.blocker-round.count}}-{{state.blocker-next.index}}"

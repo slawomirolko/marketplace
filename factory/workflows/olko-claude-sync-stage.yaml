@@ -111,6 +111,7 @@ nodes:
   - id: ask-finding
     description: "Asks: replace, delete, keep, or skip the row."
     kind: interrupt
+    askedBy: findings
     maxVisits: 200
     question:
       id: "q-claude-sync-finding-{{state.finding-next.item.id}}"
@@ -150,6 +151,7 @@ nodes:
   - id: ask-missing
     description: "Asks whether to add it as an install-user row."
     kind: interrupt
+    askedBy: findings
     maxVisits: 200
     question:
       id: "q-claude-sync-missing-{{state.missing-next.item.id}}"

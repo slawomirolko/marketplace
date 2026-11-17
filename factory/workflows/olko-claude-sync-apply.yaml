@@ -38,6 +38,7 @@ nodes:
   - id: ask-category
     description: "Asks the Olko category of a new skill."
     kind: interrupt
+    askedBy: apply-plan
     maxVisits: 200
     question:
       id: "q-claude-sync-category-{{state.apply-next.item.id}}"
@@ -46,6 +47,7 @@ nodes:
   - id: ask-overwrite
     description: "Final confirmation before take-target, take-olko or revert-user overwrites a copy."
     kind: interrupt
+    askedBy: apply-plan
     maxVisits: 200
     question:
       id: "q-claude-sync-overwrite-{{state.apply-next.item.id}}"
@@ -54,6 +56,7 @@ nodes:
   - id: ask-write
     description: "Shows the diff and asks before writing into the user scope."
     kind: interrupt
+    askedBy: apply-plan
     maxVisits: 200
     question:
       id: "q-claude-sync-write-{{state.apply-next.item.id}}"
