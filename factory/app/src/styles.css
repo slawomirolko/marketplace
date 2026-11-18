@@ -21,6 +21,7 @@
   --human-asks: #1a7f37;
   --human-relays: #000000;
   --human-halo: transparent;
+  --supervisor: #c4c8ce;
   color-scheme: light;
 }
 
@@ -47,6 +48,7 @@
     --unknown: #ff6b81;
     --human-asks: #3fb950;
     --human-halo: #e8eaed;
+    --supervisor: #4a4f57;
     color-scheme: dark;
   }
 }
