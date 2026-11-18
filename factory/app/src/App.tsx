@@ -8,7 +8,7 @@ import type { ViewerState } from "./context.ts";
 import { Details } from "./Details.tsx";
 import { CallsList } from "./Calls.tsx";
 import { QuestionsList } from "./Questions.tsx";
-import { SupervisorRing } from "./SupervisorRing.tsx";
+import { SupervisorRing, ringBounds } from "./SupervisorRing.tsx";
 import { layoutGraph, scriptsHeight } from "./layout.ts";
 import { agentsOnly } from "./agents-only.ts";
 import { nodeAriaLabel, nodeTypes } from "./nodes.tsx";
@@ -364,7 +364,6 @@ function Viewer() {
         </header>
         <main>
           <div className="canvas">
-            <SupervisorRing supervisor={shown?.report.supervisor}>
             {built?.error ? (
               <p className="error" role="alert">Could not draw this run: {built.error}</p>
             ) : (
@@ -387,10 +386,10 @@ function Viewer() {
               </Panel>
               <Background />
               <Controls showInteractive={false} />
-              <FitToBounds bounds={graph.bounds} />
+              <FitToBounds bounds={ringBounds(graph.bounds)} />
+              <SupervisorRing supervisor={shown?.report.supervisor} bounds={graph.bounds} />
             </ReactFlow>
             )}
-            </SupervisorRing>
           </div>
           <aside>
             <div className="tabs" role="tablist" aria-label="Details">
