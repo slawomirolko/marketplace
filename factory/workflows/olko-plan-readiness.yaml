@@ -1,6 +1,6 @@
 name: olko-plan-readiness
-version: 0.2.0
-description: "Steps 8 and 8b: cleanup of rejected options, consistency gate, then blocker batches until every plan says Ready for implementation: yes; each blocker decision is recorded in tracker.md and the batch is applied together."
+version: 0.3.0
+description: "Steps 8 and 8b: cleanup of rejected options, consistency gate, then blocker batches (including the GAP items of the consistency gates) until every plan says Ready for implementation: yes; each blocker decision is recorded in tracker.md and the batch is applied together."
 source: "agents/opencode/olko-plan-documentation-orchestrator.md (Steps 8-8b: cleanup, consistency gate, blocker batches until every plan is ready)"
 roles:
   plan-gate: medium
@@ -39,7 +39,7 @@ nodes:
     parse: { json: [questions] }
     prompt: |
       Do only the read of step 8b for {{state.feature.feature.featureDir}} (project {{input.project}}): read `## Implementation readiness` and `## Open items` of implementation.md and every Task file, with the full plan context and the locked decisions in tracker.md. Read only; do not delegate, change no file and do not ask the user yourself.
-      Return every BLOCKING item as a question with exactly 3 options (the first recommended); return no questions when every plan says `Ready for implementation: yes`. Do not split a question or paraphrase it into new choices, and do not repeat a locked decision.
+      Return every BLOCKING item as a question with exactly 3 options (the first recommended); return no questions when every plan says `Ready for implementation: yes`. A `GAP-<n>` item from a consistency gate is a BLOCKING item: name its mismatch and offer these 3 options, the recommended one first: accept it as ACCEPTED-GAP in tracker.md; correct the plan; keep it BLOCKING so the plan stays not ready. Do not split a question or paraphrase it into new choices, and do not repeat a locked decision.
       Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the questions and options in that language, concisely.
       If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
       End with one ```json block, one item per blocker, its text in this layout:

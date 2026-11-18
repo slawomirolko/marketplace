@@ -184,9 +184,9 @@
     }
   },
   "olko-plan-audit": {
-    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "commit": "cc761fc603f9d4253e96159e7d8592560dbd9b91",
     "files": {
-      "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+      "agents/opencode/olko-plan-documentation-orchestrator.md": "5f02358d5d290756"
     }
   },
   "olko-plan-discovery": {
@@ -197,9 +197,9 @@
     }
   },
   "olko-plan-documentation": {
-    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "commit": "cc761fc603f9d4253e96159e7d8592560dbd9b91",
     "files": {
-      "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+      "agents/opencode/olko-plan-documentation-orchestrator.md": "5f02358d5d290756"
     }
   },
   "olko-plan-editor-open": {
@@ -209,51 +209,51 @@
     }
   },
   "olko-plan-entry": {
-    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "commit": "cc761fc603f9d4253e96159e7d8592560dbd9b91",
     "files": {
-      "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+      "agents/opencode/olko-plan-documentation-orchestrator.md": "5f02358d5d290756"
     }
   },
   "olko-plan-finalize": {
-    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "commit": "cc761fc603f9d4253e96159e7d8592560dbd9b91",
     "files": {
-      "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+      "agents/opencode/olko-plan-documentation-orchestrator.md": "5f02358d5d290756"
     }
   },
   "olko-plan-gate": {
-    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "commit": "cc761fc603f9d4253e96159e7d8592560dbd9b91",
     "files": {
-      "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+      "agents/opencode/olko-plan-documentation-orchestrator.md": "5f02358d5d290756"
     }
   },
   "olko-plan-grill": {
-    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "commit": "cc761fc603f9d4253e96159e7d8592560dbd9b91",
     "files": {
-      "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+      "agents/opencode/olko-plan-documentation-orchestrator.md": "5f02358d5d290756"
     }
   },
   "olko-plan-package": {
-    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "commit": "cc761fc603f9d4253e96159e7d8592560dbd9b91",
     "files": {
-      "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+      "agents/opencode/olko-plan-documentation-orchestrator.md": "5f02358d5d290756"
     }
   },
   "olko-plan-readiness": {
-    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "commit": "cc761fc603f9d4253e96159e7d8592560dbd9b91",
     "files": {
-      "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+      "agents/opencode/olko-plan-documentation-orchestrator.md": "5f02358d5d290756"
     }
   },
   "olko-plan-review-files": {
-    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "commit": "cc761fc603f9d4253e96159e7d8592560dbd9b91",
     "files": {
-      "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+      "agents/opencode/olko-plan-documentation-orchestrator.md": "5f02358d5d290756"
     }
   },
   "olko-plan-tracker-context": {
-    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "commit": "cc761fc603f9d4253e96159e7d8592560dbd9b91",
     "files": {
-      "agents/opencode/olko-plan-documentation-orchestrator.md": "c2bd052872143db1"
+      "agents/opencode/olko-plan-documentation-orchestrator.md": "5f02358d5d290756"
     }
   },
   "olko-plan-tracker-publish": {
