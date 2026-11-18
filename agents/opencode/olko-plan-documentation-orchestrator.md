@@ -208,8 +208,14 @@ verdict.
    file estimate, dependencies, parallelism, acceptance, and business outcome.
    If any point is missing, contradictory, or unjustified, load
    `olko-plan-editor` again, correct the Feature package and affected Task
-   files, refresh `stack.md`, and repeat this consistency gate. Do not proceed
-   to the next phase or report completion while any unmatched point remains.
+   files, refresh `stack.md`, and repeat this consistency gate. Run at most
+   three corrections per gate. If the check after the third correction still
+   fails, do not ask the user at this gate: record each remaining mismatch as a
+   `BLOCKING` open item `GAP-<n>` (awaiting user acceptance) in the `## Open items`
+   of the affected plans and in `tracker.md`, then continue. Step 8b asks about
+   every open `GAP-<n>` item in its blocker batch, together with the other
+   blockers. Do not proceed to the next phase or report completion while any
+   unmatched point remains that is not recorded as a `GAP-<n>` item.
 4. Read the technical document's implementation scope. Delegate a read-only
    architecture-and-style review only for technologies that the technical
    document says will be implemented:
@@ -285,7 +291,10 @@ verdict.
      `tracker.md` batch and apply the same question-closure and full
      re-validation gate above. Refresh readiness after each closed batch; if
      blockers remain, form a new batch and repeat. Never validate partial
-     answers or run a separate loop per answer. A blocker is resolved only by an
+     answers or run a separate loop per answer. Each open `GAP-<n>` item from a
+     consistency gate is a blocker of this batch; its options are accept it as
+     `ACCEPTED-GAP` in `tracker.md`, correct the plan, or keep it `BLOCKING` so the
+     plan stays not ready. A blocker is resolved only by an
      explicit user decision (design approved, scope changed, or exception
      granted); never silently drop or defer it. Record each batch, resolution,
      and cycle result in `tracker.md` locked decisions.
