@@ -1,10 +1,11 @@
 name: olko-impl-tests-first
-version: 0.2.0
+version: 0.3.0
 description: "Step 3a: the orchestrator names the stacks of the Task and their agents; the test-first author writes one failing test per acceptance criterion for every stack; unclear criteria and blocked choices go to you, never guessed."
 source: "agents/opencode/olko-implementation-orchestrator.md (step 3a, FAILING TESTS FIRST; choose agents by stack and by the allowlist)"
 roles:
   implementer: medium
   orchestrator: medium
+  context: low
 entry: stacks
 limits:
   maxCycleIterations: 3
@@ -21,6 +22,18 @@ nodes:
       Read only: name the stacks that Task {{state.task.task.taskName}} touches, from its approved plan {{state.task.task.taskFile}} and the Feature plan {{state.task.task.featurePlan}}, and choose the agents of each stack by your stack rule and your permission.task allowlist. Delegate nothing, ask nothing and change no file.
       Stack ids: dotnet, army-python, mobile, react, react-native. Never invent an agent name and never leave one null: the implementer of a stack is olko-<stack id>-implementer and its test runner is olko-<stack id>-test-runner, both in your permission.task allowlist.
       End with one ```json block, one item per stack in each list: {"stacks": ["<stack id>"], "authors": [{"id": "<stack id>", "agentName": "olko-test-first-author"}], "implementers": [{"id": "<stack id>", "agentName": "<the stack implementer>"}], "runners": [{"id": "<stack id>", "agentName": "<the stack test runner>"}]}
+  - id: tests-store-context
+    description: "olko-project-context builds the project store digest for the files and directories the Task plan names, for the test-first author."
+    kind: llm
+    role: context
+    agent: olko-project-context
+    tools: [read, bash]
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: { json: [noStore, digest, blocked, enforced?, cut?, error?] }
+    prompt: |
+      Project: the current working directory (the Task worktree).
+      Paths: read the approved Task plan {{state.task.task.taskFile}} and use every file path and directory it names (a directory as <dir>/x).
+      Build the store digest for these paths.
   - id: tests-round
     description: "Counts the failing-tests-first rounds."
     kind: script
@@ -36,6 +49,15 @@ nodes:
     dirs: ["{{state.task.task.featureDir}}"]
     parse: { line: [result, count, unclear, blocked] }
     prompt: |
+      {{#state.tests-store-context.tests-store-context.digest.length}}
+      Project store digest for this Task (binding; open a full ADR only to resolve a conflict with it or before you return Blocked: about a decision):
+      {{/state.tests-store-context.tests-store-context.digest.length}}
+      {{#state.tests-store-context.tests-store-context.digest}}
+      - {{source}} [{{topic}}]: {{line}}
+      {{/state.tests-store-context.tests-store-context.digest}}
+      {{#state.tests-store-context.tests-store-context.blocked}}
+      Unresolved store topic {{topic}} ({{#adrs}}{{.}} {{/adrs}}): more than one ADR binds these paths. A test that depends on this choice is a Blocked: item with these ADRs as the options.
+      {{/state.tests-store-context.tests-store-context.blocked}}
       Mode: write. Task {{state.task.task.taskName}}, stack {{agent.id}}. Approved Task plan: {{state.task.task.taskFile}}. Work only in this worktree.
       Acceptance criteria:
       {{state.task.task.criteria}}
@@ -79,7 +101,8 @@ nodes:
     op: builtin.stop
     with: { reason: "Implementation stopped: criteria still unclear after {{state.tests-round.count}} rounds:\n{{state.tests-check.tests-check.questions}}" }
 edges:
-  - { from: stacks, to: tests-round }
+  - { from: stacks, to: tests-store-context }
+  - { from: tests-store-context, to: tests-round }
   - { from: tests-round, to: write-tests }
   - { from: write-tests, to: tests-check }
   - { from: tests-check, to: END, when: 'tests-check.tests-check.verdict == "done"', description: "every criterion has a failing test" }

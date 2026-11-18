@@ -1,11 +1,12 @@
 name: olko-impl-build
-version: 0.2.0
-description: "Step 3b: the orchestrator splits the Task into small ordered chunks with exclusive files and a stack implementer each; every chunk result is checked by the orchestrator against its child-result hard rules (no comments, no ids in code, no CI files, failing-test-first files untouched). Test disputes, edge cases and blocked decisions are resolved before the next chunk."
+version: 0.3.0
+description: "Step 3b: the orchestrator splits the Task into small ordered chunks with exclusive files and a stack implementer each; olko-project-context builds the project store digest for those files once, and you decide topics where overlapping ADRs leave no single binding answer; every chunk result is checked by the orchestrator against its child-result hard rules (no comments, no ids in code, no CI files, failing-test-first files untouched). Test disputes, edge cases and blocked decisions are resolved before the next chunk."
 source: "agents/opencode/olko-implementation-orchestrator.md (step 3b, CHUNKED DELEGATION, TEST DISPUTE, EDGE CASES, BLOCKED DECISIONS, child-result hard rules)"
 roles:
   planner: high
   implementer: medium
   orchestrator: medium
+  context: low
 entry: chunker
 limits:
   maxCycleIterations: 4
@@ -23,6 +24,29 @@ nodes:
       Stack implementers: {{#state.stacks.stacks.implementers}}{{id}} = {{agentName}}; {{/state.stacks.stacks.implementers}}
       Split the implementation into small ordered chunks that a child finishes in a few tool calls: one phase, mechanism or file slice per chunk. Give each file to exactly one chunk. Production code only; the failing tests already exist. A brief never asks for comments.
       End with one ```json block: {"chunks": [{"stack": "<stack id>", "title": "", "files": ["path"], "brief": "what to change", "agents": [{"id": "<stack id>", "agentName": "<the implementer of that stack, from the list above>"}]}]}
+  - id: store-context
+    description: "olko-project-context builds the project store digest once for the files of all chunks: the binding ADR decisions and MUST / MUST NOT lines, rule-file lines, and the topics where overlapping ADRs leave more than one binding answer."
+    kind: llm
+    role: context
+    agent: olko-project-context
+    tools: [read, bash]
+    parse: { json: [noStore, digest, blocked, enforced?, cut?, error?] }
+    prompt: |
+      Project: the current working directory (the Task worktree).
+      Paths: {{#state.chunker.chunker.chunks}}{{#files}}{{.}} {{/files}}{{/state.chunker.chunker.chunks}}
+      Build the store digest for these paths.
+  - id: ask-store
+    description: "Overlapping ADRs leave more than one binding answer for a topic: you name the binding ADR per topic for this Task, or stop."
+    kind: interrupt
+    askedBy: store-context
+    question:
+      id: q-impl-store
+      text: "The project store has topics where more than one ADR binds the same files, and no overrides link decides between them:\n{{#state.store-context.store-context.blocked}}- {{topic}}: {{#adrs}}{{.}} {{/adrs}}(files: {{#paths}}{{.}} {{/paths}})\n{{/state.store-context.store-context.blocked}}For each topic, name the ADR that binds for this Task (for example: logging.format=ADR-0007), or answer stop. Fix the store later with the olko-adr-store-reconcile workflow."
+  - id: stop-store
+    description: "Stops: you chose to fix the project store before the implementation."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Implementation stopped before the first chunk: the project store has overlapping ADRs without a binding answer. Run the olko-adr-store-reconcile workflow for this project, then start the Task again." }
   - id: chunk-next
     description: "Takes the next chunk."
     kind: script
@@ -39,6 +63,15 @@ nodes:
     dirs: ["{{state.task.task.featureDir}}"]
     parse: { line: [result, verdict, summary] }
     prompt: |
+      {{#state.store-context.store-context.digest.length}}
+      Project store digest for this Task (binding; open a full ADR only to resolve a conflict with it or before you return Blocked: about a decision):
+      {{/state.store-context.store-context.digest.length}}
+      {{#state.store-context.store-context.digest}}
+      - {{source}} [{{topic}}]: {{line}}
+      {{/state.store-context.store-context.digest}}
+      {{#state.ask-store.answer}}
+      Binding ADR per overlapping topic, decided by the user for this Task: {{state.ask-store.answer}}
+      {{/state.ask-store.answer}}
       Chunk {{state.chunk-next.number}} of {{state.chunk-next.total}} of Task {{state.task.task.taskName}}: {{state.chunk-next.item.title}}
       Files you own: {{#state.chunk-next.item.files}}{{.}} {{/state.chunk-next.item.files}}
       Brief: {{state.chunk-next.item.brief}}
@@ -145,7 +178,11 @@ nodes:
     op: builtin.stop
     with: { reason: "Implementation stopped: chunk {{state.chunk-next.number}} still breaks the child-result rules after three attempts:\n{{#state.child-check.child-check.violations}}{{.}}\n{{/state.child-check.child-check.violations}}" }
 edges:
-  - { from: chunker, to: chunk-next }
+  - { from: chunker, to: store-context }
+  - { from: store-context, to: ask-store, when: "store-context.store-context.blocked > 0", description: "overlapping ADRs without a binding answer" }
+  - { from: store-context, to: chunk-next, description: "the digest is ready (or there is no store)" }
+  - { from: ask-store, to: stop-store, when: 'ask-store.answer == "stop"', description: "you chose to fix the store first" }
+  - { from: ask-store, to: chunk-next, description: "you named the binding ADRs" }
   - { from: chunk-next, to: implement, when: "chunk-next.done == false", description: "a chunk is left" }
   - { from: chunk-next, to: END, description: "every chunk is done" }
   - { from: implement, to: child-check }

@@ -1,5 +1,5 @@
 name: olko-implementation
-version: 0.2.0
+version: 0.3.0
 description: "Implements one approved Task: entry gate (plans it first when no plan exists), worktree and journal, compatibility preflight, failing tests first, chunked implementation with child-result checks, style and tests, isolated runtime verification, context-file optimization, scope gate, local Task review, then commit, PR, gates, merge and closure after explicit approvals."
 source: agents/opencode/olko-implementation-orchestrator.md (steps 1-13 incl. 1a, 5a, 12a, 12b; each phase is a group file; tracker, Docker, Obsidian, editor and adoption sit behind switches)
 entry: entry
@@ -63,6 +63,7 @@ nodes:
       Chunks: {{state.chunk-next.total}}
       Code paths: {{state.scope-gate.scope-gate.count}}
       Blocking review findings left: {{state.review-gate.review-gate.blocking.length}}
+      Project store: {{#state.store-context.store-context.blocked.length}}overlapping ADR topics were decided for this Task only ({{state.ask-store.answer}}): {{#state.store-context.store-context.blocked}}{{topic}} ({{#adrs}}{{.}} {{/adrs}}); {{/state.store-context.store-context.blocked}}report that the store needs the factory workflow olko-adr-store-reconcile for this project.{{/state.store-context.store-context.blocked.length}}{{^state.store-context.store-context.blocked.length}}no overlapping ADR topics.{{/state.store-context.store-context.blocked.length}}
       Delivery: {{#state.commit.commit}}committed {{commit}}, PR {{url}}{{/state.commit.commit}}{{^state.commit.commit}}{{#state.ask-commit.answer}}not committed (you answered {{state.ask-commit.answer}}){{/state.ask-commit.answer}}{{/state.commit.commit}}
       Merge: {{#state.merge-retain.merge-retain}}{{state.merge-retain.merge-retain}}{{/state.merge-retain.merge-retain}}{{^state.merge-retain.merge-retain}}not merged{{/state.merge-retain.merge-retain}}
       Reply with the report as plain text, at most fifteen lines.

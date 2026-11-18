@@ -1,4 +1,10 @@
 {
+  "olko-adr-store-reconcile": {
+    "commit": "7aabb50165eba9b076d2fbfce1880edbc69147d8",
+    "files": {
+      "agents/opencode/olko-adr-store-reconciler.md": "cfca23f50094166b"
+    }
+  },
   "olko-claude-sync": {
     "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
     "files": {

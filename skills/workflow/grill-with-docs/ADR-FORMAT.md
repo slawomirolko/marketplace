@@ -19,6 +19,7 @@ That's it. An ADR can be a single paragraph. The value is in recording *that* a 
 Only include these when they add genuine value. Most ADRs won't need them.
 
 - **Status** frontmatter (`proposed | accepted | deprecated | superseded by ADR-NNNN`) — useful when decisions are revisited
+- **Digest frontmatter** (`topic`, `scope`, `decision`, `overrides`, `supersedes`, `enforcedBy`): write it when the project store already uses it (see `olko-init-project-docs`). Before you write an ADR with a `topic`, look for an `Accepted` ADR with the same topic and an overlapping scope. If there is one, ask whether the new ADR supersedes it, overrides it for a narrower scope, or gets a narrower scope.
 - **Considered Options** — only when the rejected alternatives are worth remembering
 - **Consequences** — only when non-obvious downstream effects need to be called out
 
