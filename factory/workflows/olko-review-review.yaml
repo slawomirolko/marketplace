@@ -75,7 +75,7 @@ nodes:
       Project rules check: {{#state.rules-merge.rules-merge.noStore}}no-store, skipped{{/state.rules-merge.rules-merge.noStore}}
       Store violations per entry: {{#state.rules-merge.rules-merge.perEntry}}{{entry}} {{count}}; {{/state.rules-merge.rules-merge.perEntry}}{{^state.rules-merge.rules-merge.perEntry}}none{{/state.rules-merge.rules-merge.perEntry}}
       {{#state.rules-store-context.rules-store-context.blocked.length}}
-      Unresolved store topics (overlapping ADRs; no violation was reported against them): {{#state.rules-store-context.rules-store-context.blocked}}{{topic}} ({{#adrs}}{{.}} {{/adrs}}); {{/state.rules-store-context.rules-store-context.blocked}}
+      Overlapping store topics (the user named the binding ADR for this review): {{#state.rules-store-context.rules-store-context.blocked}}{{topic}} ({{#adrs}}{{.}} {{/adrs}}); {{/state.rules-store-context.rules-store-context.blocked}}
       Add to the report: these topics need one binding ADR; run the factory workflow olko-adr-store-reconcile with this project.
       {{/state.rules-store-context.rules-store-context.blocked.length}}
       {{#state.rules-merge.rules-merge.dropped}}

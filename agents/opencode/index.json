@@ -625,7 +625,7 @@
     },
     {
       "name": "olko-project-rules-check",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "file": "olko-project-rules-check.md",
       "stack": "cross-stack",
       "role": "investigator",

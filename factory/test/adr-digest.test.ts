@@ -103,7 +103,7 @@ test("impl build: stop on a blocked topic stops before the first chunk; without 
   assert.ok(!plain.prompts.implement[0].includes("Project store digest"), "no digest header without a store");
 });
 
-test("plan rules: the digest and the unresolved topics reach the rules check", async () => {
+test("plan rules: an overlapping topic waits for your answer, and your answer and the digest reach the rules check", async () => {
   const factory = await newFactory();
   const { run } = factory.start("plan rules", undefined, { workflow: "olko-review-plan-rules", input: { plan: "docs/plan.md" } });
   factory.confirm(run.runId);
@@ -115,12 +115,12 @@ test("plan rules: the digest and the unresolved topics reach the rules check", a
       "plan-rules": () => "none",
       "plan-rules-merge": () => json({ noStore: false, kept: [], dropped: [], violations: [], decide: [] }),
     },
-    {},
+    { "q-plan-store": "logging.format=ADR-0002" },
   );
   assert.equal(end.status, "done", end.error);
   assert.match(prompts["plan-store-context"][0], /read the plan file docs\/plan\.md/);
   assert.match(prompts["plan-rules"][0], /- ADR-0004 \[persistence\.orm\]: Use EF Core for data access\./);
-  assert.match(prompts["plan-rules"][0], /Unresolved topic logging\.format \(ADR-0001 ADR-0002 \)/);
+  assert.match(prompts["plan-rules"][0], /Overlapping topic logging\.format \(ADR-0001 ADR-0002 \): the user named the binding ADR: logging\.format=ADR-0002\./);
 });
 
 test("store reconcile: batches, then groups found after the front matter, one question each; writes only after an approval; skip and stop write nothing", async () => {
@@ -178,7 +178,7 @@ test("store reconcile: a project without a store stops after the inventory", asy
   assert.equal(prompts.fields, undefined);
 });
 
-test("code review rules: the digest and unresolved topics reach the rules check; the merge counts violations per store entry", async () => {
+test("code review rules: an overlapping topic waits for your answer; the digest and your answer reach the rules check; the merge counts violations per store entry", async () => {
   const factory = await newFactory();
   const { run } = factory.start("review rules", undefined, { workflow: "olko-review-rules", input: {} });
   factory.confirm(run.runId);
@@ -190,16 +190,16 @@ test("code review rules: the digest and unresolved topics reach the rules check;
       "rules-check": () => "none",
       "rules-merge": () => json({ noStore: false, kept: [], dropped: [], violations: [], decide: [], perEntry: [] }),
     },
-    {},
+    { "q-rules-store": "logging.format=ADR-0002" },
   );
   assert.equal(end.status, "done", end.error);
   assert.match(prompts["rules-check"][0], /^\s*Project store digest for these paths/);
   assert.match(prompts["rules-check"][0], /- ADR-0004 \[persistence\.orm\]: Use EF Core for data access\./);
-  assert.match(prompts["rules-check"][0], /Unresolved topic logging\.format \(ADR-0001 ADR-0002 \)/);
+  assert.match(prompts["rules-check"][0], /Overlapping topic logging\.format \(ADR-0001 ADR-0002 \): the user named the binding ADR: logging\.format=ADR-0002\./);
   assert.match(prompts["rules-merge"][0], /perEntry: one item per store entry/);
 });
 
-test("tests first: the test author gets the digest of the Task plan paths, and an unresolved topic becomes a Blocked: item", async () => {
+test("tests first: the test author gets the digest of the Task plan paths, and an overlapping topic waits for your answer", async () => {
   const factory = await newFactory();
   const { run } = factory.start("tests", undefined, { workflow: "olko-impl-tests-first", input: {} });
   factory.confirm(run.runId);
@@ -212,12 +212,12 @@ test("tests first: the test author gets the digest of the Task plan paths, and a
       "write-tests": () => "tests | 1 | unclear: none | blocked: none",
       "tests-check": () => json({ verdict: "done", testFiles: ["tests/a.cs"], questions: "" }),
     },
-    {},
+    { "q-tests-store": "logging.format=ADR-0002" },
   );
   assert.equal(end.status, "done", end.error);
   assert.match(prompts["tests-store-context"][0], /read the approved Task plan/);
   assert.match(prompts["write-tests"][0], /^\s*Project store digest for this Task/);
-  assert.match(prompts["write-tests"][0], /Unresolved store topic logging\.format \(ADR-0001 ADR-0002 \).*Blocked:/);
+  assert.match(prompts["write-tests"][0], /Overlapping topic logging\.format \(ADR-0001 ADR-0002 \): the user named the binding ADR: logging\.format=ADR-0002\./);
 });
 
 test("plan review report: violations per store entry and the reconcile hint for unresolved topics", async () => {
@@ -236,10 +236,53 @@ test("plan review report: violations per store entry and the reconcile hint for 
       "plan-rules-merge": () => json({ noStore: false, kept: [], dropped: [], violations: [], decide: [], perEntry: [{ entry: "project.0004-ef-core", count: 2 }] }),
       "plan-report": () => json({ kept: [] }),
     },
-    {},
+    { "q-plan-store": "logging.format=ADR-0002" },
   );
   assert.equal(end.status, "done", end.error);
   assert.match(prompts["plan-report"][0], /Store violations per entry: project\.0004-ef-core 2;/);
-  assert.match(prompts["plan-report"][0], /Unresolved store topics .*logging\.format \(ADR-0001 ADR-0002 \)/);
+  assert.match(prompts["plan-report"][0], /Overlapping store topics \(the user named the binding ADR for this review\): logging\.format \(ADR-0001 ADR-0002 \)/);
   assert.match(prompts["plan-report"][0], /olko-adr-store-reconcile/);
+});
+
+test("implementation report: the store line names the topics decided for this Task only and suggests reconcile; without them it says so", async () => {
+  const { loadedWorkflows } = await import("../src/engine.ts");
+  const report = loadedWorkflows().get("olko-implementation")!.nodes.find((n: any) => n.id === "report") as any;
+  assert.ok(report?.prompt, "the implementation workflow has a report step with a prompt");
+  const render = (state: Record<string, unknown>) => report.prompt({ goal: "g", input: {}, state, agent: { id: "report" }, answer: "", answers: {}, steps: 0 }) as string;
+  const decided = render({ "store-context": { "store-context": { noStore: false, digest: [], blocked: [BLOCKED] } }, "ask-store": { answer: "logging.format=ADR-0002" } });
+  assert.match(decided, /Project store: overlapping ADR topics were decided for this Task only \(logging\.format=ADR-0002\): logging\.format \(ADR-0001 ADR-0002 \);/);
+  assert.match(decided, /olko-adr-store-reconcile for this project/);
+  const clean = render({ "store-context": { "store-context": { noStore: false, digest: DIGEST, blocked: [] } } });
+  assert.match(clean, /Project store: no overlapping ADR topics\./);
+  assert.doesNotMatch(clean, /olko-adr-store-reconcile/);
+});
+
+for (const [workflow, prefix, context, input] of [
+  ["olko-review-rules", "rules-", "rules-store-context", {}],
+  ["olko-review-plan-rules", "plan-", "plan-store-context", { plan: "docs/plan.md" }],
+  ["olko-impl-tests-first", "tests-", "tests-store-context", {}],
+] as const) {
+  test(`${workflow}: stop on an overlapping topic ends the run before the next step`, async () => {
+    const factory = await newFactory();
+    const { run } = factory.start("stop", undefined, { workflow, input });
+    factory.confirm(run.runId);
+    const agents: Record<string, Handler> = {
+      [context]: () => json({ noStore: false, digest: DIGEST, blocked: [BLOCKED] }),
+      stacks: () => json({ stacks: ["dotnet"], authors: [{ id: "dotnet", agentName: "olko-test-first-author" }], implementers: [], runners: [] }),
+    };
+    const { run: end, prompts, questions } = await drive(factory, run.runId, agents, { [`q-${prefix}store`]: "stop" });
+    assert.notEqual(end.status, "done");
+    assert.equal(questions.length, 1);
+    assert.match(questions[0].text, /logging\.format: ADR-0001 ADR-0002/);
+    assert.deepEqual(Object.keys(prompts).sort(), [context, ...(workflow === "olko-impl-tests-first" ? ["stacks"] : [])].sort(), "nothing runs after stop");
+  });
+}
+
+test("impl build asks again only when the test-first step did not decide the overlapping topics", async () => {
+  const { loadedWorkflows } = await import("../src/engine.ts");
+  const { evaluateWhen } = await import("../src/workflow-yaml.ts");
+  const edge = loadedWorkflows().get("olko-impl-build")!.edges.find((e: any) => e.from === "store-context" && e.to === "ask-store") as any;
+  const blocked = { "store-context": { "store-context": { blocked: [BLOCKED] } } };
+  assert.equal(evaluateWhen(edge.when, blocked), true);
+  assert.equal(evaluateWhen(edge.when, { ...blocked, "tests-ask-store": { answer: "logging.format=ADR-0002" } }), false);
 });

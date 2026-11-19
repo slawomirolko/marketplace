@@ -34,6 +34,18 @@ nodes:
       Project: the current working directory (the Task worktree).
       Paths: read the approved Task plan {{state.task.task.taskFile}} and use every file path and directory it names (a directory as <dir>/x).
       Build the store digest for these paths.
+  - id: tests-ask-store
+    description: "Overlapping ADRs leave more than one binding answer for a topic: you name the binding ADR per topic, or stop. The test-first author waits for your answer."
+    kind: interrupt
+    askedBy: tests-store-context
+    question:
+      id: q-tests-store
+      text: "The project store has topics where more than one ADR binds the same files, and no overrides link decides between them:\n{{#state.tests-store-context.tests-store-context.blocked}}- {{topic}}: {{#adrs}}{{.}} {{/adrs}}(files: {{#paths}}{{.}} {{/paths}})\n{{/state.tests-store-context.tests-store-context.blocked}}For each topic, name the ADR that binds here (for example: logging.format=ADR-0007), or answer stop. Fix the store later with the olko-adr-store-reconcile workflow."
+  - id: tests-stop-store
+    description: "Stops: you chose to fix the project store first."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Stopped: the project store has overlapping ADRs without a binding answer. Run the olko-adr-store-reconcile workflow for this project, then start again." }
   - id: tests-round
     description: "Counts the failing-tests-first rounds."
     kind: script
@@ -56,7 +68,7 @@ nodes:
       - {{source}} [{{topic}}]: {{line}}
       {{/state.tests-store-context.tests-store-context.digest}}
       {{#state.tests-store-context.tests-store-context.blocked}}
-      Unresolved store topic {{topic}} ({{#adrs}}{{.}} {{/adrs}}): more than one ADR binds these paths. A test that depends on this choice is a Blocked: item with these ADRs as the options.
+      Overlapping topic {{topic}} ({{#adrs}}{{.}} {{/adrs}}): the user named the binding ADR: {{state.tests-ask-store.answer}}. Open that ADR and follow it; the other ADRs of the topic do not apply.
       {{/state.tests-store-context.tests-store-context.blocked}}
       Mode: write. Task {{state.task.task.taskName}}, stack {{agent.id}}. Approved Task plan: {{state.task.task.taskFile}}. Work only in this worktree.
       Acceptance criteria:
@@ -102,7 +114,10 @@ nodes:
     with: { reason: "Implementation stopped: criteria still unclear after {{state.tests-round.count}} rounds:\n{{state.tests-check.tests-check.questions}}" }
 edges:
   - { from: stacks, to: tests-store-context }
-  - { from: tests-store-context, to: tests-round }
+  - { from: tests-store-context, to: tests-ask-store, when: "tests-store-context.tests-store-context.blocked > 0", description: "overlapping ADRs without a binding answer" }
+  - { from: tests-store-context, to: tests-round, description: "the digest is ready (or there is no store)" }
+  - { from: tests-ask-store, to: tests-stop-store, when: 'tests-ask-store.answer == "stop"', description: "you chose to fix the store first" }
+  - { from: tests-ask-store, to: tests-round, description: "you named the binding ADRs" }
   - { from: tests-round, to: write-tests }
   - { from: write-tests, to: tests-check }
   - { from: tests-check, to: END, when: 'tests-check.tests-check.verdict == "done"', description: "every criterion has a failing test" }

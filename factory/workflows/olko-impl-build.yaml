@@ -72,6 +72,9 @@ nodes:
       {{#state.ask-store.answer}}
       Binding ADR per overlapping topic, decided by the user for this Task: {{state.ask-store.answer}}
       {{/state.ask-store.answer}}
+      {{#state.tests-ask-store.answer}}
+      Binding ADR per overlapping topic, decided by the user in the test-first step: {{state.tests-ask-store.answer}}
+      {{/state.tests-ask-store.answer}}
       Chunk {{state.chunk-next.number}} of {{state.chunk-next.total}} of Task {{state.task.task.taskName}}: {{state.chunk-next.item.title}}
       Files you own: {{#state.chunk-next.item.files}}{{.}} {{/state.chunk-next.item.files}}
       Brief: {{state.chunk-next.item.brief}}
@@ -179,7 +182,7 @@ nodes:
     with: { reason: "Implementation stopped: chunk {{state.chunk-next.number}} still breaks the child-result rules after three attempts:\n{{#state.child-check.child-check.violations}}{{.}}\n{{/state.child-check.child-check.violations}}" }
 edges:
   - { from: chunker, to: store-context }
-  - { from: store-context, to: ask-store, when: "store-context.store-context.blocked > 0", description: "overlapping ADRs without a binding answer" }
+  - { from: store-context, to: ask-store, when: "store-context.store-context.blocked > 0 && tests-ask-store == null", description: "overlapping ADRs without a binding answer, not decided in the test-first step" }
   - { from: store-context, to: chunk-next, description: "the digest is ready (or there is no store)" }
   - { from: ask-store, to: stop-store, when: 'ask-store.answer == "stop"', description: "you chose to fix the store first" }
   - { from: ask-store, to: chunk-next, description: "you named the binding ADRs" }

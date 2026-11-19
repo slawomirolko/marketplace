@@ -25,7 +25,7 @@ Load only what matches the changed or named paths and the finding paths:
 - Rules: read the table in `<rulesDirectory>/README.md`. Open rule files whose `scope` globs match.
 - An ADR wins over a rule file.
 
-- When the prompt has a `Project store digest`, use it as the loaded store: skip the log and table reads and judge against its lines. Open a full ADR only to quote an entry. Report no violation for a topic the prompt lists as unresolved.
+- When the prompt has a `Project store digest`, use it as the loaded store: skip the log and table reads and judge against its lines. Open a full ADR only to quote an entry. For an overlapping topic where the prompt names the binding ADR chosen by the user, open that ADR and judge only against it.
 
 PART 1 — VIOLATIONS: check every added or changed line (`code`) or every step (`plan`) against each loaded `MUST` / `MUST NOT` and each ADR decision. Report a violation only when the line or step plainly does what the entry forbids, or omits what it requires for that path. Pre-existing code is out of scope.
 

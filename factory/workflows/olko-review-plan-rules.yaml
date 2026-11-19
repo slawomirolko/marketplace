@@ -22,6 +22,18 @@ nodes:
       Project: the current working directory.
       Paths: read the plan file {{input.plan}} and use every file path and directory it names (a directory as <dir>/x).
       Build the store digest for these paths.
+  - id: plan-ask-store
+    description: "Overlapping ADRs leave more than one binding answer for a topic: you name the binding ADR per topic, or stop. The plan review waits for your answer."
+    kind: interrupt
+    askedBy: plan-store-context
+    question:
+      id: q-plan-store
+      text: "The project store has topics where more than one ADR binds the same files, and no overrides link decides between them:\n{{#state.plan-store-context.plan-store-context.blocked}}- {{topic}}: {{#adrs}}{{.}} {{/adrs}}(files: {{#paths}}{{.}} {{/paths}})\n{{/state.plan-store-context.plan-store-context.blocked}}For each topic, name the ADR that binds here (for example: logging.format=ADR-0007), or answer stop. Fix the store later with the olko-adr-store-reconcile workflow."
+  - id: plan-stop-store
+    description: "Stops: you chose to fix the project store first."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Stopped: the project store has overlapping ADRs without a binding answer. Run the olko-adr-store-reconcile workflow for this project, then start again." }
   - id: plan-rules
     description: "Checks the plan and its confirmed findings against the project rule store."
     kind: llm
@@ -36,7 +48,7 @@ nodes:
       - {{source}} [{{topic}}]: {{line}}
       {{/state.plan-store-context.plan-store-context.digest}}
       {{#state.plan-store-context.plan-store-context.blocked}}
-      Unresolved topic {{topic}} ({{#adrs}}{{.}} {{/adrs}}): more than one ADR binds these paths. Report no violation against these ADRs.
+      Overlapping topic {{topic}} ({{#adrs}}{{.}} {{/adrs}}): the user named the binding ADR: {{state.plan-ask-store.answer}}. Open that ADR and judge the plan steps against it; the other ADRs of the topic do not apply.
       {{/state.plan-store-context.plan-store-context.blocked}}
       Mode: plan
       Plan file: {{input.plan}}. Read it: it is the plan text.
@@ -133,7 +145,10 @@ nodes:
       The user's answer: {{state.plan-ask-rule.answer}} (`finding`: the finding holds; `store`: the store entry holds).
       End with one ```json block: {"decided": [<every decision so far, then this one>: {"kind": "<ask|violation>", "line": "<finding>", "cite": "<entry>", "holds": "<finding|store>", "proposal": "<the update to the side that lost>"}]}
 edges:
-  - { from: plan-store-context, to: plan-rules }
+  - { from: plan-store-context, to: plan-ask-store, when: "plan-store-context.plan-store-context.blocked > 0", description: "overlapping ADRs without a binding answer" }
+  - { from: plan-store-context, to: plan-rules, description: "the digest is ready (or there is no store)" }
+  - { from: plan-ask-store, to: plan-stop-store, when: 'plan-ask-store.answer == "stop"', description: "you chose to fix the store first" }
+  - { from: plan-ask-store, to: plan-rules, description: "you named the binding ADRs" }
   - { from: plan-rules, to: plan-rules-merge }
   - { from: plan-rules-merge, to: plan-verify-violations, when: "plan-rules-merge.plan-rules-merge.violations > 0", description: "new violations in the plan" }
   - { from: plan-rules-merge, to: plan-next-decision-ask, when: "plan-rules-merge.plan-rules-merge.violations == 0", description: "no new violation" }

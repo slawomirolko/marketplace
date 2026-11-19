@@ -22,6 +22,18 @@ nodes:
       Project: the current working directory.
       Paths: {{#state.scope.scope.files}}{{.}} {{/state.scope.scope.files}}
       Build the store digest for these paths.
+  - id: rules-ask-store
+    description: "Overlapping ADRs leave more than one binding answer for a topic: you name the binding ADR per topic, or stop. The review waits for your answer."
+    kind: interrupt
+    askedBy: rules-store-context
+    question:
+      id: q-rules-store
+      text: "The project store has topics where more than one ADR binds the same files, and no overrides link decides between them:\n{{#state.rules-store-context.rules-store-context.blocked}}- {{topic}}: {{#adrs}}{{.}} {{/adrs}}(files: {{#paths}}{{.}} {{/paths}})\n{{/state.rules-store-context.rules-store-context.blocked}}For each topic, name the ADR that binds here (for example: logging.format=ADR-0007), or answer stop. Fix the store later with the olko-adr-store-reconcile workflow."
+  - id: rules-stop-store
+    description: "Stops: you chose to fix the project store first."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Stopped: the project store has overlapping ADRs without a binding answer. Run the olko-adr-store-reconcile workflow for this project, then start again." }
   - id: rules-check
     description: "Checks the diff and the confirmed findings against the project rule store (ADRs, rule files)."
     kind: llm
@@ -36,7 +48,7 @@ nodes:
       - {{source}} [{{topic}}]: {{line}}
       {{/state.rules-store-context.rules-store-context.digest}}
       {{#state.rules-store-context.rules-store-context.blocked}}
-      Unresolved topic {{topic}} ({{#adrs}}{{.}} {{/adrs}}): more than one ADR binds these paths. Report no violation against these ADRs.
+      Overlapping topic {{topic}} ({{#adrs}}{{.}} {{/adrs}}): the user named the binding ADR: {{state.rules-ask-store.answer}}. Open that ADR and judge the changed lines against it; the other ADRs of the topic do not apply.
       {{/state.rules-store-context.rules-store-context.blocked}}
       Mode: code
       {{#state.scope.scope.pr}}PR #{{state.scope.scope.pr}}: {{/state.scope.scope.pr}}{{state.scope.scope.title}}
@@ -141,7 +153,10 @@ nodes:
       The user's answer: {{state.ask-rule.answer}} (`finding`: the finding holds; `store`: the store entry holds).
       End with one ```json block: {"decided": [<every decision so far, then this one>: {"kind": "<ask|violation>", "line": "<finding>", "cite": "<entry>", "holds": "<finding|store>", "proposal": "<the update to the side that lost>"}]}
 edges:
-  - { from: rules-store-context, to: rules-check }
+  - { from: rules-store-context, to: rules-ask-store, when: "rules-store-context.rules-store-context.blocked > 0", description: "overlapping ADRs without a binding answer" }
+  - { from: rules-store-context, to: rules-check, description: "the digest is ready (or there is no store)" }
+  - { from: rules-ask-store, to: rules-stop-store, when: 'rules-ask-store.answer == "stop"', description: "you chose to fix the store first" }
+  - { from: rules-ask-store, to: rules-check, description: "you named the binding ADRs" }
   - { from: rules-check, to: rules-merge }
   - { from: rules-merge, to: verify-violations, when: "rules-merge.rules-merge.violations > 0", description: "the store check found new violations" }
   - { from: rules-merge, to: next-decision-ask, when: "rules-merge.rules-merge.violations == 0", description: "no new violation" }
