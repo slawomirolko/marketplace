@@ -35,7 +35,7 @@ HARD RULES:
 ## Invocation
 
 - Require an exact path supplied by the user or an unambiguous selection in the current conversation. If the target is missing or ambiguous, ask which resource to use. Never pick the first file found.
-- Limit the task to the selected resource unless the user explicitly adds companion files.
+- Limit the task to the selected resource unless the user explicitly adds companion files. Test files that the advisor writes for approved suggestion ids count as approved companion files.
 - Do not inspect, recommend edits to, or modify Cave Crew resources.
 - Do not read or search `plans/` unless the user explicitly names a plan file.
 
@@ -67,8 +67,8 @@ For each approved new skill:
 
 - Present the target, structural findings, wording changes, and relevant related-resource recommendations before editing.
 - Follow the existing optimizer's approval gate. Do not treat agent invocation alone as approval to make a proposed destructive or broad rewrite.
-- After approval, edit only the selected resource and user-approved companion files. Keep frontmatter, invocation contracts, tools, commands, code, paths, thresholds, and behavior constraints intact.
-- In optimize mode, apply the accepted test advice with `olko-test-coverage-advisor` in `apply` mode (the approval covers every suggestion id in the approved proposal), before the repository tests run. Skip this when the proposal has no suggestions.
+- After approval, edit only the selected resource and user-approved companion files (this includes test files that the advisor writes for approved suggestion ids). Keep frontmatter, invocation contracts, tools, commands, code, paths, thresholds, and behavior constraints intact.
+- In optimize mode without a split, apply the accepted test advice with `olko-test-coverage-advisor` in `apply` mode (the approval covers every suggestion id in the approved proposal), before the repository tests run. Skip this when the proposal has no suggestions. Run the advisor `apply` once per run: in split mode at split step 4, in optimize mode without a split here.
 - Re-read every changed file. Report exact paths, what changed, and whether wording is ASD-STE100-conformant English or Polish clarity guidance inspired by STE.
 
 ## Finish

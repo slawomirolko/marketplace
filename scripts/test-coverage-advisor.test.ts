@@ -244,3 +244,12 @@ test("optimizer version is 1.4.0 and lists the advisor as a delegate", () => {
   assert.equal(entry.version, "1.4.0");
   assert.deepEqual(entry.delegates, ["olko-test-coverage-advisor"]);
 });
+
+test("optimizer treats advisor test files as approved companions and applies once per run", () => {
+  const { body } = readOptimizer();
+  const flat = body.replace(/\s+/g, " ");
+  const limit = flat.split(/(?<=\.) /).find((s) => s.includes("Limit the task"));
+  assert.ok(limit && flat.includes("Test files that the advisor writes for approved suggestion ids count as approved companion files"));
+  assert.ok(flat.includes("user-approved companion files (this includes test files that the advisor writes"));
+  assert.ok(flat.includes("`apply` once per run") && flat.includes("split mode at split step 4"));
+});
