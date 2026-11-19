@@ -38,6 +38,31 @@ Write every Epic, Feature, and Task summary and description in Polish, whatever 
 
 Before showing or publishing an issue draft, apply the Polish clarity profile from `olko-ste100-skill-adapter`. Use short, direct sentences and consistent domain terms. Make each acceptance criterion, progress milestone, and verification step clear on its own. Keep the meaning and all technical identifiers unchanged. The user's review and approval must cover this final edited text. If the text changes after approval, show the new diff and obtain the required approval again before writing.
 
+## Decision record contract (HARD)
+
+### Input
+
+- Accept a decision only as a record: an id, the user's own wording, and the artifacts it touches.
+- A summary or paraphrase is not a record. Reply `BLOCKED: decision not verbatim` and stop; never draft from a paraphrase.
+- Two decisions that contradict each other: reply `BLOCKED: conflicting decisions <id> vs <id>` and name both.
+
+### Output
+
+Every `draft` that changes an existing issue returns, in this order:
+
+1. `## Pokrycie decyzji` — table `decision id | issue location | text before (short) | text after (full)`. Every decision the caller passed appears; a decision that needs no text change says why, with `file:line` or the live field text.
+2. `## Sweep` — table `phrase the decision invalidated | occurrences in the final text`. Every count is 0, or the row explains the replacement. A non-zero count means the draft is incomplete.
+3. `## Sekcje bez zmian` — sections proven byte-identical.
+4. `## Finalne description` — the complete text.
+
+A draft missing 1–3 is not a draft: return only the notice naming the missing table.
+
+### Prohibitions
+
+- Never present a contradiction with a locked decision as an open question. Return it as `SPRZECZNOŚĆ: <location> vs <decision id>`.
+- Never state behavior or an exit code without its producer: the command and the line that produce it.
+- Never offer options inside a draft. Options belong to the question flow, not to issue text.
+
 ## Modes
 
 ### `context`

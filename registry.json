@@ -820,8 +820,8 @@
     {
       "name": "olko-worktree-merge",
       "category": "git",
-      "version": "1.1.0",
-      "description": "Merge a git worktree branch into the default branch through a GitHub PR, including commit/push handoff, CI and review checks, worktree compose teardown, main checkout update, optional main compose rebuild, and local worktree/branch cleanup. Triggers: 'merge worktree', 'olko-worktree-merge', 'merge this branch to main', 'create PR for this worktree', 'finish worktree', 'close worktree'.",
+      "version": "1.2.0",
+      "description": "Merge a git worktree branch into the default branch through a GitHub PR, including commit/push handoff, CI and review checks, optional mandatory post-merge acceptance E2E, main checkout update, optional main compose rebuild, and session relocation before the final worktree cleanup. Triggers: 'merge worktree', 'olko-worktree-merge', 'merge this branch to main', 'create PR for this worktree', 'finish worktree', 'close worktree'.",
       "tags": [
         "git",
         "worktree",
@@ -1699,7 +1699,7 @@
       "name": "grill-with-docs",
       "category": "workflow",
       "origin": "vendored",
-      "version": "1.5.0",
+      "version": "1.6.0",
       "description": "A grilling session that stress-tests a plan against the project's documented domain model — sharpens fuzzy terminology, challenges it against the existing glossary, cross-references it with the code, and updates documentation (CONTEXT.md, ADRs) inline as decisions crystallize. The domain-aware variant of grill-me — use this instead when the repo has (or should have) a CONTEXT.md glossary or docs/adr/ decision records. Triggers include \"grill with docs\", \"stress-test this against our domain model\", \"does this match our language\", \"check this against our glossary\", \"grill this and update the docs\", or any time a non-trivial plan needs to be reconciled with the project's documented decisions.",
       "tags": [
         "workflow",
@@ -1757,9 +1757,42 @@
       }
     },
     {
+      "name": "olko-feature-plan-workflow",
+      "category": "workflow",
+      "version": "2.0.0",
+      "description": "Feature/Epic implementation planning lifecycle: Feature pair plus one plan per child Task, batched revalidation, plan review, E2E matrix authoring, and readiness gates.",
+      "tags": [
+        "workflow",
+        "plan",
+        "feature"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.plan.feature-workflow"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
       "name": "olko-feature-planner",
       "category": "workflow",
-      "version": "1.7.0",
+      "version": "1.8.0",
       "description": "Turn broad product outcomes into an Epic with business value and progress by Feature, then define user-facing Features and independently testable, one-PR Tasks. For implementation planning, return the complete accepted Feature/Task hierarchy to the orchestrator, which creates every Task plan in the same session.",
       "tags": [
         "workflow",
@@ -1859,8 +1892,8 @@
     {
       "name": "olko-implementation-closure",
       "category": "workflow",
-      "version": "1.1.0",
-      "description": "Post-merge steps 11, 12, 13, 12a, and 12b of olko-implementation-orchestrator: post-merge acceptance E2E, main-stack runtime verification, worktree cleanup, Task plan removal, Feature completion audit, and Feature plan cleanup.",
+      "version": "1.2.0",
+      "description": "Post-merge steps 11, 12, 12a, 12b, and 13 of olko-implementation-orchestrator: post-merge acceptance E2E, main-stack runtime verification, Feature completion audit, Feature plan cleanup, and the final session relocation plus worktree cleanup.",
       "tags": [
         "workflow",
         "implementation"
@@ -1877,7 +1910,7 @@
     {
       "name": "olko-implementation-journal",
       "category": "workflow",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Implementation journal template and resume procedure for olko-implementation-orchestrator; load when creating the journal or resuming a Task.",
       "tags": [
         "workflow",
@@ -1946,7 +1979,7 @@
     {
       "name": "olko-plan-backlog-discovery",
       "category": "workflow",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Epic/Feature/Task discovery path of olko-plan-documentation-orchestrator: draft, one content review, approval-gated publish to YouTrack, and read-back.",
       "tags": [
         "workflow",
@@ -1982,7 +2015,7 @@
     {
       "name": "olko-plan-editor",
       "category": "workflow",
-      "version": "1.11.0",
+      "version": "1.11.1",
       "description": "Plan an accepted Feature in one session: create its business and technical plan plus one implementation plan file for every child Task; later implementation remains per Task. Also supports Epic plans and scoped Task-plan revisions.",
       "tags": [
         "workflow",
@@ -2095,6 +2128,39 @@
       "capabilities": [
         "workflow",
         "workflow.summary"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
+      "name": "olko-task-implementation-workflow",
+      "category": "workflow",
+      "version": "1.1.0",
+      "description": "Ordered single-Task implementation, verification, PR, merge, post-merge E2E, and closure contract for the implementation orchestrator.",
+      "tags": [
+        "workflow",
+        "implementation",
+        "task"
+      ],
+      "capabilities": [
+        "workflow",
+        "workflow.implementation.task"
       ],
       "cost": 1,
       "files": [
