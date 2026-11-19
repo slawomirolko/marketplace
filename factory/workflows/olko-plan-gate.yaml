@@ -1,7 +1,7 @@
 name: olko-plan-gate
-version: 0.3.0
-description: "Steps 2a and 3, called after every plan change: refreshes stack.md, runs the bidirectional business-to-technical consistency gate, and corrects the plan up to three times; a mismatch left after the check of the third correction is recorded as a BLOCKING GAP item for the step 8b blocker batch, and nothing is asked at the gate."
-source: agents/opencode/olko-plan-documentation-orchestrator.md (steps 2a and 3, stack.md and the bidirectional consistency gate with its correction loop and GAP items)
+version: 0.4.0
+description: "Steps 3 and 4, called after every plan change: refreshes stack.md, runs the bidirectional business-to-technical consistency gate, and corrects the plan up to three times; a mismatch left after the check of the third correction is recorded as a BLOCKING GAP item for the step 12 blocker batch, and nothing is asked at the gate."
+source: "skills/workflow/olko-feature-plan-workflow/workflow.md (steps 3-4: stack.md and the bidirectional consistency gate with its correction loop; the run bounds the loop at three corrections and leaves GAP items for step 12)"
 roles:
   plan-gate: medium
   planner: high
@@ -18,7 +18,7 @@ nodes:
     maxVisits: 4
     parse: text
     prompt: |
-      Do only step 2a of your workflow for the Feature plan folder {{input.featureDir}} in the project {{input.project}}: create or refresh stack.md from the verified implementation scope and record the dependency evidence in tracker.md. Write only stack.md and tracker.md in that folder. Do not delegate, ask the user, or run commands.
+      Do only step 3 of olko-feature-plan-workflow for the Feature plan folder {{input.featureDir}} in the project {{input.project}}: create or refresh stack.md from the verified implementation scope and record the dependency evidence in tracker.md. Write only stack.md and tracker.md in that folder. Do not delegate, ask the user, or run commands.
       Reply with one line: `stack | <new dependencies or none>`.
   - id: consistency
     description: "Checks business against technical plan, stack.md and every Task file (read only)."
@@ -28,7 +28,7 @@ nodes:
     maxVisits: 4
     parse: { line: [check, verdict, count, detail] }
     prompt: |
-      Do only the check of step 3 of your workflow for the Feature plan folder {{input.featureDir}} in the project {{input.project}}: the bidirectional business-to-technical consistency gate, stack.md against the final scope, and every Task file against its Feature milestone, file estimate, dependencies, parallelism and acceptance. Read only; do not edit anything, do not delegate, do not ask the user.
+      Do only the check of step 4 of olko-feature-plan-workflow for the Feature plan folder {{input.featureDir}} in the project {{input.project}}: the bidirectional business-to-technical consistency gate, stack.md against the final scope, and every Task file against its Feature milestone, file estimate, dependencies, parallelism and acceptance. Read only; do not edit anything, do not delegate, do not ask the user.
       End with exactly one line: `consistency | <pass|fail> | <number of mismatches> | <mismatches, semicolon separated, or none>`.
   - id: round
     description: "Counts the failed checks; the fourth is the check of the third correction."
@@ -48,14 +48,14 @@ nodes:
       Mismatches: {{state.consistency.consistency.detail}}
       Reply with one line: `fixed | <files changed>`.
   - id: record-gap
-    description: "After three corrections records each remaining mismatch as a BLOCKING GAP item awaiting user acceptance; the step 8b blocker batch asks about it, nothing is asked here."
+    description: "After three corrections records each remaining mismatch as a BLOCKING GAP item awaiting user acceptance; the step 12 blocker batch asks about it, nothing is asked here."
     kind: llm
     role: plan-gate
     agent: olko-plan-documentation-orchestrator
     tools: [read, edit]
     parse: text
     prompt: |
-      Step 3 of your workflow for {{input.featureDir}} (project {{input.project}}): the consistency gate still fails after three corrections. Record each remaining mismatch as a `BLOCKING` open item `GAP-<n>` (awaiting user acceptance) in the `## Open items` of the affected plans and in tracker.md, and keep `Ready for implementation: no` on those plans. Continue the numbering of the GAP items already in tracker.md, and do not add a second item for a mismatch that is already recorded. Edit only those files; do not ask the user and do not delegate.
+      Step 4 of olko-feature-plan-workflow for {{input.featureDir}} (project {{input.project}}): the consistency gate still fails after three corrections. Record each remaining mismatch as a `BLOCKING` open item `GAP-<n>` (awaiting user acceptance) in the `## Open items` of the affected plans and in tracker.md, and keep `Ready for implementation: no` on those plans. Continue the numbering of the GAP items already in tracker.md, and do not add a second item for a mismatch that is already recorded. Edit only those files; do not ask the user and do not delegate.
       Mismatches: {{state.consistency.consistency.detail}}
       Record them in English per userDecisionRecordLanguage and userDecisionRecordStyle in .agents/skill-config.md (unset: the repository documentation language; concise translation): keep IDs and meaning-critical exact wording.
       Reply with one line: `recorded | <GAP ids>`.

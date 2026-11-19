@@ -1,10 +1,11 @@
 name: olko-plan-readiness
-version: 0.3.0
-description: "Steps 8 and 8b: cleanup of rejected options, consistency gate, then blocker batches (including the GAP items of the consistency gates) until every plan says Ready for implementation: yes; each blocker decision is recorded in tracker.md and the batch is applied together."
-source: "agents/opencode/olko-plan-documentation-orchestrator.md (Steps 8-8b: cleanup, consistency gate, blocker batches until every plan is ready)"
+version: 0.4.0
+description: "Steps 9 to 12: cleanup of rejected options, consistency gate, the acceptance-to-E2E manifest of every Task (written by the matrix author, validated by the runner), then blocker batches (including the GAP and E2E items) checked by the question reviewer until every plan says Ready for implementation: yes; each blocker decision is recorded in tracker.md, the batch is applied together and the manifests are validated again."
+source: "agents/opencode/olko-plan-documentation-orchestrator.md (E2E ACCEPTANCE MANIFEST hard rule; USER QUESTION GATE: questions composed by grill-with-docs, checked by olko-question-reviewer); skills/workflow/olko-feature-plan-workflow/workflow.md (steps 9-12: cleanup, consistency gate, acceptance-to-E2E matrix gate, readiness, blocker batches until every plan is ready)"
 roles:
   plan-gate: medium
   planner: high
+  runner: medium
 entry: cleanup
 limits:
   maxCycleIterations: 4
@@ -17,12 +18,60 @@ nodes:
     tools: [read, edit]
     parse: text
     prompt: |
-      Step 8 cleanup of {{state.feature.feature.featureDir}}/implementation.md and the Task files (project {{input.project}}): remove denied, rejected, superseded or unchosen options only after checking their approved replacement is concrete; keep scope, ordered actions, validation, acceptance criteria and blockers. Update tracker.md with the final decisions. Edit only that folder.
+      Step 9 of olko-feature-plan-workflow, the cleanup of {{state.feature.feature.featureDir}}/implementation.md and the Task files (project {{input.project}}): remove denied, rejected, superseded or unchosen options only after checking their approved replacement is concrete; keep scope, ordered actions, validation, acceptance criteria and blockers. Update tracker.md with the final decisions. Edit only that folder.
   - id: gate-cleanup
     description: "Consistency gate after the cleanup."
     kind: call
     workflow: olko-plan-gate
     input: { featureDir: "{{state.feature.feature.featureDir}}" }
+  - id: e2e-next
+    description: "Takes the next Task for the acceptance-to-E2E matrix gate; every current Task needs its validated manifest before any readiness verdict."
+    kind: script
+    op: list.next
+    maxVisits: 100
+    with: { over: feature.feature.taskIds }
+  - id: e2e-matrix
+    description: "The E2E matrix author maps every acceptance criterion of the Task to a scenario or a non-E2E check and writes the Task manifest under plans/; it never runs a phase."
+    kind: llm
+    role: plan-gate
+    agent: olko-e2e-matrix-author
+    tools: [read, edit]
+    maxVisits: 100
+    parse: text
+    prompt: |
+      Author the acceptance-to-E2E matrix of Task {{state.e2e-next.item}} in the project {{input.project}}. Task plan: {{state.feature.feature.featureDir}}/tasks/{{state.e2e-next.item}}-implementation.md; Feature plan and tracker: {{state.feature.feature.featureDir}}/implementation.md and tracker.md.
+      Feature context: {{state.feature.feature.feature}}
+      Tasks with their current acceptance criteria: {{state.feature.feature.tasks}}
+      Manifest path: <e2eManifestDir>/{{state.e2e-next.item}}.acceptance.json, with e2eManifestDir from .agents/skill-config.md (default {{state.feature.feature.featureDir}}/e2e). Manifests live under plans/, never under tests/e2e; never use a path invented now. Write only that manifest; map every criterion of this Task exactly once and never invent, merge, renumber or drop a criterion.
+      Do not validate it yourself and do not delegate: the workflow hands the manifest to the acceptance runner next. Never run baseline, implementation or post-merge.
+      Return the manifest path and one row per criterion: `id | scenario or non-E2E | expected result | evidence`, plus every criterion you could not map as a blocker.
+  - id: e2e-validate
+    description: "The acceptance runner validates the Task manifest in validation-only mode: the file exists at the resolved path, passes structural validation and its criteria equal the Task acceptance set exactly; it starts nothing."
+    kind: llm
+    role: runner
+    agent: olko-e2e-acceptance-runner
+    tools: [read, bash]
+    maxVisits: 100
+    parse: { line: [phase, verdict, path, detail] }
+    prompt: |
+      VALIDATION-ONLY MODE for Task {{state.e2e-next.item}} in the project {{input.project}}. The matrix author reported:
+      {{state.e2e-matrix.e2e-matrix}}
+      Use the exact current acceptance criterion IDs of this Task (from: {{state.feature.feature.tasks}}). Check that the manifest exists at its resolved absolute path inside <e2eManifestDir> (from .agents/skill-config.md, default {{state.feature.feature.featureDir}}/e2e; under plans/, never under tests/e2e), that it is not empty or a placeholder, that its `criteria` id set equals the Task acceptance set exactly, and that structural validation passes. Start nothing and change no file; this is not an execution or readiness verdict.
+      End with one line, the verdict in lowercase: `validation | <pass|fail|not verified> | <absolute manifest path> | <mismatch or blocker, or none>`
+  - id: e2e-fold
+    description: "Plan editor folds the criterion table into the Task plan and records the runner verdict in tracker.md; anything but a PASS for the resolved path keeps the Task at Ready for implementation: no with a BLOCKING E2E item."
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    maxVisits: 100
+    parse: text
+    prompt: |
+      Step 10 of olko-feature-plan-workflow for Task {{state.e2e-next.item}} (project {{input.project}}): fold this criterion table into {{state.feature.feature.featureDir}}/tasks/{{state.e2e-next.item}}-implementation.md and record the runner verdict with the manifest path in {{state.feature.feature.featureDir}}/tracker.md. The table in the plan is not the manifest; do not edit the manifest.
+      {{state.e2e-matrix.e2e-matrix}}
+      Runner verdict: {{state.e2e-validate.e2e-validate.verdict}} for {{state.e2e-validate.e2e-validate.path}}: {{state.e2e-validate.e2e-validate.detail}}
+      When the verdict is not pass, or the path is missing or outside <e2eManifestDir>: add or update the BLOCKING open item `E2E-{{state.e2e-next.item}}` naming the blocker in the Task plan `## Open items` and in tracker.md, and set the Task to `Ready for implementation: no`. When it is pass: close an earlier `E2E-{{state.e2e-next.item}}` item. Edit only that folder.
+      Reply with one line: `e2e | <task id> | <pass|blocked>`.
   - id: blocker-round
     description: "Counts the blocker rounds; the edge after it stops before a fourth round."
     kind: script
@@ -38,22 +87,37 @@ nodes:
     maxVisits: 4
     parse: { json: [questions] }
     prompt: |
-      Do only the read of step 8b for {{state.feature.feature.featureDir}} (project {{input.project}}): read `## Implementation readiness` and `## Open items` of implementation.md and every Task file, with the full plan context and the locked decisions in tracker.md. Read only; do not delegate, change no file and do not ask the user yourself.
-      Return every BLOCKING item as a question with exactly 3 options (the first recommended); return no questions when every plan says `Ready for implementation: yes`. A `GAP-<n>` item from a consistency gate is a BLOCKING item: name its mismatch and offer these 3 options, the recommended one first: accept it as ACCEPTED-GAP in tracker.md; correct the plan; keep it BLOCKING so the plan stays not ready. Do not split a question or paraphrase it into new choices, and do not repeat a locked decision.
+      Do only the read of step 12 of olko-feature-plan-workflow for {{state.feature.feature.featureDir}} (project {{input.project}}): read `## Implementation readiness` and `## Open items` of implementation.md and every Task file, with the full plan context and the locked decisions in tracker.md. Read only; do not delegate, change no file and do not ask the user yourself.
+      Return every BLOCKING item as a question with exactly 3 options (the first recommended); return no questions when every plan says `Ready for implementation: yes`. A Task without a current runner PASS for its acceptance manifest is not ready: its `E2E-<task-id>` item is a BLOCKING item. A `GAP-<n>` item from a consistency gate is a BLOCKING item: name its mismatch and offer these 3 options, the recommended one first: accept it as ACCEPTED-GAP in tracker.md; correct the plan; keep it BLOCKING so the plan stays not ready. Do not split a question or paraphrase it into new choices, and do not repeat a locked decision.
       Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the questions and options in that language, concisely.
       If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
       End with one ```json block, one item per blocker, its text in this layout:
       {"questions": [{"text": "Blocker: <problem>\nWhy I am asking: <why>\n1. <recommended option> (recommended)\n   Business: <business consequence>\n   Change scope: <scope>\n2. <option>\n   Business: <business consequence>\n   Change scope: <scope>\n3. <option>\n   Business: <business consequence>\n   Change scope: <scope>"}]}
+      When .agents/skill-config.md sets questionReviewerAgent, also give each item the proposal fields the question reviewer requires: cluster, topic, topicTerms, decisionStatement or cites, artifacts (never empty), and the 3 options as {label, semantics, effect}.
+  - id: readiness-review
+    description: "The question reviewer approves or rejects every blocker question against the decision registry before the user sees it; only approved questions go on, copied unchanged."
+    kind: llm
+    role: plan-gate
+    agent: olko-question-reviewer
+    tools: [read, bash]
+    maxVisits: 4
+    parse: { json: [questions] }
+    prompt: |
+      Review this batch of blocker questions for the Feature {{state.feature.feature.featureId}} (project {{input.project}}). Registry: questionRegistryPattern from .agents/skill-config.md (default {{state.feature.feature.featureDir}}/questions.json); tracker: {{state.feature.feature.featureDir}}/tracker.md. Follow your procedure; never reword, answer or add a question.
+      Batch:
+      {{state.readiness.readiness.text}}
+      When .agents/skill-config.md sets neither questionReviewerAgent nor questionGateCommand, the gate does not apply: approve every question with the reason `gate off`.
+      After your table, end with one ```json block that copies every APPROVED item of the batch unchanged: {"questions": [<approved items>]}
   - id: blocker-next
     description: "Takes the next blocker of the batch."
     kind: script
     op: list.next
     maxVisits: 100
-    with: { over: readiness.readiness.questions }
+    with: { over: readiness-review.readiness-review.questions }
   - id: ask-blocker
-    description: "Puts one blocker question with three options, composed by grill-with-docs and the recommended one first, to the user."
+    description: "Puts one blocker question with three options, composed by grill-with-docs and approved by the question reviewer, the recommended one first, to the user."
     kind: interrupt
-    askedBy: readiness
+    askedBy: [readiness, readiness-review]
     maxVisits: 100
     question:
       id: "q-plan-blocker-{{state.blocker-round.count}}-{{state.blocker-next.index}}"
@@ -64,15 +128,16 @@ nodes:
     kind: llm
     role: plan-gate
     agent: olko-plan-documentation-orchestrator
-    tools: [read, edit]
+    tools: [read, edit, bash]
     maxVisits: 100
     parse: text
     prompt: |
-      Step 8b of your workflow: record this blocker and the user's decision in blocker batch {{state.blocker-round.count}} in {{state.feature.feature.featureDir}}/tracker.md (project {{input.project}}). Keep the plan files unchanged while the batch is open: edit only tracker.md, delegate nothing and ask nothing.
+      Step 12 of olko-feature-plan-workflow: record this blocker and the user's decision in blocker batch {{state.blocker-round.count}} in {{state.feature.feature.featureDir}}/tracker.md (project {{input.project}}). Keep the plan files unchanged while the batch is open: edit only tracker.md, delegate nothing and ask nothing.
       Blocker {{state.blocker-next.number}} of {{state.blocker-next.total}}:
       {{state.blocker-next.item.text}}
       The user's decision: option {{state.ask-blocker.answer}}.
       Record the decision in English per userDecisionRecordLanguage and userDecisionRecordStyle in .agents/skill-config.md (unset: the repository documentation language; concise translation): translate and compact faithfully, keep IDs and meaning-critical exact wording, and add no new decision.
+      When .agents/skill-config.md sets questionGateCommand, also register the approved question in the decision registry (questionRegistryPattern, default {{state.feature.feature.featureDir}}/questions.json) with its `propose` command and record the answer with its `answer` command, each as one bare command (python3 scripts/plan/question_gate.py ...); otherwise run no command.
       Reply with one line: `recorded | <blocker number>`.
   - id: blocker-apply
     description: "Plan editor applies the decisions and records them as locked decisions."
@@ -93,14 +158,21 @@ nodes:
     input: { featureDir: "{{state.feature.feature.featureDir}}" }
 edges:
   - { from: cleanup, to: gate-cleanup }
-  - { from: gate-cleanup, to: blocker-round }
+  - { from: gate-cleanup, to: e2e-next }
+  - { from: e2e-next, to: e2e-matrix, when: "e2e-next.done == false", description: "a Task still needs its manifest written and validated" }
+  - { from: e2e-next, to: blocker-round, when: "e2e-next.done == true", description: "every Task manifest written and validated: read the readiness" }
+  - { from: e2e-matrix, to: e2e-validate }
+  - { from: e2e-validate, to: e2e-fold }
+  - { from: e2e-fold, to: e2e-next }
   - { from: blocker-round, to: END, when: "blocker-round.count == 4", description: "three blocker rounds done" }
   - { from: blocker-round, to: readiness, description: "fewer than three blocker rounds" }
   - { from: readiness, to: END, when: "readiness.readiness.questions == 0", description: "every plan is ready" }
-  - { from: readiness, to: blocker-next, description: "blockers remain" }
+  - { from: readiness, to: readiness-review, description: "blockers remain: the question reviewer checks the batch" }
+  - { from: readiness-review, to: END, when: "readiness-review.readiness-review.questions == 0", description: "the reviewer rejected every blocker question: none is put to the user and the plans keep their readiness verdict" }
+  - { from: readiness-review, to: blocker-next, description: "approved blocker questions remain" }
   - { from: blocker-next, to: ask-blocker, when: "blocker-next.done == false", description: "a blocker of the batch is left" }
   - { from: blocker-next, to: blocker-apply, when: "blocker-next.done == true", description: "every blocker of the batch answered" }
   - { from: ask-blocker, to: blocker-record }
   - { from: blocker-record, to: blocker-next }
   - { from: blocker-apply, to: gate-blocker }
-  - { from: gate-blocker, to: blocker-round }
+  - { from: gate-blocker, to: e2e-next, description: "decisions changed the plans: every Task manifest is written and validated again" }

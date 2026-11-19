@@ -1,7 +1,7 @@
 name: olko-plan-discovery
-version: 0.4.0
-description: "Discovery: the backlog writer drafts the Epic/Feature/Task hierarchy, the writer checks it against the locked answers (a contradiction or a repeated answered question returns it for a corrected draft), grill-with-docs presents the open questions as one batch per round and the one draft review and the revise question; the approved draft is published to the tracker when the tracker switch is on."
-source: "agents/opencode/olko-plan-documentation-orchestrator.md (DISCOVERY: backlog writer draft with question batches, one draft review, approval-gated tracker publish); skills/workflow/olko-plan-backlog-discovery/SKILL.md (question ownership gate, reconciliation after each answer batch, approval-gated publish)"
+version: 0.5.0
+description: "Discovery: the backlog writer drafts the Epic/Feature/Task hierarchy, the writer checks it against the locked answers (a contradiction, a repeated answered question or a decision not yet rewritten into every deliverable it touches returns it for a corrected draft, so no question is asked while a decision is open), grill-with-docs presents the open questions as one batch per round and the one draft review and the revise question; the approved draft is published to the tracker when the tracker switch is on."
+source: "agents/opencode/olko-plan-documentation-orchestrator.md (DISCOVERY: backlog writer draft with question batches, one draft review, approval-gated tracker publish); skills/workflow/olko-plan-backlog-discovery/SKILL.md (question ownership gate, reconciliation after each answer batch, decision closure, approval-gated publish)"
 roles:
   backlog: medium
   planner: high
@@ -39,6 +39,7 @@ nodes:
       {{/state.draft-consistency.draft-consistency.detail}}
 
       Reconcile before returning: add each new answer to the locked decisions once; drop every question already answered; if the draft contradicts a locked decision, correct the draft to match it. Never turn a contradiction into a new choice for the user.
+      Decision closure: an answer is not a preference. For every new answer, list every deliverable it touches (on this path the issue text of the draft; an implementation plan file, the tracker, an E2E manifest or code only when it already exists), rewrite all of them in this same draft, then re-read each one against the answer. Change no file and nothing in the tracker here: name such a deliverable in the draft as a pending change instead.
       When decisions remain open, return all currently answerable questions together. When the draft is ready, return no questions.
       Record decisions per userDecisionRecordLanguage and userDecisionRecordStyle in .agents/skill-config.md in {{input.project}} (unset: the repository documentation language; concise translation): translate and compact faithfully, keep IDs and meaning-critical exact wording, add no new decision.
       End with one ```json block: {"questions": ["<question>"], "decisions": ["<every locked decision>"], "feature": {"title": "", "goal": "", "criteria": [""]}, "tasks": [{"id": "T1", "title": "", "criteria": [""]}], "hierarchy": "<the Epic/Feature/Task hierarchy as markdown>"}
@@ -48,7 +49,7 @@ nodes:
     op: builtin.count
     maxVisits: 20
   - id: draft-consistency
-    description: "Backlog writer checks the draft against the locked answers, read only: a contradicted locked decision or an answered question still listed fails the check and sends the draft back for correction."
+    description: "Backlog writer checks the draft against the locked answers, read only: a contradicted locked decision, an answered question still listed or a decision not rewritten into every deliverable it touches fails the check and sends the draft back for correction."
     kind: llm
     role: backlog
     agent: olko-feature-backlog-writer
@@ -67,8 +68,8 @@ nodes:
       - {{.}}
       {{/state.draft.draft.questions}}
 
-      Check two things: (1) the draft contradicts no locked decision; (2) no question already answered in the locked decisions is still listed as open.
-      End with exactly one line: `consistency | <pass|fail> | <number of contradictions and repeated questions> | <items, semicolon separated, or none>`.
+      Check three things: (1) the draft contradicts no locked decision; (2) no question already answered in the locked decisions is still listed as open; (3) decision closure: every locked decision is rewritten into every deliverable of the draft it touches, so no decision is left only partly applied (a partly applied decision stays open, and no further question is asked while it is open).
+      End with exactly one line: `consistency | <pass|fail> | <number of contradictions, repeated questions and open decisions> | <items, semicolon separated, or none>`.
   - id: blocked
     description: "Stops the discovery run when grill-with-docs cannot be loaded: the tooling blocker is reported and nothing is asked of the user."
     kind: script
@@ -164,7 +165,7 @@ nodes:
 edges:
   - { from: draft, to: draft-round }
   - { from: draft-round, to: draft-consistency, description: "the round is counted: check the draft against the locked answers" }
-  - { from: draft-consistency, to: draft, when: 'draft-consistency.draft-consistency.verdict == "fail"', description: "the draft contradicts a locked decision or still lists an answered question: the writer returns a corrected draft" }
+  - { from: draft-consistency, to: draft, when: 'draft-consistency.draft-consistency.verdict == "fail"', description: "the draft contradicts a locked decision, still lists an answered question or leaves a decision partly applied: the writer returns a corrected draft" }
   - { from: draft-consistency, to: questions-grill, when: "draft.draft.questions != 0", description: "consistent and the writer still has open questions: grill-with-docs presents the batch" }
   - { from: draft-consistency, to: review-grill, description: "consistent and no open question left: grill-with-docs presents the draft review" }
   - { from: questions-grill, to: blocked, when: 'questions-grill.questions-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded: stop" }

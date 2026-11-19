@@ -1,7 +1,7 @@
 name: olko-plan-package
-version: 0.2.0
-description: "Steps 1 to 3: verified evidence from the knowledge base and four investigation workers, the business plan, the technical plan per Task, and the consistency gate."
-source: "agents/opencode/olko-plan-documentation-orchestrator.md (Steps 1-3: knowledge and investigation workers, business writer, technical plan per Task, consistency gate)"
+version: 0.3.0
+description: "Steps 1 to 4: verified evidence from the knowledge base and four investigation workers, the business plan, the technical plan per Task, and the consistency gate."
+source: "agents/opencode/olko-plan-documentation-orchestrator.md (FEATURE PLAN BATCH: one implementation file for every current child Task); skills/workflow/olko-feature-plan-workflow/workflow.md (steps 1-4: knowledge and investigation workers, business writer, technical plan per Task, consistency gate)"
 roles:
   plan-worker: medium
   planner: high

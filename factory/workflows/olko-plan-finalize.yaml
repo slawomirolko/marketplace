@@ -1,7 +1,7 @@
 name: olko-plan-finalize
-version: 0.2.0
-description: "Steps 8c to 11: tracker triage (switch on), the write-free Domain changes recommendation, the memory record, opening the plan in the editor (switch on) and the completion report."
-source: "agents/opencode/olko-plan-documentation-orchestrator.md (Steps 8c-11: tracker triage, Domain changes recommendation, memory, editor, scope check, completion report)"
+version: 0.3.0
+description: "Step 13 and the triage of step 8: tracker triage (switch on), the write-free Domain changes recommendation, the memory record, opening the plan in the editor (switch on) and the completion report."
+source: "skills/workflow/olko-feature-plan-workflow/workflow.md (step 8: impact triage when a Task boundary changed; step 13: olko-plan-finalization with Domain changes recommendation, memory, editor, scope check, completion report)"
 roles:
   plan-gate: medium
   plan-worker: medium

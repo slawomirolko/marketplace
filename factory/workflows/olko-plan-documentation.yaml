@@ -1,7 +1,7 @@
 name: olko-plan-documentation
-version: 0.4.0
-description: "Plans work from an idea or an accepted Feature: discovery drafts the Epic/Feature/Task hierarchy, planning writes the business plan, the technical plan and one implementation plan per Task, then reviews, grills and finalizes them. Every question to the user is composed by grill-with-docs; the workflow only puts it to the user."
-source: agents/opencode/olko-plan-documentation-orchestrator.md (DISCOVERY and IMPLEMENTATION PLANNING; each phase is a group file, tracker steps sit behind switches.tracker)
+version: 0.5.0
+description: "Plans work from an idea or an accepted Feature: discovery drafts the Epic/Feature/Task hierarchy, planning writes the business plan, the technical plan and one implementation plan per Task, then reviews, grills, validates the E2E acceptance manifests and finalizes them. Every question to the user is composed by grill-with-docs, every planning question is checked by the question reviewer; the workflow only puts it to the user."
+source: "agents/opencode/olko-plan-documentation-orchestrator.md (DISCOVERY and IMPLEMENTATION PLANNING; USER QUESTION GATE; each phase is a group file, tracker steps sit behind switches.tracker); skills/workflow/olko-feature-plan-workflow/workflow.md (ordered workflow: package, audits, review, grill, E2E matrix gate, readiness, finalization)"
 entry: route
 roles:
   planner: high
@@ -66,7 +66,7 @@ nodes:
     kind: group
     workflow: olko-plan-grill
   - id: readiness-phase
-    description: "Cleans the plan up and resolves blockers until every plan is ready for implementation."
+    description: "Cleans the plan up, writes and validates the acceptance-to-E2E manifest of every Task, and resolves blockers until every plan is ready for implementation."
     kind: group
     workflow: olko-plan-readiness
   - id: finalize
