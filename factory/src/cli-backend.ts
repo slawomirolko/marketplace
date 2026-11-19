@@ -2,18 +2,21 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import type { AgentTool, CliExecutor, CliName, CliResult, ExecResult, TokenCounts } from "./types.ts";
+import type { AgentTool, CliExecutor, CliName, CliRequest, CliResult, ExecResult, TokenCounts } from "./types.ts";
 import { claudeAgentsFile, claudeTools, opencodeConfigDir } from "./marketplace-agents.ts";
 
 const TIMEOUT_MS = 900000;
 const OPENCODE_IDS: Record<string, string> = { haiku: "anthropic/claude-haiku-5-5", sonnet: "anthropic/claude-sonnet-5-5", opus: "anthropic/claude-opus-5-5" };
 const CLAUDE_DISALLOWED = "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,Agent,Task,NotebookEdit";
 
+const CLAUDE_ISOLATION = ["--setting-sources", "project", "--disable-slash-commands", "--strict-mcp-config"];
+
 interface SpawnResult {
   code: number | null;
   stdout: string;
   stderr: string;
   durationMs: number;
+  timedOut: boolean;
 }
 
 interface ClaudeModelUsage {
@@ -69,18 +72,28 @@ function cleanEnv(): Record<string, string | undefined> {
   return env;
 }
 
+/** On Windows the CLI runs under a shell, so killing the shell leaves the CLI running; taskkill /T ends the whole tree. */
+function killTree(pid: number | undefined, fallback: () => void): void {
+  if (process.platform !== "win32" || pid === undefined) return fallback();
+  spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" }).on("error", fallback);
+}
+
 function spawnCli(command: string, args: string[], stdinText?: string, { cwd = workDir, env = {} }: { cwd?: string; env?: Record<string, string> } = {}): Promise<SpawnResult> {
   return new Promise((resolve) => {
     const started = Date.now();
     const child = spawn(command, args, { cwd, env: { ...cleanEnv(), PWD: cwd, ...env }, shell: process.platform === "win32" });
     let stdout = "";
     let stderr = "";
-    const timer = setTimeout(() => child.kill(), TIMEOUT_MS);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killTree(child.pid, () => child.kill());
+    }, TIMEOUT_MS);
     child.stdout.on("data", (d) => (stdout += d));
     child.stderr.on("data", (d) => (stderr += d));
     child.on("close", (code) => {
       clearTimeout(timer);
-      resolve({ code, stdout, stderr, durationMs: Date.now() - started });
+      resolve({ code, stdout, stderr, durationMs: Date.now() - started, timedOut });
     });
     child.stdin.end(stdinText ?? "");
   });
@@ -99,38 +112,33 @@ function parseEvents(stdout: string): OpencodeEvent[] {
   return events;
 }
 
-interface AgentRunOptions {
-  agent?: string | undefined;
-  cwd?: string | undefined;
-  configDir?: string | undefined;
-  tools?: AgentTool[] | undefined;
-  dirs?: string[] | undefined;
-}
+type AgentRunOptions = Omit<CliRequest, "model" | "prompt">;
 
 function removeTempDir(dir: string): void {
   if (path.dirname(path.resolve(dir)) === path.resolve(os.tmpdir())) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
 }
 
-function claudeAgentArgs(agent: string, tools: AgentTool[], dirs: string[]): string[] {
+function claudeAgentArgs(agent: string, tools: AgentTool[], dirs: string[], definition: CliRequest["definition"]): string[] {
   const { allowed, disallowed } = claudeTools(tools);
   const permission = tools.includes("edit") ? ["--permission-mode", "acceptEdits"] : [];
-  return ["--agents", claudeAgentsFile(agent, tools), "--agent", agent, "--max-turns", "40", "--strict-mcp-config", "--allowedTools", allowed.join(","), "--disallowedTools", disallowed.join(","), ...permission, ...dirs.flatMap((d) => ["--add-dir", d])];
+  return ["--agents", claudeAgentsFile(definition ?? agent, tools), "--agent", agent, "--max-turns", "40", "--allowedTools", allowed.join(","), "--disallowedTools", disallowed.join(","), ...permission, ...dirs.flatMap((d) => ["--add-dir", d])];
 }
 
-async function runClaude(model: string, prompt: string, { agent, cwd, tools = ["read"], dirs = [] }: AgentRunOptions = {}): Promise<CliResult> {
+async function runClaude(model: string, prompt: string, { agent: named, definition, cwd, tools = ["read"], dirs = [], env = {} }: AgentRunOptions = {}): Promise<CliResult> {
+  const agent = definition?.name ?? named;
   if (agent && !/^[a-z0-9-]+$/.test(agent)) return { ok: false, error: `invalid agent name ${agent}` };
   const args = agent
-    ? ["-p", "--model", model, "--output-format", "json", ...claudeAgentArgs(agent, tools, dirs)]
-    : ["-p", "--model", model, "--output-format", "json", "--max-turns", "2", "--strict-mcp-config", "--disallowedTools", CLAUDE_DISALLOWED];
+    ? ["-p", "--model", model, "--output-format", "json", ...CLAUDE_ISOLATION, ...claudeAgentArgs(agent, tools, dirs, definition)]
+    : ["-p", "--model", model, "--output-format", "json", ...CLAUDE_ISOLATION, "--max-turns", "2", "--disallowedTools", CLAUDE_DISALLOWED];
   const agentFile = args[args.indexOf("--agents") + 1];
-  const res = await spawnCli("claude", args, prompt, { cwd: cwd ?? workDir }).finally(() => {
+  const res = await spawnCli("claude", args, prompt, { cwd: cwd ?? workDir, env }).finally(() => {
     if (agent && agentFile) removeTempDir(path.dirname(agentFile));
   });
   let out: ClaudeOutput;
   try {
     out = JSON.parse(res.stdout) as ClaudeOutput;
   } catch {
-    return { ok: false, error: `claude exit ${res.code}: ${(res.stderr || res.stdout).slice(-300)}`, durationMs: res.durationMs };
+    return { ok: false, error: `claude exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${(res.stderr || res.stdout).slice(-300)}`, durationMs: res.durationMs, timedOut: res.timedOut };
   }
   const usageByModel = Object.entries(out.modelUsage ?? {}).map(([id, u]) => ({
     model: id,
@@ -147,12 +155,13 @@ async function runClaude(model: string, prompt: string, { agent, cwd, tools = ["
   return { ok: !out.is_error, error: out.is_error ? String(out.result).slice(0, 300) : undefined, text: out.result, turns: out.num_turns, harnessCostUsd: out.total_cost_usd ?? null, usageByModel, durationMs: res.durationMs };
 }
 
-async function runOpencode(model: string, prompt: string, { agent, cwd, configDir, tools = ["read"] }: AgentRunOptions = {}): Promise<CliResult> {
-  const id = OPENCODE_IDS[model] ?? model;
+async function runOpencode(model: string, prompt: string, { agent: named, definition, cwd, configDir, tools = ["read"], env = {} }: AgentRunOptions = {}): Promise<CliResult> {
+  const agent = definition?.name ?? named;
+  const id = OPENCODE_IDS[model] ?? (model.startsWith("claude-") ? `anthropic/${model}` : model);
   if (agent && !/^[a-z0-9-]+$/.test(agent)) return { ok: false, error: `invalid agent name ${agent}` };
   const args = ["run", "--standalone", "--archived", "--format", "json", "-m", id, ...(agent ? ["--agent", agent] : [])];
-  const agentDir = configDir ?? (agent ? opencodeConfigDir(agent, tools) : undefined);
-  const res = await spawnCli("opencode", args, prompt, { cwd: cwd ?? workDir, env: agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {} }).finally(() => {
+  const agentDir = configDir ?? (agent ? opencodeConfigDir(definition ?? agent, tools) : undefined);
+  const res = await spawnCli("opencode", args, prompt, { cwd: cwd ?? workDir, env: { ...env, ...(agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {}) } }).finally(() => {
     if (agentDir && !configDir) removeTempDir(agentDir);
   });
   const events = parseEvents(res.stdout);
@@ -175,7 +184,7 @@ async function runOpencode(model: string, prompt: string, { agent, cwd, configDi
     }
     if (p.type === "text") text = p.text ?? text;
   }
-  if (error || steps === 0) return { ok: false, error: error ? JSON.stringify(error.error).slice(0, 300) : `opencode exit ${res.code}: ${res.stderr.slice(-300)}`, durationMs: res.durationMs };
+  if (error || steps === 0) return { ok: false, error: error ? JSON.stringify(error.error).slice(0, 300) : `opencode exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${res.stderr.slice(-300)}`, durationMs: res.durationMs, timedOut: res.timedOut };
   const sessionId = events.find((e) => e.sessionID)?.sessionID ?? null;
   return { ok: true, text, turns: steps, sessionId, harnessCostUsd, usageByModel: [{ model: id, tokens, cacheWriteTtlKnown: false, harnessCostUsd }], durationMs: res.durationMs };
 }

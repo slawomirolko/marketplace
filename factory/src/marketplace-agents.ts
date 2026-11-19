@@ -201,24 +201,35 @@ function freshDir(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
-export function claudeAgentsFile(name: string, tools: AgentTool[] = ["read"]): string {
-  const agent = readMarketplaceAgent(name);
-  const file = path.join(freshDir("factory-agent-"), `claude-${name}.json`);
-  fs.writeFileSync(file, JSON.stringify({ [name]: { description: agent.description, prompt: agent.prompt, tools: claudeTools(tools).allowed } }));
+/** An agent given by its instructions, for example a delegate work item, instead of by its marketplace name. */
+export type AgentDefinition = Pick<MarketplaceAgent, "name" | "description" | "prompt"> & Partial<MarketplaceAgent>;
+
+function definitionOf(agent: string | AgentDefinition): AgentDefinition {
+  if (typeof agent !== "string") {
+    if (!AGENT_NAME.test(agent.name)) throw new Error(`invalid agent name ${agent.name}`);
+    return agent;
+  }
+  return readMarketplaceAgent(agent);
+}
+
+export function claudeAgentsFile(agent: string | AgentDefinition, tools: AgentTool[] = ["read"]): string {
+  const definition = definitionOf(agent);
+  const file = path.join(freshDir("factory-agent-"), `claude-${definition.name}.json`);
+  fs.writeFileSync(file, JSON.stringify({ [definition.name]: { description: definition.description, prompt: definition.prompt, tools: claudeTools(tools).allowed } }));
   return file;
 }
 
-export function opencodeConfigDir(name: string, tools: AgentTool[] = ["read"]): string {
-  const agent = readMarketplaceAgent(name);
+export function opencodeConfigDir(agent: string | AgentDefinition, tools: AgentTool[] = ["read"]): string {
+  const definition = definitionOf(agent);
   const dir = freshDir("factory-opencode-");
-  const target = path.join(dir, "agents", `${name}.md`);
+  const target = path.join(dir, "agents", `${definition.name}.md`);
   fs.mkdirSync(path.dirname(target), { recursive: true });
-  if (agent.skillDir || agent.pluginRoot) {
+  if (definition.skillDir || definition.pluginRoot || !definition.frontmatter) {
     const allow = (tool: AgentTool) => (tools.includes(tool) ? "allow" : "deny");
-    const front = { description: agent.description, mode: "subagent", permission: { edit: allow("edit"), bash: allow("bash"), task: "deny", webfetch: "deny", websearch: "deny", external_directory: "allow" } };
-    fs.writeFileSync(target, `---\n${JSON.stringify(front)}\n---\n\n${agent.prompt}\n`);
+    const front = { description: definition.description, mode: "subagent", permission: { edit: allow("edit"), bash: allow("bash"), task: "deny", webfetch: "deny", websearch: "deny", external_directory: "allow" } };
+    fs.writeFileSync(target, `---\n${JSON.stringify(front)}\n---\n\n${definition.prompt}\n`);
   } else {
-    fs.writeFileSync(target, `---\n${agent.frontmatter}\n---\n\n${agent.prompt}\n`);
+    fs.writeFileSync(target, `---\n${definition.frontmatter}\n---\n\n${definition.prompt}\n`);
   }
   return dir;
 }
