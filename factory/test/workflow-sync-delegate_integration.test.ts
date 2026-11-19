@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -9,10 +9,10 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { runSubagent, type SubagentResult } from "./delegate-subagent.ts";
 
 const factoryDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const marketplaceDir = path.join(factoryDir, "..");
-const TOOLS: Record<string, string> = { read: "Read,Grep,Glob", edit: "Edit,Write", bash: "Bash" };
 const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
 const SOURCES = [
   "agents/opencode/olko-workflow-sync-orchestrator.md",
@@ -23,11 +23,6 @@ const SOURCES = [
 ];
 
 type Payload = Record<string, any>;
-
-interface SubagentResult {
-  output: string;
-  usage: { model: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number };
-}
 
 async function call(client: Client, name: string, args: Record<string, unknown>): Promise<Payload> {
   const res = (await client.callTool({ name, arguments: args }, undefined, { timeout: 120000 })) as CallToolResult;
@@ -46,30 +41,6 @@ function freePort(): Promise<number> {
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync("git", ["-C", cwd, "-c", "user.name=t", "-c", "user.email=t@example.com", ...args], { encoding: "utf8" }).trim();
-}
-
-function runSubagent(work: Payload, cwd: string): Promise<SubagentResult> {
-  const agentsFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "harness-agent-")), "agents.json");
-  const allowed = (work.tools as string[]).map((t) => TOOLS[t]).join(",");
-  fs.writeFileSync(agentsFile, JSON.stringify({ [work.agentName]: { description: work.agentDescription, prompt: work.agentInstructions, tools: allowed.split(",") } }));
-  const dirs = (work.dirs as string[]).flatMap((d) => ["--add-dir", d]);
-  return new Promise((resolve, reject) => {
-    const child = spawn("claude", ["-p", "--agents", agentsFile, "--agent", work.agentName, "--model", work.model, "--output-format", "json", "--allowedTools", allowed, ...((work.tools as string[]).includes("edit") ? ["--permission-mode", "acceptEdits"] : []), ...dirs, "--max-turns", "40"], { cwd, shell: process.platform === "win32" });
-    let stdout = "";
-    let stderr = "";
-    const timer = setTimeout(() => child.kill(), 20 * 60 * 1000);
-    child.stdout.on("data", (d) => (stdout += d));
-    child.stderr.on("data", (d) => (stderr += d));
-    child.on("error", reject);
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      if (code !== 0) return reject(new Error(`claude exited ${code}: ${stderr.slice(-500)}`));
-      const out = JSON.parse(stdout) as { result: string; modelUsage: Record<string, { inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number }> };
-      const [usedModel, usage] = Object.entries(out.modelUsage).sort((a, b) => b[1].outputTokens - a[1].outputTokens)[0]!;
-      resolve({ output: out.result, usage: { model: usedModel, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, cacheReadTokens: usage.cacheReadInputTokens, cacheWriteTokens: usage.cacheCreationInputTokens } });
-    });
-    child.stdin.end(work.prompt);
-  });
 }
 
 test("a harness drives the workflow sync over stdio: the orchestrator runs the skill script, the mapper ends its round with it, and approve locks the verified workflow", async () => {
@@ -110,7 +81,7 @@ test("a harness drives the workflow sync over stdio: the orchestrator runs the s
       if (status.status === "waiting_for_client") {
         const items = status.pendingWorkItems as Payload[];
         offered.push(...items);
-        const results = await Promise.all(items.map((w) => runSubagent(w, root)));
+        const results = await Promise.all(items.map((w) => runSubagent(w, { cwd: root })));
         for (const [i, work] of items.entries()) {
           status = await call(client, "factory_submit", { runId, nodePath: work.nodePath, agentId: work.agentId, output: results[i]!.output, usage: results[i]!.usage });
         }
