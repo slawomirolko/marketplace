@@ -1,9 +1,10 @@
 name: olko-skill-optimizer-propose
-version: 0.1.1
-description: "Propose phase for optimize and split: runs the optimizer skill on the selected resource (read only), applies the language profile after the structural decisions, drafts one proposal with findings, wording changes, split plan and expected size, and puts the exact text to you. Revise runs the analysis again; approve or stop ends the phase. Nothing is edited here."
+version: 0.2.0
+description: "Propose phase for optimize and split: runs the optimizer skill on the selected resource (read only), applies the language profile after the structural decisions, asks the test coverage advisor for missing tests (suggest mode), drafts one proposal with findings, wording changes, split plan, expected size and test advice, and puts the exact text to you. Revise runs the analysis again; approve or stop ends the phase. Nothing is edited here."
 source: "agents/opencode/olko-skill-optimizer.md (required skill sequence, steps 2-4, approval and editing)"
 roles:
   optimizer: medium
+  auditor: medium
 limits:
   maxCycleIterations: 4
 entry: analyze
@@ -46,6 +47,23 @@ nodes:
 
       Rules: ASD-STE100 applies only to English text: say so and label it conformant only when it is. For Polish prose, use the Polish clarity profile from the adapter and say it is clarity guidance inspired by STE, never formally ASD-STE100 compliant. Note any wording that could disadvantage or exclude a group of users.
       Reply with the wording changes (old text, new text, reason), the conformance label, and the related skill and agent recommendations. Mark every recommendation as a draft for the user to decide.
+  - id: advise
+    description: "The test coverage advisor suggests missing tests for the selected resource (suggest mode, read only). testsRoot is the marketplace checkout, also in a consuming project, unless you asked for a project root. It never blocks the optimization."
+    kind: llm
+    role: auditor
+    agent: olko-test-coverage-advisor
+    tools: [read, bash]
+    dirs: ["{{state.resolve-path.resolve-path.path}}", "{{input.marketplace}}", "{{input.testsRoot}}"]
+    maxVisits: 4
+    parse: { json: [artifact, suggestions, covered, notApplicable] }
+    prompt: |
+      Mode: suggest. Read only: change nothing.
+      testsRoot: {{#input.testsRoot}}{{input.testsRoot}} (the person asked to check this project's tests){{/input.testsRoot}}{{^input.testsRoot}}{{#input.marketplace}}{{input.marketplace}}{{/input.marketplace}}{{^input.marketplace}}the marketplace checkout (your default), also when the selected resource is in a consuming project{{/input.marketplace}}{{/input.testsRoot}}
+      artifacts: {{state.ask-target.answer}}
+
+      Follow your `suggest` steps for this one artifact. Use `<artifact-name>#TP<n>` as the suggestion id. When you cannot tell whether a principle applies, say so in `reason`.
+      End with one ```json block:
+      {"artifact": "<skill|agent>:<name>", "suggestions": [{"id": "<name>#TP<n>", "principle": "TP<n>", "status": "<partial|missing>", "severity": "<high|medium|low>", "evidence": "<path:line>", "scenario": "<one sentence>", "targetFile": "<path in testsRoot>", "sketch": "<test sketch>"}], "covered": ["TP<n>"], "notApplicable": [{"principle": "TP<n>", "reason": "<reason>"}]}
   - id: draft
     description: "Combines the findings, wording changes, split plan and expected size into one proposal, marked as draft for your review. Read only."
     kind: llm
@@ -65,6 +83,8 @@ nodes:
       {{state.analyze.analyze}}
       Wording and recommendations:
       {{state.wording.wording}}
+      Test coverage advisor report (suggest mode, JSON):
+      {{state.advise.advise.text}}
 
       Write one proposal with these parts, in this order:
       1. Target: the exact path.
@@ -73,7 +93,8 @@ nodes:
       4. Split plan: for each new skill, its name, the section it takes, the one-line load instruction left in the agent, the permission.skill and manifest entries it needs, and the registry entry. Write `none` when there is no split.
       5. Expected words and tokens after the change: write `needs engine op skill.measure` when the measure step was not available; do not estimate.
       6. Related skill and agent recommendations.
-      7. Edit list: the exact files and the exact changes you will make after approval, and nothing else.
+      7. Test advice: every advisor suggestion with its id, principle, status, severity, scenario and target file, and the testsRoot. Write `none` when the advisor has no suggestions. Approval covers every suggestion id listed here; the advisor writes those tests in apply mode, before the repository tests run.
+      8. Edit list: the exact files and the exact changes you will make after approval, and nothing else.
       Check the proposal for company, team, product or internal repository names when the target is in a public repository. If you find one, do not propose any edit; write the hit as the only finding and stop.
       Mark the whole proposal as draft material that a responsible person must review and validate before any edit.
   - id: approve
@@ -87,7 +108,8 @@ nodes:
       allowed: [approve, revise, stop]
 edges:
   - { from: analyze, to: wording, description: "findings ready: apply the language profile" }
-  - { from: wording, to: draft, description: "wording ready: combine into one proposal" }
+  - { from: wording, to: advise, description: "wording ready: ask the test coverage advisor for missing tests" }
+  - { from: advise, to: draft, description: "test advice ready: combine into one proposal; the advisor never blocks" }
   - { from: draft, to: approve, description: "proposal ready: put it to you" }
   - { from: approve, to: analyze, when: 'approve.answer == "revise"', description: "you asked to revise: run the analysis again" }
   - { from: approve, to: END, description: "you approved or stopped: leave the phase; the caller reads your answer" }

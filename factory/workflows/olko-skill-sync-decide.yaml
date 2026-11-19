@@ -1,6 +1,6 @@
 name: olko-skill-sync-decide
-version: 0.2.0
-description: "Phase 3: one decision per non-identical artifact, with the actions its classification allows."
+version: 0.3.0
+description: "Phase 3: one decision per non-identical artifact, with the actions its classification allows, then one question for the accepted test suggestion ids across all artifacts."
 source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 3)"
 entry: decide-next
 limits:
@@ -21,7 +21,15 @@ nodes:
       id: "q-sync-{{state.decide-next.index}}"
       text: "Artifact {{state.decide-next.number}} of {{state.decide-next.total}} needs a decision.\n{{state.decide-next.item.line}}\n\nAll artifacts:\n{{state.rows.rows.table}}\n\nNothing changes until you decide. revert-local overwrites the local copy."
       allowedFrom: state.decide-next.item.options
+  - id: decide-tests
+    description: "After all per-artifact decisions, asks once which test suggestions to accept, across all artifacts (identical ones included). Free text: suggestion ids, comma separated, or none."
+    kind: interrupt
+    askedBy: { workflow: olko-skill-sync-compare, step: rows }
+    question:
+      id: q-tests
+      text: "Test coverage advisor suggestions (draft for your review):\n{{state.rows.rows.tests}}\n\nSuggestion ids: {{#state.rows.rows.testIds}}{{.}} {{/state.rows.rows.testIds}}\n\nWhich suggestions do you accept? Answer the suggestion ids, comma separated, or none. Accepted tests go into the marketplace pull request and cause no version bump."
 edges:
   - { from: decide-next, to: decide, when: "decide-next.done == false", description: "a non-identical artifact is left" }
-  - { from: decide-next, to: END, when: "decide-next.done == true", description: "all decided" }
+  - { from: decide-next, to: decide-tests, when: "decide-next.done == true", description: "all decided: ask once for the accepted test suggestions" }
   - { from: decide, to: decide-next }
+  - { from: decide-tests, to: END }

@@ -1,14 +1,15 @@
 name: olko-skill-optimizer-apply
-version: 0.1.1
-description: "Apply phase: after your approval of the exact proposal, edits only the selected resource and the companion files the approval names, re-reads every changed file and reports paths and test results. For split it also creates the approved new skills with their registry entries. Then it records verified, reusable learning in the memory layer, or reports that learning was skipped."
+version: 0.2.0
+description: "Apply phase: after your approval of the exact proposal, edits only the selected resource and the companion files the approval names, re-reads every changed file and reports paths. For split it also creates the approved new skills with their registry entries. Then the test coverage advisor writes the tests for every suggestion id in the approved proposal (skipped when it has none), the repository tests run, and verified, reusable learning is recorded in the memory layer, or learning is reported as skipped."
 source: "agents/opencode/olko-skill-optimizer.md (split execution, approval and editing, finish)"
 roles:
   writer: medium
   reader: low
+  auditor: medium
 entry: apply
 nodes:
   - id: apply
-    description: "Applies the approved edits only, runs the approved registry and test steps, re-reads every changed file and reports exact paths, changes, test results and the wording label. Words and tokens after the change need the measure step and are reported as needs engine op."
+    description: "Applies the approved edits only, runs the approved registry step, re-reads every changed file and reports exact paths, changes and the wording label. The repository tests run later, after the accepted test advice is applied. Words and tokens after the change need the measure step and are reported as needs engine op."
     kind: llm
     role: writer
     agent: olko-skill-optimizer
@@ -25,11 +26,43 @@ nodes:
       1. Edit only the selected resource and the companion files named in the approved edit list. Never edit agents, skills, engine code, tests or the lock file that the approval does not name.
       2. Change behavior only where the approved text says so. Keep frontmatter, invocation contracts, tools, permissions, commands, paths, thresholds and hard rules intact unless the approved text names the exact change.
       3. Split (only when the approved split plan is not `none`): for each approved new skill, create it in the repository skill layout with the approved progressive section files; add its registry entry and run `node scripts/registry.mjs` when the repository has that script; in the agent, replace the moved section with the approved "in step X, load skill Y" line; add the skill to the agent's permission.skill allowlist and to the agent manifest entry.
-      4. Run the repository tests when they exist (for example `node --test scripts/*`). Report the results exactly.
+      4. Do not run the repository tests in this step: the test coverage advisor first writes the accepted tests, then a later step runs the repository tests. Do not write the advisor's test files yourself.
       5. Never add content that changes per run, per user or per machine (dates, session notes, absolute paths) to a resource that loads on every step.
       6. In a public repository, check every new or changed file for company, team, product and internal repository names before you write it. If you find one, stop, write nothing more and report the hit.
-      7. Re-read every changed file. Report the exact paths, what changed in each, the test results, and whether the wording is ASD-STE100-conformant English or Polish clarity guidance inspired by STE. Write `needs engine op skill.measure` for the words and tokens after the change, so the caller can re-run the measure step.
+      7. Re-read every changed file. Report the exact paths, what changed in each, and whether the wording is ASD-STE100-conformant English or Polish clarity guidance inspired by STE. Write `needs engine op skill.measure` for the words and tokens after the change, so the caller can re-run the measure step.
       8. Report any approved edit you could not make, with the reason.
+  - id: tests-apply
+    description: "The test coverage advisor writes the tests for every suggestion id in the approved proposal (apply mode, same testsRoot as the suggest step), once per run, before the repository tests. Skipped when the proposal has no suggestions. It never blocks the run."
+    kind: llm
+    role: auditor
+    agent: olko-test-coverage-advisor
+    tools: [read, edit, bash]
+    dirs: ["{{state.resolve-path.resolve-path.path}}", "{{input.marketplace}}", "{{input.testsRoot}}"]
+    parse: { json: [written, results] }
+    prompt: |
+      Mode: apply. Write only test files and test fixtures; do not commit, push or call gh.
+      testsRoot: {{#input.testsRoot}}{{input.testsRoot}}{{/input.testsRoot}}{{^input.testsRoot}}{{#input.marketplace}}{{input.marketplace}}{{/input.marketplace}}{{^input.marketplace}}the marketplace checkout (your default), the same as in the suggest step{{/input.marketplace}}{{/input.testsRoot}}
+      artifacts: {{state.ask-target.answer}}
+      accepted: every suggestion id in the approved proposal below. The person approved this exact proposal, so the approval covers every suggestion id in its test advice:
+      {{state.draft.draft}}
+      Your suggest report (JSON):
+      {{state.advise.advise.text}}
+
+      Follow your `apply` steps for those ids only: write each test in its target file inside testsRoot, run `node --test <file>` for each file you touched, run the vacuity check for each new test and restore its exact text, and keep a test that fails on the current code with `{ todo: "<reason>" }`.
+      End with one ```json block:
+      {"written": ["<test file path>"], "results": [{"id": "<suggestion id>", "status": "<pass|todo>", "vacuityChecked": <true|false>}]}
+  - id: repo-tests
+    description: "Runs the repository tests when they exist, after the advisor wrote the accepted tests, and reports the results exactly. Edits nothing."
+    kind: llm
+    role: writer
+    agent: olko-skill-optimizer
+    tools: [read, bash]
+    dirs: ["{{state.resolve-path.resolve-path.path}}"]
+    parse: text
+    prompt: |
+      Do not edit any file in this step.
+      Run the repository's tests when they exist (for example `node --test scripts/*`) in {{state.resolve-path.resolve-path.path}}. Report the results exactly.
+      {{#state.tests-apply}}The test coverage advisor wrote: {{state.tests-apply.tests-apply.written}} ({{#state.tests-apply.tests-apply.results}}{{id}} {{status}}; {{/state.tests-apply.tests-apply.results}}). Report a `todo` test as a finding.{{/state.tests-apply}}{{^state.tests-apply}}The proposal had no test suggestions, so the advisor apply step was skipped.{{/state.tests-apply}}
   - id: learn
     description: "Records only verified, reusable workflow improvements in this agent's memory block through the memory layer skill; otherwise reports that learning was skipped. Stores no one-off or project-specific facts."
     kind: llm
@@ -40,9 +73,13 @@ nodes:
     prompt: |
       Load `olko-memory-layer` through the skill tool before any memory read or write; it owns the storage and retention policy.
       Apply result of this run: {{state.apply.apply}}
+      Repository test results: {{state.repo-tests.repo-tests}}
       Persist only verified, reusable workflow improvements from this run to your own block at `.opencode/memory/olko-skill-optimizer.md`. Do not store one-off or project-specific facts, dates, paths or session notes. If nothing qualifies, reply `learning: none`.
       If the memory tooling is unavailable, reply `learning: skipped (memory tooling unavailable)`. Do not create a fallback record in task artifacts.
       Reply with one line: the learning entry you stored, `learning: none`, or the skip reason.
 edges:
-  - { from: apply, to: learn, description: "edits applied and reported: record learning" }
+  - { from: apply, to: tests-apply, when: "advise.advise.suggestions > 0", description: "edits applied: write the tests for the approved suggestion ids" }
+  - { from: apply, to: repo-tests, description: "edits applied and the proposal has no test suggestions: skip the advisor" }
+  - { from: tests-apply, to: repo-tests, description: "tests written; the advisor never blocks the run" }
+  - { from: repo-tests, to: learn, description: "repository tests run and reported: record learning" }
   - { from: learn, to: END, description: "learning stored or skipped" }
