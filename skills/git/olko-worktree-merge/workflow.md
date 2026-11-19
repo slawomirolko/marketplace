@@ -276,7 +276,9 @@ If a rebuilt service fails to start, report logs and ask whether to investigate 
 
 If `postMergeE2E: required`, run this step only after Step 9a's gate passed; remove the disposable checkout first, then the Task worktree.
 
-After the PR is confirmed merged and the main checkout is updated, remove the worktree from the main checkout:
+Worktree removal is the last filesystem action of this flow. Before removing anything, relocate the current session out of the worktree: the runtime resolves `.opencode/agents` and project configuration relative to the session's project directory, so removing that directory empties the session's agent registry (`Session.AgentNotFoundError: Agent not found`) and leaves the session unusable. Move the session to `<mainRepoPath>` with the runtime's session-move capability (`opencode.session_move`, or `POST /api/session/{sessionID}/move` with `{"directory": "<mainRepoPath>"}`), verify the session directory resolves to `<mainRepoPath>`, and only then remove the worktree. When the runtime cannot move a session, stop and hand the removal to the user with the exact command instead of removing the directory under a live session.
+
+After the PR is confirmed merged, the main checkout is updated, and the session is relocated, remove the worktree from the main checkout:
 
 ```powershell
 git -C <mainRepoPath> worktree remove <worktreePath>

@@ -3,12 +3,23 @@
   "opencodeAgentFormat": "v1",
   "agents": [
     {
+      "name": "olko-question-reviewer",
+      "version": "1.0.0",
+      "file": "olko-question-reviewer.md",
+      "stack": "cross-stack",
+      "role": "auditor",
+      "skills": [
+        "olko-memory-layer"
+      ]
+    },
+    {
       "name": "olko-implementation-orchestrator",
-      "version": "2.6.0",
+      "version": "2.9.0",
       "file": "olko-implementation-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",
       "skills": [
+        "olko-task-implementation-workflow",
         "olko-memory-layer",
         "olko-agents-optimizer",
         "olko-pr-check",
@@ -23,6 +34,7 @@
       ],
       "delegates": [
         "olko-e2e-acceptance-runner",
+        "olko-e2e-matrix-author",
         "olko-marketplace-skill-bootstrapper",
         "olko-worktree-lifecycle-manager",
         "olko-git-delivery-manager",
@@ -49,7 +61,8 @@
         "olko-investigation-readiness-worker",
         "olko-review-orchestrator",
         "olko-feature-backlog-writer",
-        "olko-task-scope-impact-reviewer"
+        "olko-task-scope-impact-reviewer",
+        "olko-question-reviewer"
       ]
     },
     {
@@ -70,18 +83,20 @@
     },
     {
       "name": "olko-marketplace-skill-sync-manager",
-      "version": "2.5.0",
+      "version": "2.7.1",
       "file": "olko-marketplace-skill-sync-manager.md",
       "stack": "cross-stack",
       "role": "orchestrator",
       "skills": [
         "olko-adapt-to-marketplace",
         "olko-commit",
-        "olko-memory-layer"
+        "olko-memory-layer",
+        "grill-with-docs"
       ],
       "delegates": [
         "olko-marketplace-skill-bootstrapper",
-        "olko-marketplace-skill-sync-comparator"
+        "olko-marketplace-skill-sync-comparator",
+        "olko-question-reviewer"
       ]
     },
     {
@@ -133,7 +148,7 @@
     },
     {
       "name": "olko-worktree-lifecycle-manager",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "file": "olko-worktree-lifecycle-manager.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -145,7 +160,7 @@
     },
     {
       "name": "olko-e2e-acceptance-runner",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "file": "olko-e2e-acceptance-runner.md",
       "stack": "cross-stack",
       "role": "test-runner",
@@ -154,12 +169,26 @@
       ]
     },
     {
+      "name": "olko-e2e-matrix-author",
+      "version": "2.0.0",
+      "file": "olko-e2e-matrix-author.md",
+      "stack": "cross-stack",
+      "role": "writer",
+      "skills": [
+        "olko-memory-layer"
+      ],
+      "delegates": [
+        "olko-e2e-acceptance-runner"
+      ]
+    },
+    {
       "name": "olko-plan-documentation-orchestrator",
-      "version": "2.8.0",
+      "version": "3.1.1",
       "file": "olko-plan-documentation-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",
       "skills": [
+        "olko-feature-plan-workflow",
         "olko-plan-editor",
         "olko-investigate-existing",
         "grill-with-docs",
@@ -183,7 +212,10 @@
         "olko-army-python-auditor",
         "olko-obsidian-knowledge-manager",
         "olko-task-scope-impact-reviewer",
-        "olko-review-orchestrator"
+        "olko-review-orchestrator",
+        "olko-e2e-matrix-author",
+        "olko-e2e-acceptance-runner",
+        "olko-question-reviewer"
       ]
     },
     {
@@ -471,7 +503,7 @@
     },
     {
       "name": "olko-feature-backlog-writer",
-      "version": "1.4.0",
+      "version": "1.5.0",
       "file": "olko-feature-backlog-writer.md",
       "stack": "cross-stack",
       "role": "writer",

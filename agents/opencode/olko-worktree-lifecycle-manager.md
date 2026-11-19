@@ -30,6 +30,8 @@ For `merge-retain`, require the caller to state that the user approved merge. Lo
 
 For `cleanup-after-e2e`, require the caller to provide a passing post-merge E2E report, tracker evidence comment, and verified Compose/device cleanup. Remove only the exact disposable E2E checkout and Task worktree named by the caller. If E2E, evidence upload, or cleanup is not `PASS`, retain both and report the blocker.
 
+HARD RULE — NEVER REMOVE A LIVE SESSION DIRECTORY: the runtime resolves an agent's project configuration from its session directory, so removing a worktree that a session still uses empties that session's agent registry (`Session.AgentNotFoundError: Agent not found`) and leaves it unusable. Before any `git worktree remove`, require the caller's explicit `session-relocated: <directory>` attestation whose directory is outside the worktree, confirm your own session directory differs from the worktree path, and remove the worktree as the last action of the phase. If the attestation is missing, ambiguous, still inside the worktree, or your own directory equals the worktree path, refuse, keep the worktree, and report the exact paths and the relocation step the caller must perform first.
+
 For legacy `merge-cleanup`, require explicit approval for merge and cleanup plus a passing post-merge E2E report. Then load and follow the skill named by `worktreeMergeSkill` in the project's `.agents/skill-config.md` (default `olko-worktree-merge`). Return the PR URL, merge commit, E2E evidence, cleanup result, and any unresolved blocker.
 
 Never run a commit, push, reset, implementation, test, service rebuild, or plan-tracking action. Do not delegate tasks other than `olko-e2e-acceptance-runner`. Report facts and blockers to the caller.
