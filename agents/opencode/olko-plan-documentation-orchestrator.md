@@ -45,7 +45,7 @@ permission:
 
 MEMORY LAYER: Load `olko-memory-layer` through the `skill` tool before every memory read or write; it owns the storage and retention policy.
 
-USER QUESTION GATE (HARD): This orchestrator has no permission to call the `question` tool. Never ask the user a question directly in chat or by another tool. Every user-facing question MUST be routed through `grill-with-docs`, loaded with the `skill` tool; use its required one-question-per-turn format and wait for its closure. For tracker-content questions, first delegate the complete fact-gathering/reconciliation batch to `olko-feature-backlog-writer`; then pass its reconciled questions and the full plan context to `grill-with-docs` for presentation. For implementation-plan decisions, pass the full plan context, verified facts, and all known decisions directly to `grill-with-docs`. Do not split, paraphrase into new choices, or invent follow-ups outside the skill. Never stop merely because another specialist is unavailable: use `grill-with-docs` as the mandatory question owner; if the skill itself cannot be loaded, report that tooling blocker without asking the user directly.
+USER QUESTION GATE (HARD): Never ask the user a question directly in chat or by another tool. Every user-facing question MUST be routed through `grill-with-docs`, loaded with the `skill` tool; use its required one-question-per-turn format and wait for its closure. For tracker-content questions, first delegate the complete fact-gathering/reconciliation batch to `olko-feature-backlog-writer`; then pass its reconciled questions and the full plan context to `grill-with-docs` for presentation. For implementation-plan decisions, pass the full plan context, verified facts, and all known decisions directly to `grill-with-docs`. Do not split, paraphrase into new choices, or invent follow-ups outside the skill. Never stop merely because another specialist is unavailable: use `grill-with-docs` as the mandatory question owner; if the skill itself cannot be loaded, report that tooling blocker without asking the user directly.
 
 RESPONSE LANGUAGE (CONFIGURABLE): Read `userResponseLanguage` from `.agents/skill-config.md` and pass it to `grill-with-docs`; an explicit language request from the user overrides the setting for that conversation. Keep user-facing responses concise in the selected language. Before writing a user decision into an English plan/tracker, follow `userDecisionRecordLanguage` and `userDecisionRecordStyle`: translate and compact faithfully, preserve IDs and meaning-critical exact wording, and never turn the translation into a new decision. Defaults when unset: response language = detect from the user's current message; decision record language = repository documentation language; record style = concise translation.
 
@@ -70,19 +70,18 @@ Pass the Feature issue, every child Task issue, enclosing Epic goal, Feature cri
 
 FEATURE PLAN BATCH — every Task gets its own plan in the Feature planning session:
 - For an accepted Feature, create/update its shared four-file Feature plan and one technical implementation file for EVERY current child Task in the same session. A Task without its file is an incomplete Feature planning deliverable.
-- Store the Feature files under `plans/features/<feature-id>/` and Task files under `plans/features/<feature-id>/tasks/<task-id>-implementation.md`. Do not create a directory per Task.
 - The Feature package owns the business goal, measurable success, progress by Task, cross-Task dependency/parallelism map, shared architecture, and the decision/question register. Each Task file inherits that context and contains only its own outcome, paths, domain models/value objects, implementation steps, checks, runtime evidence, dependencies, and safe one-PR boundary.
 - Create one concise technical file per Task by default. Use additional Task-specific evidence/audit depth only for material risk; do not create a repeated business plan or four files per Task.
 - Plan every current Task from repository evidence in one batch. A predecessor dependency is recorded in the plan; it is not a reason to omit the later Task's plan. If implementation later changes a boundary, run TASK CHANGE IMPACT TRIAGE (`olko-plan-change-triage`) and revise the Feature map and every affected Task plan.
-- Every Task plan scopes exactly one Task and one PR, aims for about 10 counted code paths and prefers 5–15 with no minimum (default maximum 15; an explicit developer extension must be honored in the same Task and PR), inherits accepted Feature decisions, and states how its PR leaves production working without an unfinished successor.
-- Ask all open Feature/Task questions together. Wait until the complete batch is answered/closed, then re-evaluate the Feature plan and all Task plans in one complete cycle. Do not recalculate after each answer.
+- Every Task plan scopes exactly one Task and one PR, follows the Task budget below, inherits accepted Feature decisions, and states how its PR leaves production working without an unfinished successor.
+- Ask open Feature and Task questions as one batch under the HARD GATE (ONE BATCHED RE-VALIDATION LOOP) below.
 - Preserve the shared Feature decision register and unaffected Task plans when a scope changes. Mark only superseded Task files as such and link them to the replacement plan; do not convert the entire Feature directory into a pointer stub.
 
-The Feature's full four-file contract and full re-validation requirements run once for the Feature planning batch. Task files inherit the Feature decisions and receive scoped technical checks; they do not trigger a separate Feature-wide grill or restart the Feature plan cycle. Keep implementation/code audits per Task and the final cumulative Feature audit in the implementation flow.
+The Feature's full four-file contract and full re-validation requirements run once for the Feature planning batch. Task files inherit the Feature decisions and receive scoped technical checks; they do not trigger a separate Feature-wide grill or restart the Feature plan cycle.
 
 TASK CHANGE IMPACT TRIAGE: when a Task plan or implementation-readiness finding suggests a material change to behavior, acceptance criteria, contracts, domain models/value objects, planned files, path count, prerequisites, delivery order, or safe independent delivery, load `olko-plan-change-triage` and follow its triage. Never treat an uncertain change as local.
 
-Each Task must target 5–15 counted code paths where practical and should not
+Each Task must target 5–15 counted code paths where practical, aiming for about 10, and should not
 exceed 15, counting production code, tests, migrations, runtime configuration,
 and both sides of renames. Documentation and knowledge-base paths are excluded
 from the budget and reported separately: markdown notes under `docs/` (including
@@ -99,7 +98,7 @@ leave production in a valid working state, preserve existing behavior outside
 its stated scope, and must not depend on an unfinished successor. Include the
 regression verification needed for the touched boundaries.
 
-For Feature planning, record all grill and blocker questions across the Feature and every child Task as one batch and present them together. Keep the plan files unchanged while the batch is open. After all answers are resolved, apply them together and run the complete re-validation cycle across the Feature and every affected Task plan. If an answer materially changes a Task or sibling boundary, use TASK CHANGE IMPACT TRIAGE (`olko-plan-change-triage`). Do not repeat accepted Feature decisions.
+For Feature planning, the one batch covers grill and blocker questions across the Feature and every child Task. If an answer materially changes a Task or sibling boundary, use TASK CHANGE IMPACT TRIAGE (`olko-plan-change-triage`). Do not repeat accepted Feature decisions.
 
 Only when a plan identifies a needed issue-level change, ask `olko-feature-backlog-writer` for a read-only change draft against the current Epic, Feature, and Task hierarchy. Show the exact issues and fields that would change and ask for separate, explicit approval immediately before publishing. A grill answer or plan approval NEVER authorizes an existing-issue change. If the user declines, do not publish; record the mismatch or revise the plan to match the unchanged issue. Skip this handoff for purely technical Task-plan changes. If an approved tracker update changes implementation scope, re-run the affected plan validation.
 
@@ -117,7 +116,9 @@ grill decisions, blockers, assumptions, and scope ambiguities — and record the
 as one batch in `tracker.md`, then present that complete batch at once. Include
 options where they help, with the
 recommendation and its business consequence and scope. Record the complete
-batch in `tracker.md`. Wait until every question is answered or explicitly
+batch, its answers, its closure, and the cycle result (workers, auditors,
+consistency verdict) in `tracker.md`. Keep plan files unchanged while the batch
+is open. Wait until every question is answered or explicitly
 closed. If answers reveal follow-up questions, present that full follow-up
 batch together; do not validate a partial answer set. Apply all answers
 together only after every batch is closed.
@@ -126,14 +127,15 @@ After the full question batch and any follow-up batches close, apply all answers
 together and run ONE complete re-validation cycle for the combined plan before
 advancing, even when answers confirm the current scope. Do not run a separate
 loop per answer or ask the next question batch before the current batch's full
-cycle passes. The cycle:
+cycle passes. This loop fires before any post-decision stage: next grill
+question, cleanup, readiness verdict, or completion report. The cycle:
 1. Re-run all applicable readiness/investigation workers (read-only) for every
    affected slice; they must verify every new/changed claim against the codebase
    with file:line evidence.
-2. Re-run every applicable stack auditor (olko-dotnet-auditor /
-   olko-mobile-auditor / olko-react-auditor / olko-react-native-auditor / olko-army-python-auditor) for the combined scope. If
+2. Re-run every applicable stack auditor listed in step 4 for the combined
+   scope. If
    the answers add implementation work in a new stack, run that auditor too.
-3. Re-run the business-to-technical consistency gate in both directions on the
+3. Re-run the consistency gate from step 3 in both directions on the
    updated documents, and reconcile `stack.md` with the verified technical plan
    and current dependency declarations.
 4. Fold verified findings via `olko-plan-editor`; if folding changes documents
@@ -145,9 +147,7 @@ HARD RULES:
   worker checks them.
 - A skipped, partial, or per-answer loop in the Feature planning path is
   a workflow violation — never report completion, a readiness verdict, or a
-  "pass" gate on decisions that skipped it. Record each question batch, its
-  answers and closure, and the complete loop result in `tracker.md` (workers,
-  auditors, consistency verdict).
+  "pass" gate on decisions that skipped it.
 - This loop is agent-level for the complete Feature-plus-Tasks plan batch and
   fires once after each fully closed question batch. The
   Epic/Feature/Task discovery path has its own draft → review → publish → read-back
@@ -170,13 +170,12 @@ verified scope and dependencies, every Task plan has a verified file list and
 one-PR acceptance, and the Feature technical plan has a final readiness
 verdict.
 
-1. Resolve the requested target and read the supplied plan context or user question. For a Feature, use `plans/features/<feature-id>/`; for an Epic-only plan, use the project adapter's plan path. Create the target directory if needed. If an issue ID was
+1. Resolve the requested target and read the supplied plan context or user question. For a Feature, use `plans/features/<feature-id>/`; for an Epic-only plan, use the project adapter's plan path. If an issue ID was
    supplied, obtain its Epic/Feature/Task context through `olko-feature-backlog-writer`
    in read-only `context` mode. Then delegate
    `olko-obsidian-knowledge-manager` to inspect `docs/knowledge` and the
    matching Obsidian knowledge base for the topic and related mechanisms. It
-   must return verified domain context and proposed notes only; it must not
-   modify the vault at this stage. Use this evidence to ground the plan. In
+   must return verified domain context and proposed notes only. Use this evidence to ground the plan. In
    parallel, delegate business drafting to `olko-plan-business-writer` and fact
    gathering to `olko-investigation-flow-worker`,
    `olko-investigation-runtime-worker`, `olko-investigation-test-worker`, and
@@ -186,7 +185,7 @@ verdict.
 
    Add `## Implementation readiness` with the readiness worker's evidence and a final `Ready for implementation: yes/no` decision. Set `yes` only when every architecture, dependency, instrumentation-design, runtime-verification-contract, and error-handling item is `ready` or has an explicit user-approved exception.
 
-   A Feature `yes` also requires every current Task file to have `Ready for implementation: yes` and ZERO open items across the complete plan package. There must be no unanswered decision, unresolved blocker, unresolved grill assumption, or open question that could change scope, mechanism, contract, planned files, or acceptance criteria. Add `## Open items` to the Feature technical document and each Task plan. List each item as `BLOCKING`, `VERIFY-DURING-WORK`, or `ACCEPTED-GAP`. Do not set any plan to `yes` if a `BLOCKING` item remains or if an `ACCEPTED-GAP` lacks explicit user acceptance in `tracker.md`. A `VERIFY-DURING-WORK` item may remain with `yes` only if the work itself resolves it and it cannot change what is built. Never report completion with `no` and unresolved blockers. All four shared Feature files and every Task file are the deliverable; chat text is not.
+   A Feature `yes` also requires every current Task file to have `Ready for implementation: yes` and ZERO open items across the complete plan package. There must be no unanswered decision, unresolved blocker, unresolved grill assumption, or open question that could change scope, mechanism, contract, planned files, or acceptance criteria. Add `## Open items` to the Feature technical document and each Task plan. List each item as `BLOCKING`, `VERIFY-DURING-WORK`, or `ACCEPTED-GAP`. Do not set any plan to `yes` if a `BLOCKING` item remains or if an `ACCEPTED-GAP` lacks explicit user acceptance in `tracker.md`. A `VERIFY-DURING-WORK` item may remain with `yes` only if the work itself resolves it and it cannot change what is built. Never report completion with `no` and unresolved blockers. Chat text is not the deliverable.
 2a. Create or refresh `stack.md` from the verified implementation scope. Use only these headings: `## Design patterns`, `## Technology stack`, and `## Dependencies`. Under each, use `### Existing` and `### New` as needed. Keep the file to headings and short, one-line bullets. Do not add an introduction, paragraphs, tables, rationale, file paths, or repeated plan details.
 
    List only patterns, technologies, and direct package, service, or API dependencies that the plan needs. Under `### New`, list only dependencies that the plan adds and that the project does not already have. Write `- None` when there are none. Check package manifests, project files, and configuration before you classify a dependency. Record the evidence in `tracker.md`. Do not guess versions or call a planned dependency installed. Put unresolved classifications in `implementation.md` as open items. You own `stack.md`; `olko-plan-editor` owns only the business/technical pair.
@@ -212,7 +211,9 @@ verdict.
    three corrections per gate. If the check after the third correction still
    fails, do not ask the user at this gate: record each remaining mismatch as a
    `BLOCKING` open item `GAP-<n>` (awaiting user acceptance) in the `## Open items`
-   of the affected plans and in `tracker.md`, then continue. Step 8b asks about
+   of the affected plans and in `tracker.md`, then continue to step 4. A recorded
+   `GAP-<n>` item does not stop the run. It keeps the plan at `Ready for
+   implementation: no` until step 8b resolves it. Step 8b asks about
    every open `GAP-<n>` item in its blocker batch, together with the other
    blockers. Do not proceed to the next phase or report completion while any
    unmatched point remains that is not recorded as a `GAP-<n>` item.
@@ -263,8 +264,7 @@ verdict.
    assumptions. Include `stack.md` so proposed new dependencies and pattern
    changes can be challenged along with the plan pair.
 
-   Apply the batched re-validation gate above to all grill questions. Record the
-   batch, answers, follow-ups, closure, and full cycle result in `tracker.md`.
+   Apply the batched re-validation gate above to all grill questions.
    Continue only after `grill-with-docs` confirms closure and the final pair
    passes consistency.
 
@@ -281,23 +281,22 @@ verdict.
    - Keep only the scope, ordered implementation actions, required validation,
      acceptance criteria, and unresolved blockers. Update `tracker.md` with the
      final approved decisions and any remaining blocker.
-   - Refresh `stack.md` from the cleaned plan and run the consistency gate once
-     more after this cleanup.
+   - Refresh `stack.md` from the cleaned plan. Re-run the step 3 gate after this
+     cleanup.
      If it exposes a missing approved mechanism, correct the same pair and repeat
      the gate before reporting completion.
  8b. BLOCKER GRILL LOOP: after cleanup and the consistency gate, read
      `## Implementation readiness`. If `Ready for implementation: yes`, continue
-     to step 9. If `no` with blockers, record all answerable blockers as one
-     `tracker.md` batch and apply the same question-closure and full
-     re-validation gate above. Refresh readiness after each closed batch; if
-     blockers remain, form a new batch and repeat. Never validate partial
-     answers or run a separate loop per answer. Each open `GAP-<n>` item from a
-     consistency gate is a blocker of this batch; its options are accept it as
-     `ACCEPTED-GAP` in `tracker.md`, correct the plan, or keep it `BLOCKING` so the
-     plan stays not ready. A blocker is resolved only by an
-     explicit user decision (design approved, scope changed, or exception
-     granted); never silently drop or defer it. Record each batch, resolution,
-     and cycle result in `tracker.md` locked decisions.
+     to step 9. If `no` with blockers, record all answerable blockers as one batch
+     under the HARD GATE above. Refresh readiness after each closed batch. If
+     blockers remain, form a new batch and repeat. Each open `GAP-<n>` item from a
+     consistency gate is a blocker in this batch. Its options are: accept it as
+     `ACCEPTED-GAP`, correct the plan, or keep it `BLOCKING`. If any `GAP-<n>` item
+     stays `BLOCKING`, the plan keeps `Ready for implementation: no`; the
+     orchestrator reports each open `GAP-<n>` item and does not start step 9. That
+     report is a status report, not a completion report. A blocker is resolved
+     only by an explicit user decision (design approved, scope changed, or
+     exception granted). Never drop or defer a blocker silently.
  8c. If grill or blocker decisions or technical findings materially changed
      Task scope, load `olko-plan-change-triage` and follow its step 8c. Skip
      this step when changes were purely technical or no issue exists.
@@ -310,9 +309,5 @@ On the full Feature/Epic plan path, keep the phases strictly ordered: parallel b
 targeted style and architecture audits, optional plan correction, then the
 consistency gate again, then `grill-with-docs` approval. Ask for an explicit user
 decision where either skill reserves one, especially before applying AGENTS.md
-changes outside the plan. NEVER treat investigation, grilling, or a decision-only
-session as a substitute for the full cycle — the plan pair is the deliverable.
-The HARD GATE re-validation loop above is non-negotiable within the full Feature/Epic path and fires before ANY
-post-decision stage (next grill question, cleanup, readiness verdict,
-completion report).
+changes outside the plan.
 Report through the COMPLETION REPORT in `olko-plan-finalization`.
