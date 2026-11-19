@@ -198,6 +198,12 @@ test("installs the plan documentation orchestrator with review-only stack delega
   assert.match(agent, /grill-with-docs: allow/);
   assert.match(agent, /FULL FEATURE\/Epic PLAN PROCEDURE/);
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-plan-editor", "SKILL.md")));
+  assert.equal(
+    JSON.parse(fs.readFileSync(path.join(marketplaceRoot, "agents", "opencode", "index.json"), "utf8")).agents.find(
+      (entry) => entry.name === "olko-plan-documentation-orchestrator",
+    ).version,
+    "3.1.1",
+  );
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-investigate-existing", "SKILL.md")));
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "grill-with-docs", "SKILL.md")));
   for (const [agentName, skills] of [
@@ -235,7 +241,7 @@ test("installs the visible marketplace skill sync manager and its comparator", (
     JSON.parse(fs.readFileSync(path.join(marketplaceRoot, "agents", "opencode", "index.json"), "utf8")).agents.find(
       (agent) => agent.name === "olko-marketplace-skill-sync-manager",
     ).version,
-    "2.7.0",
+    "2.7.1",
   );
   assert.match(manager, /bash: allow/);
   assert.match(manager, /Never pass `--force` to `olko-commit`/);
