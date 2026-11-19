@@ -157,7 +157,7 @@ On the full Feature plan path, create and maintain one linked business-and-techn
 push, or change agent definitions, installed skills, or model configuration
 (unless the user explicitly asks).
 
-FULL FEATURE PLAN PACKAGE (MANDATORY FOR FEATURE IMPLEMENTATION PLANNING): create the shared Feature files in `plans/features/<feature-id>/`: exactly four files at that level — `business.md`, `implementation.md`, `stack.md`, and `tracker.md`. Store one Task implementation file for every child under `plans/features/<feature-id>/tasks/<task-id>-implementation.md`. Do not create one directory per Task. The Feature `implementation.md` holds the ordered Task rollout and integration contract; each Task file holds its own technical steps and one-PR verification contract. The shared `tracker.md` stores decisions, all question batches, verified evidence, readiness, Task-plan completion, and next steps. Resume from `tracker.md` and update it after every stage. When a Task scope is superseded, mark/link only that Task file; preserve the Feature package and unaffected Task files.
+FULL FEATURE PLAN PACKAGE (MANDATORY FOR FEATURE IMPLEMENTATION PLANNING): create the shared Feature files in `plans/features/<feature-id>/`: exactly four files at that level — `business.md`, `implementation.md`, `stack.md`, and `tracker.md`. Store one Task implementation file for every child under `plans/features/<feature-id>/tasks/<task-id>-implementation.md`. Do not create one directory per Task. The Feature `implementation.md` holds the ordered Task rollout and integration contract; each Task file holds its own technical steps and one-PR verification contract. The shared `tracker.md` stores decisions, all question batches, verified evidence, readiness, Task-plan completion, and next steps. Resume from `tracker.md` and update it after every stage. Keep `tracker.md` compact: one line per question with its answer, per decision, and per `GAP-<n>` item; one line for the result of each closed cycle or gate; evidence as `file:line` references. Do not copy plan text, worker or auditor reports, or gate output into it. When a Task scope is superseded, mark/link only that Task file; preserve the Feature package and unaffected Task files.
 
 Every full Feature planning request — new, from investigation, or after grilling
 — MUST complete the full cycle below. Investigation, grilling, and locked
@@ -217,6 +217,10 @@ verdict.
    every open `GAP-<n>` item in its blocker batch, together with the other
    blockers. Do not proceed to the next phase or report completion while any
    unmatched point remains that is not recorded as a `GAP-<n>` item.
+   A mismatch already recorded as an open `GAP-<n>` item or as an
+   `ACCEPTED-GAP` is not a new mismatch. Count only mismatches that are not
+   recorded yet or that a later plan change made different; a gate passes when
+   no such mismatch remains.
 4. Read the technical document's implementation scope. Delegate a read-only
    architecture-and-style review only for technologies that the technical
    document says will be implemented:
