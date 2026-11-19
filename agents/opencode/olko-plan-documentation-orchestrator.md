@@ -14,6 +14,7 @@ permission:
   bash:
     "*": deny
     "code *": allow
+    "python3 scripts/plan/question_gate.py *": allow
   question: deny
   task:
     "*": deny
@@ -30,6 +31,7 @@ permission:
     olko-army-python-auditor: allow
     olko-obsidian-knowledge-manager: allow
     olko-task-scope-impact-reviewer: allow
+    olko-question-reviewer: allow
     olko-review-orchestrator: allow
     olko-e2e-acceptance-runner: allow
     olko-e2e-matrix-author: allow

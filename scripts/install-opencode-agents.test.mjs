@@ -190,6 +190,9 @@ test("installs the plan documentation orchestrator with review-only stack delega
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-feature-plan-workflow", "SKILL.md")));
   assert.match(agent, /olko-e2e-matrix-author: allow/);
   assert.match(agent, /olko-e2e-acceptance-runner: allow/);
+  assert.match(agent, /olko-question-reviewer: allow/);
+  assert.match(agent, /"python3 scripts\/plan\/question_gate\.py \*": allow/);
+  assert.ok(fs.existsSync(path.join(project, ".opencode", "agents", "olko-question-reviewer.md")));
   assert.match(agent, /olko-plan-editor: allow/);
   assert.match(agent, /olko-investigate-existing: allow/);
   assert.match(agent, /grill-with-docs: allow/);
@@ -232,7 +235,7 @@ test("installs the visible marketplace skill sync manager and its comparator", (
     JSON.parse(fs.readFileSync(path.join(marketplaceRoot, "agents", "opencode", "index.json"), "utf8")).agents.find(
       (agent) => agent.name === "olko-marketplace-skill-sync-manager",
     ).version,
-    "2.6.0",
+    "2.7.0",
   );
   assert.match(manager, /bash: allow/);
   assert.match(manager, /Never pass `--force` to `olko-commit`/);
@@ -255,6 +258,7 @@ test("installs the visible marketplace skill sync manager and its comparator", (
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-commit", "SKILL.md")));
   assert.ok(fs.existsSync(path.join(project, ".opencode", "agents", "olko-marketplace-skill-bootstrapper.md")));
   assert.ok(fs.existsSync(path.join(project, ".opencode", "agents", "olko-marketplace-skill-sync-comparator.md")));
+  assert.ok(fs.existsSync(path.join(project, ".opencode", "agents", "olko-question-reviewer.md")));
   assert.match(
     fs.readFileSync(path.join(project, ".opencode", "memory", "olko-marketplace-skill-sync-manager.md"), "utf8"),
     /version-keyed rejected new-artifact candidates/,

@@ -83,7 +83,7 @@
     },
     {
       "name": "olko-marketplace-skill-sync-manager",
-      "version": "2.6.0",
+      "version": "2.7.0",
       "file": "olko-marketplace-skill-sync-manager.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -94,7 +94,8 @@
       ],
       "delegates": [
         "olko-marketplace-skill-bootstrapper",
-        "olko-marketplace-skill-sync-comparator"
+        "olko-marketplace-skill-sync-comparator",
+        "olko-question-reviewer"
       ]
     },
     {
@@ -181,7 +182,7 @@
     },
     {
       "name": "olko-plan-documentation-orchestrator",
-      "version": "3.0.0",
+      "version": "3.1.0",
       "file": "olko-plan-documentation-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -211,7 +212,8 @@
         "olko-obsidian-knowledge-manager",
         "olko-task-scope-impact-reviewer",
         "olko-review-orchestrator",
-        "olko-e2e-matrix-author"
+        "olko-e2e-matrix-author",
+        "olko-question-reviewer"
       ]
     },
     {
