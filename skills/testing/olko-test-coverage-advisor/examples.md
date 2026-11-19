@@ -5,6 +5,8 @@ Load this file when you write a sketch. Each sketch has one test that covers one
 
 Names such as `sync-plan.ts`, `check-leaks.ts`, and `sync-cli.ts` are placeholders. Replace them with the real script of the artifact.
 
+A test resolves every path from `import.meta.url`, never from the current directory: the advisor and the test runner can start in another project. A test spawns only `node` (`process.execPath`) and stubbed tools.
+
 ## TP1 Logic in code, judgment in the model
 ```ts
 import assert from "node:assert/strict";
@@ -23,9 +25,12 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 test("static: the agent file denies commit and push", () => {
-  const text = fs.readFileSync(path.join("agents", "opencode", "example-agent.md"), "utf8");
+  const text = fs.readFileSync(path.join(root, "agents", "opencode", "example-agent.md"), "utf8");
   assert.match(text, /"git commit \*": deny/);
   assert.match(text, /"git push \*": deny/);
 });
@@ -39,13 +44,18 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
-test("the script calls the stubbed gh on PATH and never the real one", () => {
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// The stub is a POSIX shell script; Windows cannot run it from PATH.
+const posixOnly = { skip: process.platform === "win32" ? "POSIX shell stub" : false };
+
+test("the script calls the stubbed gh on PATH and never the real one", posixOnly, () => {
   const bin = fs.mkdtempSync(path.join(os.tmpdir(), "stub-bin-"));
   const log = path.join(bin, "calls.log");
   fs.writeFileSync(path.join(bin, "gh"), `#!/bin/sh\necho "$@" >> "${log}"\n`, { mode: 0o755 });
 
-  spawnSync("node", ["scripts/sync-cli.ts", "--dry-run"], {
+  spawnSync(process.execPath, [path.join(root, "scripts", "sync-cli.ts"), "--dry-run"], {
     env: { ...process.env, PATH: bin + path.delimiter + process.env.PATH },
   });
 
@@ -57,10 +67,14 @@ test("the script calls the stubbed gh on PATH and never the real one", () => {
 ```ts
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+const cli = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "scripts", "sync-cli.ts");
 
 test("a blocked run exits 2 with JSON on stdout; a crash exits 1", () => {
-  const blocked = spawnSync("node", ["scripts/sync-cli.ts", "--root", "missing-dir"], { encoding: "utf8" });
+  const blocked = spawnSync(process.execPath, [cli, "--root", "missing-dir"], { encoding: "utf8" });
   const body = JSON.parse(blocked.stdout);
   assert.equal(body.status, "blocked");
   assert.ok(body.error.length > 0);
@@ -124,10 +138,14 @@ test("a second run with the same input changes nothing", () => {
 ```ts
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+const cli = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "scripts", "sync-cli.ts");
 
 test("evidence first: parse the JSON, then check the exit code", () => {
-  const run = spawnSync("node", ["scripts/sync-cli.ts", "--list"], { encoding: "utf8" });
+  const run = spawnSync(process.execPath, [cli, "--list"], { encoding: "utf8" });
   const body = JSON.parse(run.stdout);
   assert.deepEqual(body.items, ["alpha", "beta"]);
   assert.equal(run.status, 0);

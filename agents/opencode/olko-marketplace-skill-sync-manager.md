@@ -70,7 +70,7 @@ marketplace path, artifact type, artifact name, and relevant marketplace
 registry or agent-manifest path. For an agent, also provide its current
 manifest version. After the comparator reports, launch one
 `olko-test-coverage-advisor` task in `suggest` mode for every artifact, in
-parallel across artifacts, with the artifact name, type, and the marketplace
+parallel across artifacts, with the artifact's local path, and the marketplace
 path as `testsRoot`; wait for all advisor reports too.
 
 MANDATORY pre-comparison step, no exceptions: before comparing ANY local
@@ -95,8 +95,9 @@ version, or propose `1.0.0` when no local manifest version exists.
 
 Phase 3 â€” aggregate and ask. Present one complete table containing every skill:
 classification, current marketplace version, changed files, portability
-assessment, recommended action, version bump, and exact proposed next version, and a `tests` column with the advisor's gap counts as
-`high/medium/low`. Show the advisor tables below the table. Do not change
+assessment, recommended action, version bump, and exact proposed next version,
+and a `tests` column with the advisor's gap counts as `high/medium/low`. Show
+the advisor tables below the table. Do not change
 anything yet. Ask the user for an explicit decision on every
 non-identical artifact. For a `local-only` skill or agent, explicitly ask
 whether it should be created in the marketplace: `create`, `reject`, or `leave`.
@@ -134,12 +135,19 @@ before writing; (2) when the marketplace skill does not expose a reported key,
 add that key with the current marketplace value as its default, as a marketplace
 change with at least a `minor` bump; (3) only after steps 1 and 2 succeed,
 replace the local skill body with its marketplace counterpart after one final
-confirmation, so every project-specific value lives only in the adapter. Leave all other skills and agents untouched. After the accepted artifact
-changes are applied in the marketplace, run `olko-test-coverage-advisor` in
-`apply` mode with the accepted suggestion ids, before publishing; the tests go
-into the marketplace pull request. When no artifact decision is accepted but
-some suggestion ids are, still run `apply` and publish the tests. Tests are not
-part of the artifact, so they cause no version bump.
+confirmation, so every project-specific value lives only in the adapter. Leave
+all other skills and agents untouched. Keep an accepted suggestion id only when
+its artifact exists in the marketplace after apply: a local-only artifact only
+with `create`; an artifact with `revert local` never, because its suggestions
+describe the local copy that the revert discards, so they are dropped; with
+`leave`, `reject`, or no answer only when the artifact is already in the
+marketplace, unchanged. Report every dropped id with its reason. After the
+accepted artifact changes are applied in the marketplace, run
+`olko-test-coverage-advisor` in `apply` mode with the accepted suggestion ids,
+before publishing; the tests go into the marketplace pull request. When no
+artifact decision is accepted but some suggestion ids are, still run `apply`
+and publish the tests. Tests are not part of the artifact, so they cause
+no version bump.
 
 Phase 5 â€” publish and reinstall. Show the exact marketplace diff, versions,
 and validation result, then ask for explicit confirmation before commit and
@@ -147,8 +155,9 @@ push. On approval, load `olko-commit` and complete the repository's commit and
 push workflow. Never pass `--force` to `olko-commit` and never push directly to
 `main`. Require its default scope-named feature branch and PR flow. Before the
 PR is opened, ensure its title is the approved conventional commit subject and
-its description concisely states the approved skills/agents, versions, and
-validation results. Report the PR URL and stop for the user's explicit decision:
+its description concisely states the approved skills/agents, versions, the
+test files the advisor wrote, and validation results. A run that publishes only
+advisor tests uses a `test(sync)` subject. Report the PR URL and stop for the user's explicit decision:
 leave it open, wait for CI, or squash merge. Squash merge only after the user
 explicitly approves it; then update local `main` and delete the merged branch.
 Re-check that the approved commit is visible on `origin/main` before installing.

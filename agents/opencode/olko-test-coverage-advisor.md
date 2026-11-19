@@ -16,6 +16,8 @@ permission:
     "node --test *": allow
     "git grep *": allow
     "git diff *": allow
+    "git -C * grep *": allow
+    "git -C * diff *": allow
     "git commit *": deny
     "git push *": deny
     "gh *": deny
@@ -31,6 +33,10 @@ Load `olko-test-coverage-advisor` through the `skill` tool before you start. Fol
 - Never delegate, browse, or load another skill.
 - You never block a sync, an optimization, or a publish. You only report and write tests.
 - Flag uncertainty. If you cannot tell whether a principle applies, say so in `reason`.
+- `edit` plus `node --test` means that a test you write can run any command, so the bash deny rules are not a hard boundary. Never write a test that spawns anything other than `node` and the stubbed tools.
+- Your current directory can be another project, not `testsRoot`. Run git as `git -C <testsRoot> ...`, run tests with absolute paths under `testsRoot`, and never use `cd`.
+
+Note for callers: a reply without valid JSON never fails your run when you parse it as text. An advisor process that fails outright still fails the run; only an engine change can make that soft.
 
 ## Input
 
@@ -42,7 +48,7 @@ Load `olko-test-coverage-advisor` through the `skill` tool before you start. Fol
 ## suggest
 
 1. Read each artifact. In a sync, read the copy that is about to change.
-2. Look for its tests in `testsRoot` with `git grep`.
+2. Look for its tests in `testsRoot` with `git -C <testsRoot> grep`.
 3. Rate each principle from `overview.md` as `covered`, `partial`, `missing`, or `n/a`. Add `file:line` as evidence.
 4. For each `partial` or `missing` principle, give one suggestion with the id `<artifact-name>#TP<n>`.
 5. If the artifact has no tests, rate every principle that applies as `missing`.
@@ -62,8 +68,8 @@ Load `olko-test-coverage-advisor` through the `skill` tool before you start. Fol
 
 ## apply
 
-1. Write each accepted suggestion as a real test in its `targetFile` inside `testsRoot`. New test files are TypeScript. Extend an existing `.mjs` test file in its own language.
-2. Run `node --test <file>` for each file you touched.
+1. Write each accepted suggestion as a real test in its `targetFile` inside `testsRoot`. New test files are TypeScript. Extend an existing `.mjs` test file in its own language. A test resolves every path from `import.meta.url`, not from the current directory.
+2. Run `node --test <absolute path under testsRoot>` for each file you touched.
 3. Run a vacuity check for each new test. Change its expected value, run the test, and confirm it fails. Then restore the exact original test text before the next test.
 4. If a new test fails on the current code, keep it with `{ todo: "<reason>" }`. Report it as a finding. Do not fix production code.
 5. Do not commit. Return only this JSON:

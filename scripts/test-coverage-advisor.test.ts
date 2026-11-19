@@ -117,6 +117,8 @@ test("advisor agent cannot delegate, browse, commit, push, or call gh", () => {
     '"node --test *": allow',
     '"git grep *": allow',
     '"git diff *": allow',
+    '"git -C * grep *": allow',
+    '"git -C * diff *": allow',
     '"git commit *": deny',
     '"git push *": deny',
     '"gh *": deny',
@@ -143,6 +145,41 @@ test("advisor agent edits only test files", () => {
     .split(/\r?\n/)
     .find((line) => line.includes("test files") && line.includes("fixtures") && /never/i.test(line) && line.includes("production code"));
   assert.ok(rule, "hard rule line");
+});
+
+test("advisor runs git in testsRoot and writes tests that resolve paths from import.meta.url", () => {
+  const { body } = readAgent();
+  const flow = read("workflow.md");
+  for (const [name, text] of [["agent", body], ["workflow.md", flow]]) {
+    const flat = text.replace(/\s+/g, " ");
+    assert.ok(flat.includes("git -C <testsRoot> grep"), `${name}: git -C <testsRoot> grep`);
+    assert.match(flat, /node --test <absolute path/, `${name}: node --test with an absolute path`);
+    assert.match(flat, /`import\.meta\.url`[^.]*not [^.]*current directory/, `${name}: paths from import.meta.url`);
+  }
+});
+
+test("advisor hard rules say bash deny rules are not a hard boundary and the run is never blocked", () => {
+  const flat = readAgent().body.replace(/\s+/g, " ");
+  assert.match(flat, /not a hard boundary/);
+  assert.match(flat, /Never write a test that spawns anything other than `node` and the stubbed tools/);
+  assert.match(flat, /fails outright[^.]*still fails the run/, "callers know the residual limit");
+});
+
+test("skill workflow says the advisor never blocks and testsRoot is a project root only on request", () => {
+  const flat = read("workflow.md").replace(/\s+/g, " ");
+  assert.match(flat, /never blocks a sync, an optimization, or a publish/);
+  assert.match(flat, /project root only when the person asks/);
+});
+
+test("example sketches build paths from import.meta.url and guard the POSIX stub", () => {
+  const sections = read("examples.md").split(/^## /m).slice(1);
+  for (const id of ["TP2", "TP3", "TP4", "TP9"]) {
+    const section = sections.find((s) => s.startsWith(`${id} `)) ?? "";
+    assert.ok(section.includes("import.meta.url"), `${id} uses import.meta.url`);
+    assert.doesNotMatch(section, /spawnSync\("node"/, `${id} spawns process.execPath`);
+  }
+  const tp3 = sections.find((s) => s.startsWith("TP3 ")) ?? "";
+  assert.match(tp3, /process\.platform === "win32"/);
 });
 
 test("manifest lists the advisor as an auditor with its skill", () => {
@@ -189,6 +226,27 @@ test("sync manager runs suggest in phase 2, shows tests in phase 3, applies acce
   assert.ok(/tests[^.]*no version bump/i.test(body), "tests cause no version bump");
 });
 
+test("sync manager passes local paths, filters accepted tests, and names tests in the PR", () => {
+  const { body } = readSync();
+  const two = phase(body, "Phase 2");
+  assert.match(two, /advisor[^.]*local path/);
+  assert.doesNotMatch(two, /artifact name, type, and the marketplace path as `testsRoot`/);
+  const four = phase(body, "Phase 4");
+  assert.match(four, /exists in the marketplace after apply/);
+  assert.match(four, /`revert local`[^.]*dropped/);
+  const five = phase(body, "Phase 5");
+  assert.ok(five.includes("test files") && five.includes("`test(sync)`"));
+});
+
+test("sync manager phase 3 and phase 4 keep the surrounding line width", () => {
+  const { body } = readSync();
+  const start = body.indexOf("\nPhase 3");
+  const end = body.indexOf("\nPhase 5");
+  // 82 is the width of the existing Phase 3 heading line.
+  const long = body.slice(start, end).split("\n").filter((line) => line.length > 82);
+  assert.deepEqual(long, []);
+});
+
 test("sync manager version is 2.6.0", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, "agents", "opencode", "index.json"), "utf8"));
   const entry = manifest.agents.find((a: { name: string }) => a.name === "olko-marketplace-skill-sync-manager");
@@ -229,6 +287,14 @@ test("optimizer checks marketplace tests unless the person asks for project test
   const flat = body.replace(/\s+/g, " ");
   assert.ok(flat.includes("testsRoot") && flat.includes("marketplace"));
   assert.match(flat, /project root[^.]*only when the person asks|only when the person asks[^.]*project root/i);
+});
+
+test("optimizer resolves the marketplace checkout in the sync manager's order, then asks", () => {
+  const { body } = readOptimizer();
+  const line = body.split("\n").find((l) => l.startsWith("4. Combine everything")) ?? "";
+  const step = line.slice(line.indexOf("the sync manager's order"));
+  const at = ["marketplace path", "`MARKETPLACE_PATH`", "`.opencode/marketplace-path.local.json`", "ask the person"].map((word) => step.indexOf(word));
+  assert.ok(at.every((i, n) => i >= 0 && (n === 0 || i > at[n - 1])), "input, MARKETPLACE_PATH, adapter, then ask");
 });
 
 test("audit mode does not call the advisor", () => {
