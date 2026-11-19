@@ -9,6 +9,7 @@ permission:
     "*": deny
     olko-marketplace-skill-bootstrapper: allow
     olko-marketplace-skill-sync-comparator: allow
+    olko-test-coverage-advisor: allow
   external_directory: allow
   webfetch: deny
   websearch: deny
@@ -67,7 +68,10 @@ independent tasks in parallel in bounded batches, but wait for all reports
 before taking any write action. Give each comparator the local project path,
 marketplace path, artifact type, artifact name, and relevant marketplace
 registry or agent-manifest path. For an agent, also provide its current
-manifest version.
+manifest version. After the comparator reports, launch one
+`olko-test-coverage-advisor` task in `suggest` mode for every artifact, in
+parallel across artifacts, with the artifact name, type, and the marketplace
+path as `testsRoot`; wait for all advisor reports too.
 
 MANDATORY pre-comparison step, no exceptions: before comparing ANY local
 skill, load `olko-adapt-to-marketplace` with `--local-only` for that skill. It
@@ -91,8 +95,9 @@ version, or propose `1.0.0` when no local manifest version exists.
 
 Phase 3 â€” aggregate and ask. Present one complete table containing every skill:
 classification, current marketplace version, changed files, portability
-assessment, recommended action, version bump, and exact proposed next version.
-Do not change anything yet. Ask the user for an explicit decision on every
+assessment, recommended action, version bump, and exact proposed next version, and a `tests` column with the advisor's gap counts as
+`high/medium/low`. Show the advisor tables below the table. Do not change
+anything yet. Ask the user for an explicit decision on every
 non-identical artifact. For a `local-only` skill or agent, explicitly ask
 whether it should be created in the marketplace: `create`, `reject`, or `leave`.
 Show its candidate version. For an `adapter-candidate` artifact, recommend
@@ -101,7 +106,10 @@ or `leave`. For all other non-identical artifacts, ask for
 `adopt <patch|minor|major>`, `revert local`, or `leave`. `revert local` is a
 destructive overwrite and requires one final confirmation immediately before it
 runs. Keep project adapters, secrets, paths, credentials, and runtime settings
-local even when the user chooses `adopt`.
+local even when the user chooses `adopt`. After all per-artifact decisions, ask
+one extra question listing every suggestion id across all artifacts, including
+identical artifacts; the answer is the accepted suggestion ids, comma
+separated, or `none`.
 
 Phase 4 â€” apply only accepted decisions. For accepted portable changes, update
 only the named marketplace skill directories, set the approved SemVer version
@@ -126,7 +134,12 @@ before writing; (2) when the marketplace skill does not expose a reported key,
 add that key with the current marketplace value as its default, as a marketplace
 change with at least a `minor` bump; (3) only after steps 1 and 2 succeed,
 replace the local skill body with its marketplace counterpart after one final
-confirmation, so every project-specific value lives only in the adapter. Leave all other skills and agents untouched.
+confirmation, so every project-specific value lives only in the adapter. Leave all other skills and agents untouched. After the accepted artifact
+changes are applied in the marketplace, run `olko-test-coverage-advisor` in
+`apply` mode with the accepted suggestion ids, before publishing; the tests go
+into the marketplace pull request. When no artifact decision is accepted but
+some suggestion ids are, still run `apply` and publish the tests. Tests are not
+part of the artifact, so they cause no version bump.
 
 Phase 5 â€” publish and reinstall. Show the exact marketplace diff, versions,
 and validation result, then ask for explicit confirmation before commit and

@@ -154,3 +154,43 @@ test("manifest lists the advisor as an auditor with its skill", () => {
   assert.equal(entry.stack, "cross-stack");
   assert.deepEqual(entry.skills, ["olko-test-coverage-advisor"]);
 });
+
+const syncFile = path.join(root, "agents", "opencode", "olko-marketplace-skill-sync-manager.md");
+
+function readSync(): { front: string; body: string } {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/.exec(fs.readFileSync(syncFile, "utf8"));
+  assert.ok(match, "sync manager frontmatter block");
+  return { front: match[1], body: match[2].replace(/\r\n/g, "\n") };
+}
+
+function phase(body: string, label: string): string {
+  const match = new RegExp(`${label} \\S+ [\\s\\S]*?(?=\\nPhase \\d|\\nAfter both|$)`).exec(body);
+  assert.ok(match, label);
+  return match[0].replace(/\s+/g, " ");
+}
+
+test("sync manager may run the advisor", () => {
+  const { front } = readSync();
+  const task = block(front, "task");
+  assert.ok(task.includes("olko-test-coverage-advisor: allow"));
+  assert.ok(task.includes('"*": deny'));
+  assert.ok(task.includes("olko-marketplace-skill-sync-comparator: allow"));
+});
+
+test("sync manager runs suggest in phase 2, shows tests in phase 3, applies accepted ids in phase 4", () => {
+  const { body } = readSync();
+  const two = phase(body, "Phase 2");
+  assert.ok(two.includes("olko-test-coverage-advisor") && two.includes("`suggest`"));
+  const three = phase(body, "Phase 3");
+  assert.ok(three.includes("`tests`") && three.includes("high/medium/low"));
+  assert.ok(three.includes("one extra question") && three.includes("`none`"));
+  const four = phase(body, "Phase 4");
+  assert.ok(four.includes("`apply`") && four.includes("accepted suggestion ids"));
+  assert.ok(/tests[^.]*no version bump/i.test(body), "tests cause no version bump");
+});
+
+test("sync manager version is 2.6.0", () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, "agents", "opencode", "index.json"), "utf8"));
+  const entry = manifest.agents.find((a: { name: string }) => a.name === "olko-marketplace-skill-sync-manager");
+  assert.equal(entry.version, "2.6.0");
+});
