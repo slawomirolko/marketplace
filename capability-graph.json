@@ -825,10 +825,12 @@
     {
       "id": "testing",
       "skills": [
-        "olko-test"
+        "olko-test",
+        "olko-test-coverage-advisor"
       ],
       "related": [
-        "testing.test"
+        "testing.test",
+        "testing.test.coverage.advisor"
       ],
       "prerequisites": []
     },
@@ -838,7 +840,19 @@
         "olko-test"
       ],
       "related": [
-        "testing"
+        "testing",
+        "testing.test.coverage.advisor"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "testing.test.coverage.advisor",
+      "skills": [
+        "olko-test-coverage-advisor"
+      ],
+      "related": [
+        "testing",
+        "testing.test"
       ],
       "prerequisites": []
     },
