@@ -32,7 +32,7 @@ test("sync compare runs the advisor per artifact after the comparator", () => {
   assert.equal(tests.kind, "llm");
   assert.equal(tests.agent, ADVISOR);
   assert.equal(tests.agentsFrom, "state.discover.discover.compare");
-  assert.deepEqual(tests.parse, { json: ["artifact", "suggestions", "covered", "notApplicable"] });
+  assert.deepEqual(tests.parse, { json: ["artifact?", "suggestions?", "covered?", "notApplicable?"] });
   assert.match(tests.prompt ?? "", /suggest/);
   assert.match(tests.prompt ?? "", /testsRoot: \{\{state\.resolve-path\.resolve-path\.path\}\}/);
   assert.equal(edges(compare, "compare", "tests").length, 1);
@@ -94,7 +94,7 @@ test("optimizer propose adds advice to the draft, apply runs advisor apply befor
   const advise = node(propose, "advise");
   assert.equal(advise.agent, ADVISOR);
   assert.match(advise.prompt ?? "", /Mode: suggest/);
-  assert.deepEqual(advise.parse, { json: ["artifact", "suggestions", "covered", "notApplicable"] });
+  assert.deepEqual(advise.parse, { json: ["artifact?", "suggestions?", "covered?", "notApplicable?"] });
   assert.equal(edges(propose, "wording", "advise").length, 1);
   assert.equal(edges(propose, "advise", "draft").length, 1);
   assert.equal(edges(propose, "wording", "draft").length, 0);

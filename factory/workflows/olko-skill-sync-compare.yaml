@@ -92,7 +92,7 @@ nodes:
     agentsFrom: state.discover.discover.compare
     tools: [read, bash]
     dirs: ["{{state.resolve-path.resolve-path.path}}"]
-    parse: { json: [artifact, suggestions, covered, notApplicable] }
+    parse: { json: [artifact?, suggestions?, covered?, notApplicable?] }
     prompt: |
       Mode: suggest. Read only: change nothing.
       testsRoot: {{state.resolve-path.resolve-path.path}}

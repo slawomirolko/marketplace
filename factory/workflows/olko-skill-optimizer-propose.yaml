@@ -55,7 +55,7 @@ nodes:
     tools: [read, bash]
     dirs: ["{{state.resolve-path.resolve-path.path}}", "{{input.marketplace}}", "{{input.testsRoot}}"]
     maxVisits: 4
-    parse: { json: [artifact, suggestions, covered, notApplicable] }
+    parse: { json: [artifact?, suggestions?, covered?, notApplicable?] }
     prompt: |
       Mode: suggest. Read only: change nothing.
       testsRoot: {{#input.testsRoot}}{{input.testsRoot}} (the person asked to check this project's tests){{/input.testsRoot}}{{^input.testsRoot}}{{#input.marketplace}}{{input.marketplace}}{{/input.marketplace}}{{^input.marketplace}}the marketplace checkout (your default), also when the selected resource is in a consuming project{{/input.marketplace}}{{/input.testsRoot}}

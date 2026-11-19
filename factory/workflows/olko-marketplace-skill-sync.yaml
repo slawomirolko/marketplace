@@ -73,7 +73,7 @@ nodes:
     agentsFrom: state.plan.plan.acceptedTests
     tools: [read, edit, bash]
     dirs: ["{{state.resolve-path.resolve-path.path}}"]
-    parse: { json: [written, results] }
+    parse: { json: [written?, results?] }
     prompt: |
       Mode: apply. Write only test files and test fixtures; do not commit, push or call gh.
       testsRoot: {{state.resolve-path.resolve-path.path}}

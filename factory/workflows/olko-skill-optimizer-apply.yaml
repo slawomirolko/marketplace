@@ -38,7 +38,7 @@ nodes:
     agent: olko-test-coverage-advisor
     tools: [read, edit, bash]
     dirs: ["{{state.resolve-path.resolve-path.path}}", "{{input.marketplace}}", "{{input.testsRoot}}"]
-    parse: { json: [written, results] }
+    parse: { json: [written?, results?] }
     prompt: |
       Mode: apply. Write only test files and test fixtures; do not commit, push or call gh.
       testsRoot: {{#input.testsRoot}}{{input.testsRoot}}{{/input.testsRoot}}{{^input.testsRoot}}{{#input.marketplace}}{{input.marketplace}}{{/input.marketplace}}{{^input.marketplace}}the marketplace checkout (your default), the same as in the suggest step{{/input.marketplace}}{{/input.testsRoot}}
