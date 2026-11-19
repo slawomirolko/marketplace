@@ -15,6 +15,8 @@ Roles are deliberately separated:
   declared skills; it does not gain access to unrelated skills.
 - `comparator` is read-only and reports a bounded comparison to its calling
   orchestrator; it may declare no skills.
+- `worker` runs one bounded task for its calling agent. It loads only its own
+  skill and never delegates, commits, or publishes.
 
 `olko-plan-documentation-orchestrator` performs a saved-plan workflow in this
 order: `olko-plan-editor`, `olko-investigate-existing`, then an optional second

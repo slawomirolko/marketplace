@@ -75,3 +75,82 @@ test("registry lists the skill in category testing", () => {
   assert.equal(entry.category, "testing");
   assert.equal(entry.version, "1.0.0");
 });
+
+const agentFile = path.join(root, "agents", "opencode", "olko-test-coverage-advisor.md");
+
+function readAgent(): { front: string; body: string } {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/.exec(fs.readFileSync(agentFile, "utf8"));
+  assert.ok(match, "agent frontmatter block");
+  return { front: match[1], body: match[2] };
+}
+
+function block(front: string, name: string): string[] {
+  const lines = front.split(/\r?\n/);
+  const start = lines.findIndex((line) => line === `  ${name}:`);
+  assert.ok(start >= 0, `${name} block`);
+  const out: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    if (!line.startsWith("    ")) break;
+    out.push(line.trim());
+  }
+  return out;
+}
+
+test("advisor agent is a hidden subagent that loads only its skill", () => {
+  const { front } = readAgent();
+  assert.match(front, /^mode: subagent$/m);
+  assert.match(front, /^hidden: true$/m);
+  const skills = block(front, "skill");
+  assert.ok(skills.includes('"*": deny'));
+  assert.ok(skills.includes("olko-test-coverage-advisor: allow"));
+  assert.equal(skills.filter((line) => line.endsWith(": allow")).length, 1);
+});
+
+test("advisor agent cannot delegate, browse, commit, push, or call gh", () => {
+  const { front } = readAgent();
+  assert.match(front, /^ {2}task: deny$/m);
+  assert.match(front, /^ {2}webfetch: deny$/m);
+  assert.match(front, /^ {2}websearch: deny$/m);
+  const bash = block(front, "bash");
+  for (const rule of [
+    '"*": deny',
+    '"node --test *": allow',
+    '"git grep *": allow',
+    '"git diff *": allow',
+    '"git commit *": deny',
+    '"git push *": deny',
+    '"gh *": deny',
+  ]) {
+    assert.ok(bash.includes(rule), rule);
+  }
+});
+
+test("advisor agent defines both modes and both JSON contracts", () => {
+  const { body } = readAgent();
+  const words = [
+    "suggest", "apply", "testsRoot", "artifact", "suggestions", "id", "principle", "status",
+    "severity", "evidence", "scenario", "targetFile", "sketch", "covered", "notApplicable",
+    "reason", "written", "results", "vacuityChecked", "todo", "vacuity", "restore",
+  ];
+  for (const word of words) {
+    assert.ok(body.includes(word), word);
+  }
+});
+
+test("advisor agent edits only test files", () => {
+  const { body } = readAgent();
+  const rule = body
+    .split(/\r?\n/)
+    .find((line) => line.includes("test files") && line.includes("fixtures") && /never/i.test(line) && line.includes("production code"));
+  assert.ok(rule, "hard rule line");
+});
+
+test("manifest lists the advisor as a worker with its skill", () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, "agents", "opencode", "index.json"), "utf8"));
+  const entry = manifest.agents.find((a: { name: string }) => a.name === "olko-test-coverage-advisor");
+  assert.ok(entry, "manifest entry");
+  assert.equal(entry.version, "1.0.0");
+  assert.equal(entry.role, "worker");
+  assert.equal(entry.stack, "cross-stack");
+  assert.deepEqual(entry.skills, ["olko-test-coverage-advisor"]);
+});

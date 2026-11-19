@@ -108,6 +108,16 @@
       ]
     },
     {
+      "name": "olko-test-coverage-advisor",
+      "version": "1.0.0",
+      "file": "olko-test-coverage-advisor.md",
+      "stack": "cross-stack",
+      "role": "worker",
+      "skills": [
+        "olko-test-coverage-advisor"
+      ]
+    },
+    {
       "name": "olko-marketplace-skill-bootstrapper",
       "version": "1.0.2",
       "file": "olko-marketplace-skill-bootstrapper.md",
