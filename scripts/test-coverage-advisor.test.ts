@@ -194,3 +194,53 @@ test("sync manager version is 2.6.0", () => {
   const entry = manifest.agents.find((a: { name: string }) => a.name === "olko-marketplace-skill-sync-manager");
   assert.equal(entry.version, "2.6.0");
 });
+
+const optimizerFile = path.join(root, "agents", "opencode", "olko-skill-optimizer.md");
+
+function readOptimizer(): { front: string; body: string } {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/.exec(fs.readFileSync(optimizerFile, "utf8"));
+  assert.ok(match, "optimizer frontmatter block");
+  return { front: match[1], body: match[2].replace(/\r\n/g, "\n") };
+}
+
+test("optimizer may run only the advisor", () => {
+  const { front } = readOptimizer();
+  const task = block(front, "task");
+  assert.ok(task.includes('"*": deny'));
+  assert.ok(task.includes("olko-test-coverage-advisor: allow"));
+  assert.equal(task.length, 2);
+});
+
+test("optimizer adds test advice and applies it after approval", () => {
+  const { body } = readOptimizer();
+  const flat = body.replace(/\s+/g, " ");
+  assert.ok(flat.includes("Test advice") && flat.includes("`suggest`") && flat.includes("`apply`"));
+  const applyAt = flat.indexOf("`apply`");
+  const testsAt = flat.indexOf("Run the repository's tests");
+  assert.ok(applyAt >= 0 && testsAt > applyAt, "apply before the repository tests step");
+  const splitSection = /## Split execution[\s\S]*?(?=\n## )/.exec(body)?.[0].replace(/\s+/g, " ") ?? "";
+  assert.ok(splitSection.indexOf("`apply`") >= 0 && splitSection.indexOf("`apply`") < splitSection.indexOf("Run the repository's tests"));
+  const approval = /## Approval and editing[\s\S]*?(?=\n## )/.exec(body)?.[0] ?? "";
+  assert.ok(approval.includes("`apply`"), "optimize mode applies after approval");
+});
+
+test("optimizer checks marketplace tests unless the person asks for project tests", () => {
+  const { body } = readOptimizer();
+  const flat = body.replace(/\s+/g, " ");
+  assert.ok(flat.includes("testsRoot") && flat.includes("marketplace"));
+  assert.match(flat, /project root[^.]*only when the person asks|only when the person asks[^.]*project root/i);
+});
+
+test("audit mode does not call the advisor", () => {
+  const { body } = readOptimizer();
+  const audit = body.split("\n").find((line) => line.startsWith("- **audit**"));
+  assert.ok(audit, "audit bullet");
+  assert.doesNotMatch(audit, /advisor/i);
+});
+
+test("optimizer version is 1.4.0 and lists the advisor as a delegate", () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, "agents", "opencode", "index.json"), "utf8"));
+  const entry = manifest.agents.find((a: { name: string }) => a.name === "olko-skill-optimizer");
+  assert.equal(entry.version, "1.4.0");
+  assert.deepEqual(entry.delegates, ["olko-test-coverage-advisor"]);
+});
