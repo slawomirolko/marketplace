@@ -1,5 +1,5 @@
 name: olko-marketplace-skill-sync
-version: 0.5.0
+version: 0.6.0
 description: "Synchronizes project-local skills and OpenCode agents with the marketplace: compares every artifact and asks the test coverage advisor for missing tests, asks one decision per difference and one for the accepted test suggestions, applies, writes the accepted tests, publishes through a marketplace PR, installs after the merge, and then delivers the project-side changes through a second, separate local project PR."
 source: agents/opencode/olko-marketplace-skill-sync-manager.md (phases 1-6)
 roles:
@@ -26,11 +26,11 @@ nodes:
     kind: group
     workflow: olko-skill-sync-decide
   - id: plan
-    description: "The sync manager collects your decisions, the accepted ones and the approved version and route of each one, and the accepted test suggestion ids per artifact. Changes nothing."
+    description: "The sync manager collects your decisions, the accepted ones and the approved version and route of each one, and the accepted test suggestion ids per artifact, kept only for artifacts that exist in the marketplace after apply (dropped ids are listed). Changes nothing."
     kind: llm
     role: sync
     agent: olko-marketplace-skill-sync-manager
-    parse: { json: [decided, accepted, acceptedTests] }
+    parse: { json: [decided, accepted, acceptedTests, droppedTests?] }
     prompt: |
       Phase 3 is answered. Collect the decisions only; change nothing and ask nothing.
       Artifacts that needed a decision, with the question that asked for it:
@@ -54,9 +54,10 @@ nodes:
       Test suggestions offered by the advisor: {{#state.rows.rows.testIds}}{{.}} {{/state.rows.rows.testIds}}
       Accepted test suggestion ids (answer to q-tests): {{state.decide-tests.answer}}
       `acceptedTests`: the answered ids that were offered, grouped by artifact (the name before `#`), one item per artifact with at least one id. Ignore ids that were not offered. `none`, an empty or an unanswered q-tests gives an empty list. Tests are not part of the artifact: they change no decision, route or version.
+      Keep an answered id only when its artifact exists in the marketplace after apply. Drop it, and list it in `droppedTests` with the reason, when its artifact's decision is `revert-local` (the suggestions describe the local copy that the revert discards), or when the artifact has marketplace `none` in Paths and its decision is not `create` (a local-only artifact stays out of the marketplace with leave, reject or unanswered). Keep it for an identical artifact and for every other decision on an artifact that already has a marketplace copy.
 
       End with one ```json block:
-      {"decided": [{"type": "<skill|agent>", "name": "<name>", "classification": "<classification>", "decision": "<decision>"}], "accepted": [{"type": "<skill|agent>", "name": "<name>", "classification": "<classification>", "marketplaceVersion": "<x.y.z or none>", "decision": "<decision>", "route": "<change|revert|adapter>", "version": "<approved x.y.z>", "localPath": "<path>", "marketplacePath": "<path or none>"}], "acceptedTests": [{"id": "<artifact name>", "name": "<artifact name>", "ids": ["<accepted suggestion id>"]}]}
+      {"decided": [{"type": "<skill|agent>", "name": "<name>", "classification": "<classification>", "decision": "<decision>"}], "accepted": [{"type": "<skill|agent>", "name": "<name>", "classification": "<classification>", "marketplaceVersion": "<x.y.z or none>", "decision": "<decision>", "route": "<change|revert|adapter>", "version": "<approved x.y.z>", "localPath": "<path>", "marketplacePath": "<path or none>"}], "acceptedTests": [{"id": "<artifact name>", "name": "<artifact name>", "ids": ["<accepted suggestion id>"]}], "droppedTests": [{"id": "<dropped suggestion id>", "reason": "<why its artifact is not in the marketplace after apply>"}]}
   - id: apply-phase
     description: "Phase 4: applies one accepted decision at a time: marketplace change, move-to-adapter with draft and approval, or revert-local after a final confirmation."
     kind: group
@@ -66,14 +67,14 @@ nodes:
     kind: script
     op: builtin.pass
   - id: tests-apply
-    description: "One test coverage advisor per artifact with accepted suggestions writes those tests in the marketplace (apply mode), after the artifact changes and before publish. The tests go into the marketplace pull request and cause no version bump. It never blocks the sync."
+    description: "One test coverage advisor per artifact with accepted suggestions writes those tests in the marketplace (apply mode), after the artifact changes and before publish. The tests go into the marketplace pull request and cause no version bump. Its reply is kept as text, so a malformed reply never fails the run; it never blocks the sync."
     kind: llm
     role: auditor
     agent: olko-test-coverage-advisor
     agentsFrom: state.plan.plan.acceptedTests
     tools: [read, edit, bash]
     dirs: ["{{state.resolve-path.resolve-path.path}}"]
-    parse: { json: [written?, results?] }
+    parse: text
     prompt: |
       Mode: apply. Write only test files and test fixtures; do not commit, push or call gh.
       testsRoot: {{state.resolve-path.resolve-path.path}}
@@ -83,9 +84,11 @@ nodes:
       {{#state.discover.discover.compare}}
       - {{type}} {{name}}: local {{localPath}}; marketplace {{marketplacePath}}
       {{/state.discover.discover.compare}}
-      Suggestions from the suggest step (all artifacts; use only the accepted ids):
-      {{#each.state.tests}}{{#value.suggestions}}- {{id}}: {{scenario}} -> {{targetFile}}; sketch: {{sketch}}
-      {{/value.suggestions}}{{/each.state.tests}}
+      Suggest reports from the suggest step, by artifact (use only the accepted ids of {{agent.name}}):
+      {{#each.state.tests}}
+      - {{key}}:
+      {{value}}
+      {{/each.state.tests}}
 
       Follow your `apply` steps for the accepted ids only: write each test in its target file inside testsRoot, run `node --test <file>` for each file you touched, run the vacuity check for each new test and restore its exact text, and keep a test that fails on the current code with `{ todo: "<reason>" }`.
       End with one ```json block:
@@ -107,7 +110,14 @@ nodes:
       {{#state.plan.plan.decided}}
       - {{type}} {{name}}: {{classification}} -> {{decision}}
       {{/state.plan.plan.decided}}
-      {{#state.tests-apply}}Tests written by the test coverage advisor: {{#each.state.tests-apply}}{{key}}: {{value.written}} ({{#value.results}}{{id}} {{status}}; {{/value.results}}) {{/each.state.tests-apply}}{{/state.tests-apply}}
+      {{#state.tests-apply}}Test coverage advisor apply reports (name the test files and the result per id from them):
+      {{#each.state.tests-apply}}
+      - {{key}}:
+      {{value}}
+      {{/each.state.tests-apply}}
+      {{/state.tests-apply}}
+      {{#state.plan.plan.droppedTests}}Dropped test suggestion: {{id}} ({{reason}})
+      {{/state.plan.plan.droppedTests}}
       {{#state.validate}}Validation: {{state.validate.validate.summary}} (changed files: {{state.validate.validate.changed}}).{{/state.validate}}{{^state.validate}}Marketplace, branches and installs: unchanged.{{/state.validate}}
       {{#state.publish}}Marketplace pull request: {{state.publish.publish.url}}.{{/state.publish}}
       {{#state.pr.merge}}Squash merged as {{state.pr.merge.merge.commit}}.{{/state.pr.merge}}

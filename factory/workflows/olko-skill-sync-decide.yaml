@@ -1,6 +1,6 @@
 name: olko-skill-sync-decide
-version: 0.3.0
-description: "Phase 3: one decision per non-identical artifact, with the actions its classification allows, then one question for the accepted test suggestion ids across all artifacts."
+version: 0.4.0
+description: "Phase 3: one decision per non-identical artifact, with the actions its classification allows, then one question for the accepted test suggestion ids across all artifacts, asked only when the advisor offered at least one id."
 source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 3)"
 entry: decide-next
 limits:
@@ -30,6 +30,7 @@ nodes:
       text: "Test coverage advisor suggestions (draft for your review):\n{{state.rows.rows.tests}}\n\nSuggestion ids: {{#state.rows.rows.testIds}}{{.}} {{/state.rows.rows.testIds}}\n\nWhich suggestions do you accept? Answer the suggestion ids, comma separated, or none. Accepted tests go into the marketplace pull request and cause no version bump."
 edges:
   - { from: decide-next, to: decide, when: "decide-next.done == false", description: "a non-identical artifact is left" }
-  - { from: decide-next, to: decide-tests, when: "decide-next.done == true", description: "all decided: ask once for the accepted test suggestions" }
+  - { from: decide-next, to: decide-tests, when: "decide-next.done == true && rows.rows.testIds > 0", description: "all decided and the advisor offered suggestion ids: ask once for the accepted test suggestions" }
+  - { from: decide-next, to: END, when: "decide-next.done == true", description: "all decided and no suggestion id was offered: no test question; the plan reads an unanswered q-tests as none" }
   - { from: decide, to: decide-next }
   - { from: decide-tests, to: END }

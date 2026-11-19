@@ -1,5 +1,5 @@
 name: olko-skill-sync-compare
-version: 0.3.0
+version: 0.4.0
 description: "Phase 2: the sync manager discovers local skills and agents, the adapter versions every skill locally, the manager checks the versions, one comparator per artifact compares it with its marketplace copy in parallel, then one test coverage advisor per artifact suggests missing tests in parallel, and the manager builds the decision table with a tests column."
 source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 2 and phase 3 table)"
 roles:
@@ -85,20 +85,21 @@ nodes:
       Return your structured report. End it with exactly one line:
       result | <identical|local-only|marketplace-only|project-adapter-only|adapter-candidate|portable-local-change|conflict> | <current marketplace version or none> | <none|patch|minor|major> | <exact proposed next version or none> | <recommended action>
   - id: tests
-    description: "After the comparators report, one test coverage advisor per artifact suggests missing tests in parallel (suggest mode, read only). It never blocks the sync."
+    description: "After the comparators report, one test coverage advisor per artifact suggests missing tests in parallel (suggest mode, read only). Its reply is kept as text, so a malformed reply never fails the run; it never blocks the sync."
     kind: llm
     role: auditor
     agent: olko-test-coverage-advisor
     agentsFrom: state.discover.discover.compare
     tools: [read, bash]
     dirs: ["{{state.resolve-path.resolve-path.path}}"]
-    parse: { json: [artifact?, suggestions?, covered?, notApplicable?] }
+    parse: text
     prompt: |
       Mode: suggest. Read only: change nothing.
       testsRoot: {{state.resolve-path.resolve-path.path}}
       Artifact type: {{agent.type}}
       Artifact name: {{agent.name}}
       artifacts: {{agent.localPath}} (the local copy that is about to change); marketplace copy: {{agent.marketplacePath}}
+      Suggestions for an artifact whose decision is revert-local are dropped at plan time, because the revert discards the local copy.
 
       Follow your `suggest` steps for this one artifact. Use `<artifact-name>#TP<n>` as the suggestion id. When you cannot tell whether a principle applies, say so in `reason`.
       End with one ```json block:
@@ -119,14 +120,16 @@ nodes:
       {{#each.state.compare}}
       - {{key}}: {{value.classification}}; marketplace {{value.marketplaceVersion}}; bump {{value.bump}}; next {{value.nextVersion}}; recommended {{value.action}}
       {{/each.state.compare}}
-      Test coverage advisor reports by artifact (suggest mode):
+      Test coverage advisor reports by artifact (suggest mode, free text that should end with a JSON block):
       {{#each.state.tests}}
-      - {{key}}: {{#value.suggestions}}{{id}} ({{severity}}, {{status}}, {{scenario}}); {{/value.suggestions}}covered {{value.covered}}
+      - {{key}}:
+      {{value}}
       {{/each.state.tests}}
 
       For each artifact derive the proposed version: for `local-only` the candidate version of your instructions (the skill's declared SemVer; for an agent its local manifest version, or `1.0.0`), otherwise the comparator's next version.
       Allowed decisions, exactly these strings: `local-only` -> create, reject, leave. `adapter-candidate` -> move-to-adapter, adopt-patch, adopt-minor, adopt-major, revert-local, leave. Every other non-identical classification -> adopt-patch, adopt-minor, adopt-major, revert-local, leave. `identical` -> none.
       `decide` holds the non-identical rows in table order; give the n-th of them (from 0) the question `q-sync-<n>`.
+      Read each advisor report yourself: take every suggestion id, severity, status, scenario and target file from its JSON block, or from its text when the block is missing. A report you cannot read counts as no suggestions; say so in `tests` for that artifact.
       Tests column: the advisor's gap counts of the artifact as `<high>/<medium>/<low>` (number of suggestions per severity; `0/0/0` when it has none or the advisor gave no report).
       `tests` holds the advisor tables to show below the table: per artifact, one line per suggestion (id, principle, status, severity, scenario, target file). `testIds` lists every suggestion id across all artifacts, identical artifacts included.
 

@@ -8,7 +8,10 @@ import type { WorkflowSpec, WorkflowSpecNode } from "../src/types.ts";
 
 const specs = new Map(loadWorkflowSpecs(path.join(import.meta.dirname, "..", "workflows")).map((s) => [s.name, s]));
 const ADVISOR = "olko-test-coverage-advisor";
-const CHANGED = ["olko-skill-sync-compare", "olko-skill-sync-decide", "olko-marketplace-skill-sync", "olko-skill-sync-apply", "olko-skill-optimizer-propose", "olko-skill-optimizer-apply"];
+const CHANGED = ["olko-skill-sync-compare", "olko-skill-sync-decide", "olko-marketplace-skill-sync", "olko-skill-sync-apply", "olko-skill-sync-publish", "olko-skill-optimizer-propose", "olko-skill-optimizer-apply"];
+const ADVISOR_NODES: [string, string][] = [["olko-skill-sync-compare", "tests"], ["olko-marketplace-skill-sync", "tests-apply"], ["olko-skill-optimizer-propose", "advise"], ["olko-skill-optimizer-apply", "tests-apply"]];
+// The optimizer's testsRoot: the person's answer when asked, else the resolved marketplace checkout.
+const TESTS_ROOT = "{{#state.ask-tests-root.answer}}{{state.ask-tests-root.answer}}{{/state.ask-tests-root.answer}}{{^state.ask-tests-root.answer}}{{state.tests-root.tests-root.path}}{{/state.ask-tests-root.answer}}";
 
 function spec(name: string): WorkflowSpec {
   const found = specs.get(name);
@@ -32,18 +35,31 @@ test("sync compare runs the advisor per artifact after the comparator", () => {
   assert.equal(tests.kind, "llm");
   assert.equal(tests.agent, ADVISOR);
   assert.equal(tests.agentsFrom, "state.discover.discover.compare");
-  assert.deepEqual(tests.parse, { json: ["artifact?", "suggestions?", "covered?", "notApplicable?"] });
+  assert.equal(tests.parse, "text", "a malformed advisor reply never fails the run");
   assert.match(tests.prompt ?? "", /suggest/);
+  assert.match(tests.prompt ?? "", /revert-local[^.]*dropped at plan time/);
   assert.match(tests.prompt ?? "", /testsRoot: \{\{state\.resolve-path\.resolve-path\.path\}\}/);
   assert.equal(edges(compare, "compare", "tests").length, 1);
   assert.equal(edges(compare, "tests", "rows").length, 1);
   assert.equal(edges(compare, "compare", "rows").length, 0);
 });
 
-test("sync rows show test gap counts", () => {
+test("sync rows show test gap counts read from the advisor text", () => {
   const rows = node(spec("olko-skill-sync-compare"), "rows");
-  assert.match(rows.prompt ?? "", /state\.tests/);
+  assert.match(rows.prompt ?? "", /\{\{#each\.state\.tests\}\}[\s\S]*\{\{value\}\}[\s\S]*\{\{\/each\.state\.tests\}\}/);
+  assert.doesNotMatch(rows.prompt ?? "", /value\.(suggestions|covered)/);
   assert.match(rows.prompt ?? "", /"line": "[^"]*tests <high>\/<medium>\/<low>/);
+});
+
+test("every advisor node parses text, and no template reads advisor JSON fields", () => {
+  for (const [workflow, id] of ADVISOR_NODES) assert.equal(node(spec(workflow), id).parse, "text", `${workflow} ${id}`);
+  for (const name of CHANGED) {
+    for (const n of spec(name).nodes) {
+      const text = [n.prompt ?? "", n.question?.text ?? "", ...(n.dirs ?? [])].join("\n");
+      assert.doesNotMatch(text, /(advise\.advise|tests-apply\.tests-apply|value)\.(text|suggestions|covered|written|results)\b/, `${name} ${n.id}`);
+      assert.doesNotMatch(text, /input\.testsRoot/, `${name} ${n.id}`);
+    }
+  }
 });
 
 test("sync decide asks once for accepted test ids", () => {
@@ -54,8 +70,10 @@ test("sync decide asks once for accepted test ids", () => {
   assert.equal(ask.question?.allowed, undefined);
   assert.equal(ask.question?.allowedFrom, undefined);
   assert.match(ask.question?.text ?? "", /none/);
-  assert.deepEqual(edges(decide, "decide-next", "decide-tests").map((e) => e.when), ["decide-next.done == true"]);
-  assert.equal(edges(decide, "decide-next", "END").length, 0, "all decided goes to the test question, not straight to the end");
+  assert.deepEqual(edges(decide, "decide-next", "decide-tests").map((e) => e.when), ["decide-next.done == true && rows.rows.testIds > 0"]);
+  assert.deepEqual(edges(decide, "decide-next", "END").map((e) => e.when), ["decide-next.done == true"], "no suggestion ids: no test question");
+  const order = decide.edges.filter((e) => e.from === "decide-next").map((e) => e.to);
+  assert.ok(order.indexOf("decide-tests") < order.indexOf("END"), "the test question edge is tried first");
   assert.deepEqual(edges(decide, "decide-tests", "END").map((e) => e.when), [undefined]);
 });
 
@@ -67,6 +85,16 @@ test("sync plan collects accepted test ids", () => {
   assert.match(plan.prompt ?? "", /"acceptedTests": \[\{[^\]]*"name": [^\]]*"ids": \[/);
 });
 
+test("sync plan keeps test ids only for artifacts in the marketplace after apply", () => {
+  const plan = node(spec("olko-marketplace-skill-sync"), "plan");
+  assert.ok((plan.parse as { json: string[] }).json.includes("droppedTests?"));
+  const prompt = (plan.prompt ?? "").replace(/\s+/g, " ");
+  assert.match(prompt, /exists in the marketplace after apply/);
+  assert.match(prompt, /Drop it[^.]*`revert-local`/);
+  assert.match(prompt, /marketplace `none`[^.]*`create`/);
+  assert.match(prompt, /"droppedTests": \[\{"id": [^\]]*"reason": /);
+});
+
 test("sync runs advisor apply after the artifact changes and before publish", () => {
   const sync = spec("olko-marketplace-skill-sync");
   const apply = node(sync, "tests-apply");
@@ -74,6 +102,7 @@ test("sync runs advisor apply after the artifact changes and before publish", ()
   assert.equal(apply.agentsFrom, "state.plan.plan.acceptedTests");
   assert.deepEqual(apply.tools, ["read", "edit", "bash"]);
   assert.match(apply.prompt ?? "", /apply/);
+  assert.match(apply.prompt ?? "", /\{\{#each\.state\.tests\}\}[\s\S]*\{\{value\}\}/);
   // A group exit cannot carry a condition when the group's own last edge has one, so a pass gate routes after apply-phase.
   assert.equal(node(sync, "tests-gate").op, "builtin.pass");
   assert.deepEqual(edges(sync, "apply-phase", "tests-gate").map((e) => e.when), [undefined]);
@@ -89,17 +118,40 @@ test("sync runs advisor apply after the artifact changes and before publish", ()
   assert.deepEqual(edges(sync, "tests-apply", "publish-phase").map((e) => e.when), [undefined], "the advisor never blocks: publish follows whatever it reports");
 });
 
+test("optimizer resolves testsRoot before advise, or asks", () => {
+  const propose = spec("olko-skill-optimizer-propose");
+  const resolve = node(propose, "tests-root");
+  assert.equal(resolve.kind, "llm");
+  assert.deepEqual(resolve.parse, { json: ["path?", "source?"] });
+  const order = (resolve.prompt ?? "").replace(/\s+/g, " ");
+  const at = ["{{input.marketplace}}", "MARKETPLACE_PATH", ".opencode/marketplace-path.local.json"].map((word) => order.indexOf(word));
+  assert.ok(at.every((i, n) => i >= 0 && (n === 0 || i > (at[n - 1] ?? -1))), "input, then MARKETPLACE_PATH, then the project adapter");
+  const ask = node(propose, "ask-tests-root");
+  assert.equal(ask.kind, "interrupt");
+  assert.equal(ask.question?.allowed, undefined, "free text: also a project root");
+  assert.match(ask.question?.text ?? "", /project root/);
+  assert.equal(edges(propose, "wording", "tests-root").length, 1);
+  assert.deepEqual(edges(propose, "tests-root", "ask-tests-root").map((e) => e.when), ["tests-root.tests-root.path == null"]);
+  assert.deepEqual(edges(propose, "tests-root", "advise").map((e) => e.when), [undefined]);
+  assert.deepEqual(edges(propose, "ask-tests-root", "advise").map((e) => e.when), [undefined]);
+  const advise = node(propose, "advise");
+  assert.ok((advise.prompt ?? "").includes(`testsRoot: ${TESTS_ROOT}`));
+  assert.deepEqual(advise.dirs?.slice(1), [TESTS_ROOT]);
+  const apply = node(spec("olko-skill-optimizer-apply"), "tests-apply");
+  assert.ok((apply.prompt ?? "").includes(`testsRoot: ${TESTS_ROOT}`));
+  assert.deepEqual(apply.dirs?.slice(1), [TESTS_ROOT]);
+});
+
 test("optimizer propose adds advice to the draft, apply runs advisor apply before learn", () => {
   const propose = spec("olko-skill-optimizer-propose");
   const advise = node(propose, "advise");
   assert.equal(advise.agent, ADVISOR);
   assert.match(advise.prompt ?? "", /Mode: suggest/);
-  assert.deepEqual(advise.parse, { json: ["artifact?", "suggestions?", "covered?", "notApplicable?"] });
-  assert.equal(edges(propose, "wording", "advise").length, 1);
+  assert.equal(edges(propose, "wording", "advise").length, 0);
   assert.equal(edges(propose, "advise", "draft").length, 1);
   assert.equal(edges(propose, "wording", "draft").length, 0);
-  // A json parse stores an object; its raw reply is in `.text`, so the draft reads `state.advise.advise.text` (a bare object renders as [object Object]).
-  assert.match(node(propose, "draft").prompt ?? "", /\{\{state\.advise\.advise\.text\}\}/);
+  // A text parse stores the reply as a string, so the draft reads `state.advise.advise` itself.
+  assert.match(node(propose, "draft").prompt ?? "", /\{\{state\.advise\.advise\}\}/);
 
   const applyFlow = spec("olko-skill-optimizer-apply");
   const apply = node(applyFlow, "tests-apply");
@@ -107,8 +159,10 @@ test("optimizer propose adds advice to the draft, apply runs advisor apply befor
   assert.match(apply.prompt ?? "", /Mode: apply/);
   assert.match(apply.prompt ?? "", /every suggestion id/);
   assert.match(apply.prompt ?? "", /\{\{state\.draft\.draft\}\}/);
-  assert.deepEqual(edges(applyFlow, "apply", "tests-apply").map((e) => e.when), ["advise.advise.suggestions > 0"]);
-  assert.deepEqual(edges(applyFlow, "apply", "repo-tests").map((e) => e.when), [undefined], "no suggestions: skip the advisor");
+  assert.match(apply.prompt ?? "", /no suggestion ids[^.]*write nothing/i, "no ids: the advisor does nothing");
+  // No JSON-parsed step reports the suggestion count, so tests-apply always runs and does nothing when there are no ids.
+  assert.deepEqual(edges(applyFlow, "apply", "tests-apply").map((e) => e.when), [undefined]);
+  assert.equal(edges(applyFlow, "apply", "repo-tests").length, 0);
   assert.deepEqual(edges(applyFlow, "tests-apply", "repo-tests").map((e) => e.when), [undefined]);
   assert.deepEqual(edges(applyFlow, "repo-tests", "learn").map((e) => e.when), [undefined]);
   assert.equal(edges(applyFlow, "apply", "learn").length, 0);

@@ -1,5 +1,5 @@
 name: olko-skill-sync-publish
-version: 0.6.0
+version: 0.7.0
 description: "Phase 5 and the order of phase 6: the sync manager validates the marketplace, olko-commit publishes after approval, then leave, wait for CI or squash merge, installs after the merge, and only then starts the separate local project pull request; verified flow memory is saved last. A run with only local reverts skips the marketplace pull request and goes straight to the local delivery. A stop makes no marketplace pull request and ends the run without a local delivery, so nothing is reported complete while only one of the two deliveries exists."
 source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 4 validation, phase 5, two-pull-request contract, phase 6 order)"
 roles:
@@ -23,9 +23,10 @@ nodes:
       {{#state.plan.plan.accepted}}
       - {{type}} {{name}}: {{decision}} -> {{version}} (route {{route}})
       {{/state.plan.plan.accepted}}
-      Test files the test coverage advisor wrote for the accepted test suggestions (part of this marketplace change, no version bump):
+      Test coverage advisor apply reports for the accepted test suggestions; the test files they name are part of this marketplace change, with no version bump:
       {{#each.state.tests-apply}}
-      - {{key}}: {{value.written}}
+      - {{key}}:
+      {{value}}
       {{/each.state.tests-apply}}
 
       When a skill changed: `node scripts/registry.mjs --fix`. For every changed agent: `node scripts/install-opencode-agents.mjs --project <temporary empty directory> --agent <name>`, then delete that directory. When anything changed: the affected Node tests. Then `git status --porcelain --untracked-files=all` and `git diff --stat`.
@@ -52,7 +53,7 @@ nodes:
       Run the olko-commit workflow in the marketplace repository {{state.resolve-path.resolve-path.path}} (use `git -C` or change into it), not in the current directory.
       Never pass --force, never push to main: use its scope-named feature branch and PR flow. Do not merge. Do not ask questions; the user already approved this publish.
       PR title: the conventional commit subject for this change, for example `feat(sync): {{#state.plan.plan.accepted}}{{name}} {{/state.plan.plan.accepted}}`; when only advisor tests changed, `test(sync): {{#state.plan.plan.acceptedTests}}{{name}} {{/state.plan.plan.acceptedTests}}`.
-      PR description, concise: the artifacts and versions below, the test files the advisor wrote{{#each.state.tests-apply}} ({{key}}: {{value.written}}){{/each.state.tests-apply}}, and the validation result. Carry only portable artifacts: never include project adapters, `.agents/skill-config.md`, local-only SemVer lines, permission narrowing, opencode.json changes, machine paths or credentials; those belong to the separate local pull request.
+      PR description, concise: the artifacts and versions below, the test files the advisor wrote (they are among the changed files: {{state.validate.validate.changed}}), and the validation result. Carry only portable artifacts: never include project adapters, `.agents/skill-config.md`, local-only SemVer lines, permission narrowing, opencode.json changes, machine paths or credentials; those belong to the separate local pull request.
       {{state.validate.validate.versions}}
       Validation: {{state.validate.validate.summary}}
 
