@@ -9,6 +9,7 @@ permission:
     "*": deny
     olko-marketplace-skill-bootstrapper: allow
     olko-marketplace-skill-sync-comparator: allow
+    olko-question-reviewer: allow
   external_directory: allow
   webfetch: deny
   websearch: deny
