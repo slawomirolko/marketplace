@@ -100,8 +100,9 @@ test("a harness drives the YAML plan documentation over stdio in delegate mode w
     for (const step of ["feature", "auditors", "plan-files", "report"]) assert.ok(orchestratorRan(step), `the orchestrator agent ran ${step}`);
     assert.ok(!work.some((w) => w.nodePath === "olko-plan-documentation/route"), "input.route picks the path without an agent");
     const recorded = (step: string) => work.filter((w) => w.nodePath === `olko-plan-documentation/${step}`).length;
-    assert.equal(recorded("grill-record"), asked.filter((q) => String(q.id).startsWith("q-plan-grill-")).length, "the orchestrator records every grill answer in tracker.md");
-    assert.equal(recorded("blocker-record"), asked.filter((q) => String(q.id).startsWith("q-plan-blocker-")).length, "the orchestrator records every blocker decision in tracker.md");
+    const batchCount = (prefix: string) => new Set(asked.map((q) => String(q.id)).filter((id) => id.startsWith(prefix)).map((id) => id.split("-").slice(0, -1).join("-"))).size;
+    assert.equal(recorded("grill-record"), batchCount("q-plan-grill-"), "the orchestrator records each answered grill batch in tracker.md in one step");
+    assert.equal(recorded("blocker-record"), batchCount("q-plan-blocker-"), "the orchestrator records each answered blocker batch in tracker.md in one step");
     assert.ok(!work.some((w) => w.nodePath.endsWith("/editor/open")), "the editor switch is off");
     const changed = execFileSync("git", ["-C", project, "status", "--porcelain", "--untracked-files=all"], { encoding: "utf8" }).split(/\r?\n/).filter(Boolean).map((l) => l.slice(3).trim());
     assert.ok(changed.every((c) => c.startsWith(`plans/features/${FEATURE}/`) || c === ".opencode/memory/olko-plan-documentation-orchestrator.md"), changed.join(", "));
