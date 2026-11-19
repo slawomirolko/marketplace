@@ -145,12 +145,12 @@ test("advisor agent edits only test files", () => {
   assert.ok(rule, "hard rule line");
 });
 
-test("manifest lists the advisor as a worker with its skill", () => {
+test("manifest lists the advisor as an auditor with its skill", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, "agents", "opencode", "index.json"), "utf8"));
   const entry = manifest.agents.find((a: { name: string }) => a.name === "olko-test-coverage-advisor");
   assert.ok(entry, "manifest entry");
   assert.equal(entry.version, "1.0.0");
-  assert.equal(entry.role, "worker");
+  assert.equal(entry.role, "auditor");
   assert.equal(entry.stack, "cross-stack");
   assert.deepEqual(entry.skills, ["olko-test-coverage-advisor"]);
 });

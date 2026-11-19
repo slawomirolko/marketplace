@@ -112,7 +112,7 @@
       "version": "1.0.0",
       "file": "olko-test-coverage-advisor.md",
       "stack": "cross-stack",
-      "role": "worker",
+      "role": "auditor",
       "skills": [
         "olko-test-coverage-advisor"
       ]
