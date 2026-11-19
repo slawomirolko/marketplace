@@ -1,5 +1,5 @@
 name: olko-skill-optimizer-propose
-version: 0.3.0
+version: 0.3.1
 description: "Propose phase for optimize and split: runs the optimizer skill on the selected resource (read only), applies the language profile after the structural decisions, resolves the advisor testsRoot (the marketplace checkout, or asks), asks the test coverage advisor for missing tests (suggest mode), drafts one proposal with findings, wording changes, split plan, expected size and test advice, and puts the exact text to you. Revise runs the analysis again; approve or stop ends the phase. Nothing is edited here."
 source: "agents/opencode/olko-skill-optimizer.md (required skill sequence, steps 2-4, approval and editing)"
 roles:
@@ -48,25 +48,24 @@ nodes:
       Rules: ASD-STE100 applies only to English text: say so and label it conformant only when it is. For Polish prose, use the Polish clarity profile from the adapter and say it is clarity guidance inspired by STE, never formally ASD-STE100 compliant. Note any wording that could disadvantage or exclude a group of users.
       Reply with the wording changes (old text, new text, reason), the conformance label, and the related skill and agent recommendations. Mark every recommendation as a draft for the user to decide.
   - id: tests-root
-    description: "Read only: finds the advisor's testsRoot, the marketplace checkout, in the sync manager's order (input marketplace, MARKETPLACE_PATH, project adapter), or a project root when your request asks to check that project's tests. Replies null when none is found, so the next step asks you."
+    description: "Read only: finds the advisor's testsRoot, the marketplace checkout, in the sync manager's order (input marketplace, MARKETPLACE_PATH, project adapter), or a project root when your request asks to check that project's tests. Replies with the plain path, or exactly none so the next step asks you; the reply is kept as text, so a malformed reply never fails the run."
     kind: llm
     role: optimizer
     agent: olko-skill-optimizer
     tools: [read, bash]
     maxVisits: 4
-    parse: { json: [path?, source?] }
+    parse: text
     prompt: |
       Read only. Do not write anything. Find the testsRoot for the test coverage advisor.
       Run goal: {{goal}}
-      When the run goal explicitly asks to check the tests of a project root instead of the marketplace, use that project root (source `request`) and stop here.
+      When the run goal explicitly asks to check the tests of a project root instead of the marketplace, use that project root and stop here.
       Otherwise find the marketplace checkout in this order, and take the first one that gives a path:
       1. the marketplace path given in this run: {{input.marketplace}}{{^input.marketplace}}none{{/input.marketplace}};
       2. the `MARKETPLACE_PATH` environment variable;
       3. `.opencode/marketplace-path.local.json` (field `marketplacePath`) in the current project.
-      Check that the path exists and is a Git repository (`git -C <path> rev-parse --is-inside-work-tree`); skip a path that is not. Report the absolute path. Do not guess a default path.
+      Check that the path exists and is a Git repository (`git -C <path> rev-parse --is-inside-work-tree`); skip a path that is not. Do not guess a default path.
 
-      End with one ```json block:
-      {"path": "<absolute path, or null when none is found>", "source": "<request|input|MARKETPLACE_PATH|project adapter|none>"}
+      Reply with only the absolute path, or exactly `none` when none is found. No other text, no quotes, no code block.
   - id: ask-tests-root
     description: "Asks for the advisor's testsRoot when no marketplace checkout was found: the marketplace checkout, or a project root when you want that project's tests checked."
     kind: interrupt
@@ -81,12 +80,12 @@ nodes:
     role: auditor
     agent: olko-test-coverage-advisor
     tools: [read, bash]
-    dirs: ["{{state.resolve-path.resolve-path.path}}", "{{#state.ask-tests-root.answer}}{{state.ask-tests-root.answer}}{{/state.ask-tests-root.answer}}{{^state.ask-tests-root.answer}}{{state.tests-root.tests-root.path}}{{/state.ask-tests-root.answer}}"]
+    dirs: ["{{state.resolve-path.resolve-path.path}}", "{{#state.ask-tests-root.answer}}{{state.ask-tests-root.answer}}{{/state.ask-tests-root.answer}}{{^state.ask-tests-root.answer}}{{state.tests-root.tests-root}}{{/state.ask-tests-root.answer}}"]
     maxVisits: 4
     parse: text
     prompt: |
       Mode: suggest. Read only: change nothing.
-      testsRoot: {{#state.ask-tests-root.answer}}{{state.ask-tests-root.answer}}{{/state.ask-tests-root.answer}}{{^state.ask-tests-root.answer}}{{state.tests-root.tests-root.path}}{{/state.ask-tests-root.answer}}
+      testsRoot: {{#state.ask-tests-root.answer}}{{state.ask-tests-root.answer}}{{/state.ask-tests-root.answer}}{{^state.ask-tests-root.answer}}{{state.tests-root.tests-root}}{{/state.ask-tests-root.answer}}
       artifacts: {{state.ask-target.answer}}
 
       Follow your `suggest` steps for this one artifact. Use `<artifact-name>#TP<n>` as the suggestion id. When you cannot tell whether a principle applies, say so in `reason`.
@@ -137,7 +136,7 @@ nodes:
 edges:
   - { from: analyze, to: wording, description: "findings ready: apply the language profile" }
   - { from: wording, to: tests-root, description: "wording ready: find the advisor's testsRoot" }
-  - { from: tests-root, to: ask-tests-root, when: "tests-root.tests-root.path == null", description: "no marketplace checkout found: ask for the testsRoot" }
+  - { from: tests-root, to: ask-tests-root, when: 'tests-root.tests-root == "none"', description: "no marketplace checkout found: ask for the testsRoot" }
   - { from: tests-root, to: advise, description: "testsRoot found: ask the test coverage advisor for missing tests" }
   - { from: ask-tests-root, to: advise, description: "testsRoot given: ask the test coverage advisor for missing tests" }
   - { from: advise, to: draft, description: "test advice ready: combine into one proposal; the advisor never blocks" }

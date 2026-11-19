@@ -1,5 +1,5 @@
 name: olko-skill-optimizer-apply
-version: 0.3.0
+version: 0.3.1
 description: "Apply phase: after your approval of the exact proposal, edits only the selected resource and the companion files the approval names, re-reads every changed file and reports paths. For split it also creates the approved new skills with their registry entries. Then the test coverage advisor writes the tests for every suggestion id in the approved proposal (it does nothing when there are none), the repository tests run, and verified, reusable learning is recorded in the memory layer, or learning is reported as skipped."
 source: "agents/opencode/olko-skill-optimizer.md (split execution, approval and editing, finish)"
 roles:
@@ -37,11 +37,11 @@ nodes:
     role: auditor
     agent: olko-test-coverage-advisor
     tools: [read, edit, bash]
-    dirs: ["{{state.resolve-path.resolve-path.path}}", "{{#state.ask-tests-root.answer}}{{state.ask-tests-root.answer}}{{/state.ask-tests-root.answer}}{{^state.ask-tests-root.answer}}{{state.tests-root.tests-root.path}}{{/state.ask-tests-root.answer}}"]
+    dirs: ["{{state.resolve-path.resolve-path.path}}", "{{#state.ask-tests-root.answer}}{{state.ask-tests-root.answer}}{{/state.ask-tests-root.answer}}{{^state.ask-tests-root.answer}}{{state.tests-root.tests-root}}{{/state.ask-tests-root.answer}}"]
     parse: text
     prompt: |
       Mode: apply. Write only test files and test fixtures; do not commit, push or call gh.
-      testsRoot: {{#state.ask-tests-root.answer}}{{state.ask-tests-root.answer}}{{/state.ask-tests-root.answer}}{{^state.ask-tests-root.answer}}{{state.tests-root.tests-root.path}}{{/state.ask-tests-root.answer}}
+      testsRoot: {{#state.ask-tests-root.answer}}{{state.ask-tests-root.answer}}{{/state.ask-tests-root.answer}}{{^state.ask-tests-root.answer}}{{state.tests-root.tests-root}}{{/state.ask-tests-root.answer}}
       artifacts: {{state.ask-target.answer}}
       accepted: every suggestion id in the approved proposal below. The person approved this exact proposal, so the approval covers every suggestion id in its test advice:
       {{state.draft.draft}}

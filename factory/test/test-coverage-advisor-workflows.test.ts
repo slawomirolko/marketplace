@@ -11,7 +11,7 @@ const ADVISOR = "olko-test-coverage-advisor";
 const CHANGED = ["olko-skill-sync-compare", "olko-skill-sync-decide", "olko-marketplace-skill-sync", "olko-skill-sync-apply", "olko-skill-sync-publish", "olko-skill-optimizer-propose", "olko-skill-optimizer-apply"];
 const ADVISOR_NODES: [string, string][] = [["olko-skill-sync-compare", "tests"], ["olko-marketplace-skill-sync", "tests-apply"], ["olko-skill-optimizer-propose", "advise"], ["olko-skill-optimizer-apply", "tests-apply"]];
 // The optimizer's testsRoot: the person's answer when asked, else the resolved marketplace checkout.
-const TESTS_ROOT = "{{#state.ask-tests-root.answer}}{{state.ask-tests-root.answer}}{{/state.ask-tests-root.answer}}{{^state.ask-tests-root.answer}}{{state.tests-root.tests-root.path}}{{/state.ask-tests-root.answer}}";
+const TESTS_ROOT = "{{#state.ask-tests-root.answer}}{{state.ask-tests-root.answer}}{{/state.ask-tests-root.answer}}{{^state.ask-tests-root.answer}}{{state.tests-root.tests-root}}{{/state.ask-tests-root.answer}}";
 
 function spec(name: string): WorkflowSpec {
   const found = specs.get(name);
@@ -122,7 +122,9 @@ test("optimizer resolves testsRoot before advise, or asks", () => {
   const propose = spec("olko-skill-optimizer-propose");
   const resolve = node(propose, "tests-root");
   assert.equal(resolve.kind, "llm");
-  assert.deepEqual(resolve.parse, { json: ["path?", "source?"] });
+  assert.equal(resolve.parse, "text", "a malformed reply never fails the run");
+  assert.match(resolve.prompt ?? "", /Reply with only the absolute path, or exactly `none`/);
+  assert.doesNotMatch(resolve.prompt ?? "", /```json|null/, "no JSON shape a model could copy as the string \"null\"");
   const order = (resolve.prompt ?? "").replace(/\s+/g, " ");
   const at = ["{{input.marketplace}}", "MARKETPLACE_PATH", ".opencode/marketplace-path.local.json"].map((word) => order.indexOf(word));
   assert.ok(at.every((i, n) => i >= 0 && (n === 0 || i > (at[n - 1] ?? -1))), "input, then MARKETPLACE_PATH, then the project adapter");
@@ -131,7 +133,7 @@ test("optimizer resolves testsRoot before advise, or asks", () => {
   assert.equal(ask.question?.allowed, undefined, "free text: also a project root");
   assert.match(ask.question?.text ?? "", /project root/);
   assert.equal(edges(propose, "wording", "tests-root").length, 1);
-  assert.deepEqual(edges(propose, "tests-root", "ask-tests-root").map((e) => e.when), ["tests-root.tests-root.path == null"]);
+  assert.deepEqual(edges(propose, "tests-root", "ask-tests-root").map((e) => e.when), ['tests-root.tests-root == "none"']);
   assert.deepEqual(edges(propose, "tests-root", "advise").map((e) => e.when), [undefined]);
   assert.deepEqual(edges(propose, "ask-tests-root", "advise").map((e) => e.when), [undefined]);
   const advise = node(propose, "advise");
