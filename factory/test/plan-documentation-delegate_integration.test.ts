@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -9,20 +9,15 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { runSubagent, type SubagentResult } from "./delegate-subagent.ts";
 
 const factoryDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const MARKETPLACE = process.env.FACTORY_SYNC_MARKETPLACE ?? "slawomirolko/marketplace";
 const IDEA = process.env.FACTORY_PLAN_IDEA ?? "Add approval gates to the skill factory: a script node can declare approval: required, and the engine asks the user before it runs the operation and records the answer in the run (item E7 of factory/docs/yaml-migration-plan.md).";
 const FEATURE = process.env.FACTORY_PLAN_FEATURE_ID ?? "e7-approval-gates";
-const TOOLS: Record<string, string> = { read: "Read,Grep,Glob", edit: "Edit,Write", bash: "Bash" };
 const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
 
 type Payload = Record<string, any>;
-
-interface SubagentResult {
-  output: string;
-  usage: { model: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number };
-}
 
 async function call(client: Client, name: string, args: Record<string, unknown>): Promise<Payload> {
   const res = (await client.callTool({ name, arguments: args }, undefined, { timeout: 120000 })) as CallToolResult;
@@ -45,28 +40,6 @@ function git(cwd: string, ...args: string[]): string {
 
 function snapshot(dir: string): Record<string, string> {
   return { branch: git(dir, "branch", "--show-current"), head: git(dir, "rev-parse", "HEAD"), status: git(dir, "status", "--porcelain"), branches: git(dir, "branch", "--list", "--format=%(refname:short)") };
-}
-
-function runSubagent(work: Payload, cwd: string): Promise<SubagentResult> {
-  const agentsFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "harness-agent-")), "agents.json");
-  const allowed = (work.tools as string[]).map((t) => TOOLS[t]).join(",");
-  fs.writeFileSync(agentsFile, JSON.stringify({ [work.agentName]: { description: work.agentDescription, prompt: work.agentInstructions, tools: allowed.split(",") } }));
-  const dirs = (work.dirs as string[]).flatMap((d) => ["--add-dir", d]);
-  return new Promise((resolve, reject) => {
-    const child = spawn("claude", ["-p", "--agents", agentsFile, "--agent", work.agentName, "--model", work.model, "--output-format", "json", "--allowedTools", allowed, ...((work.tools as string[]).includes("edit") ? ["--permission-mode", "acceptEdits"] : []), ...dirs, "--max-turns", "40"], { cwd, shell: process.platform === "win32" });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (d) => (stdout += d));
-    child.stderr.on("data", (d) => (stderr += d));
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code !== 0) return reject(new Error(`claude exited ${code}: ${stderr.slice(-500)}`));
-      const out = JSON.parse(stdout) as { result: string; modelUsage: Record<string, { inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number }> };
-      const [usedModel, usage] = Object.entries(out.modelUsage).sort((a, b) => b[1].outputTokens - a[1].outputTokens)[0]!;
-      resolve({ output: out.result, usage: { model: usedModel, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, cacheReadTokens: usage.cacheReadInputTokens, cacheWriteTokens: usage.cacheCreationInputTokens } });
-    });
-    child.stdin.end(work.prompt);
-  });
 }
 
 function answerOf(question: Payload): string {
@@ -100,7 +73,7 @@ test("a harness drives the YAML plan documentation over stdio in delegate mode w
         const items = status.pendingWorkItems as Payload[];
         for (const work of items) assert.ok(work.agentName && work.agentInstructions && Array.isArray(work.tools) && Array.isArray(work.dirs), `pendingWork for ${work.nodePath} carries agent, tools and dirs`);
         batches.push(items);
-        const results = await Promise.all(items.map((w) => runSubagent(w, (w.cwd as string | undefined) ?? project)));
+        const results = await Promise.all(items.map((w) => runSubagent(w, { cwd: (w.cwd as string | undefined) ?? project })));
         for (const [i, work] of items.entries()) {
           const result = results[i]!;
           submitted.push({ agentName: work.agentName, usage: result.usage });
@@ -127,8 +100,9 @@ test("a harness drives the YAML plan documentation over stdio in delegate mode w
     for (const step of ["feature", "auditors", "plan-files", "report"]) assert.ok(orchestratorRan(step), `the orchestrator agent ran ${step}`);
     assert.ok(!work.some((w) => w.nodePath === "olko-plan-documentation/route"), "input.route picks the path without an agent");
     const recorded = (step: string) => work.filter((w) => w.nodePath === `olko-plan-documentation/${step}`).length;
-    assert.equal(recorded("grill-record"), asked.filter((q) => String(q.id).startsWith("q-plan-grill-")).length, "the orchestrator records every grill answer in tracker.md");
-    assert.equal(recorded("blocker-record"), asked.filter((q) => String(q.id).startsWith("q-plan-blocker-")).length, "the orchestrator records every blocker decision in tracker.md");
+    const batchCount = (prefix: string) => new Set(asked.map((q) => String(q.id)).filter((id) => id.startsWith(prefix)).map((id) => id.split("-").slice(0, -1).join("-"))).size;
+    assert.equal(recorded("grill-record"), batchCount("q-plan-grill-"), "the orchestrator records each answered grill batch in tracker.md in one step");
+    assert.equal(recorded("blocker-record"), batchCount("q-plan-blocker-"), "the orchestrator records each answered blocker batch in tracker.md in one step");
     assert.ok(!work.some((w) => w.nodePath.endsWith("/editor/open")), "the editor switch is off");
     const changed = execFileSync("git", ["-C", project, "status", "--porcelain", "--untracked-files=all"], { encoding: "utf8" }).split(/\r?\n/).filter(Boolean).map((l) => l.slice(3).trim());
     assert.ok(changed.every((c) => c.startsWith(`plans/features/${FEATURE}/`) || c === ".opencode/memory/olko-plan-documentation-orchestrator.md"), changed.join(", "));

@@ -1,6 +1,6 @@
 name: olko-plan-readiness
-version: 0.4.0
-description: "Steps 9 to 12: cleanup of rejected options, consistency gate, the acceptance-to-E2E manifest of every Task (written by the matrix author, validated by the runner), then blocker batches (including the GAP and E2E items) checked by the question reviewer until every plan says Ready for implementation: yes; each blocker decision is recorded in tracker.md, the batch is applied together and the manifests are validated again."
+version: 0.5.0
+description: "Steps 9 to 12: cleanup of rejected options, consistency gate, the acceptance-to-E2E manifest of every Task (written by the matrix author, validated by the runner), then blocker batches (including the GAP and E2E items) checked by the question reviewer until every plan says Ready for implementation: yes; the answered blocker batch is recorded in tracker.md in one step, the batch is applied together and the manifests are validated again."
 source: "agents/opencode/olko-plan-documentation-orchestrator.md (E2E ACCEPTANCE MANIFEST hard rule; USER QUESTION GATE: questions composed by grill-with-docs, checked by olko-question-reviewer); skills/workflow/olko-feature-plan-workflow/workflow.md (steps 9-12: cleanup, consistency gate, acceptance-to-E2E matrix gate, readiness, blocker batches until every plan is ready)"
 roles:
   plan-gate: medium
@@ -123,22 +123,30 @@ nodes:
       id: "q-plan-blocker-{{state.blocker-round.count}}-{{state.blocker-next.index}}"
       text: "Blocker {{state.blocker-next.number}} of {{state.blocker-next.total}}:\n{{state.blocker-next.item.text}}"
       allowed: ["1", "2", "3"]
+  - id: blocker-collect
+    description: "Keeps the blocker and the user's decision in the open batch; nothing is written until the whole batch is answered."
+    kind: script
+    op: list.append
+    maxVisits: 100
+    with: { values: { blocker: blocker-next.item.text, answer: ask-blocker.answer }, restartWhen: "blocker-next.number == 1" }
   - id: blocker-record
-    description: "The plan documentation orchestrator records the blocker decision in the open batch of tracker.md; the plan files stay unchanged while the batch is open."
+    description: "The plan documentation orchestrator records the whole answered blocker batch in tracker.md in one step; the plan files stay unchanged."
     kind: llm
     role: plan-gate
     agent: olko-plan-documentation-orchestrator
     tools: [read, edit, bash]
-    maxVisits: 100
+    maxVisits: 4
     parse: text
     prompt: |
-      Step 12 of olko-feature-plan-workflow: record this blocker and the user's decision in blocker batch {{state.blocker-round.count}} in {{state.feature.feature.featureDir}}/tracker.md (project {{input.project}}). Keep the plan files unchanged while the batch is open: edit only tracker.md, delegate nothing and ask nothing.
-      Blocker {{state.blocker-next.number}} of {{state.blocker-next.total}}:
-      {{state.blocker-next.item.text}}
-      The user's decision: option {{state.ask-blocker.answer}}.
-      Record the decision in English per userDecisionRecordLanguage and userDecisionRecordStyle in .agents/skill-config.md (unset: the repository documentation language; concise translation): translate and compact faithfully, keep IDs and meaning-critical exact wording, and add no new decision.
-      When .agents/skill-config.md sets questionGateCommand, also register the approved question in the decision registry (questionRegistryPattern, default {{state.feature.feature.featureDir}}/questions.json) with its `propose` command and record the answer with its `answer` command, each as one bare command (python3 scripts/plan/question_gate.py ...); otherwise run no command.
-      Reply with one line: `recorded | <blocker number>`.
+      Step 12 of olko-feature-plan-workflow: record blocker batch {{state.blocker-round.count}}, every blocker with the user's decision, as one batch in {{state.feature.feature.featureDir}}/tracker.md (project {{input.project}}). Keep the plan files unchanged: edit only tracker.md, delegate nothing and ask nothing.
+      {{#state.blocker-collect.items}}
+      Blocker {{number}}:
+      {{blocker}}
+      The user's decision: option {{answer}}.
+      {{/state.blocker-collect.items}}
+      Record the decisions in English per userDecisionRecordLanguage and userDecisionRecordStyle in .agents/skill-config.md (unset: the repository documentation language; concise translation): translate and compact faithfully, keep IDs and meaning-critical exact wording, and add no new decision.
+      When .agents/skill-config.md sets questionGateCommand, also register every approved blocker question of the batch in the decision registry (questionRegistryPattern, default {{state.feature.feature.featureDir}}/questions.json) with its `propose` command and record each answer with its `answer` command, each as one bare command (python3 scripts/plan/question_gate.py ...); otherwise run no command.
+      Reply with one line: `recorded | <number of blockers>`.
   - id: blocker-apply
     description: "Plan editor applies the decisions and records them as locked decisions."
     kind: llm
@@ -171,8 +179,9 @@ edges:
   - { from: readiness-review, to: END, when: "readiness-review.readiness-review.questions == 0", description: "the reviewer rejected every blocker question: none is put to the user and the plans keep their readiness verdict" }
   - { from: readiness-review, to: blocker-next, description: "approved blocker questions remain" }
   - { from: blocker-next, to: ask-blocker, when: "blocker-next.done == false", description: "a blocker of the batch is left" }
-  - { from: blocker-next, to: blocker-apply, when: "blocker-next.done == true", description: "every blocker of the batch answered" }
-  - { from: ask-blocker, to: blocker-record }
-  - { from: blocker-record, to: blocker-next }
+  - { from: blocker-next, to: blocker-record, when: "blocker-next.done == true", description: "every blocker of the batch answered" }
+  - { from: ask-blocker, to: blocker-collect }
+  - { from: blocker-collect, to: blocker-next }
+  - { from: blocker-record, to: blocker-apply }
   - { from: blocker-apply, to: gate-blocker }
   - { from: gate-blocker, to: e2e-next, description: "decisions changed the plans: every Task manifest is written and validated again" }

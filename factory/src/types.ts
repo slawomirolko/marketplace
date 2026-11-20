@@ -131,6 +131,9 @@ export interface CliRequest {
   configDir?: string | undefined;
   tools?: AgentTool[] | undefined;
   dirs?: string[] | undefined;
+  /** The agent's own instructions, used instead of looking `agent` up in the marketplace. */
+  definition?: { name: string; description: string; prompt: string } | undefined;
+  env?: Record<string, string> | undefined;
 }
 
 export interface CliResult {
@@ -142,6 +145,7 @@ export interface CliResult {
   harnessCostUsd?: number | null;
   usageByModel?: ModelUsage[];
   durationMs?: number;
+  timedOut?: boolean;
 }
 
 export type CliExecutor = (request: CliRequest) => Promise<CliResult>;

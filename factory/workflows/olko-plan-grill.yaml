@@ -1,6 +1,6 @@
 name: olko-plan-grill
-version: 0.4.0
-description: "Steps 7 and 8: grill-with-docs composes the whole batch of questions (three options, recommendation first), the question reviewer approves them against the decision registry, each answer is recorded in tracker.md, the answers are applied together, the investigation workers re-validate the plan and the consistency gate runs; repeated for follow-up questions, at most three rounds."
+version: 0.5.0
+description: "Steps 7 and 8: grill-with-docs composes the whole batch of questions (three options, recommendation first), the question reviewer approves them against the decision registry, the answered batch is recorded in tracker.md in one step, the answers are applied together, the investigation workers re-validate the plan and the consistency gate runs; repeated for follow-up questions, at most three rounds."
 source: "agents/opencode/olko-plan-documentation-orchestrator.md (FEATURE PLAN BATCH: one question batch for the Feature and every Task; USER QUESTION GATE: questions composed by grill-with-docs, checked by olko-question-reviewer); skills/workflow/olko-feature-plan-workflow/workflow.md (steps 7-8: grill-with-docs question batches, answers applied together, re-validation by the workers, consistency gate)"
 roles:
   plan-gate: medium
@@ -62,22 +62,30 @@ nodes:
       id: "q-plan-grill-{{state.grill-round.count}}-{{state.grill-next.index}}"
       text: "Grill question {{state.grill-next.number}} of {{state.grill-next.total}} (the whole batch is answered before anything changes):\n{{state.grill-next.item.text}}"
       allowed: ["1", "2", "3"]
+  - id: grill-collect
+    description: "Keeps the question and its answer in the open batch; nothing is written until the whole batch is answered."
+    kind: script
+    op: list.append
+    maxVisits: 100
+    with: { values: { question: grill-next.item.text, answer: ask-grill.answer }, restartWhen: "grill-next.number == 1" }
   - id: grill-record
-    description: "The plan documentation orchestrator records the question and its answer in the open batch of tracker.md; the plan files stay unchanged while the batch is open."
+    description: "The plan documentation orchestrator records the whole answered batch in tracker.md in one step; the plan files stay unchanged."
     kind: llm
     role: plan-gate
     agent: olko-plan-documentation-orchestrator
     tools: [read, edit, bash]
-    maxVisits: 100
+    maxVisits: 4
     parse: text
     prompt: |
-      Step 7 of olko-feature-plan-workflow (one batched question loop): record this question and its answer in grill batch {{state.grill-round.count}} in {{state.feature.feature.featureDir}}/tracker.md (project {{input.project}}). Keep the plan files unchanged while the batch is open: edit only tracker.md, delegate nothing and ask nothing.
-      Question {{state.grill-next.number}} of {{state.grill-next.total}}:
-      {{state.grill-next.item.text}}
-      The user's answer: option {{state.ask-grill.answer}}.
-      Record the decision in English per userDecisionRecordLanguage and userDecisionRecordStyle in .agents/skill-config.md (unset: the repository documentation language; concise translation): translate and compact faithfully, keep IDs and meaning-critical exact wording, and add no new decision.
-      When .agents/skill-config.md sets questionGateCommand, also register the approved question in the decision registry (questionRegistryPattern, default {{state.feature.feature.featureDir}}/questions.json) with its `propose` command and record the answer with its `answer` command, each as one bare command (python3 scripts/plan/question_gate.py ...); otherwise run no command.
-      Reply with one line: `recorded | <question number>`.
+      Step 7 of olko-feature-plan-workflow (one batched question loop): record grill batch {{state.grill-round.count}}, every question with its answer, as one batch in {{state.feature.feature.featureDir}}/tracker.md (project {{input.project}}). Keep the plan files unchanged: edit only tracker.md, delegate nothing and ask nothing.
+      {{#state.grill-collect.items}}
+      Question {{number}}:
+      {{question}}
+      The user's answer: option {{answer}}.
+      {{/state.grill-collect.items}}
+      Record the decisions in English per userDecisionRecordLanguage and userDecisionRecordStyle in .agents/skill-config.md (unset: the repository documentation language; concise translation): translate and compact faithfully, keep IDs and meaning-critical exact wording, and add no new decision.
+      When .agents/skill-config.md sets questionGateCommand, also register every approved question of the batch in the decision registry (questionRegistryPattern, default {{state.feature.feature.featureDir}}/questions.json) with its `propose` command and record each answer with its `answer` command, each as one bare command (python3 scripts/plan/question_gate.py ...); otherwise run no command.
+      Reply with one line: `recorded | <number of questions>`.
   - id: grill-apply
     description: "Plan editor applies all answers of the batch together and records the batch closure in tracker.md."
     kind: llm
@@ -130,9 +138,10 @@ edges:
   - { from: grill-review, to: END, when: "grill-review.grill-review.questions == 0", description: "the reviewer rejected every question: none is put to the user" }
   - { from: grill-review, to: grill-next, description: "approved questions remain" }
   - { from: grill-next, to: ask-grill, when: "grill-next.done == false", description: "a question of the batch is left" }
-  - { from: grill-next, to: grill-apply, when: "grill-next.done == true", description: "every question of the batch answered" }
-  - { from: ask-grill, to: grill-record }
-  - { from: grill-record, to: grill-next }
+  - { from: grill-next, to: grill-record, when: "grill-next.done == true", description: "every question of the batch answered" }
+  - { from: ask-grill, to: grill-collect }
+  - { from: grill-collect, to: grill-next }
+  - { from: grill-record, to: grill-apply }
   - { from: grill-apply, to: revalidate }
   - { from: revalidate, to: fold-reval, when: 'revalidate.flow.verdict == "found" || revalidate.runtime.verdict == "found" || revalidate.test.verdict == "found" || revalidate.readiness.verdict == "found"', description: "a worker found unverified claims" }
   - { from: revalidate, to: gate-grill, description: "no worker found an unverified claim: run the consistency gate" }

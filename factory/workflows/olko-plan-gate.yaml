@@ -1,5 +1,5 @@
 name: olko-plan-gate
-version: 0.4.0
+version: 0.5.0
 description: "Steps 3 and 4, called after every plan change: refreshes stack.md, runs the bidirectional business-to-technical consistency gate, and corrects the plan up to three times; a mismatch left after the check of the third correction is recorded as a BLOCKING GAP item for the step 12 blocker batch, and nothing is asked at the gate."
 source: "skills/workflow/olko-feature-plan-workflow/workflow.md (steps 3-4: stack.md and the bidirectional consistency gate with its correction loop; the run bounds the loop at three corrections and leaves GAP items for step 12)"
 roles:
@@ -28,7 +28,7 @@ nodes:
     maxVisits: 4
     parse: { line: [check, verdict, count, detail] }
     prompt: |
-      Do only the check of step 4 of olko-feature-plan-workflow for the Feature plan folder {{input.featureDir}} in the project {{input.project}}: the bidirectional business-to-technical consistency gate, stack.md against the final scope, and every Task file against its Feature milestone, file estimate, dependencies, parallelism and acceptance. Read only; do not edit anything, do not delegate, do not ask the user.
+      Do only the check of step 4 of olko-feature-plan-workflow for the Feature plan folder {{input.featureDir}} in the project {{input.project}}: the bidirectional business-to-technical consistency gate, stack.md against the final scope, and every Task file against its Feature milestone, file estimate, dependencies, parallelism and acceptance. A mismatch already recorded as an open GAP-<n> item or as an ACCEPTED-GAP in tracker.md is not a mismatch here; count only mismatches not recorded yet or made different by a later plan change. Read only; do not edit anything, do not delegate, do not ask the user.
       End with exactly one line: `consistency | <pass|fail> | <number of mismatches> | <mismatches, semicolon separated, or none>`.
   - id: round
     description: "Counts the failed checks; the fourth is the check of the third correction."

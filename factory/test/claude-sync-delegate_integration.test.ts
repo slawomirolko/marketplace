@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import net from "node:net";
@@ -10,21 +10,16 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { runSubagent, type SubagentResult } from "./delegate-subagent.ts";
 
 const factoryDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TARGET = process.env.FACTORY_CLAUDE_SYNC_TARGET ?? "anthropics/claude-plugins-official";
 const ARTIFACTS = (process.env.FACTORY_CLAUDE_SYNC_ARTIFACTS ?? "olko-design-rules,olko-review-verifier,frontend-design").split(",");
 const MARKETPLACE = process.env.FACTORY_SYNC_MARKETPLACE ?? "slawomirolko/marketplace";
 const REAL_SYNC_HOME = process.env.OLKO_SYNC_HOME ?? path.join(os.homedir(), ".olko-sync");
-const TOOLS: Record<string, string> = { read: "Read,Grep,Glob", edit: "Edit,Write", bash: "Bash" };
 const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
 
 type Payload = Record<string, any>;
-
-interface SubagentResult {
-  output: string;
-  usage: { model: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number };
-}
 
 async function call(client: Client, name: string, args: Record<string, unknown>): Promise<Payload> {
   const res = (await client.callTool({ name, arguments: args }, undefined, { timeout: 120000 })) as CallToolResult;
@@ -78,28 +73,6 @@ function snapshot(dir: string): Record<string, string> {
   return { branch: git(dir, "branch", "--show-current"), head: git(dir, "rev-parse", "HEAD"), status: git(dir, "status", "--porcelain"), branches: git(dir, "branch", "--list", "--format=%(refname:short)") };
 }
 
-function runSubagent(work: Payload, cwd: string): Promise<SubagentResult> {
-  const agentsFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "harness-agent-")), "agents.json");
-  const allowed = (work.tools as string[]).map((t) => TOOLS[t]).join(",");
-  fs.writeFileSync(agentsFile, JSON.stringify({ [work.agentName]: { description: work.agentDescription, prompt: work.agentInstructions, tools: allowed.split(",") } }));
-  const dirs = (work.dirs as string[]).flatMap((d) => ["--add-dir", d]);
-  return new Promise((resolve, reject) => {
-    const child = spawn("claude", ["-p", "--agents", agentsFile, "--agent", work.agentName, "--model", work.model, "--output-format", "json", "--allowedTools", allowed, ...((work.tools as string[]).includes("edit") ? ["--permission-mode", "acceptEdits"] : []), ...dirs, "--max-turns", "40"], { cwd, shell: process.platform === "win32" });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (d) => (stdout += d));
-    child.stderr.on("data", (d) => (stderr += d));
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code !== 0) return reject(new Error(`claude exited ${code}: ${stderr.slice(-500)}`));
-      const out = JSON.parse(stdout) as { result: string; modelUsage: Record<string, { inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number }> };
-      const [usedModel, usage] = Object.entries(out.modelUsage).sort((a, b) => b[1].outputTokens - a[1].outputTokens)[0]!;
-      resolve({ output: out.result, usage: { model: usedModel, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, cacheReadTokens: usage.cacheReadInputTokens, cacheWriteTokens: usage.cacheCreationInputTokens } });
-    });
-    child.stdin.end(work.prompt);
-  });
-}
-
 test("a harness drives the YAML claude sync over stdio in delegate mode on marketplace agents only: three inventories at once, only requested capabilities compared, leave changes no store and no real sync state", async () => {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "factory-claude-sync-ts-")));
   const [target, olko, user, state] = ["target", "olko", "user", "state"].map((d) => path.join(root, d)) as [string, string, string, string];
@@ -126,7 +99,7 @@ test("a harness drives the YAML claude sync over stdio in delegate mode on marke
         const items = status.pendingWorkItems as Payload[];
         for (const work of items) assert.ok(work.agentName && work.agentInstructions && Array.isArray(work.tools) && Array.isArray(work.dirs), `pendingWork for ${work.nodePath} carries agent, tools and dirs`);
         batches.push(items);
-        const results = await Promise.all(items.map((w) => runSubagent(w, (w.cwd as string | undefined) ?? olko)));
+        const results = await Promise.all(items.map((w) => runSubagent(w, { cwd: (w.cwd as string | undefined) ?? olko })));
         for (const [i, work] of items.entries()) {
           const result = results[i]!;
           submitted.push({ agentName: work.agentName, usage: result.usage });
