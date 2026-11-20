@@ -1,10 +1,11 @@
 name: olko-skill-sync-compare
-version: 0.2.0
-description: "Phase 2: the sync manager discovers local skills and agents, the adapter versions every skill locally, the manager checks the versions, one comparator per artifact compares it with its marketplace copy in parallel, and the manager builds the decision table."
+version: 0.4.0
+description: "Phase 2: the sync manager discovers local skills and agents, the adapter versions every skill locally, the manager checks the versions, one comparator per artifact compares it with its marketplace copy in parallel, then one test coverage advisor per artifact suggests missing tests in parallel, and the manager builds the decision table with a tests column."
 source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 2 and phase 3 table)"
 roles:
   sync: medium
   comparator: medium
+  auditor: medium
 entry: discover
 limits:
   maxCycleIterations: 3
@@ -83,12 +84,32 @@ nodes:
 
       Return your structured report. End it with exactly one line:
       result | <identical|local-only|marketplace-only|project-adapter-only|adapter-candidate|portable-local-change|conflict> | <current marketplace version or none> | <none|patch|minor|major> | <exact proposed next version or none> | <recommended action>
+  - id: tests
+    description: "After the comparators report, one test coverage advisor per artifact suggests missing tests in parallel (suggest mode, read only). Its reply is kept as text, so a malformed reply never fails the run; it never blocks the sync."
+    kind: llm
+    role: auditor
+    agent: olko-test-coverage-advisor
+    agentsFrom: state.discover.discover.compare
+    tools: [read, bash]
+    dirs: ["{{state.resolve-path.resolve-path.path}}"]
+    parse: text
+    prompt: |
+      Mode: suggest. Read only: change nothing.
+      testsRoot: {{state.resolve-path.resolve-path.path}}
+      Artifact type: {{agent.type}}
+      Artifact name: {{agent.name}}
+      artifacts: {{agent.localPath}} (the local copy that is about to change); marketplace copy: {{agent.marketplacePath}}
+      Suggestions for an artifact whose decision is revert-local are dropped at plan time, because the revert discards the local copy.
+
+      Follow your `suggest` steps for this one artifact. Use `<artifact-name>#TP<n>` as the suggestion id. When you cannot tell whether a principle applies, say so in `reason`.
+      End with one ```json block:
+      {"artifact": "{{agent.type}}:{{agent.name}}", "suggestions": [{"id": "{{agent.name}}#TP<n>", "principle": "TP<n>", "status": "<partial|missing>", "severity": "<high|medium|low>", "evidence": "<path:line>", "scenario": "<one sentence>", "targetFile": "<path in testsRoot>", "sketch": "<test sketch>"}], "covered": ["TP<n>"], "notApplicable": [{"principle": "TP<n>", "reason": "<reason>"}]}
   - id: rows
-    description: "Phase 3 table: the sync manager builds one row per artifact with its candidate version and the decisions its classification allows. Changes nothing."
+    description: "Phase 3 table: the sync manager builds one row per artifact with its candidate version, the decisions its classification allows and the advisor's test gap counts, and the advisor tables with every suggestion id. Changes nothing."
     kind: llm
     role: sync
     agent: olko-marketplace-skill-sync-manager
-    parse: { json: [rows, decide, table] }
+    parse: { json: [rows, decide, table, tests, testIds] }
     prompt: |
       Do only the aggregation of Phase 3. Change nothing and ask nothing: the factory asks the user.
       Discovered artifacts:
@@ -99,14 +120,22 @@ nodes:
       {{#each.state.compare}}
       - {{key}}: {{value.classification}}; marketplace {{value.marketplaceVersion}}; bump {{value.bump}}; next {{value.nextVersion}}; recommended {{value.action}}
       {{/each.state.compare}}
+      Test coverage advisor reports by artifact (suggest mode, free text that should end with a JSON block):
+      {{#each.state.tests}}
+      - {{key}}:
+      {{value}}
+      {{/each.state.tests}}
 
       For each artifact derive the proposed version: for `local-only` the candidate version of your instructions (the skill's declared SemVer; for an agent its local manifest version, or `1.0.0`), otherwise the comparator's next version.
       Allowed decisions, exactly these strings: `local-only` -> create, reject, leave. `adapter-candidate` -> move-to-adapter, adopt-patch, adopt-minor, adopt-major, revert-local, leave. Every other non-identical classification -> adopt-patch, adopt-minor, adopt-major, revert-local, leave. `identical` -> none.
       `decide` holds the non-identical rows in table order; give the n-th of them (from 0) the question `q-sync-<n>`.
+      Read each advisor report yourself: take every suggestion id, severity, status, scenario and target file from its JSON block, or from its text when the block is missing. A report you cannot read counts as no suggestions; say so in `tests` for that artifact.
+      Tests column: the advisor's gap counts of the artifact as `<high>/<medium>/<low>` (number of suggestions per severity; `0/0/0` when it has none or the advisor gave no report).
+      `tests` holds the advisor tables to show below the table: per artifact, one line per suggestion (id, principle, status, severity, scenario, target file). `testIds` lists every suggestion id across all artifacts, identical artifacts included.
 
       End with one ```json block:
-      {"rows": [<row>], "decide": [<row with question>], "table": "<one line per artifact>"}
-      Row: {"type": "<skill|agent>", "name": "<name>", "classification": "<classification>", "marketplaceVersion": "<x.y.z or none>", "bump": "<none|patch|minor|major>", "nextVersion": "<proposed version>", "action": "<recommended action>", "line": "<type> <name>: <classification>; marketplace <version>; bump <bump>; proposed <version>; recommended <action>", "options": ["<allowed decision>"], "question": "<q-sync-n, decide rows only>"}
+      {"rows": [<row>], "decide": [<row with question>], "table": "<one line per artifact>", "tests": "<advisor tables, or none>", "testIds": ["<suggestion id>"]}
+      Row: {"type": "<skill|agent>", "name": "<name>", "classification": "<classification>", "marketplaceVersion": "<x.y.z or none>", "bump": "<none|patch|minor|major>", "nextVersion": "<proposed version>", "action": "<recommended action>", "line": "<type> <name>: <classification>; marketplace <version>; bump <bump>; proposed <version>; recommended <action>; tests <high>/<medium>/<low>", "options": ["<allowed decision>"], "question": "<q-sync-n, decide rows only>"}
 edges:
   - { from: discover, to: stop-missing, when: "discover.discover.missing > 0", description: "a requested artifact is not in the project" }
   - { from: discover, to: adapt-loop, description: "every requested artifact found" }
@@ -115,5 +144,6 @@ edges:
   - { from: versions, to: stop-versions, when: "versions.versions.missing > 0", description: "a local skill has no SemVer version" }
   - { from: versions, to: compare, description: "every local skill has a SemVer version" }
   - { from: stop-versions, to: END, description: "never reached: stop-versions fails the run" }
-  - { from: compare, to: rows }
+  - { from: compare, to: tests, description: "comparators reported: the advisor suggests tests per artifact" }
+  - { from: tests, to: rows, description: "advisor reports are in; they never block the sync" }
   - { from: rows, to: END }
