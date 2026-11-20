@@ -1,0 +1,6 @@
+{
+  "description": "Words that must never appear in published text (branch names, PR titles and bodies). Stored as lowercase SHA-256 hashes so this file does not contain them.",
+  "sha256": [
+    "c857d09db23e6822e3600bc06ad8d58f92ed62bc8efd81c753f77048662cb97d"
+  ]
+}
