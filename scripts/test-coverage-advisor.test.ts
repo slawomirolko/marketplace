@@ -235,7 +235,8 @@ test("sync manager passes local paths, filters accepted tests, and names tests i
   assert.match(four, /exists in the marketplace after apply/);
   assert.match(four, /`revert local`[^.]*dropped/);
   const five = phase(body, "Phase 5");
-  assert.ok(five.includes("test files") && five.includes("`test(sync)`"));
+  assert.match(five, /path of every\s+test file the advisor wrote/);
+  assert.ok(five.includes("`test(sync)`"));
 });
 
 test("sync manager phase 3 and phase 4 keep the surrounding line width", () => {
