@@ -113,7 +113,7 @@ test("plan rules: an overlapping topic waits for your answer, and your answer an
     {
       "plan-store-context": () => json({ noStore: false, digest: DIGEST, blocked: [BLOCKED] }),
       "plan-rules": () => "none",
-      "plan-rules-merge": () => json({ noStore: false, kept: [], dropped: [], violations: [], decide: [] }),
+      "plan-rules-merge": () => json({ noStore: false, kept: [], dropped: [], violations: [], decide: [], violationEntries: [] }),
     },
     { "q-plan-store": "logging.format=ADR-0002" },
   );
@@ -178,7 +178,7 @@ test("store reconcile: a project without a store stops after the inventory", asy
   assert.equal(prompts.fields, undefined);
 });
 
-test("code review rules: an overlapping topic waits for your answer; the digest and your answer reach the rules check; the merge counts violations per store entry", async () => {
+test("code review rules: an overlapping topic waits for your answer; the digest and your answer reach the rules check; the merge lists the store entry of each violation", async () => {
   const factory = await newFactory();
   const { run } = factory.start("review rules", undefined, { workflow: "olko-review-rules", input: {} });
   factory.confirm(run.runId);
@@ -188,7 +188,7 @@ test("code review rules: an overlapping topic waits for your answer; the digest 
     {
       "rules-store-context": () => json({ noStore: false, digest: DIGEST, blocked: [BLOCKED] }),
       "rules-check": () => "none",
-      "rules-merge": () => json({ noStore: false, kept: [], dropped: [], violations: [], decide: [], perEntry: [] }),
+      "rules-merge": () => json({ noStore: false, kept: [], dropped: [], violations: [], decide: [], violationEntries: [] }),
     },
     { "q-rules-store": "logging.format=ADR-0002" },
   );
@@ -196,7 +196,7 @@ test("code review rules: an overlapping topic waits for your answer; the digest 
   assert.match(prompts["rules-check"][0], /^\s*Project store digest for these paths/);
   assert.match(prompts["rules-check"][0], /- ADR-0004 \[persistence\.orm\]: Use EF Core for data access\./);
   assert.match(prompts["rules-check"][0], /Overlapping topic logging\.format \(ADR-0001 ADR-0002 \): the user named the binding ADR: logging\.format=ADR-0002\./);
-  assert.match(prompts["rules-merge"][0], /perEntry: one item per store entry/);
+  assert.match(prompts["rules-merge"][0], /violationEntries: one item per violation line, in the same order/);
 });
 
 test("tests first: the test author gets the digest of the Task plan paths, and an overlapping topic waits for your answer", async () => {
@@ -233,13 +233,15 @@ test("plan review report: violations per store entry and the reconcile hint for 
       "plan-confirm": () => json({ confirmed: [], dropped: [] }),
       "plan-store-context": () => json({ noStore: false, digest: DIGEST, blocked: [BLOCKED] }),
       "plan-rules": () => "none",
-      "plan-rules-merge": () => json({ noStore: false, kept: [], dropped: [], violations: [], decide: [], perEntry: [{ entry: "project.0004-ef-core", count: 2 }] }),
+      "plan-rules-merge": () => json({ noStore: false, kept: [], dropped: [], violations: ["a", "b", "c"], decide: [], violationEntries: ["project.0001-logging", "project.0004-ef-core", "project.0004-ef-core"] }),
+      "plan-verify-violations": () => "none",
+      "plan-rules-violations": () => json({ decide: [] }),
       "plan-report": () => json({ kept: [] }),
     },
     { "q-plan-store": "logging.format=ADR-0002" },
   );
   assert.equal(end.status, "done", end.error);
-  assert.match(prompts["plan-report"][0], /Store violations per entry: project\.0004-ef-core 2;/);
+  assert.match(prompts["plan-report"][0], /Store violations per entry: project\.0004-ef-core 2; project\.0001-logging 1; /);
   assert.match(prompts["plan-report"][0], /Overlapping store topics \(the user named the binding ADR for this review\): logging\.format \(ADR-0001 ADR-0002 \)/);
   assert.match(prompts["plan-report"][0], /olko-adr-store-reconcile/);
 });

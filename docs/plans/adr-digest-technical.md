@@ -148,7 +148,7 @@ Tests: a fake-backend integration test, `adr-store-reconcile-delegate_integratio
   - the number of `project.*` violations that the verifier confirms;
   - the number of `Blocked:` stops;
   - the cost per run.
-- In the run report, count violations per ADR or rule id. An entry with zero violations and `enforcedBy` set is a candidate to drop from the digest.
+- In the run report, count violations per ADR or rule id: the rules merge lists the store entry of each violation (`violationEntries`), and the script operation `list.count` counts them, so the counts are deterministic. An entry with zero violations and `enforcedBy` set is a candidate to drop from the digest.
 
 ## Open questions
 

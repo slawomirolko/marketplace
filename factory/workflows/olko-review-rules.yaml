@@ -1,5 +1,5 @@
 name: olko-review-rules
-version: 0.3.0
+version: 0.4.0
 description: "Builds the project store digest for the changed paths, checks the confirmed findings against it, verifies new violations and asks the user one question per conflict between a finding and the store."
 source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE, step 6a: project rules check)"
 roles:
@@ -70,7 +70,7 @@ nodes:
     kind: llm
     role: orchestrator
     agent: olko-review-orchestrator
-    parse: { json: [noStore, kept, dropped, violations, decide, perEntry?] }
+    parse: { json: [noStore, kept, dropped, violations, decide, violationEntries] }
     prompt: |
       Do only the split part of step 6a of your REVIEW ROUTE. Read no file and ask nobody: the factory asks the user.
       Confirmed findings, in order:
@@ -81,9 +81,14 @@ nodes:
       Project rules check output:
       {{state.rules-check.rules-check}}
 
-      `no-store`: noStore true and every confirmed finding is kept. `keep`: kept, with the citation added when one is given. `drop`: dropped, with the cited entry. `ask`: decide, kind ask. `violation` lines: violations, the text after `violation | `. perEntry: one item per store entry (`project.<entry file>`) that a violation line cites, with the number of violation lines citing it.
+      `no-store`: noStore true and every confirmed finding is kept. `keep`: kept, with the citation added when one is given. `drop`: dropped, with the cited entry. `ask`: decide, kind ask. `violation` lines: violations, the text after `violation | `. violationEntries: one item per violation line, in the same order: the store entry it cites (`project.<entry file>`).
       End with one ```json block:
-      {"noStore": <true|false>, "kept": [{"line": "<finding>", "unchecked": <true|false>}], "dropped": [{"line": "<finding>", "cite": "<entry>"}], "violations": ["<violation>"], "decide": [{"kind": "ask", "line": "<finding>", "cite": "<quoted entry>"}], "perEntry": [{"entry": "project.<entry file>", "count": <violations citing it>}]}
+      {"noStore": <true|false>, "kept": [{"line": "<finding>", "unchecked": <true|false>}], "dropped": [{"line": "<finding>", "cite": "<entry>"}], "violations": ["<violation>"], "decide": [{"kind": "ask", "line": "<finding>", "cite": "<quoted entry>"}], "violationEntries": ["project.<entry file>"]}
+  - id: rules-count
+    description: "Counts the new violations per store entry."
+    kind: script
+    op: list.count
+    with: { over: rules-merge.rules-merge.violationEntries }
   - id: verify-violations
     description: "The verifier checks the new rule violations."
     kind: llm
@@ -158,8 +163,9 @@ edges:
   - { from: rules-ask-store, to: rules-stop-store, when: 'rules-ask-store.answer == "stop"', description: "you chose to fix the store first" }
   - { from: rules-ask-store, to: rules-check, description: "you named the binding ADRs" }
   - { from: rules-check, to: rules-merge }
-  - { from: rules-merge, to: verify-violations, when: "rules-merge.rules-merge.violations > 0", description: "the store check found new violations" }
-  - { from: rules-merge, to: next-decision-ask, when: "rules-merge.rules-merge.violations == 0", description: "no new violation" }
+  - { from: rules-merge, to: rules-count }
+  - { from: rules-count, to: verify-violations, when: "rules-merge.rules-merge.violations > 0", description: "the store check found new violations" }
+  - { from: rules-count, to: next-decision-ask, when: "rules-merge.rules-merge.violations == 0", description: "no new violation" }
   - { from: verify-violations, to: rules-violations }
   - { from: rules-violations, to: next-decision }
   - { from: next-decision, to: ask-rule, when: "next-decision.done == false", description: "a conflict is left" }

@@ -28,6 +28,21 @@ const listAppend: Operation = async ({ state, args, nodeId }) => {
   return { state: { items, count: items.length }, metrics: { count: items.length }, output: `${items.length} items collected.` };
 };
 
+/** Counts the items of a list per value (or per the `by` field of each item), most frequent first; ties keep first-seen order. */
+const listCount: Operation = async ({ state, args }) => {
+  if (typeof args.over !== "string") throw new Error("with.over must be a state path");
+  const list = readState(state, args.over);
+  if (!Array.isArray(list)) throw new Error(`state.${args.over} is not a list`);
+  const by = typeof args.by === "string" ? args.by : undefined;
+  const tally = new Map<string, number>();
+  for (const item of list) {
+    const value = String(by && item && typeof item === "object" ? (item as Record<string, unknown>)[by] : item);
+    tally.set(value, (tally.get(value) ?? 0) + 1);
+  }
+  const counts = [...tally].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count);
+  return { state: { counts, total: list.length }, metrics: { total: list.length, values: counts.length }, output: `${list.length} items, ${counts.length} distinct values.` };
+};
+
 export const OPERATIONS: Record<string, Operation> = {
   "builtin.pass": pass,
   "builtin.count": async ({ state, nodeId }) => {
@@ -50,6 +65,7 @@ export const OPERATIONS: Record<string, Operation> = {
   },
   "list.next": listNext,
   "list.append": listAppend,
+  "list.count": listCount,
 };
 
 export function operationNamed(name: string): Operation | undefined {
