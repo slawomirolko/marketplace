@@ -164,9 +164,9 @@ push workflow. Never pass `--force` to `olko-commit` and never push directly to
 `main`. Require its default scope-named feature branch and PR flow. Before the
 PR is opened, ensure its title is the approved conventional commit subject and
 its description concisely states the approved skills/agents, versions, the
-test files the advisor wrote, and validation results. A run that publishes only
-advisor tests uses a `test(sync)` subject. Report the PR URL and stop for the user's explicit decision:
-leave it open, wait for CI, or squash merge. Squash merge only after the user
+path of every test file the advisor wrote, and validation results. A run that
+publishes only advisor tests uses a `test(sync)` subject. Report the PR URL and
+stop for the user's explicit decision: leave it open, wait for CI, or squash merge. Squash merge only after the user
 explicitly approves it; then update local `main` and delete the merged branch.
 Re-check that the approved commit is visible on `origin/main` before installing.
 Verify the installed OpenSkills CLI help first. For each

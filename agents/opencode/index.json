@@ -732,6 +732,10 @@
       "role": "orchestrator",
       "skills": [
         "olko-factory-workflow-sync"
+      ],
+      "delegates": [
+        "olko-workflow-mapper",
+        "olko-workflow-verifier"
       ]
     },
     {

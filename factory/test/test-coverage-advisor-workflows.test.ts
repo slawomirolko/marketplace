@@ -62,18 +62,26 @@ test("every advisor node parses text, and no template reads advisor JSON fields"
   }
 });
 
-test("sync decide asks once for accepted test ids", () => {
+test("sync decide asks once for accepted test ids, composed by grill-with-docs", () => {
   const decide = spec("olko-skill-sync-decide");
+  const grill = node(decide, "tests-grill");
+  assert.equal(grill.kind, "llm");
+  assert.equal(grill.skill, "grill-with-docs");
+  assert.match(grill.prompt ?? "", /none/);
+  assert.match(grill.prompt ?? "", /\{\{state\.rows\.rows\.tests\}\}/);
   const ask = node(decide, "decide-tests");
   assert.equal(ask.kind, "interrupt");
+  assert.equal(ask.askedBy, "tests-grill");
   assert.equal(ask.question?.id, "q-tests");
+  assert.equal(ask.question?.text, "{{state.tests-grill.tests-grill}}");
   assert.equal(ask.question?.allowed, undefined);
   assert.equal(ask.question?.allowedFrom, undefined);
-  assert.match(ask.question?.text ?? "", /none/);
-  assert.deepEqual(edges(decide, "decide-next", "decide-tests").map((e) => e.when), ["decide-next.done == true && rows.rows.testIds > 0"]);
+  assert.deepEqual(edges(decide, "decide-next", "tests-grill").map((e) => e.when), ["decide-next.done == true && rows.rows.testIds > 0"]);
   assert.deepEqual(edges(decide, "decide-next", "END").map((e) => e.when), ["decide-next.done == true"], "no suggestion ids: no test question");
   const order = decide.edges.filter((e) => e.from === "decide-next").map((e) => e.to);
-  assert.ok(order.indexOf("decide-tests") < order.indexOf("END"), "the test question edge is tried first");
+  assert.ok(order.indexOf("tests-grill") < order.indexOf("END"), "the test question edge is tried first");
+  assert.deepEqual(edges(decide, "tests-grill", "grill-blocked-decide").map((e) => e.when), ['tests-grill.tests-grill == "blocker | grill-with-docs cannot be loaded"']);
+  assert.deepEqual(edges(decide, "tests-grill", "decide-tests").map((e) => e.when), [undefined]);
   assert.deepEqual(edges(decide, "decide-tests", "END").map((e) => e.when), [undefined]);
 });
 
