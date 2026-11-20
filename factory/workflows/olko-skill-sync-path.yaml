@@ -1,9 +1,10 @@
 name: olko-skill-sync-path
-version: 0.2.0
-description: "The sync manager finds the marketplace checkout (input, MARKETPLACE_PATH, project adapter, fallback) and checks it is a Git repository; asks before using the built-in fallback and stops when the path is not usable."
-source: "agents/opencode/olko-marketplace-skill-sync-manager.md (marketplace path)"
+version: 0.3.0
+description: "The sync manager finds the marketplace checkout (input, MARKETPLACE_PATH, project adapter, fallback) and checks it is a Git repository; asks before using the built-in fallback (the question is composed by grill-with-docs, the user question gate) and stops when the path is not usable or grill-with-docs cannot be loaded."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (marketplace path, user question gate, response language)"
 roles:
   sync: medium
+  grill: medium
 entry: resolve-path
 limits:
   maxCycleIterations: 3
@@ -23,14 +24,31 @@ nodes:
 
       End with one ```json block:
       {"path": "<absolute marketplace path>", "source": "<input|MARKETPLACE_PATH|project adapter|fallback>", "fallback": <true when the source is the fallback default, else false>, "problem": "<why the path does not exist or is not a Git repository, or null>"}
+  - id: fallback-grill
+    description: "grill-with-docs composes the one question whether to use the built-in fallback path, in the user's response language; it asks nothing itself and changes no file."
+    kind: llm
+    role: grill
+    skill: grill-with-docs
+    tools: [read]
+    parse: text
+    prompt: |
+      Compose one question, one question per turn: the marketplace path was resolved only from the built-in fallback default ({{state.resolve-path.resolve-path.path}}, source {{state.resolve-path.resolve-path.source}}); no explicit path, MARKETPLACE_PATH or project adapter path was found. Use this path for the sync, or stop before any write?
+      Return the question text only, with the choices `continue` and `stop`; the workflow puts it to the user and waits for the answer. Add no other option or follow-up and change no file.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely; keep the choice words exactly as given.
+      If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
   - id: ask-fallback
-    description: "Asks before using the built-in fallback path."
+    description: "Puts the fallback-path question composed by grill-with-docs to the user: continue or stop."
     kind: interrupt
-    askedBy: resolve-path
+    askedBy: fallback-grill
     question:
       id: q-marketplace-fallback
-      text: "The marketplace path comes from the built-in fallback: {{state.resolve-path.resolve-path.path}}. Use it?"
+      text: "{{state.fallback-grill.fallback-grill}}"
       allowed: [continue, stop]
+  - id: grill-blocked-path
+    description: "Stops the run when grill-with-docs cannot be loaded: the tooling blocker is reported and nothing is asked of the user directly."
+    kind: script
+    op: builtin.stop
+    with: { reason: "grill-with-docs cannot be loaded: the sync stopped without asking the user about the fallback marketplace path." }
   - id: stop-path
     description: "Stops the run: the marketplace path does not exist or is not a Git repository."
     kind: script
@@ -38,8 +56,11 @@ nodes:
     with: { reason: "The marketplace path does not exist or is not a Git repository; the resolve-path step names the path and the problem." }
 edges:
   - { from: resolve-path, to: stop-path, when: "resolve-path.resolve-path.problem != null", description: "the path does not exist or is not a Git repository" }
-  - { from: resolve-path, to: ask-fallback, when: "resolve-path.resolve-path.fallback == true", description: "only the built-in fallback path was found" }
+  - { from: resolve-path, to: fallback-grill, when: "resolve-path.resolve-path.fallback == true", description: "only the built-in fallback path was found: grill-with-docs composes the question" }
   - { from: resolve-path, to: END, description: "path from input, environment or adapter" }
+  - { from: fallback-grill, to: grill-blocked-path, when: 'fallback-grill.fallback-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded: stop" }
+  - { from: fallback-grill, to: ask-fallback, description: "grill-with-docs composed the question: put it to the user" }
+  - { from: grill-blocked-path, to: END, description: "never reached: grill-blocked-path fails the run" }
   - { from: ask-fallback, to: END, when: 'ask-fallback.answer == "continue"', description: "you chose continue with the fallback path" }
   - { from: ask-fallback, to: FINISH, when: 'ask-fallback.answer == "stop"', description: "you chose stop" }
   - { from: stop-path, to: END, description: "never reached: stop-path fails the run" }

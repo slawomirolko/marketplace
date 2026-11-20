@@ -4,6 +4,7 @@ import { z } from "zod";
 
 export const OPERATION_CONTRACTS: Record<string, z.ZodType> = {
   "builtin.gate": z.object({ enabled: z.boolean(), required: z.boolean() }),
+  "list.count": z.object({ counts: z.array(z.object({ value: z.string(), count: z.number() })), total: z.number() }),
 };
 
 export function contractJson(): { operations: Record<string, unknown> } {

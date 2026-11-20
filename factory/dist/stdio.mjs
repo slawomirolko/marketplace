@@ -5839,7 +5839,7 @@ function preprocess(fn, schema) {
 function datetime(params) {
 	return /* @__PURE__ */ _isoDateTime(ZodISODateTime, params);
 }
-// node_modules/.pnpm/@modelcontextprotocol+sdk@1.32.2_zod@4.6.7/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
+// node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
 var LATEST_PROTOCOL_VERSION = "2025-11-25";
 var SUPPORTED_PROTOCOL_VERSIONS = [
 	LATEST_PROTOCOL_VERSION,
@@ -7771,7 +7771,7 @@ function deserializeMessage(line) {
 function serializeMessage(message) {
 	return JSON.stringify(message) + "\n";
 }
-// node_modules/.pnpm/@modelcontextprotocol+sdk@1.32.2_zod@4.6.7/node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
+// node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
 /**
 * Server transport for stdio: this communicates with an MCP client by reading from the current process' stdin and writing to stdout.
 *
@@ -11444,7 +11444,7 @@ function object(shape, params) {
 		...normalizeParams(params)
 	});
 }
-// node_modules/.pnpm/@modelcontextprotocol+sdk@1.32.2_zod@4.6.7/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-compat.js
+// node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-compat.js
 function isZ4Schema(s) {
 	return !!s._zod;
 }
@@ -11566,7 +11566,7 @@ function getLiteralValue(schema) {
 	const directValue = schema.value;
 	if (directValue !== void 0) return directValue;
 }
-// node_modules/.pnpm/@modelcontextprotocol+sdk@1.32.2_zod@4.6.7/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js
+// node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js
 /**
 * Experimental task interfaces for MCP SDK.
 * WARNING: These APIs are experimental and may change without notice.
@@ -12623,7 +12623,7 @@ var zodToJsonSchema = (schema, options) => {
 	if (refs.target === "openAi" && ("anyOf" in combined || "oneOf" in combined || "allOf" in combined || "type" in combined && Array.isArray(combined.type))) console.warn("Warning: OpenAI may not support schemas with unions as roots! Try wrapping it in an object property.");
 	return combined;
 };
-// node_modules/.pnpm/@modelcontextprotocol+sdk@1.32.2_zod@4.6.7/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-json-schema-compat.js
+// node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-json-schema-compat.js
 function mapMiniTarget(t) {
 	if (!t) return "draft-7";
 	if (t === "jsonSchema7" || t === "draft-7") return "draft-7";
@@ -13519,7 +13519,7 @@ function mergeCapabilities(base, additional) {
 	}
 	return result;
 }
-// node_modules/.pnpm/@modelcontextprotocol+sdk@1.32.2_zod@4.6.7/node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
+// node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
 var import_ajv = /* @__PURE__ */ __toESM(require_ajv(), 1);
 var import_dist = /* @__PURE__ */ __toESM(require_dist(), 1);
 function createDefaultAjvInstance() {
@@ -13594,7 +13594,7 @@ var AjvJsonSchemaValidator = class {
 		};
 	}
 };
-// node_modules/.pnpm/@modelcontextprotocol+sdk@1.32.2_zod@4.6.7/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/server.js
+// node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/server.js
 /**
 * Experimental server task features for MCP SDK.
 * WARNING: These APIs are experimental and may change without notice.
@@ -13811,7 +13811,7 @@ var ExperimentalServerTasks = class {
 		return this._server.cancelTask({ taskId }, options);
 	}
 };
-// node_modules/.pnpm/@modelcontextprotocol+sdk@1.32.2_zod@4.6.7/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/helpers.js
+// node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/helpers.js
 /**
 * Experimental task capability assertion helpers.
 * WARNING: These APIs are experimental and may change without notice.
@@ -13855,7 +13855,7 @@ function assertClientRequestTaskCapability(requests, method, entityName) {
 		case "elicitation/create": if (!requests.elicitation?.create) throw new Error(`${entityName} does not support task creation for elicitation/create (required for ${method})`);
 	}
 }
-// node_modules/.pnpm/@modelcontextprotocol+sdk@1.32.2_zod@4.6.7/node_modules/@modelcontextprotocol/sdk/dist/esm/server/index.js
+// node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/server/index.js
 /**
 * An MCP server on top of a pluggable transport.
 *
@@ -14177,7 +14177,7 @@ var Server = class extends Protocol {
 		return this.notification({ method: "notifications/prompts/list_changed" });
 	}
 };
-// node_modules/.pnpm/@modelcontextprotocol+sdk@1.32.2_zod@4.6.7/node_modules/@modelcontextprotocol/sdk/dist/esm/server/completable.js
+// node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/server/completable.js
 var COMPLETABLE_SYMBOL = Symbol.for("mcp.completable");
 /**
 * Checks if a schema is completable (has completion metadata).
@@ -14195,7 +14195,7 @@ var McpZodTypeKind;
 (function(McpZodTypeKind) {
 	McpZodTypeKind["Completable"] = "McpCompletable";
 })(McpZodTypeKind || (McpZodTypeKind = {}));
-// node_modules/.pnpm/@modelcontextprotocol+sdk@1.32.2_zod@4.6.7/node_modules/@modelcontextprotocol/sdk/dist/esm/shared/toolNameValidation.js
+// node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/shared/toolNameValidation.js
 /**
 * Tool name validation utilities according to SEP: Specify Format for Tool Names
 *
@@ -14265,7 +14265,7 @@ function validateAndWarnToolName(name) {
 	issueToolNameWarning(name, result.warnings);
 	return result.isValid;
 }
-// node_modules/.pnpm/@modelcontextprotocol+sdk@1.32.2_zod@4.6.7/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/mcp-server.js
+// node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/mcp-server.js
 /**
 * Experimental McpServer task features for MCP SDK.
 * WARNING: These APIs are experimental and may change without notice.
@@ -14295,7 +14295,7 @@ var ExperimentalMcpServerTasks = class {
 		return this._mcpServer._createRegisteredTool(name, config.title, config.description, config.inputSchema, config.outputSchema, config.annotations, execution, config._meta, handler);
 	}
 };
-// node_modules/.pnpm/@modelcontextprotocol+sdk@1.32.2_zod@4.6.7/node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js
+// node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js
 function toolInputElementCount(value, max) {
 	let count = 0;
 	const stack = [value];

@@ -1,7 +1,7 @@
 ---
 name: olko-worktree-merge
-version: 1.1.0
-description: "Merge a git worktree branch into the default branch through a GitHub PR, including commit/push handoff, CI and review checks, optional mandatory post-merge acceptance E2E, main checkout update, optional main compose rebuild, and worktree cleanup after verification. Triggers: 'merge worktree', 'olko-worktree-merge', 'merge this branch to main', 'create PR for this worktree', 'finish worktree', 'close worktree'."
+version: 1.2.0
+description: "Merge a git worktree branch into the default branch through a GitHub PR, including commit/push handoff, CI and review checks, optional mandatory post-merge acceptance E2E, main checkout update, optional main compose rebuild, and session relocation before the final worktree cleanup. Triggers: 'merge worktree', 'olko-worktree-merge', 'merge this branch to main', 'create PR for this worktree', 'finish worktree', 'close worktree'."
 user_invocable: true
 ---
 

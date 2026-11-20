@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -9,8 +8,7 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { claudeTools } from "../src/marketplace-agents.ts";
-import type { AgentTool } from "../src/types.ts";
+import { runSubagent, type SubagentResult } from "./delegate-subagent.ts";
 
 const factoryDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.join(factoryDir, "..");
@@ -19,11 +17,6 @@ const PR = Number(process.env.FACTORY_REVIEW_PR ?? 69);
 const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
 
 type Payload = Record<string, any>;
-
-interface SubagentResult {
-  output: string;
-  usage: { model: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number };
-}
 
 async function call(client: Client, name: string, args: Record<string, unknown>): Promise<Payload> {
   const res = (await client.callTool({ name, arguments: args }, undefined, { timeout: 120000 })) as CallToolResult;
@@ -37,29 +30,6 @@ function freePort(): Promise<number> {
       const { port } = server.address() as net.AddressInfo;
       server.close(() => resolve(port));
     });
-  });
-}
-
-function runSubagent(work: Payload): Promise<SubagentResult> {
-  const { agentName, agentInstructions: instructions, agentDescription: description, model, prompt } = work;
-  const dirs = (work.dirs as string[]).flatMap((d) => ["--add-dir", d]);
-  const agentsFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "harness-agent-")), "agents.json");
-  const tools = claudeTools(work.tools as AgentTool[]).allowed;
-  fs.writeFileSync(agentsFile, JSON.stringify({ [agentName]: { description, prompt: instructions, tools } }));
-  return new Promise((resolve, reject) => {
-    const child = spawn("claude", ["-p", "--agents", agentsFile, "--agent", agentName, "--model", model, "--output-format", "json", "--allowedTools", tools.join(","), ...dirs, "--max-turns", "40"], { cwd: repoRoot, shell: process.platform === "win32" });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (d) => (stdout += d));
-    child.stderr.on("data", (d) => (stderr += d));
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code !== 0) return reject(new Error(`claude exited ${code}: ${stderr.slice(-500)}`));
-      const out = JSON.parse(stdout) as { result: string; modelUsage: Record<string, { inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number }> };
-      const [usedModel, usage] = Object.entries(out.modelUsage).sort((a, b) => b[1].outputTokens - a[1].outputTokens)[0]!;
-      resolve({ output: out.result, usage: { model: usedModel, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, cacheReadTokens: usage.cacheReadInputTokens, cacheWriteTokens: usage.cacheCreationInputTokens } });
-    });
-    child.stdin.end(prompt);
   });
 }
 
@@ -84,7 +54,7 @@ test("a harness drives the YAML olko-review workflow over stdio in delegate mode
         for (const work of items) assert.ok(work.agentName && work.agentInstructions, `pendingWork for ${work.nodePath} carries the marketplace agent to run`);
         batches.push(items.map((w) => w.agentName));
         for (const work of items) if ((work.tools as string[]).includes("bash")) bashNodes.add(work.nodePath.split("/").at(-1));
-        const results = await Promise.all(items.map((w) => runSubagent(w)));
+        const results = await Promise.all(items.map((w) => runSubagent(w, { cwd: repoRoot })));
         for (const [i, work] of items.entries()) {
           const result = results[i]!;
           submitted.push({ agentName: work.agentName, usage: result.usage });

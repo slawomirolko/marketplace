@@ -1,5 +1,5 @@
 name: olko-review-plan
-version: 0.2.0
+version: 0.3.1
 description: "PLAN route: reviews a plan file against its acceptance criteria and the project rules before implementation; no memory."
 source: "agents/opencode/olko-review-orchestrator.md (PLAN ROUTE)"
 roles:
@@ -40,6 +40,11 @@ nodes:
       - {{line}} | {{reason}}
       {{/state.plan-confirm.plan-confirm.dropped}}
       Project rules check: {{#state.plan-rules-merge.plan-rules-merge.noStore}}no-store, skipped{{/state.plan-rules-merge.plan-rules-merge.noStore}}
+      Store violations per entry: {{#state.plan-rules-count.counts}}{{value}} {{count}}; {{/state.plan-rules-count.counts}}{{^state.plan-rules-count.counts}}none{{/state.plan-rules-count.counts}}
+      {{#state.plan-store-context.plan-store-context.blocked.length}}
+      Overlapping store topics (the user named the binding ADR for this review): {{#state.plan-store-context.plan-store-context.blocked}}{{topic}} ({{#adrs}}{{.}} {{/adrs}}); {{/state.plan-store-context.plan-store-context.blocked}}
+      Add to the report: these topics need one binding ADR; run the factory workflow olko-adr-store-reconcile with this project.
+      {{/state.plan-store-context.plan-store-context.blocked.length}}
       {{#state.plan-rules-merge.plan-rules-merge.dropped}}
       - dropped by the store: {{line}} | {{cite}}
       {{/state.plan-rules-merge.plan-rules-merge.dropped}}

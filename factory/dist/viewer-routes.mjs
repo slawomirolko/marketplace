@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import crypto, { randomBytes } from "node:crypto";
 import os from "node:os";
+import { DatabaseSync } from "node:sqlite";
 // \0rolldown/runtime.js
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -7279,9 +7280,12 @@ var pass = async () => ({
 	state: { passed: true },
 	output: "verify passed"
 });
+function readState(state, dotted) {
+	return dotted.split(".").reduce((value, key) => value && typeof value === "object" ? value[key] : void 0, state);
+}
 var listNext = async ({ state, args, nodeId }) => {
 	if (typeof args.over !== "string") throw new Error("with.over must be a state path");
-	const list = args.over.split(".").reduce((value, key) => value && typeof value === "object" ? value[key] : void 0, state);
+	const list = readState(state, args.over);
 	if (!Array.isArray(list)) throw new Error(`state.${args.over} is not a list`);
 	const previous = nodeId ? state[nodeId] : void 0;
 	const index = previous?.index === void 0 || previous.done ? 0 : previous.index + 1;
@@ -7299,6 +7303,51 @@ var listNext = async ({ state, args, nodeId }) => {
 			total: list.length
 		},
 		output: done ? `All ${list.length} items handled.` : `Item ${index + 1} of ${list.length}.`
+	};
+};
+/** Appends one item built from state paths to this node's list; `restartWhen` starts a new list, for example at the first question of a batch. */
+var listAppend = async ({ state, args, nodeId }) => {
+	if (!args.values || typeof args.values !== "object" || Array.isArray(args.values)) throw new Error("with.values must map names to state paths");
+	const previous = typeof args.restartWhen === "string" && evaluateWhen(args.restartWhen, state) || !nodeId ? [] : state[nodeId]?.items ?? [];
+	const item = {
+		number: previous.length + 1,
+		...Object.fromEntries(Object.entries(args.values).map(([name, dotted]) => [name, readState(state, String(dotted))]))
+	};
+	const items = [...previous, item];
+	return {
+		state: {
+			items,
+			count: items.length
+		},
+		metrics: { count: items.length },
+		output: `${items.length} items collected.`
+	};
+};
+/** Counts the items of a list per value (or per the `by` field of each item), most frequent first; ties keep first-seen order. */
+var listCount = async ({ state, args }) => {
+	if (typeof args.over !== "string") throw new Error("with.over must be a state path");
+	const list = readState(state, args.over);
+	if (!Array.isArray(list)) throw new Error(`state.${args.over} is not a list`);
+	const by = typeof args.by === "string" ? args.by : void 0;
+	const tally = /* @__PURE__ */ new Map();
+	for (const item of list) {
+		const value = String(by && item && typeof item === "object" ? item[by] : item);
+		tally.set(value, (tally.get(value) ?? 0) + 1);
+	}
+	const counts = [...tally].map(([value, count]) => ({
+		value,
+		count
+	})).sort((a, b) => b.count - a.count);
+	return {
+		state: {
+			counts,
+			total: list.length
+		},
+		metrics: {
+			total: list.length,
+			values: counts.length
+		},
+		output: `${list.length} items, ${counts.length} distinct values.`
 	};
 };
 var OPERATIONS = {
@@ -7347,7 +7396,9 @@ var OPERATIONS = {
 			output: enabled ? `Subgraph ${String(args.subgraph)} runs (${when}).` : skipped
 		};
 	},
-	"list.next": listNext
+	"list.next": listNext,
+	"list.append": listAppend,
+	"list.count": listCount
 };
 function operationNamed(name) {
 	return OPERATIONS[name];
@@ -15021,6 +15072,35 @@ function render(template) {
 	mustache.parse(template);
 	return (context) => mustache.render(template, withEach(context));
 }
+function askedByRefs(askedBy) {
+	if (askedBy === void 0) return [];
+	return Array.isArray(askedBy) ? askedBy : [askedBy];
+}
+function isOwnStep(ref) {
+	return typeof ref === "string";
+}
+/** Rewrites the askedBy of an inlined node: its own step ids get the inlining prefix, steps of other workflows wait for a workflow that inlines them. */
+function prefixAskedBy(node, prefix) {
+	if (node.askedBy === void 0) return node;
+	return {
+		...node,
+		askedBy: askedByRefs(node.askedBy).map((ref) => isOwnStep(ref) ? prefix(ref) : ref)
+	};
+}
+/** The step id, in this workflow's own id space, of a step of another workflow: this workflow itself, or a subgraph, call or group of it that inlines that workflow. */
+function resolveStep(spec, ref) {
+	if (spec.name === ref.workflow) return ref.step;
+	const inliner = spec.nodes.find((n) => (n.kind === "subgraph" || n.kind === "call" || n.kind === "group") && n.workflow === ref.workflow);
+	if (!inliner) return null;
+	return inliner.kind === "group" ? ref.step : `${inliner.id}/${ref.step}`;
+}
+function resolveAskedBy(node, spec) {
+	if (node.askedBy === void 0) return node;
+	return {
+		...node,
+		askedBy: askedByRefs(node.askedBy).map((ref) => isOwnStep(ref) ? ref : resolveStep(spec, ref) ?? ref)
+	};
+}
 function buildNode(workflow, spec) {
 	if (spec.kind === "call") {
 		const inputs = Object.fromEntries(Object.entries(spec.input ?? {}).map(([k, v]) => {
@@ -15061,6 +15141,8 @@ function buildNode(workflow, spec) {
 		...a.agent ? { agentName: a.agent } : {}
 	}));
 	if (spec.question) node.question = spec.question;
+	const askedBy = askedByRefs(spec.askedBy).filter(isOwnStep);
+	if (askedBy.length) node.askedBy = askedBy.map((id) => `${workflow.name}/${id}`);
 	if (spec.turns) node.turns = spec.turns;
 	if (spec.askAfterTurn) node.askAfterTurn = spec.askAfterTurn;
 	if (spec.maxVisits) node.maxVisits = spec.maxVisits;
@@ -15093,6 +15175,10 @@ function readSpec(file) {
 	for (const node of spec.nodes) {
 		if (node.kind === "llm" && node.role && !(spec.roles ?? {})[node.role]) throw new Error(`${file}: node ${node.id}: role ${node.role} has no tier in roles`);
 		for (const agent of node.agents ?? []) if (agent.role && !(spec.roles ?? {})[agent.role]) throw new Error(`${file}: node ${node.id}: role ${agent.role} has no tier in roles`);
+		if (node.askedBy !== void 0) {
+			if (node.kind !== "interrupt") throw new Error(`${file}: node ${node.id}: askedBy is only for interrupt steps`);
+			for (const ref of askedByRefs(node.askedBy).filter(isOwnStep)) if (spec.nodes.find((n) => n.id === ref)?.kind !== "llm") throw new Error(`${file}: node ${node.id}: askedBy ${ref} is not an llm step of this workflow`);
+		}
 	}
 	return spec;
 }
@@ -15150,7 +15236,7 @@ function expandSubgraphs(spec, specs, seen = []) {
 			if (clash) throw new Error(`subgraph ${node.id}: step ${clash.localId ?? clash.id} is used twice; a subgraph shares its state keys with its parent`);
 		}
 		nodes = nodes.concat(sub.nodes.map((n) => ({
-			...n,
+			...prefixAskedBy(n, prefix),
 			id: prefix(n.id),
 			...scoped ? { scope: n.scope ? prefix(n.scope) : node.id } : {},
 			...scoped || !n.scope ? { localId: n.localId ?? n.id } : {}
@@ -15228,7 +15314,7 @@ function expandSubgraphs(spec, specs, seen = []) {
 		...spec,
 		roles,
 		entry,
-		nodes,
+		nodes: nodes.map((n) => resolveAskedBy(n, spec)),
 		edges
 	};
 }
@@ -15262,6 +15348,12 @@ function readSpecDir(dir) {
 		if (specs.has(spec.name)) throw new Error(`${file}: workflow name ${spec.name} is used twice`);
 		specs.set(spec.name, spec);
 		files.set(spec.name, full);
+	}
+	for (const [name, spec] of specs) for (const node of spec.nodes) for (const ref of askedByRefs(node.askedBy)) {
+		if (isOwnStep(ref)) continue;
+		const target = specs.get(ref.workflow);
+		if (!target) throw new Error(`${path.basename(files.get(name) ?? name)}: node ${node.id}: askedBy names unknown workflow ${ref.workflow}`);
+		if (target.nodes.find((n) => n.id === ref.step)?.kind !== "llm") throw new Error(`${path.basename(files.get(name) ?? name)}: node ${node.id}: askedBy ${ref.workflow}/${ref.step} is not an llm step of that workflow`);
 	}
 	return {
 		specs,
@@ -15315,6 +15407,11 @@ function viewerOptions(dataDir) {
 	};
 }
 // src/config.ts
+var DEFAULT_MEMORY_LAYER = "olko-memory-layer";
+/** The marketplace skill that gives an agent persistent memory, from a parsed config file. */
+function memoryLayerOf(raw) {
+	return raw?.memoryLayer ?? "olko-memory-layer";
+}
 function configFile() {
 	return process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR$1, "config", "factory.yaml");
 }
@@ -15329,7 +15426,8 @@ function loadFactoryConfig(file = configFile()) {
 			infoRatio: raw.budget.infoRatio ?? .5,
 			pauseRatio: raw.budget.pauseRatio ?? .8
 		},
-		switches: raw.switches ?? {}
+		switches: raw.switches ?? {},
+		memoryLayer: memoryLayerOf(raw)
 	};
 }
 // src/marketplace-agents.ts
@@ -15472,6 +15570,13 @@ function readMarketplaceAgent(name) {
 		...pluginRoot ? { pluginRoot } : {}
 	};
 }
+/** The permission that lets an agent ask the user itself: OpenCode `question: allow` or a Claude Code `AskUserQuestion` tool. */
+function askPermission(frontmatter) {
+	if (!frontmatter) return null;
+	const front = (0, import_dist.parse)(frontmatter);
+	if (front.permission?.question === "allow") return "question: allow";
+	return (Array.isArray(front.tools) ? front.tools.map(String) : String(front.tools ?? "").split(",").map((t) => t.trim())).includes("AskUserQuestion") ? "AskUserQuestion tool" : null;
+}
 function skillDescription(file) {
 	try {
 		return String(readFrontmatter(file).front.description ?? "").replace(/\s+/g, " ").trim();
@@ -15479,7 +15584,16 @@ function skillDescription(file) {
 		return "";
 	}
 }
-function describeAgent(name) {
+function skillScripts(skill, skillFile) {
+	const dir = path.join(path.dirname(skillFile), "scripts");
+	if (!fs.existsSync(dir)) return [];
+	return fs.readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isFile() && !/\.tests?\.[a-z0-9]+$/i.test(entry.name)).map((entry) => ({
+		skill,
+		name: entry.name,
+		path: path.join(dir, entry.name)
+	})).sort((a, b) => a.name.localeCompare(b.name));
+}
+function describeAgent(name, memoryLayer = DEFAULT_MEMORY_LAYER) {
 	let agent;
 	try {
 		agent = readMarketplaceAgent(name);
@@ -15490,6 +15604,7 @@ function describeAgent(name) {
 	const rel = (f) => path.relative(root, f).split(path.sep).join("/");
 	const kind = agent.skillDir ? "skill" : agent.pluginRoot ? "plugin-agent" : "agent";
 	const declared = kind === "skill" ? [] : agent.skills;
+	const scripts = kind === "skill" ? skillScripts(name, agent.file) : declared.flatMap((s) => skillScripts(s.name, s.file));
 	const fromPrompt = agent.prompt.match(/Not in the marketplace, so not available in this run: ([^\n]+)\./)?.[1]?.split(", ") ?? [];
 	return {
 		name,
@@ -15501,7 +15616,14 @@ function describeAgent(name) {
 			description: skillDescription(s.file),
 			file: rel(s.file)
 		})),
-		missing: fromPrompt
+		scripts: scripts.map((s) => ({
+			skill: s.skill,
+			name: s.name,
+			file: rel(s.path)
+		})),
+		missing: fromPrompt,
+		asks: askPermission(agent.frontmatter),
+		memoryLayer: kind !== "skill" && [...declared.map((s) => s.name), ...fromPrompt].includes(memoryLayer)
 	};
 }
 function claudeTools(tools) {
@@ -15514,25 +15636,32 @@ function claudeTools(tools) {
 function freshDir(prefix) {
 	return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
-function claudeAgentsFile(name, tools = ["read"]) {
-	const agent = readMarketplaceAgent(name);
-	const file = path.join(freshDir("factory-agent-"), `claude-${name}.json`);
-	fs.writeFileSync(file, JSON.stringify({ [name]: {
-		description: agent.description,
-		prompt: agent.prompt,
+function definitionOf(agent) {
+	if (typeof agent !== "string") {
+		if (!AGENT_NAME.test(agent.name)) throw new Error(`invalid agent name ${agent.name}`);
+		return agent;
+	}
+	return readMarketplaceAgent(agent);
+}
+function claudeAgentsFile(agent, tools = ["read"]) {
+	const definition = definitionOf(agent);
+	const file = path.join(freshDir("factory-agent-"), `claude-${definition.name}.json`);
+	fs.writeFileSync(file, JSON.stringify({ [definition.name]: {
+		description: definition.description,
+		prompt: definition.prompt,
 		tools: claudeTools(tools).allowed
 	} }));
 	return file;
 }
-function opencodeConfigDir(name, tools = ["read"]) {
-	const agent = readMarketplaceAgent(name);
+function opencodeConfigDir(agent, tools = ["read"]) {
+	const definition = definitionOf(agent);
 	const dir = freshDir("factory-opencode-");
-	const target = path.join(dir, "agents", `${name}.md`);
+	const target = path.join(dir, "agents", `${definition.name}.md`);
 	fs.mkdirSync(path.dirname(target), { recursive: true });
-	if (agent.skillDir || agent.pluginRoot) {
+	if (definition.skillDir || definition.pluginRoot || !definition.frontmatter) {
 		const allow = (tool) => tools.includes(tool) ? "allow" : "deny";
 		const front = {
-			description: agent.description,
+			description: definition.description,
 			mode: "subagent",
 			permission: {
 				edit: allow("edit"),
@@ -15543,9 +15672,76 @@ function opencodeConfigDir(name, tools = ["read"]) {
 				external_directory: "allow"
 			}
 		};
-		fs.writeFileSync(target, `---\n${JSON.stringify(front)}\n---\n\n${agent.prompt}\n`);
-	} else fs.writeFileSync(target, `---\n${agent.frontmatter}\n---\n\n${agent.prompt}\n`);
+		fs.writeFileSync(target, `---\n${JSON.stringify(front)}\n---\n\n${definition.prompt}\n`);
+	} else fs.writeFileSync(target, `---\n${definition.frontmatter}\n---\n\n${definition.prompt}\n`);
 	return dir;
+}
+// src/questions.ts
+var SCHEMA = `
+create table if not exists questions (
+  run_id text not null,
+  question_id text not null,
+  node text,
+  asked_by text,
+  text text not null,
+  allowed text,
+  asked_at text not null,
+  answer text,
+  answered_at text,
+  primary key (run_id, question_id)
+)`;
+function storedAskedBy(askedBy) {
+	if (askedBy.length === 0) return null;
+	return askedBy.length === 1 ? askedBy[0] : JSON.stringify(askedBy);
+}
+function readAskedBy(stored) {
+	if (stored === null) return [];
+	return stored.startsWith("[") ? JSON.parse(stored) : [stored];
+}
+function questionsFile(dataDir) {
+	return path.join(dataDir, "questions.sqlite");
+}
+function withStore(dataDir, use) {
+	const db = new DatabaseSync(questionsFile(dataDir));
+	try {
+		db.exec("pragma busy_timeout = 5000; pragma journal_mode = wal;");
+		db.exec(SCHEMA);
+		return use(db);
+	} finally {
+		db.close();
+	}
+}
+/** Stores a question when it is asked; asking it again after a restart keeps the first record. */
+function recordQuestion(dataDir, question) {
+	withStore(dataDir, (db) => {
+		db.prepare("insert or ignore into questions (run_id, question_id, node, asked_by, text, allowed, asked_at) values (?, ?, ?, ?, ?, ?, ?)").run(question.runId, question.questionId, question.node, storedAskedBy(question.askedBy), question.text, question.allowed ? JSON.stringify(question.allowed) : null, question.askedAt);
+	});
+}
+function recordAnswer(dataDir, runId, questionId, answer, answeredAt) {
+	withStore(dataDir, (db) => {
+		db.prepare("update questions set answer = ?, answered_at = ? where run_id = ? and question_id = ? and answer is null").run(answer, answeredAt, runId, questionId);
+	});
+}
+function readQuestions(dataDir, runId) {
+	const file = questionsFile(dataDir);
+	if (!fs.existsSync(file)) return [];
+	const db = new DatabaseSync(file, { readOnly: true });
+	try {
+		db.exec("pragma busy_timeout = 5000;");
+		return db.prepare("select * from questions where run_id = ? order by asked_at, rowid").all(runId).map((r) => ({
+			runId: r.run_id,
+			questionId: r.question_id,
+			node: r.node,
+			askedBy: readAskedBy(r.asked_by),
+			text: r.text,
+			allowed: r.allowed ? JSON.parse(r.allowed) : null,
+			askedAt: r.asked_at,
+			answer: r.answer,
+			answeredAt: r.answered_at
+		}));
+	} finally {
+		db.close();
+	}
 }
 // src/run-summary.ts
 var SUPERVISOR_PATH = "@supervisor";
@@ -15754,6 +15950,21 @@ function parseSupervisorLine(output) {
 	};
 }
 // src/engine.ts
+var LOCKED_FILE_CODES = /* @__PURE__ */ new Set([
+	"EPERM",
+	"EBUSY",
+	"EACCES"
+]);
+/** Renames a file, retrying for a short time while Windows holds the target open for a reader. */
+function renameWithRetry(from, to, attempts = 10) {
+	for (let attempt = 1;; attempt++) try {
+		fs.renameSync(from, to);
+		return;
+	} catch (error) {
+		if (attempt >= attempts || !LOCKED_FILE_CODES.has(error.code ?? "")) throw error;
+		Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20 * attempt);
+	}
+}
 var FAKE_PRICE_PER_MTOK = {
 	low: {
 		input: .8,
@@ -15887,7 +16098,7 @@ var Factory = class {
 		const file = path.join(this.dataDir, "runs", `${run.runId}.json`);
 		const temp = `${file}.${process.pid}.tmp`;
 		fs.writeFileSync(temp, JSON.stringify(run, null, 2));
-		fs.renameSync(temp, file);
+		renameWithRetry(temp, file);
 		if (run.status !== "running") this.notify(run);
 	}
 	notify(run) {
@@ -15938,6 +16149,20 @@ var Factory = class {
 			node: record.nodePath,
 			costUsd: record.costUsd,
 			costSource: record.costSource
+		});
+	}
+	/** Puts a question to the user: the run waits for it, and the question store keeps its text for the viewer. */
+	askUser(run, question, askedBy) {
+		run.status = "waiting_for_user";
+		run.pendingQuestion = question;
+		recordQuestion(this.dataDir, {
+			runId: run.runId,
+			questionId: question.id,
+			node: question.node ?? null,
+			askedBy,
+			text: question.text,
+			allowed: question.allowed ?? null,
+			askedAt: (/* @__PURE__ */ new Date()).toISOString()
 		});
 	}
 	event(run, type, data = {}) {
@@ -16054,6 +16279,7 @@ var Factory = class {
 			questionId,
 			answer
 		});
+		recordAnswer(this.dataDir, run.runId, questionId, answer, run.events.at(-1).at);
 		this.checkpoint(run);
 		this.schedule(run);
 		return {
@@ -16177,12 +16403,11 @@ var Factory = class {
 		}
 		if (ratio >= pauseRatio && !run.thresholdsHit.includes("pause")) {
 			run.thresholdsHit.push("pause");
-			run.status = "waiting_for_user";
-			run.pendingQuestion = {
+			this.askUser(run, {
 				id: "q-budget-pause",
 				text: `The factory run has used ${Math.round(ratio * 100)}% of its budget. Continue or stop?`,
 				allowed: ["continue", "stop"]
-			};
+			}, []);
 			this.event(run, "budget_threshold", {
 				level: "pause",
 				ratio
@@ -16372,11 +16597,10 @@ var Factory = class {
 			};
 			const answer = run.answers[question.id];
 			if (answer === void 0) {
-				run.status = "waiting_for_user";
-				run.pendingQuestion = {
+				this.askUser(run, {
 					...question,
 					node: node.path
-				};
+				}, node.askedBy ?? []);
 				this.event(run, "needs_input", {
 					node: node.path,
 					questionId: question.id
@@ -16445,11 +16669,10 @@ var Factory = class {
 		const backend = config.backend.kind;
 		const askNow = backend === "fake" ? run.nodeTurn === node.askAfterTurn : true;
 		if (node.question && askNow && run.answers[node.question.id] === void 0) {
-			run.status = "waiting_for_user";
-			run.pendingQuestion = {
+			this.askUser(run, {
 				...node.question,
 				node: node.path
-			};
+			}, [node.path]);
 			this.event(run, "needs_input", {
 				node: node.path,
 				questionId: node.question.id
@@ -17088,12 +17311,28 @@ var OPENCODE_IDS = {
 	opus: "anthropic/claude-opus-5-5"
 };
 var CLAUDE_DISALLOWED = "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,Agent,Task,NotebookEdit";
+var CLAUDE_ISOLATION = [
+	"--setting-sources",
+	"project",
+	"--disable-slash-commands",
+	"--strict-mcp-config"
+];
 var workDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-cli-"));
 fs.writeFileSync(path.join(workDir, "opencode.json"), "{}\n");
 function cleanEnv() {
 	const env = {};
 	for (const [k, v] of Object.entries(process.env)) if (!/^(CLAUDE|ANTHROPIC)/.test(k)) env[k] = v;
 	return env;
+}
+/** On Windows the CLI runs under a shell, so killing the shell leaves the CLI running; taskkill /T ends the whole tree. */
+function killTree(pid, fallback) {
+	if (process.platform !== "win32" || pid === void 0) return fallback();
+	spawn("taskkill", [
+		"/pid",
+		String(pid),
+		"/T",
+		"/F"
+	], { stdio: "ignore" }).on("error", fallback);
 }
 function spawnCli(command, args, stdinText, { cwd = workDir, env = {} } = {}) {
 	return new Promise((resolve) => {
@@ -17109,7 +17348,11 @@ function spawnCli(command, args, stdinText, { cwd = workDir, env = {} } = {}) {
 		});
 		let stdout = "";
 		let stderr = "";
-		const timer = setTimeout(() => child.kill(), TIMEOUT_MS);
+		let timedOut = false;
+		const timer = setTimeout(() => {
+			timedOut = true;
+			killTree(child.pid, () => child.kill());
+		}, TIMEOUT_MS);
 		child.stdout.on("data", (d) => stdout += d);
 		child.stderr.on("data", (d) => stderr += d);
 		child.on("close", (code) => {
@@ -17118,7 +17361,8 @@ function spawnCli(command, args, stdinText, { cwd = workDir, env = {} } = {}) {
 				code,
 				stdout,
 				stderr,
-				durationMs: Date.now() - started
+				durationMs: Date.now() - started,
+				timedOut
 			});
 		});
 		child.stdin.end(stdinText ?? "");
@@ -17141,17 +17385,16 @@ function removeTempDir(dir) {
 		maxRetries: 3
 	});
 }
-function claudeAgentArgs(agent, tools, dirs) {
+function claudeAgentArgs(agent, tools, dirs, definition) {
 	const { allowed, disallowed } = claudeTools(tools);
 	const permission = tools.includes("edit") ? ["--permission-mode", "acceptEdits"] : [];
 	return [
 		"--agents",
-		claudeAgentsFile(agent, tools),
+		claudeAgentsFile(definition ?? agent, tools),
 		"--agent",
 		agent,
 		"--max-turns",
 		"40",
-		"--strict-mcp-config",
 		"--allowedTools",
 		allowed.join(","),
 		"--disallowedTools",
@@ -17160,7 +17403,8 @@ function claudeAgentArgs(agent, tools, dirs) {
 		...dirs.flatMap((d) => ["--add-dir", d])
 	];
 }
-async function runClaude(model, prompt, { agent, cwd, tools = ["read"], dirs = [] } = {}) {
+async function runClaude(model, prompt, { agent: named, definition, cwd, tools = ["read"], dirs = [], env = {} } = {}) {
+	const agent = definition?.name ?? named;
 	if (agent && !/^[a-z0-9-]+$/.test(agent)) return {
 		ok: false,
 		error: `invalid agent name ${agent}`
@@ -17171,21 +17415,25 @@ async function runClaude(model, prompt, { agent, cwd, tools = ["read"], dirs = [
 		model,
 		"--output-format",
 		"json",
-		...claudeAgentArgs(agent, tools, dirs)
+		...CLAUDE_ISOLATION,
+		...claudeAgentArgs(agent, tools, dirs, definition)
 	] : [
 		"-p",
 		"--model",
 		model,
 		"--output-format",
 		"json",
+		...CLAUDE_ISOLATION,
 		"--max-turns",
 		"2",
-		"--strict-mcp-config",
 		"--disallowedTools",
 		CLAUDE_DISALLOWED
 	];
 	const agentFile = args[args.indexOf("--agents") + 1];
-	const res = await spawnCli("claude", args, prompt, { cwd: cwd ?? workDir }).finally(() => {
+	const res = await spawnCli("claude", args, prompt, {
+		cwd: cwd ?? workDir,
+		env
+	}).finally(() => {
 		if (agent && agentFile) removeTempDir(path.dirname(agentFile));
 	});
 	let out;
@@ -17194,8 +17442,9 @@ async function runClaude(model, prompt, { agent, cwd, tools = ["read"], dirs = [
 	} catch {
 		return {
 			ok: false,
-			error: `claude exit ${res.code}: ${(res.stderr || res.stdout).slice(-300)}`,
-			durationMs: res.durationMs
+			error: `claude exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${(res.stderr || res.stdout).slice(-300)}`,
+			durationMs: res.durationMs,
+			timedOut: res.timedOut
 		};
 	}
 	const usageByModel = Object.entries(out.modelUsage ?? {}).map(([id, u]) => ({
@@ -17220,8 +17469,9 @@ async function runClaude(model, prompt, { agent, cwd, tools = ["read"], dirs = [
 		durationMs: res.durationMs
 	};
 }
-async function runOpencode(model, prompt, { agent, cwd, configDir, tools = ["read"] } = {}) {
-	const id = OPENCODE_IDS[model] ?? model;
+async function runOpencode(model, prompt, { agent: named, definition, cwd, configDir, tools = ["read"], env = {} } = {}) {
+	const agent = definition?.name ?? named;
+	const id = OPENCODE_IDS[model] ?? (model.startsWith("claude-") ? `anthropic/${model}` : model);
 	if (agent && !/^[a-z0-9-]+$/.test(agent)) return {
 		ok: false,
 		error: `invalid agent name ${agent}`
@@ -17236,10 +17486,13 @@ async function runOpencode(model, prompt, { agent, cwd, configDir, tools = ["rea
 		id,
 		...agent ? ["--agent", agent] : []
 	];
-	const agentDir = configDir ?? (agent ? opencodeConfigDir(agent, tools) : void 0);
+	const agentDir = configDir ?? (agent ? opencodeConfigDir(definition ?? agent, tools) : void 0);
 	const res = await spawnCli("opencode", args, prompt, {
 		cwd: cwd ?? workDir,
-		env: agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {}
+		env: {
+			...env,
+			...agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {}
+		}
 	}).finally(() => {
 		if (agentDir && !configDir) removeTempDir(agentDir);
 	});
@@ -17272,8 +17525,9 @@ async function runOpencode(model, prompt, { agent, cwd, configDir, tools = ["rea
 	}
 	if (error || steps === 0) return {
 		ok: false,
-		error: error ? JSON.stringify(error.error).slice(0, 300) : `opencode exit ${res.code}: ${res.stderr.slice(-300)}`,
-		durationMs: res.durationMs
+		error: error ? JSON.stringify(error.error).slice(0, 300) : `opencode exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${res.stderr.slice(-300)}`,
+		durationMs: res.durationMs,
+		timedOut: res.timedOut
 	};
 	const sessionId = events.find((e) => e.sessionID)?.sessionID ?? null;
 	return {
@@ -17600,6 +17854,10 @@ async function finishFakeRun(factory, goal) {
 	}
 }
 function createDataApi({ factoryDir, dataDir, configFile, demo }) {
+	const readConfig = () => {
+		const text = fs.readFileSync(configFile, "utf8");
+		return /\.ya?ml$/i.test(configFile) ? (0, import_dist.parse)(text) : JSON.parse(text);
+	};
 	const runsDir = path.join(dataDir, "runs");
 	function runFiles() {
 		if (!fs.existsSync(runsDir)) return [];
@@ -17642,6 +17900,7 @@ function createDataApi({ factoryDir, dataDir, configFile, demo }) {
 			}));
 		},
 		agents() {
+			const memoryLayer = memoryLayerOf(readConfig());
 			const names = /* @__PURE__ */ new Set();
 			for (const w of loadWorkflowSpecs(path.join(factoryDir, "workflows"))) for (const n of w.nodes) {
 				if (n.agent) names.add(n.agent);
@@ -17649,13 +17908,12 @@ function createDataApi({ factoryDir, dataDir, configFile, demo }) {
 				for (const a of n.agents ?? []) if (a.agent) names.add(a.agent);
 			}
 			return Object.fromEntries([...names].sort().flatMap((name) => {
-				const info = describeAgent(name);
+				const info = describeAgent(name, memoryLayer);
 				return info ? [[name, info]] : [];
 			}));
 		},
 		config() {
-			const text = fs.readFileSync(configFile, "utf8");
-			return /\.ya?ml$/i.test(configFile) ? (0, import_dist.parse)(text) : JSON.parse(text);
+			return readConfig();
 		},
 		runs() {
 			const specs = loadWorkflowSpecs(path.join(factoryDir, "workflows"));
@@ -17706,7 +17964,8 @@ function createDataApi({ factoryDir, dataDir, configFile, demo }) {
 					pendingQuestion,
 					pendingWorkItems
 				},
-				report: runReport(run)
+				report: runReport(run),
+				questions: readQuestions(path.dirname(path.dirname(file)), id)
 			};
 		},
 		stale() {

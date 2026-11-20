@@ -1,7 +1,7 @@
 name: olko-plan-audit
-version: 0.3.0
-description: "Steps 4 and 5: stack auditors chosen from the technologies the plan implements review the plan; verified findings are folded in and the consistency gate runs again."
-source: "agents/opencode/olko-plan-documentation-orchestrator.md (Steps 4-5: stack auditors chosen by technology, verified findings folded, consistency gate)"
+version: 0.4.0
+description: "Step 5: stack auditors chosen from the technologies the plan implements review the plan; verified findings are folded in and the consistency gate runs again."
+source: "skills/workflow/olko-feature-plan-workflow/workflow.md (step 5: stack auditors chosen by technology, verified findings folded, consistency gate)"
 roles:
   auditor: medium
   plan-gate: medium
@@ -18,7 +18,7 @@ nodes:
     tools: [read]
     parse: { json: [agents, skipped] }
     prompt: |
-      Do only the selection part of step 4 of your workflow: read the implementation scope of {{state.feature.feature.featureDir}}/implementation.md and its Task files (project {{input.project}}) and choose an auditor only for each technology that the technical document says will be implemented. Do not choose an auditor for a technology outside the implementation scope. Read only; change no file, delegate nothing and ask nothing.
+      Do only the selection part of step 5 of olko-feature-plan-workflow: read the implementation scope of {{state.feature.feature.featureDir}}/implementation.md and its Task files (project {{input.project}}) and choose an auditor only for each technology that the technical document says will be implemented. Do not choose an auditor for a technology outside the implementation scope. Read only; change no file, delegate nothing and ask nothing.
       Auditors, with these ids and agent names exactly:
       - .NET: {"id": "dotnet", "agentName": "olko-dotnet-auditor"}
       - Android/Kotlin: {"id": "mobile", "agentName": "olko-mobile-auditor"}
@@ -42,7 +42,7 @@ nodes:
     agent: olko-plan-documentation-orchestrator
     parse: { json: [findings] }
     prompt: |
-      Do only the collect part of step 4 of your workflow: collect the exact rule and file:line evidence plus the corrections to the technical document from the auditor results below. Add no finding of your own; read no file and change nothing.
+      Do only the collect part of step 5 of olko-feature-plan-workflow: collect the exact rule and file:line evidence plus the corrections to the technical document from the auditor results below. Add no finding of your own; read no file and change nothing.
       {{#each.state.audit}}
       auditor {{key}}:
       {{value}}

@@ -1,7 +1,7 @@
 name: olko-marketplace-skill-sync
 version: 0.6.0
-description: "Synchronizes project-local skills and OpenCode agents with the marketplace: compares every artifact and asks the test coverage advisor for missing tests, asks one decision per difference and one for the accepted test suggestions, applies, writes the accepted tests, publishes through a marketplace PR, installs after the merge, and then delivers the project-side changes through a second, separate local project PR."
-source: agents/opencode/olko-marketplace-skill-sync-manager.md (phases 1-6)
+description: "Synchronizes project-local skills and OpenCode agents with the marketplace: compares every artifact and asks the test coverage advisor for missing tests, asks one decision per difference and one for the accepted test suggestions, applies, writes the accepted tests, publishes through a marketplace PR, installs after the merge, and then delivers the project-side changes through a second, separate local project PR. Every question to the user is composed by grill-with-docs in the user's response language; the workflow only puts it to the user."
+source: agents/opencode/olko-marketplace-skill-sync-manager.md (phases 1-6, user question gate, response language)
 roles:
   bootstrap: low
   adapter: medium
@@ -125,6 +125,7 @@ nodes:
       {{#state.local-commit}}Local pull request: {{state.local-commit.local-commit.url}}.{{/state.local-commit}}
 
       Report one line per artifact with its classification and decision, then the outcome: what was published, merged and installed, and the local delivery. Follow your two-pull-request contract: do not report the run complete while only one of the two deliveries exists, and say explicitly when the local pull request was omitted because no local file was written.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{state.discover.discover.project}} (unset: the language of the user's latest message); an explicit language request from the user in this conversation overrides it. Write the report concisely in that language; keep IDs, names, versions and URLs exactly as given. Ask the user nothing.
 edges:
   - { from: sources, to: compare-phase }
   - { from: compare-phase, to: decide-phase }

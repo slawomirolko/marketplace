@@ -247,10 +247,10 @@ test("sync manager phase 3 and phase 4 keep the surrounding line width", () => {
   assert.deepEqual(long, []);
 });
 
-test("sync manager version is 2.6.0", () => {
+test("sync manager version is 2.8.0", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, "agents", "opencode", "index.json"), "utf8"));
   const entry = manifest.agents.find((a: { name: string }) => a.name === "olko-marketplace-skill-sync-manager");
-  assert.equal(entry.version, "2.6.0");
+  assert.equal(entry.version, "2.8.0");
 });
 
 const optimizerFile = path.join(root, "agents", "opencode", "olko-skill-optimizer.md");
