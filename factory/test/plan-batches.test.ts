@@ -5,7 +5,8 @@ import path from "node:path";
 import test from "node:test";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
-const { Factory } = await import("../src/engine.ts");
+const { Factory, loadedWorkflows } = await import("../src/engine.ts");
+const { loadWorkflowDir } = await import("../src/workflow-yaml.ts");
 
 const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
 const FENCE = "`".repeat(3);
@@ -50,8 +51,10 @@ async function drive(workflow: string, reply: (step: string, visit: number) => s
 }
 
 test("a grill batch is recorded in tracker.md by one step after every question of the batch is answered, and the next batch starts a new list", async () => {
+  let batch = "";
   const reply = (step: string, visit: number) => {
-    if (step === "grill") return visit === 1 ? questions("First-batch question", 3) : visit === 2 ? questions("Follow-up question", 2) : questions("none", 0);
+    if (step === "grill") return (batch = visit === 1 ? questions("First-batch question", 3) : visit === 2 ? questions("Follow-up question", 2) : questions("none", 0));
+    if (step === "grill-review") return batch;
     if (step === "grill-record") return "recorded | batch";
     if (step === "grill-apply") return "applied";
     throw new Error(`unexpected step ${step}`);
@@ -68,15 +71,62 @@ test("a grill batch is recorded in tracker.md by one step after every question o
   assert.equal(prompts["grill-apply"]?.length, 2);
 });
 
+// olko-plan-readiness runs as a group inside olko-plan-documentation and reads the Feature (featureDir, taskIds)
+// that olko-plan-entry put in the shared state. This wrapper supplies that Feature state for one Task.
+function withFeatureWrapper(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-readiness-wrapper-"));
+  const source = path.join(import.meta.dirname, "..", "workflows");
+  for (const file of fs.readdirSync(source)) if (file.endsWith(".yaml")) fs.copyFileSync(path.join(source, file), path.join(dir, file));
+  fs.writeFileSync(
+    path.join(dir, "test-plan-readiness.yaml"),
+    [
+      "name: test-plan-readiness",
+      "version: 0.0.1",
+      'description: "Test wrapper: supplies the Feature state, then runs olko-plan-readiness as a group."',
+      'source: "factory/test/plan-batches.test.ts"',
+      "roles:",
+      "  plan-gate: medium",
+      "  planner: high",
+      "  runner: medium",
+      "entry: feature",
+      "nodes:",
+      "  - id: feature",
+      '    description: "Supplies the Feature folder and its Task ids."',
+      "    kind: llm",
+      "    role: plan-gate",
+      "    parse: { json: [featureDir, taskIds, tasks, feature] }",
+      '    prompt: "feature"',
+      "  - id: readiness-phase",
+      '    description: "The readiness phase under test."',
+      "    kind: group",
+      "    workflow: olko-plan-readiness",
+      "edges:",
+      "  - { from: feature, to: readiness-phase }",
+      "  - { from: readiness-phase, to: END }",
+      "",
+    ].join("\n"),
+  );
+  const wrapper = loadWorkflowDir(dir).get("test-plan-readiness");
+  if (!wrapper) throw new Error("test wrapper did not load");
+  loadedWorkflows().set("test-plan-readiness", wrapper);
+  return "test-plan-readiness";
+}
+
 test("a blocker batch is recorded in tracker.md by one step after every blocker of the batch is answered", async () => {
+  let batch = "";
   const reply = (step: string, visit: number) => {
+    if (step === "feature") return `${FENCE}json\n${JSON.stringify({ featureDir: "plans/features/F-1", taskIds: ["T-1"], tasks: "T-1: AC-1", feature: "F-1" })}\n${FENCE}`;
+    if (step === "e2e-matrix") return "plans/features/F-1/e2e/T-1.acceptance.json\nAC-1 | scenario | ok | screenshot";
+    if (step === "e2e-validate") return "validation | pass | /repo/plans/features/F-1/e2e/T-1.acceptance.json | none";
+    if (step === "e2e-fold") return "e2e | T-1 | pass";
     if (step === "cleanup") return "cleaned";
-    if (step === "readiness") return visit === 1 ? questions("Blocker GAP-1", 2) : questions("none", 0);
+    if (step === "readiness") return (batch = visit === 1 ? questions("Blocker GAP-1", 2) : questions("none", 0));
+    if (step === "readiness-review") return batch;
     if (step === "blocker-record") return "recorded | batch";
     if (step === "blocker-apply") return "applied";
     throw new Error(`unexpected step ${step}`);
   };
-  const { done, prompts, asked } = await drive("olko-plan-readiness", reply, () => "1");
+  const { done, prompts, asked } = await drive(withFeatureWrapper(), reply, () => "1");
   assert.equal(done.status, "done", JSON.stringify(done.events.at(-1)));
   assert.equal(asked.length, 2);
   const records = prompts["blocker-record"] ?? [];

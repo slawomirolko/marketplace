@@ -1,7 +1,7 @@
 name: olko-plan-review-files
-version: 0.2.0
-description: "Step 6a: every plan file (the Feature technical plan and each Task plan) goes through the olko-review PLAN route; the confirmed findings of each file are folded in and the consistency gate runs again after every fold."
-source: "agents/opencode/olko-plan-documentation-orchestrator.md (Step 6a: olko-review PLAN route once per plan file, confirmed findings folded, consistency gate)"
+version: 0.3.0
+description: "Step 6: every plan file (the Feature technical plan and each Task plan) goes through the olko-review PLAN route; the confirmed findings of each file are folded in and the consistency gate runs again after every fold."
+source: "skills/workflow/olko-feature-plan-workflow/workflow.md (step 6: olko-review PLAN route once per plan file, confirmed findings folded, consistency gate)"
 roles:
   plan-gate: medium
   planner: high
@@ -17,7 +17,7 @@ nodes:
     tools: [read]
     parse: { json: [files] }
     prompt: |
-      Do only the listing part of step 6a of your workflow for the plan folder {{state.feature.feature.featureDir}} (project {{input.project}}): list the Feature implementation.md once and every existing Task file tasks/<task-id>-implementation.md once, each with its acceptance criteria (the Feature criteria for implementation.md, the Task criteria for a Task file). Read only; change no file, delegate nothing and ask nothing.
+      Do only the listing part of step 6 of olko-feature-plan-workflow for the plan folder {{state.feature.feature.featureDir}} (project {{input.project}}): list the Feature implementation.md once and every existing Task file tasks/<task-id>-implementation.md once, each with its acceptance criteria (the Feature criteria for implementation.md, the Task criteria for a Task file). Read only; change no file, delegate nothing and ask nothing.
       Feature and Tasks:
       {{state.feature.feature.feature}}
       {{state.feature.feature.tasks}}

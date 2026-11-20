@@ -1,5 +1,5 @@
 name: olko-review-review
-version: 0.3.0
+version: 0.4.0
 description: "REVIEW route: a read-only review of someone else's PR or a fresh review of your own, from scope to posted comments. On the LOCAL route (a working tree against input.base) the ranked findings go back to the caller and nothing is posted."
 source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE)"
 roles:
@@ -73,6 +73,11 @@ nodes:
       - {{line}} | {{reason}}
       {{/state.confirm.confirm.dropped}}
       Project rules check: {{#state.rules-merge.rules-merge.noStore}}no-store, skipped{{/state.rules-merge.rules-merge.noStore}}
+      Store violations per entry: {{#state.rules-merge.rules-merge.perEntry}}{{entry}} {{count}}; {{/state.rules-merge.rules-merge.perEntry}}{{^state.rules-merge.rules-merge.perEntry}}none{{/state.rules-merge.rules-merge.perEntry}}
+      {{#state.rules-store-context.rules-store-context.blocked.length}}
+      Overlapping store topics (the user named the binding ADR for this review): {{#state.rules-store-context.rules-store-context.blocked}}{{topic}} ({{#adrs}}{{.}} {{/adrs}}); {{/state.rules-store-context.rules-store-context.blocked}}
+      Add to the report: these topics need one binding ADR; run the factory workflow olko-adr-store-reconcile with this project.
+      {{/state.rules-store-context.rules-store-context.blocked.length}}
       {{#state.rules-merge.rules-merge.dropped}}
       - dropped by the store: {{line}} | {{cite}}
       {{/state.rules-merge.rules-merge.dropped}}

@@ -1,10 +1,11 @@
 name: olko-skill-sync-publish
-version: 0.5.0
-description: "Phase 5 and the order of phase 6: the sync manager validates the marketplace, olko-commit publishes after approval, then leave, wait for CI or squash merge, installs after the merge, and only then starts the separate local project pull request; verified flow memory is saved last. A run with only local reverts skips the marketplace pull request and goes straight to the local delivery. A stop makes no marketplace pull request and ends the run without a local delivery, so nothing is reported complete while only one of the two deliveries exists."
-source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 4 validation, phase 5, two-pull-request contract, phase 6 order)"
+version: 0.6.0
+description: "Phase 5 and the order of phase 6: the sync manager validates the marketplace, olko-commit publishes after approval (the question is composed by grill-with-docs, the user question gate), then leave, wait for CI or squash merge, installs after the merge, and only then starts the separate local project pull request; verified flow memory is saved last. A run with only local reverts skips the marketplace pull request and goes straight to the local delivery. A stop makes no marketplace pull request and ends the run without a local delivery, so nothing is reported complete while only one of the two deliveries exists."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 4 validation, phase 5, two-pull-request contract, phase 6 order, user question gate, response language)"
 roles:
   sync: medium
   publisher: medium
+  grill: medium
 entry: validate
 limits:
   maxCycleIterations: 3
@@ -28,14 +29,37 @@ nodes:
 
       End with one ```json block:
       {"changed": <number of changed marketplace files in git status, 0 when none>, "status": "<git status output>", "diffStat": "<git diff --stat output>", "versions": "<one line per non-revert decision: type name decision -> version>", "summary": "<one result per check: pass or FAIL with the last error lines, or nothing to validate>", "failed": <number of failed checks>}
+  - id: publish-grill
+    description: "grill-with-docs composes the publish question from the marketplace diff, versions and validation, in the user's response language; it asks nothing itself and changes no file."
+    kind: llm
+    role: grill
+    skill: grill-with-docs
+    tools: [read]
+    parse: text
+    prompt: |
+      Compose one question, one question per turn, before any marketplace commit and push. The artifact decisions are closed: do not re-ask them or split them into new options. Show the exact marketplace diff, the versions and the validation result, then ask: commit and push on a feature branch and open the marketplace pull request, or stop? Say that stop makes no marketplace pull request and ends the run without a local delivery, so the run is not reported complete.
+      Marketplace diff:
+      {{state.validate.validate.status}}
+      {{state.validate.validate.diffStat}}
+      Versions:
+      {{state.validate.validate.versions}}
+      Validation: {{state.validate.validate.summary}}
+      Return the question text only, with the choices `publish` and `stop`; the workflow puts it to the user and waits for the answer. Add no other option or follow-up and change no file.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{state.discover.discover.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely; keep the diff, versions and choice words exactly as given.
+      If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
   - id: ask-publish
-    description: "Shows the diff, versions and validation; asks before commit and push."
+    description: "Puts the publish question composed by grill-with-docs to the user: publish or stop."
     kind: interrupt
-    askedBy: validate
+    askedBy: publish-grill
     question:
       id: q-sync-publish
-      text: "Marketplace diff:\n{{state.validate.validate.status}}\n{{state.validate.validate.diffStat}}\n\nVersions:\n{{state.validate.validate.versions}}\n\nValidation: {{state.validate.validate.summary}}\n\nCommit and push on a feature branch and open a PR? Stop: no marketplace PR is made and the run ends without a local delivery, so it is not reported complete."
+      text: "{{state.publish-grill.publish-grill}}"
       allowed: [publish, stop]
+  - id: grill-blocked-publish
+    description: "Stops the run when grill-with-docs cannot be loaded: the tooling blocker is reported and nothing is asked of the user directly; no marketplace pull request is made."
+    kind: script
+    op: builtin.stop
+    with: { reason: "grill-with-docs cannot be loaded: the sync stopped before the publish question; the marketplace changes stay uncommitted and no pull request was made." }
   - id: publish
     description: "olko-commit commits on a feature branch, pushes and opens the PR."
     kind: llm
@@ -48,7 +72,7 @@ nodes:
       Run the olko-commit workflow in the marketplace repository {{state.resolve-path.resolve-path.path}} (use `git -C` or change into it), not in the current directory.
       Never pass --force, never push to main: use its scope-named feature branch and PR flow. Do not merge. Do not ask questions; the user already approved this publish.
       PR title: the conventional commit subject for this change, for example `feat(sync): {{#state.plan.plan.accepted}}{{name}} {{/state.plan.plan.accepted}}`.
-      PR description, concise: the artifacts and versions below, and the validation result. Carry only portable artifacts: never include project adapters, `.agents/skill-config.md`, local-only SemVer lines, permission narrowing, opencode.json changes, machine paths or credentials; those belong to the separate local pull request.
+      PR description, concise: the artifacts and versions below, and the validation result. When it records a user decision, follow `userDecisionRecordLanguage` and `userDecisionRecordStyle` from the local project's .agents/skill-config.md ({{state.discover.discover.project}}; unset: the repository documentation language, concise translation): translate and compact faithfully, keep IDs and meaning-critical exact wording, and never turn the translation into a new decision. Carry only portable artifacts: never include project adapters, `.agents/skill-config.md`, local-only SemVer lines, permission narrowing, opencode.json changes, machine paths or credentials; those belong to the separate local pull request.
       {{state.validate.validate.versions}}
       Validation: {{state.validate.validate.summary}}
 
@@ -62,7 +86,7 @@ nodes:
     description: "Calls the shared PR step: leave, wait for CI or squash merge."
     kind: call
     workflow: olko-pr-merge
-    input: { path: "{{state.resolve-path.resolve-path.path}}", prUrl: "{{state.publish.publish.url}}", prBranch: "{{state.publish.publish.branch}}", label: "marketplace" }
+    input: { path: "{{state.resolve-path.resolve-path.path}}", prUrl: "{{state.publish.publish.url}}", prBranch: "{{state.publish.publish.branch}}", label: "marketplace", project: "{{state.discover.discover.project}}" }
   - id: pr-outcome
     description: "Branches on the PR answer: install only after a merge."
     kind: script
@@ -90,8 +114,11 @@ nodes:
       Install result: {{#state.install.install.lines}}{{.}}; {{/state.install.install.lines}}
       Reply with the lessons you recorded, or `none` when nothing verified and reusable happened.
 edges:
-  - { from: validate, to: ask-publish, when: "validate.validate.changed > 0", description: "the marketplace changed" }
+  - { from: validate, to: publish-grill, when: "validate.validate.changed > 0", description: "the marketplace changed: grill-with-docs composes the publish question" }
   - { from: validate, to: local-phase, description: "only local reverts: no marketplace pull request is made, so only the local delivery runs" }
+  - { from: publish-grill, to: grill-blocked-publish, when: 'publish-grill.publish-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded: stop" }
+  - { from: publish-grill, to: ask-publish, description: "grill-with-docs composed the question: put it to the user" }
+  - { from: grill-blocked-publish, to: END, description: "never reached: grill-blocked-publish fails the run" }
   - { from: ask-publish, to: publish, when: 'ask-publish.answer == "publish"', description: "you chose publish" }
   - { from: ask-publish, to: END, when: 'ask-publish.answer == "stop"', description: "you chose stop: no marketplace pull request is made, the marketplace changes stay unpublished, nothing is installed and no local delivery runs, so the run is not reported complete" }
   - { from: publish, to: stop-main, when: 'publish.publish.branch == "main"', description: "pushed to the default branch" }

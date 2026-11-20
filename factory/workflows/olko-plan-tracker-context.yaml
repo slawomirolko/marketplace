@@ -1,7 +1,7 @@
 name: olko-plan-tracker-context
-version: 0.2.0
+version: 0.3.0
 description: "Reads the Feature with its Epic and child Tasks from the tracker, read only."
-source: agents/opencode/olko-plan-documentation-orchestrator.md (entry gate, read-only Feature context from the tracker)
+source: "agents/opencode/olko-plan-documentation-orchestrator.md (entry gate, read-only Feature context from the tracker); skills/workflow/olko-feature-plan-workflow/workflow.md (step 1: issue context from olko-feature-backlog-writer in read-only context mode)"
 roles:
   backlog: medium
 entry: context

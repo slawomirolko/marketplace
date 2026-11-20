@@ -1,9 +1,10 @@
 name: olko-skill-sync-apply
-version: 0.2.0
-description: "Phase 4: applies one accepted decision at a time: marketplace change, move-to-adapter with draft and approval, or revert-local after a final confirmation."
-source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 4)"
+version: 0.3.0
+description: "Phase 4: applies one accepted decision at a time: marketplace change, move-to-adapter with draft and approval, or revert-local after a final confirmation. Both questions are composed by grill-with-docs (the user question gate)."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 4, user question gate, response language)"
 roles:
   sync: medium
+  grill: medium
 entry: apply-next
 limits:
   maxCycleIterations: 3
@@ -49,15 +50,34 @@ nodes:
       Local path: {{state.apply-next.item.localPath}}
       Marketplace path: {{state.apply-next.item.marketplacePath}}
       Reply with the diff and the key list only.
+  - id: adapter-grill
+    description: "grill-with-docs composes the one question whether to write the drafted adapter and marketplace keys, in the user's response language; it asks nothing itself and changes no file."
+    kind: llm
+    role: grill
+    skill: grill-with-docs
+    tools: [read]
+    maxVisits: 200
+    parse: text
+    prompt: |
+      Compose one question, one question per turn, for the accepted move-to-adapter decision of {{state.apply-next.item.type}} {{state.apply-next.item.name}} (approved version {{state.apply-next.item.version}}; marketplace {{state.apply-next.item.marketplaceVersion}}). The decision itself is closed: do not re-ask it or split it into new options. Ask only whether to write this drafted adapter diff and the listed marketplace keys:
+      {{state.adapter-draft.adapter-draft}}
+      Return the question text only, with the drafted diff and the choices `write` and `skip`; the workflow puts it to the user and waits for the answer. Add no other option or follow-up and change no file.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{state.discover.discover.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely; keep the diff and the choice words exactly as given.
+      If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
   - id: ask-adapter
-    description: "Asks before writing the adapter and the marketplace keys."
+    description: "Puts the adapter question composed by grill-with-docs to the user: write or skip."
     kind: interrupt
-    askedBy: adapter-draft
+    askedBy: adapter-grill
     maxVisits: 200
     question:
       id: "q-sync-adapter-{{state.apply-next.index}}"
-      text: "Adapter change for {{state.apply-next.item.type}} {{state.apply-next.item.name}}:\n{{state.adapter-draft.adapter-draft}}\n\nWrite the adapter and the marketplace keys?"
+      text: "{{state.adapter-grill.adapter-grill}}"
       allowed: [write, skip]
+  - id: grill-blocked-apply
+    description: "Stops the run when grill-with-docs cannot be loaded: the tooling blocker is reported and nothing is asked of the user directly."
+    kind: script
+    op: builtin.stop
+    with: { reason: "grill-with-docs cannot be loaded: the sync stopped in phase 4 without asking the user; decisions already applied stay as they are." }
   - id: adapter-write
     description: "Writes the approved adapter and marketplace keys."
     kind: llm
@@ -81,14 +101,27 @@ nodes:
     kind: script
     op: builtin.stop
     with: { reason: "Apply blocked: the sync manager could not apply an accepted decision; its last reply names the reason." }
+  - id: revert-grill
+    description: "grill-with-docs composes the final confirmation before the local copy is overwritten, in the user's response language; it asks nothing itself and changes no file."
+    kind: llm
+    role: grill
+    skill: grill-with-docs
+    tools: [read]
+    maxVisits: 200
+    parse: text
+    prompt: |
+      Compose the one final confirmation, one question per turn, immediately before a destructive overwrite. The decision {{state.apply-next.item.decision}} for {{state.apply-next.item.type}} {{state.apply-next.item.name}} is closed: do not re-ask it or split it into new options. Ask only: replace the local copy {{state.apply-next.item.localPath}} with its marketplace counterpart {{state.apply-next.item.marketplacePath}} (marketplace version {{state.apply-next.item.marketplaceVersion}})? Say that this overwrites the local copy.
+      Return the question text only, with the choices `revert` and `keep`; the workflow puts it to the user and waits for the answer. Add no other option or follow-up and change no file.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{state.discover.discover.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely; keep the paths and the choice words exactly as given.
+      If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
   - id: ask-revert
-    description: "Final confirmation before the local copy is overwritten."
+    description: "Puts the final confirmation composed by grill-with-docs to the user before the local copy is overwritten: revert or keep."
     kind: interrupt
-    askedBy: { workflow: olko-marketplace-skill-sync, step: plan }
+    askedBy: revert-grill
     maxVisits: 200
     question:
       id: "q-sync-revert-{{state.apply-next.index}}"
-      text: "Final confirmation: replace the local {{state.apply-next.item.type}} {{state.apply-next.item.localPath}} with its marketplace counterpart {{state.apply-next.item.marketplacePath}}? This overwrites the local copy."
+      text: "{{state.revert-grill.revert-grill}}"
       allowed: [revert, keep]
   - id: revert
     description: "After the final confirmation, the sync manager replaces only the selected local copy with its marketplace counterpart."
@@ -111,15 +144,20 @@ nodes:
 edges:
   - { from: apply-next, to: END, when: "apply-next.done == true", description: "all decisions applied" }
   - { from: apply-next, to: apply, when: 'apply-next.item.route == "change"', description: "adopt or create" }
-  - { from: apply-next, to: ask-revert, when: 'apply-next.item.route == "revert"', description: "revert-local" }
+  - { from: apply-next, to: revert-grill, when: 'apply-next.item.route == "revert"', description: "revert-local: grill-with-docs composes the final confirmation" }
   - { from: apply-next, to: adapter-draft, when: 'apply-next.item.route == "adapter"', description: "move-to-adapter" }
   - { from: apply, to: stop-blocked, when: 'apply.apply.status == "blocked"', description: "the change could not be applied" }
   - { from: apply, to: apply-next, description: "applied: next decision" }
-  - { from: adapter-draft, to: ask-adapter }
+  - { from: adapter-draft, to: adapter-grill }
+  - { from: adapter-grill, to: grill-blocked-apply, when: 'adapter-grill.adapter-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded: stop" }
+  - { from: adapter-grill, to: ask-adapter, description: "grill-with-docs composed the question: put it to the user" }
+  - { from: revert-grill, to: grill-blocked-apply, when: 'revert-grill.revert-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded: stop" }
+  - { from: revert-grill, to: ask-revert, description: "grill-with-docs composed the final confirmation: put it to the user" }
+  - { from: grill-blocked-apply, to: END, description: "never reached: grill-blocked-apply fails the run" }
   - { from: ask-adapter, to: adapter-write, when: 'ask-adapter.answer == "write"', description: "you chose write" }
   - { from: ask-adapter, to: apply-next, when: 'ask-adapter.answer == "skip"', description: "you chose skip" }
   - { from: adapter-write, to: stop-blocked, when: 'adapter-write.adapter-write.status == "blocked"', description: "the adapter could not be written" }
-  - { from: adapter-write, to: ask-revert, description: "adapter written: confirm replacing the local body" }
+  - { from: adapter-write, to: revert-grill, description: "adapter written: grill-with-docs composes the confirmation to replace the local body" }
   - { from: stop-blocked, to: END, description: "never reached: stop-blocked fails the run" }
   - { from: ask-revert, to: revert, when: 'ask-revert.answer == "revert"', description: "you confirmed the overwrite" }
   - { from: ask-revert, to: apply-next, when: 'ask-revert.answer == "keep"', description: "you kept the local copy" }

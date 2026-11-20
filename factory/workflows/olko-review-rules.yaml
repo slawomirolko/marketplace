@@ -1,15 +1,39 @@
 name: olko-review-rules
-version: 0.2.0
-description: "Checks the confirmed findings against the project rule store, verifies new violations and asks the user one question per conflict between a finding and the store."
+version: 0.3.0
+description: "Builds the project store digest for the changed paths, checks the confirmed findings against it, verifies new violations and asks the user one question per conflict between a finding and the store."
 source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE, step 6a: project rules check)"
 roles:
   orchestrator: medium
   rules: medium
   verifier: medium
-entry: rules-check
+  context: low
+entry: rules-store-context
 limits:
   maxCycleIterations: 3
 nodes:
+  - id: rules-store-context
+    description: "olko-project-context builds the project store digest for the changed paths."
+    kind: llm
+    role: context
+    agent: olko-project-context
+    tools: [read, bash]
+    parse: { json: [noStore, digest, blocked, enforced?, cut?, error?] }
+    prompt: |
+      Project: the current working directory.
+      Paths: {{#state.scope.scope.files}}{{.}} {{/state.scope.scope.files}}
+      Build the store digest for these paths.
+  - id: rules-ask-store
+    description: "Overlapping ADRs leave more than one binding answer for a topic: you name the binding ADR per topic, or stop. The review waits for your answer."
+    kind: interrupt
+    askedBy: rules-store-context
+    question:
+      id: q-rules-store
+      text: "The project store has topics where more than one ADR binds the same files, and no overrides link decides between them:\n{{#state.rules-store-context.rules-store-context.blocked}}- {{topic}}: {{#adrs}}{{.}} {{/adrs}}(files: {{#paths}}{{.}} {{/paths}})\n{{/state.rules-store-context.rules-store-context.blocked}}For each topic, name the ADR that binds here (for example: logging.format=ADR-0007), or answer stop. Fix the store later with the olko-adr-store-reconcile workflow."
+  - id: rules-stop-store
+    description: "Stops: you chose to fix the project store first."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Stopped: the project store has overlapping ADRs without a binding answer. Run the olko-adr-store-reconcile workflow for this project, then start again." }
   - id: rules-check
     description: "Checks the diff and the confirmed findings against the project rule store (ADRs, rule files)."
     kind: llm
@@ -17,6 +41,15 @@ nodes:
     agent: olko-project-rules-check
     parse: text
     prompt: |
+      {{#state.rules-store-context.rules-store-context.digest.length}}
+      Project store digest for these paths (use it as the loaded store; open a full ADR only to quote it or to resolve a conflict):
+      {{/state.rules-store-context.rules-store-context.digest.length}}
+      {{#state.rules-store-context.rules-store-context.digest}}
+      - {{source}} [{{topic}}]: {{line}}
+      {{/state.rules-store-context.rules-store-context.digest}}
+      {{#state.rules-store-context.rules-store-context.blocked}}
+      Overlapping topic {{topic}} ({{#adrs}}{{.}} {{/adrs}}): the user named the binding ADR: {{state.rules-ask-store.answer}}. Open that ADR and judge the changed lines against it; the other ADRs of the topic do not apply.
+      {{/state.rules-store-context.rules-store-context.blocked}}
       Mode: code
       {{#state.scope.scope.pr}}PR #{{state.scope.scope.pr}}: {{/state.scope.scope.pr}}{{state.scope.scope.title}}
 
@@ -37,7 +70,7 @@ nodes:
     kind: llm
     role: orchestrator
     agent: olko-review-orchestrator
-    parse: { json: [noStore, kept, dropped, violations, decide] }
+    parse: { json: [noStore, kept, dropped, violations, decide, perEntry?] }
     prompt: |
       Do only the split part of step 6a of your REVIEW ROUTE. Read no file and ask nobody: the factory asks the user.
       Confirmed findings, in order:
@@ -48,9 +81,9 @@ nodes:
       Project rules check output:
       {{state.rules-check.rules-check}}
 
-      `no-store`: noStore true and every confirmed finding is kept. `keep`: kept, with the citation added when one is given. `drop`: dropped, with the cited entry. `ask`: decide, kind ask. `violation` lines: violations, the text after `violation | `.
+      `no-store`: noStore true and every confirmed finding is kept. `keep`: kept, with the citation added when one is given. `drop`: dropped, with the cited entry. `ask`: decide, kind ask. `violation` lines: violations, the text after `violation | `. perEntry: one item per store entry (`project.<entry file>`) that a violation line cites, with the number of violation lines citing it.
       End with one ```json block:
-      {"noStore": <true|false>, "kept": [{"line": "<finding>", "unchecked": <true|false>}], "dropped": [{"line": "<finding>", "cite": "<entry>"}], "violations": ["<violation>"], "decide": [{"kind": "ask", "line": "<finding>", "cite": "<quoted entry>"}]}
+      {"noStore": <true|false>, "kept": [{"line": "<finding>", "unchecked": <true|false>}], "dropped": [{"line": "<finding>", "cite": "<entry>"}], "violations": ["<violation>"], "decide": [{"kind": "ask", "line": "<finding>", "cite": "<quoted entry>"}], "perEntry": [{"entry": "project.<entry file>", "count": <violations citing it>}]}
   - id: verify-violations
     description: "The verifier checks the new rule violations."
     kind: llm
@@ -120,6 +153,10 @@ nodes:
       The user's answer: {{state.ask-rule.answer}} (`finding`: the finding holds; `store`: the store entry holds).
       End with one ```json block: {"decided": [<every decision so far, then this one>: {"kind": "<ask|violation>", "line": "<finding>", "cite": "<entry>", "holds": "<finding|store>", "proposal": "<the update to the side that lost>"}]}
 edges:
+  - { from: rules-store-context, to: rules-ask-store, when: "rules-store-context.rules-store-context.blocked > 0", description: "overlapping ADRs without a binding answer" }
+  - { from: rules-store-context, to: rules-check, description: "the digest is ready (or there is no store)" }
+  - { from: rules-ask-store, to: rules-stop-store, when: 'rules-ask-store.answer == "stop"', description: "you chose to fix the store first" }
+  - { from: rules-ask-store, to: rules-check, description: "you named the binding ADRs" }
   - { from: rules-check, to: rules-merge }
   - { from: rules-merge, to: verify-violations, when: "rules-merge.rules-merge.violations > 0", description: "the store check found new violations" }
   - { from: rules-merge, to: next-decision-ask, when: "rules-merge.rules-merge.violations == 0", description: "no new violation" }

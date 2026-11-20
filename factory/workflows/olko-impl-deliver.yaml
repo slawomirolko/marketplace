@@ -1,7 +1,7 @@
 name: olko-impl-deliver
-version: 0.2.0
-description: "Steps 8-9: commit, push and a draft PR only after your explicit yes; PR check where you choose which findings to fix; Obsidian and editor gates; PR merge only after your yes, which leaves the Task worktree intact. Then the closure group (steps 11-13). Answering no ends the run with the work left in the worktree."
-source: "agents/opencode/olko-implementation-orchestrator.md (steps 8-9, merge-retain; steps 11-13 in olko-impl-closure) and skills/*/olko-implementation-pr-gates, olko-implementation-closure"
+version: 0.3.0
+description: "Steps 8-9: commit, push and a draft PR only after your explicit yes; PR check where you choose which findings to fix; Obsidian and editor gates; PR merge only after your yes, which leaves the Task worktree intact. Then the closure group: steps 11, 12, 12a, 12b and last the cleanup (13). Answering no ends the run with the work left in the worktree."
+source: "agents/opencode/olko-implementation-orchestrator.md and skills/workflow/olko-task-implementation-workflow/SKILL.md (workflow.md gates 11-13: delivery, PR check, merge-retain; post-merge stages in olko-impl-closure) and skills/*/olko-implementation-pr-gates, olko-implementation-closure"
 roles:
   publisher: medium
   implementer: medium
@@ -112,7 +112,7 @@ nodes:
       The user approved the merge of PR {{state.commit.commit.url}} for branch {{state.worktree.worktree.branch}} into {{state.worktree.worktree.base}}. Phase merge-retain only. Merge the PR, update the target branch, and keep the Task worktree {{state.worktree.worktree.path}} and its branch intact: do not remove the worktree or the branch and do not delete any plan.
       Return the PR URL and the merge commit.
   - id: closure
-    description: "Closure after a merge: acceptance E2E (11), post-merge runtime (12), worktree cleanup (13), then the Feature steps (12a, 12b)."
+    description: "Closure after a merge: acceptance E2E (11), post-merge runtime (12), the Feature steps (12a, 12b), then cleanup (13) with the run moved out of the worktree before it is removed."
     kind: group
     workflow: olko-impl-closure
 edges:

@@ -1,7 +1,7 @@
 name: olko-plan-entry
-version: 0.2.0
+version: 0.3.0
 description: "Planning entry: reads the Feature with its Tasks from the tracker (switch on) or takes the approved draft, and stops unless every Task has acceptance criteria."
-source: "agents/opencode/olko-plan-documentation-orchestrator.md (PLANNING entry gate: Feature context from the tracker or the approved draft; every Task needs acceptance criteria)"
+source: "agents/opencode/olko-plan-documentation-orchestrator.md (PLANNING entry gate: Feature context from the tracker or the approved draft; every Task needs acceptance criteria); skills/workflow/olko-feature-plan-workflow/workflow.md (step 1: resolve Feature/Task scope); skills/workflow/olko-feature-plan-workflow/edge-cases.md (Task without acceptance criteria: stop, never plan from a guessed criterion)"
 roles:
   plan-gate: medium
 entry: tracker-context
@@ -21,7 +21,7 @@ nodes:
     tools: [read, edit]
     parse: { json: [ok, featureId, featureDir, feature, tasks, taskIds, criteria, reason] }
     prompt: |
-      Do only the ENTRY GATE of IMPLEMENTATION PLANNING and the target part of step 1 of your workflow, in the project {{input.project}}. Delegate nothing and ask nothing.
+      Do only the ENTRY GATE of IMPLEMENTATION PLANNING and the target part of step 1 of olko-feature-plan-workflow, in the project {{input.project}}. Delegate nothing and ask nothing.
       {{#state.context.context}}
       Feature context from the tracker (read-only context of the backlog writer):
       {{hierarchy}}

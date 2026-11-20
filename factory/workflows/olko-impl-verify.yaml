@@ -1,7 +1,7 @@
 name: olko-impl-verify
-version: 0.2.0
+version: 0.3.0
 description: "Steps 4-7: style and affected tests until they pass, then the acceptance E2E recheck (step 5a), then the Docker rebuild in an isolated Compose project with runtime evidence (behind switches.docker)."
-source: "agents/opencode/olko-implementation-orchestrator.md (steps 4-7, step 5a ACCEPTANCE E2E RECHECK, WORKTREE COMPOSE ISOLATION)"
+source: "agents/opencode/olko-implementation-orchestrator.md and skills/workflow/olko-task-implementation-workflow/SKILL.md (workflow.md gates 6-7: style, affected tests, E2E implementation recheck, isolated rebuild and runtime evidence; WORKTREE COMPOSE ISOLATION)"
 entry: checks
 roles:
   runner: medium
@@ -20,7 +20,7 @@ nodes:
     dirs: ["{{state.task.task.featureDir}}"]
     parse: { line: [phase, verdict, detail] }
     prompt: |
-      Phase implementation for Task {{state.task.task.taskName}}, from the same manifest as the baseline in {{state.task.task.taskFile}}. Run only in the isolated worktree project of {{state.worktree.worktree.path}}, never the main stack or the shared database. Do not change any file.
+      Phase implementation for Task {{state.task.task.taskName}}, from the same manifest as the baseline: the Task manifest <e2eManifestDir>/<Task ID>.acceptance.json (e2eManifestDir from the project adapter, default {{state.task.task.featureDir}}/e2e); manifests live under plans/, never under tests/e2e. Pass every exact current Task acceptance criterion ID, read from the tracker; a missing or extra mapping blocks. Run only in the isolated worktree project of {{state.worktree.worktree.path}}, never the main stack or the shared database. Do not change any file.
       Report PASS, FAIL or NOT VERIFIED per criterion, compare each with the baseline result, and give the cleanup proof and the first actionable failure.
       End with one line, the verdict in lowercase: `implementation | <pass|fail|not verified> | <first failing criterion or blocker, cleanup proof>`
   - id: stop-e2e-recheck

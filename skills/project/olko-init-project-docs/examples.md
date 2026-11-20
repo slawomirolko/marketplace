@@ -28,10 +28,30 @@ Glossary: UTC — time without a time-zone offset.
 ## ADR log
 
 ```markdown
-| ADR | Title | Status | Scope |
-|---|---|---|---|
-| 0001 | UTC timestamps | Accepted | `src/**`, `web/src/**` |
+| ADR | Title | Status | Topic | Scope |
+|---|---|---|---|---|
+| 0001 | UTC timestamps | Accepted | time.storage | `src/**`, `web/src/**` |
+| 0004 | EF Core for data access | Accepted | persistence.orm | `src/**` |
+| 0007 | Dapper in the reports module | Accepted | persistence.orm | `src/Reports/**` |
+| 0011 | Raw ADO.NET for data access | Superseded by 0004 | persistence.orm | `src/**` |
 ```
+
+## ADR front matter
+
+```markdown
+---
+status: Accepted
+topic: persistence.orm
+scope: ["src/Reports/**"]
+decision: "The reports module reads data with Dapper, not EF Core."
+overrides: [ADR-0004]
+enforcedBy: archtest
+---
+
+# 0007. Dapper in the reports module
+```
+
+ADR-0004 (`src/**`) and ADR-0007 (`src/Reports/**`) have the same topic and overlapping scopes. The store is still valid: ADR-0007 `overrides` ADR-0004, so for a file in `src/Reports/` ADR-0007 binds, and for every other file in `src/` ADR-0004 binds. ADR-0004 has `supersedes: [ADR-0011]`.
 
 ## Rule file
 

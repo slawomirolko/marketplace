@@ -1,7 +1,7 @@
 name: olko-plan-grill
-version: 0.4.0
-description: "Step 7: grill-with-docs asks the whole batch of questions (three options, recommendation first), the answered batch is recorded in tracker.md in one step, the answers are applied together, the investigation workers re-validate the plan and the consistency gate runs; repeated for follow-up questions, at most three rounds."
-source: "agents/opencode/olko-plan-documentation-orchestrator.md (Step 7: grill-with-docs question batches, answers applied together, re-validation by the workers, consistency gate)"
+version: 0.5.0
+description: "Steps 7 and 8: grill-with-docs composes the whole batch of questions (three options, recommendation first), the question reviewer approves them against the decision registry, the answered batch is recorded in tracker.md in one step, the answers are applied together, the investigation workers re-validate the plan and the consistency gate runs; repeated for follow-up questions, at most three rounds."
+source: "agents/opencode/olko-plan-documentation-orchestrator.md (FEATURE PLAN BATCH: one question batch for the Feature and every Task; USER QUESTION GATE: questions composed by grill-with-docs, checked by olko-question-reviewer); skills/workflow/olko-feature-plan-workflow/workflow.md (steps 7-8: grill-with-docs question batches, answers applied together, re-validation by the workers, consistency gate)"
 roles:
   plan-gate: medium
   plan-worker: medium
@@ -25,23 +25,38 @@ nodes:
     maxVisits: 4
     parse: { json: [questions] }
     prompt: |
-      Grill the plan package {{state.feature.feature.featureDir}} (business.md, implementation.md, stack.md and the Task files) in the project {{input.project}} against the project's docs and code. Read only. Use the full plan context: the verified facts in the plan package and all known decisions and earlier question batches with their answers recorded in its tracker.md.
+      Grill the plan package {{state.feature.feature.featureDir}} (business.md, implementation.md, stack.md and the Task files of the Feature and every Task) in the project {{input.project}} against the project's docs and code. Read only. Use the full plan context: the verified facts in the plan package and all known decisions and earlier question batches with their answers recorded in its tracker.md.
       Gather every currently answerable question (business scope, mechanism, delivery, risks, non-goals, acceptance criteria, assumptions) as ONE batch; when tracker.md already records a closed batch, return only follow-up questions its answers raised, or none. Do not ask the user yourself; the workflow puts your questions to the user. Do not split a question or paraphrase it into new choices, and do not repeat a decision already locked.
       Every question has exactly 3 options, the recommended one first.
       Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the questions and options in that language, concisely.
       If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
       End with one ```json block, one item per question, its text in this layout:
       {"questions": [{"text": "Problem: <problem>\nWhy I am asking: <why>\n1. <recommended option> (recommended)\n   Business: <business consequence>\n   Change scope: <scope>\n2. <option>\n   Business: <business consequence>\n   Change scope: <scope>\n3. <option>\n   Business: <business consequence>\n   Change scope: <scope>\nGlossary: <terms, or leave this line out>"}]}
+      When .agents/skill-config.md sets questionReviewerAgent, also give each item the proposal fields the question reviewer requires: cluster, topic, topicTerms, decisionStatement or cites, artifacts (never empty), and the 3 options as {label, semantics, effect}.
+  - id: grill-review
+    description: "The question reviewer approves or rejects every grill question against the decision registry before the user sees it; only approved questions go on, copied unchanged."
+    kind: llm
+    role: plan-gate
+    agent: olko-question-reviewer
+    tools: [read, bash]
+    maxVisits: 4
+    parse: { json: [questions] }
+    prompt: |
+      Review this batch of grill questions for the Feature {{state.feature.feature.featureId}} (project {{input.project}}). Registry: questionRegistryPattern from .agents/skill-config.md (default {{state.feature.feature.featureDir}}/questions.json); tracker: {{state.feature.feature.featureDir}}/tracker.md. Follow your procedure; never reword, answer or add a question.
+      Batch:
+      {{state.grill.grill.text}}
+      When .agents/skill-config.md sets neither questionReviewerAgent nor questionGateCommand, the gate does not apply: approve every question with the reason `gate off`.
+      After your table, end with one ```json block that copies every APPROVED item of the batch unchanged: {"questions": [<approved items>]}
   - id: grill-next
     description: "Takes the next grill question of the batch."
     kind: script
     op: list.next
     maxVisits: 100
-    with: { over: grill.grill.questions }
+    with: { over: grill-review.grill-review.questions }
   - id: ask-grill
-    description: "Asks one grill question with three options, the recommended one first."
+    description: "Asks one grill question with three options, composed by grill-with-docs and approved by the question reviewer, the recommended one first."
     kind: interrupt
-    askedBy: grill
+    askedBy: [grill, grill-review]
     maxVisits: 100
     question:
       id: "q-plan-grill-{{state.grill-round.count}}-{{state.grill-next.index}}"
@@ -58,17 +73,18 @@ nodes:
     kind: llm
     role: plan-gate
     agent: olko-plan-documentation-orchestrator
-    tools: [read, edit]
+    tools: [read, edit, bash]
     maxVisits: 4
     parse: text
     prompt: |
-      HARD GATE of your workflow: record grill batch {{state.grill-round.count}}, every question with its answer, as one batch in {{state.feature.feature.featureDir}}/tracker.md (project {{input.project}}). Keep the plan files unchanged: edit only tracker.md, delegate nothing and ask nothing.
+      Step 7 of olko-feature-plan-workflow (one batched question loop): record grill batch {{state.grill-round.count}}, every question with its answer, as one batch in {{state.feature.feature.featureDir}}/tracker.md (project {{input.project}}). Keep the plan files unchanged: edit only tracker.md, delegate nothing and ask nothing.
       {{#state.grill-collect.items}}
       Question {{number}}:
       {{question}}
       The user's answer: option {{answer}}.
       {{/state.grill-collect.items}}
       Record the decisions in English per userDecisionRecordLanguage and userDecisionRecordStyle in .agents/skill-config.md (unset: the repository documentation language; concise translation): translate and compact faithfully, keep IDs and meaning-critical exact wording, and add no new decision.
+      When .agents/skill-config.md sets questionGateCommand, also register every approved question of the batch in the decision registry (questionRegistryPattern, default {{state.feature.feature.featureDir}}/questions.json) with its `propose` command and record each answer with its `answer` command, each as one bare command (python3 scripts/plan/question_gate.py ...); otherwise run no command.
       Reply with one line: `recorded | <number of questions>`.
   - id: grill-apply
     description: "Plan editor applies all answers of the batch together and records the batch closure in tracker.md."
@@ -118,7 +134,9 @@ edges:
   - { from: grill-round, to: END, when: "grill-round.count == 4", description: "three rounds done: the rest stays in Open items" }
   - { from: grill-round, to: grill, description: "fewer than three rounds" }
   - { from: grill, to: END, when: "grill.grill.questions == 0", description: "no open question" }
-  - { from: grill, to: grill-next, description: "the batch has questions" }
+  - { from: grill, to: grill-review, description: "the batch has questions: the question reviewer checks them" }
+  - { from: grill-review, to: END, when: "grill-review.grill-review.questions == 0", description: "the reviewer rejected every question: none is put to the user" }
+  - { from: grill-review, to: grill-next, description: "approved questions remain" }
   - { from: grill-next, to: ask-grill, when: "grill-next.done == false", description: "a question of the batch is left" }
   - { from: grill-next, to: grill-record, when: "grill-next.done == true", description: "every question of the batch answered" }
   - { from: ask-grill, to: grill-collect }

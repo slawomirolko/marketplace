@@ -4,6 +4,8 @@
 - Never overwrite an existing file. Create only the missing files.
 - A new entry for an existing file (an ADR, a log row, a rule, a C4 line) goes through the same grill question and is written as a shown diff after approval.
 - An existing entry that the code no longer follows → show the entry and the evidence, and ask: keep it, update it (exact new text), or mark the ADR `Superseded by NNNN` with a new ADR. Never change it silently.
+- An existing ADR without front matter → propose its `topic`, `scope`, `decision`, and `enforcedBy` in one question, and write them only after approval. To do this for the whole store, use the factory workflow `olko-adr-store-reconcile`.
+- `check-store.mjs` reports two `Accepted` ADRs with the same topic and overlapping scopes → ask the topic-collision question from `workflow.md` for that pair.
 
 ## Conflicts
 - A candidate rule contradicts `AGENTS.md` → stop on that candidate and ask which one holds; propose the fix to the other source. Write nothing for it until the user decides.
