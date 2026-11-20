@@ -146,6 +146,7 @@ function buildNode(workflow: WorkflowSpec, spec: WorkflowSpecNode): WorkflowNode
   if (spec.parallel) node.parallel = spec.parallel;
   if (spec.prompt) node.prompt = render(spec.prompt);
   if (spec.agentsFrom) node.agentsFrom = agentsFromPath(spec.agentsFrom);
+  if (spec.freshResults) node.freshResults = true;
   if (isParseSpec(spec.parse)) node.parse = buildParser(spec.parse);
   else if (spec.parse) throw new Error(`node ${spec.id}: unknown parser ${JSON.stringify(spec.parse)}; use text, {json: [...]} or {line: [...]}`);
   if (spec.op) {

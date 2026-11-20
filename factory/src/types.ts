@@ -198,6 +198,7 @@ export interface WorkflowNode {
   prompt?: (context: PromptContext) => string;
   agents?: Agent[];
   agentsFrom?: (state: WorkflowState | undefined) => Agent[];
+  freshResults?: boolean;
   script?: (context: ScriptContext) => Promise<ScriptResult>;
   parse?: (text: string) => unknown;
   skipIf?: (state: WorkflowState | undefined) => boolean;
@@ -421,6 +422,7 @@ export interface WorkflowSpecNode {
   agent?: string;
   agents?: WorkflowSpecAgent[];
   agentsFrom?: string;
+  freshResults?: boolean;
   op?: string;
   with?: Record<string, unknown>;
   prompt?: string;
