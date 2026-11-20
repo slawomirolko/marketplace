@@ -1,0 +1,103 @@
+name: olko-review-review
+version: 0.4.1
+description: "REVIEW route: a read-only review of someone else's PR or a fresh review of your own, from scope to posted comments. On the LOCAL route (a working tree against input.base) the ranked findings go back to the caller and nothing is posted."
+source: "agents/opencode/olko-review-orchestrator.md (REVIEW ROUTE)"
+roles:
+  orchestrator: medium
+entry: review-scope
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: review-scope
+    description: "Reads the PR (title, body, diff) and picks the lenses: bugs, one stack lens per changed stack, requirements when the PR states criteria."
+    kind: group
+    workflow: olko-review-scope
+  - id: memory
+    description: "Step 3: the review orchestrator loads its memory through olko-memory-layer: patterns to suppress (rejected twice) and to prioritize (confirmed once). Writes nothing."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    tools: [read]
+    parse: { json: [loaded, file, suppressText, prioritizeText] }
+    prompt: |
+      Do only step 3 of your REVIEW ROUTE (load memory). Read only: write no file and no memory.
+      Load `olko-memory-layer` first, then read only your own memory block. Count the `confirmed:<pattern>` and `rejected:<pattern>` lines per pattern and build the Suppress and Prioritize lists of step 3.
+
+      End with one ```json block:
+      {"loaded": <true when the block exists and was read, else false>, "file": "<path of your memory block>", "suppressText": "<suppressed patterns, comma separated, or none>", "prioritizeText": "<prioritized patterns, comma separated, or none>"}
+  - id: ask-memory
+    description: "Asks whether to continue without a memory block."
+    kind: interrupt
+    askedBy: memory
+    question:
+      id: q-memory-missing
+      text: "The review memory block {{state.memory.memory.file}} does not exist. Fix: install the agent memory with `node scripts/install-opencode-agents.mjs --project <project> --agent olko-review-orchestrator`. Continue this review without memory, or stop?"
+      allowed: [continue, stop]
+  - id: review-findings
+    description: "Runs the lenses in parallel on the diff, merges their findings and lets the verifier confirm or reject each one."
+    kind: group
+    workflow: olko-review-findings
+  - id: review-rules
+    description: "Checks the confirmed findings against the project rule store, verifies new violations and asks the user one question per conflict between a finding and the store."
+    kind: group
+    workflow: olko-review-rules
+  - id: after-rules
+    description: "Branches on the route: a local working tree returns its findings, a PR posts them."
+    kind: script
+    op: builtin.pass
+  - id: local-rank
+    description: "LOCAL route only: the review orchestrator ranks the kept findings by severity tier and returns the report to the caller."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    parse: { json: [kept] }
+    prompt: |
+      Do only steps 7 and 8 of your REVIEW ROUTE (rank and report) for a local diff. Read no file and post nothing.
+      Review of {{state.scope.scope.title}}
+
+      Kept findings:
+      {{#state.rules-merge.rules-merge.kept}}
+      - {{line}}{{#unchecked}} (rule unchecked){{/unchecked}}
+      {{/state.rules-merge.rules-merge.kept}}
+      Decided conflicts (`finding` keeps the finding with tier repo-rule, `store` drops it):
+      {{#state.rule-decided.rule-decided.decided}}
+      - {{kind}}: {{line}} -> {{holds}} holds. {{proposal}}
+      {{/state.rule-decided.rule-decided.decided}}
+      Lenses run: {{#state.scope.scope.lenses}}{{agentName}} {{/state.scope.scope.lenses}}
+      Lenses missing: {{#state.merge.merge.missing}}{{.}} {{/state.merge.merge.missing}}
+      Acceptance criteria: {{state.scope.scope.criteria}}
+      File types reviewed only by the bugs lens: {{#state.scope.scope.unreviewed}}{{.}} {{/state.scope.scope.unreviewed}}
+      Not reviewed (excluded): {{#state.scope.scope.excluded}}{{.}} {{/state.scope.scope.excluded}}
+      Dropped by the verifier:
+      {{#state.confirm.confirm.dropped}}
+      - {{line}} | {{reason}}
+      {{/state.confirm.confirm.dropped}}
+      Project rules check: {{#state.rules-merge.rules-merge.noStore}}no-store, skipped{{/state.rules-merge.rules-merge.noStore}}
+      Store violations per entry: {{#state.rules-count.counts}}{{value}} {{count}}; {{/state.rules-count.counts}}{{^state.rules-count.counts}}none{{/state.rules-count.counts}}
+      {{#state.rules-store-context.rules-store-context.blocked.length}}
+      Overlapping store topics (the user named the binding ADR for this review): {{#state.rules-store-context.rules-store-context.blocked}}{{topic}} ({{#adrs}}{{.}} {{/adrs}}); {{/state.rules-store-context.rules-store-context.blocked}}
+      Add to the report: these topics need one binding ADR; run the factory workflow olko-adr-store-reconcile with this project.
+      {{/state.rules-store-context.rules-store-context.blocked.length}}
+      {{#state.rules-merge.rules-merge.dropped}}
+      - dropped by the store: {{line}} | {{cite}}
+      {{/state.rules-merge.rules-merge.dropped}}
+      Memory: {{#state.memory.memory.loaded}}loaded{{/state.memory.memory.loaded}}{{^state.memory.memory.loaded}}not loaded (the user chose to continue without it){{/state.memory.memory.loaded}}
+
+      Write the step 8 report. Then end with one ```json block, findings in rank order:
+      {"kept": [{"line": "<finding>", "ruleId": "<rule-id>", "sev": "<sev>", "tier": "<bug|security|repo-rule|design|style|nit>", "unchecked": <true|false>}]}
+  - id: review-post
+    description: "Ranks the kept findings, asks post or skip for each one, posts one PR comment per post and records the decisions in the review memory."
+    kind: group
+    workflow: olko-review-post
+edges:
+  - { from: review-scope, to: memory }
+  - { from: memory, to: review-findings, when: "memory.memory.loaded == true", description: "memory block loaded" }
+  - { from: memory, to: ask-memory, when: "memory.memory.loaded != true", description: "no memory block yet" }
+  - { from: ask-memory, to: review-findings, when: 'ask-memory.answer == "continue"', description: "you chose continue without memory" }
+  - { from: ask-memory, to: END, when: 'ask-memory.answer == "stop"', description: "you chose stop" }
+  - { from: review-findings, to: review-rules }
+  - { from: review-rules, to: after-rules }
+  - { from: after-rules, to: local-rank, when: 'route.route.route == "LOCAL"', description: "local working tree: nothing to post" }
+  - { from: after-rules, to: review-post, description: "a PR: post the findings" }
+  - { from: local-rank, to: END }
+  - { from: review-post, to: END }

@@ -1,0 +1,29 @@
+name: olko-obsidian-knowledge-apply
+version: 0.1.0
+description: "Apply phase: after your approval and an unchanged re-check, writes exactly the approved creates and updates to the target. Writes go to the feature worktree docs/knowledge when the request names one, otherwise to the running vault through the Obsidian CLI. Nothing is deleted."
+source: "agents/opencode/olko-obsidian-knowledge-manager.md (steps 4-5 of the approval-gated workflow, worktree targeting rule, startup-registration fallbacks, no issue-fix notes rule)"
+roles:
+  writer: medium
+entry: write-notes
+nodes:
+  - id: write-notes
+    description: "Knowledge manager writes only the approved creates and updates, to the worktree or the vault, and reports the exact paths written."
+    kind: llm
+    role: writer
+    agent: olko-obsidian-knowledge-manager
+    tools: [read, edit, bash]
+    dirs: ["{{input.project}}", "{{input.worktree}}"]
+    parse: text
+    prompt: |
+      The user approved this proposal. Write exactly the approved text, without rewording it:
+      {{state.propose.propose}}
+      Request from the user: {{input.request}}
+
+      1. Write only the approved creates and updates. Never delete, rename or move a note. Never change the repository docs/knowledge files. Do not commit, push, change OpenCode configuration, install plugins or modify Obsidian plugin or theme files.
+      2. Worktree target: when the request names a feature worktree path (the step 8b reconciliation), write each approved note to <worktree>/docs/knowledge/<vault-relative path> with the file tools. Use UTF-8 without BOM. Never write to the main checkout docs/knowledge, because it is the running vault and the Obsidian CLI writes there land on main. If the Obsidian CLI is the only write path, write to the vault, copy the changed files into the worktree, then revert the vault changes so main stays clean.
+      3. Vault target: when no worktree path is named, load obsidian-cli and apply each approved create or update with the Obsidian CLI, using silent unless the user asked to open the note. Use no shell redirection and no direct file writes into a vault.
+      4. Before each write, re-read the target. Load olko-memory-layer before any memory read or write.
+      5. If the edit or write tools are unavailable, write worktree notes with bash using quoted here-documents (<<'EOF' ... EOF), as UTF-8 without BOM. Shell redirection must never target a running vault. State this tool gap in the result.
+      6. Report the exact paths written. Never report a write as done unless the bytes are on disk. Report any approved change that you could not write, with its reason.
+edges:
+  - { from: write-notes, to: END }

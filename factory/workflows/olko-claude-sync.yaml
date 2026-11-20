@@ -1,0 +1,90 @@
+name: olko-claude-sync
+version: 0.3.0
+description: "Synchronizes skills and agents between a Claude Code plugin marketplace (target), the Olko marketplace and your ~/.claude scope: inventory, match, compare, one decision per row, port through stage folders, apply one row at a time, publish a draft PR, optional consolidation. Every step runs on the sync manager and its marketplace workers."
+source: plugins/olko-sync/agents/olko-claude-sync-manager.md (phases 0-6)
+roles:
+  sync-worker: low
+  sync: medium
+entry: state-phase
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: state-phase
+    description: "Phase 0: prepares the sync state (Olko path, target, user scope) and asks once for leak terms that must never reach Olko."
+    kind: group
+    workflow: olko-claude-sync-state
+  - id: sources
+    description: "Phase 1: both marketplaces must be clean and current before anything is compared."
+    kind: group
+    workflow: olko-claude-sync-sources
+  - id: inventory-phase
+    description: "Phase 2: three inventory workers list every skill and agent per store, the matcher links copies into capabilities, probable links are confirmed and exclusions checked."
+    kind: group
+    workflow: olko-claude-sync-inventories
+  - id: compare-phase
+    description: "Phase 2 and 3: one comparator per capability returns a verdict; the sync manager builds the decision table."
+    kind: group
+    workflow: olko-claude-sync-compare
+  - id: decide-phase
+    description: "Phase 3: one decision per non-identical row; exclusions ask for their scope and reason and are recorded."
+    kind: group
+    workflow: olko-claude-sync-decide
+  - id: changes-gate
+    description: "Routes on whether any decided row changes a store."
+    kind: script
+    op: builtin.pass
+  - id: stage-phase
+    description: "Phase 4 Wave C: one porter per approved row translates it into its own stage folder and runs the sanitize gate; every finding and every missing dependency is decided by the user."
+    kind: group
+    workflow: olko-claude-sync-stage
+  - id: apply-phase
+    description: "Phase 4: applies one staged row at a time into Olko (registry or agent manifest, validation) or into the user scope after a yes, and records lineage."
+    kind: group
+    workflow: olko-claude-sync-apply
+  - id: publish-phase
+    description: "Phase 5: Olko tests and leak check, then a draft PR after approval, and leave, wait for CI or squash merge."
+    kind: group
+    workflow: olko-claude-sync-publish
+  - id: consolidate-phase
+    description: "Phase 6: offers the skill consolidator once; its suggestions are accepted into a plan file or rejected with a reason."
+    kind: group
+    workflow: olko-claude-sync-consolidate
+  - id: report
+    description: "The sync manager reports every row with its verdict and decision, what was applied and published, and the consolidation."
+    kind: llm
+    role: sync
+    agent: olko-claude-sync-manager
+    parse: text
+    prompt: |
+      Do only the report of your Phase 6; the consolidator was already offered. Ask nothing and run nothing.
+      Decided rows:
+      {{#state.plan.plan.decided}}
+      - {{id}} | {{verdict}} | {{decision}}
+      {{/state.plan.plan.decided}}
+      {{^state.plan}}
+      Compared rows (none needed a decision):
+      {{#state.rows.rows.rows}}
+      - {{id}} | {{verdict}} | none
+      {{/state.rows.rows.rows}}
+      {{/state.plan}}
+      Excluded:
+      {{#state.exclusions.exclusions.excluded}}
+      - {{id}} | excluded | {{reason}}
+      {{/state.exclusions.exclusions.excluded}}
+      Applied: {{#state.apply.apply.applied}}{{.}}; {{/state.apply.apply.applied}}{{^state.apply}}none{{/state.apply}}
+      Published: {{#state.publish-pr}}{{state.publish-pr.publish-pr.url}} on {{state.publish-pr.publish-pr.branch}}, {{#state.pr.merge}}squash merged as {{state.pr.merge.merge.commit}}{{/state.pr.merge}}{{^state.pr.merge}}not merged{{/state.pr.merge}}{{/state.publish-pr}}{{^state.publish-pr}}{{#state.apply.apply.olkoChanged}}Olko changes are in the working tree and not published.{{/state.apply.apply.olkoChanged}}{{^state.apply.apply.olkoChanged}}no Olko change to publish{{/state.apply.apply.olkoChanged}}{{/state.publish-pr}}
+      Consolidation: {{#state.consolidation-record}}{{state.consolidation-record.consolidation-record.accepted}} accepted (plan {{state.consolidation-record.consolidation-record.planFile}}), {{state.consolidation-record.consolidation-record.rejected}} rejected{{/state.consolidation-record}}{{^state.consolidation-record}}skipped{{/state.consolidation-record}}
+      Start with `Claude sync report`, then one line `row | <id> | <verdict> | <decision>` per row (excluded rows as `row | <id> | excluded | excluded`), then what was applied and published, then the consolidation. Never name the target or its path.
+edges:
+  - { from: state-phase, to: sources }
+  - { from: sources, to: inventory-phase }
+  - { from: inventory-phase, to: compare-phase }
+  - { from: compare-phase, to: decide-phase }
+  - { from: decide-phase, to: changes-gate }
+  - { from: changes-gate, to: stage-phase, when: "plan.plan.changes > 0", description: "some rows change a store" }
+  - { from: changes-gate, to: consolidate-phase, description: "nothing to apply" }
+  - { from: stage-phase, to: apply-phase }
+  - { from: apply-phase, to: publish-phase }
+  - { from: publish-phase, to: consolidate-phase }
+  - { from: consolidate-phase, to: report }
+  - { from: report, to: END }

@@ -1,0 +1,54 @@
+name: olko-plan-entry
+version: 0.3.0
+description: "Planning entry: reads the Feature with its Tasks from the tracker (switch on) or takes the approved draft, and stops unless every Task has acceptance criteria."
+source: "agents/opencode/olko-plan-documentation-orchestrator.md (PLANNING entry gate: Feature context from the tracker or the approved draft; every Task needs acceptance criteria); skills/workflow/olko-feature-plan-workflow/workflow.md (step 1: resolve Feature/Task scope); skills/workflow/olko-feature-plan-workflow/edge-cases.md (Task without acceptance criteria: stop, never plan from a guessed criterion)"
+roles:
+  plan-gate: medium
+entry: tracker-context
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: tracker-context
+    description: "Reads the Feature, its Epic and every child Task from the tracker; skipped when switches.tracker is off."
+    kind: subgraph
+    workflow: olko-plan-tracker-context
+    enabledWhen: "switches.tracker == true"
+  - id: feature
+    description: "The plan documentation orchestrator runs the entry gate: it picks the Feature context, requires acceptance criteria on every Task, resolves the plan folder and starts its tracker.md."
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    tools: [read, edit]
+    parse: { json: [ok, featureId, featureDir, feature, tasks, taskIds, criteria, reason] }
+    prompt: |
+      Do only the ENTRY GATE of IMPLEMENTATION PLANNING and the target part of step 1 of olko-feature-plan-workflow, in the project {{input.project}}. Delegate nothing and ask nothing.
+      {{#state.context.context}}
+      Feature context from the tracker (read-only context of the backlog writer):
+      {{hierarchy}}
+      Tasks with their acceptance criteria:
+      {{#tasks}}
+      - {{id}} {{title}}: {{#criteria}}{{.}}; {{/criteria}}
+      {{/tasks}}
+      {{/state.context.context}}
+      {{#state.draft.draft}}
+      Approved Epic/Feature/Task draft:
+      {{hierarchy}}
+      Tasks with their acceptance criteria:
+      {{#tasks}}
+      - {{id}} {{title}}: {{#criteria}}{{.}}; {{/criteria}}
+      {{/tasks}}
+      {{/state.draft.draft}}
+      When both are given, use the tracker context: it is the published hierarchy.
+      The gate fails (ok false) when no Feature context is given, when it is an Epic and not a Feature, when the Feature has no child Task, or when a Task has no acceptance criteria. Never plan from a criterion you would have to guess: name the missing items in reason, and create no file.
+      When the gate passes: the Feature id is {{#input.featureId}}{{input.featureId}}{{/input.featureId}}{{^input.featureId}}the Feature issue id, else a short lowercase slug of the Feature title{{/input.featureId}}, and the plan folder is plans/features/<feature-id>. Create plans/features/<feature-id>/tracker.md with the entry gate result: the Feature, its Epic goal, every Task with its acceptance criteria and the accepted decisions. Write only that file.
+      End with one ```json block: {"ok": <true|false>, "featureId": "<feature-id>", "featureDir": "plans/features/<feature-id>", "feature": "<the Epic goal, the Feature goal and its criteria as markdown>", "tasks": "<every Task with its acceptance criteria as markdown>", "taskIds": ["<task-id>"], "criteria": "<the Feature and Task acceptance criteria, semicolon separated>", "reason": "<why the gate failed, or empty>"}
+  - id: entry-stop
+    description: "Stops planning when the entry gate fails: never plan from a guessed criterion."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Entry gate: no Feature context, no child Task, or a Task without acceptance criteria. Planning stopped; the feature step output names the missing items. Route to the backlog writer draft first." }
+edges:
+  - { from: tracker-context, to: feature }
+  - { from: feature, to: END, when: "feature.feature.ok == true", description: "the Feature and every Task have acceptance criteria" }
+  - { from: feature, to: entry-stop, description: "the entry gate failed" }
+  - { from: entry-stop, to: END }

@@ -1,6 +1,6 @@
 ---
 name: olko-feature-plan-workflow
-version: 1.0.0
+version: 1.1.0
 description: "Feature/Epic implementation planning lifecycle, including batched revalidation, review, E2E matrix authoring, and readiness gates."
 ---
 

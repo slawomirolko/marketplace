@@ -1,0 +1,56 @@
+name: olko-review-plan-findings
+version: 0.2.0
+description: "Runs the requirements lens in plan mode on the plan file and lets the verifier confirm each finding against the plan text."
+source: "agents/opencode/olko-review-orchestrator.md (PLAN ROUTE, steps 1 to 3: lens and verification)"
+roles:
+  orchestrator: medium
+  lens: medium
+  verifier: medium
+entry: plan-lens
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: plan-lens
+    description: "Runs the requirements lens in plan mode on the plan file."
+    kind: llm
+    role: lens
+    agents:
+      - { id: requirements, agent: olko-review-requirements-lens }
+    parse: text
+    prompt: |
+      Mode: plan
+      Acceptance criteria: {{input.criteria}}{{^input.criteria}}none{{/input.criteria}}
+
+      Plan file: {{input.plan}}. Read it: it is the plan text.
+  - id: plan-verify
+    description: "The verifier checks the plan findings against the plan text."
+    kind: llm
+    role: verifier
+    agent: olko-review-verifier
+    parse: text
+    prompt: |
+      Plan review of {{input.plan}}. The findings quote plan steps; read the plan file and check them against its text.
+      Lens output `none` means no finding: reply with nothing.
+
+      Findings, one per line:
+      {{state.plan-lens.requirements}}
+  - id: plan-confirm
+    description: "The review orchestrator keeps the confirmed plan findings."
+    kind: llm
+    role: orchestrator
+    agent: olko-review-orchestrator
+    parse: { json: [confirmed, dropped] }
+    prompt: |
+      Do only step 3 of your PLAN ROUTE: keep CONFIRMED and CONFIRMED-UNCHECKED findings. Read no file.
+      Lens findings:
+      {{state.plan-lens.requirements}}
+
+      Verifier output:
+      {{state.plan-verify.plan-verify}}
+
+      A finding without a verdict is dropped with the reason `no verdict returned`. Lens output `none`: both lists are empty.
+      End with one ```json block: {"confirmed": [{"line": "<finding>", "unchecked": <true for CONFIRMED-UNCHECKED>}], "dropped": [{"line": "<finding>", "reason": "<the verifier reason>"}]}
+edges:
+  - { from: plan-lens, to: plan-verify }
+  - { from: plan-verify, to: plan-confirm }
+  - { from: plan-confirm, to: END }

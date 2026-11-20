@@ -1,0 +1,99 @@
+name: olko-review-feedback
+version: 0.3.0
+description: "FEEDBACK route: works through CI state and review comments on your own PR, decides each item with the user, implements agreed fixes and drafts replies."
+source: "agents/opencode/olko-review-orchestrator.md (FEEDBACK ROUTE) and agents/opencode/olko-review-feedback-handler.md"
+roles:
+  feedback: medium
+entry: fb-items
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: fb-items
+    description: "Reads CI state and unresolved review comments of your own PR, assesses each item and asks one decision per item."
+    kind: group
+    workflow: olko-review-feedback-items
+  - id: fb-plan
+    description: "The feedback handler collects the fixes and the replies to draft."
+    kind: llm
+    role: feedback
+    agent: olko-review-feedback-handler
+    parse: { json: [fixes, fixItems, replies] }
+    prompt: |
+      Do only the planning part of step 5 of your workflow. Change no file and ask nobody: the factory asks the user.
+      Items:
+      {{#state.fb-check.fb-check.items}}
+      - item {{index}} {{path}}:{{line}}
+      {{#comments}}
+        - {{kind}} {{id}} by {{author}} ({{url}}): {{body}}
+      {{/comments}}
+      {{/state.fb-check.fb-check.items}}
+      Decisions, as the user's answers to q-feedback-<item index> (an item without such an answer is skip):
+      {{#each.answers}}
+      - {{key}}: {{value}}
+      {{/each.answers}}
+      End with one ```json block: {"fixes": <number of fix items>, "fixItems": [<each fix item with its path, line and comments>], "replies": [<each wont-fix and question item: {"index", "path", "line", "decision", "comments"}>]}
+  - id: fb-implement
+    description: "Asks whether to implement the fixes now."
+    kind: interrupt
+    askedBy: fb-plan
+    question:
+      id: q-feedback-implement
+      text: "{{state.fb-plan.fb-plan.fixes}} items have the decision fix. Implement them now?"
+      allowed: ["yes", "no"]
+  - id: fb-fix
+    description: "The feedback handler implements the agreed fixes one item at a time and verifies them."
+    kind: llm
+    role: feedback
+    agent: olko-review-feedback-handler
+    tools: [read, edit, bash]
+    parse: { line: [result, detail] }
+    prompt: |
+      Do only step 6 of your workflow: implement these agreed fixes one item at a time, then verify with `olko-test`. On a failure, report it and stop. Do not commit, push, post or resolve threads.
+      {{#state.fb-plan.fb-plan.fixItems}}
+      - {{path}}:{{line}}
+      {{#comments}}
+        - {{author}}: {{body}}
+      {{/comments}}
+      {{/state.fb-plan.fb-plan.fixItems}}
+      End with one line: `<pass|fail> | <what changed and where, or what failed>`
+  - id: fb-fix-failed
+    description: "Stops: a fix or its verification failed."
+    kind: script
+    op: builtin.stop
+    with: { reason: "a review fix or its verification failed; the fb-fix output has the details" }
+  - id: fb-replies
+    description: "Drafts one reply per wont-fix or question item and posts it only after the user says post."
+    kind: group
+    workflow: olko-review-feedback-replies
+  - id: fb-report
+    description: "The feedback handler reports CI state, decisions, fixes and posted replies."
+    kind: llm
+    role: feedback
+    agent: olko-review-feedback-handler
+    parse: text
+    prompt: |
+      Report to the user, and change nothing:
+      CI: {{state.fb-check.fb-check.ci}}
+      Items and decisions:
+      {{#state.fb-check.fb-check.items}}
+      - item {{index}} {{path}}:{{line}} ({{comments.length}} comments)
+      {{/state.fb-check.fb-check.items}}
+      Decisions, as the user's answers to q-feedback-<item index>:
+      {{#each.answers}}
+      - {{key}}: {{value}}
+      {{/each.answers}}
+      Implementation: {{state.fb-implement.answer}}{{^state.fb-implement.answer}}nothing to implement{{/state.fb-implement.answer}}. {{state.fb-fix.fb-fix.detail}}
+      Replies posted:
+      {{#state.fb-post.fb-post.posted}}
+      - {{.}}
+      {{/state.fb-post.fb-post.posted}}
+edges:
+  - { from: fb-items, to: fb-plan }
+  - { from: fb-plan, to: fb-implement, when: "fb-plan.fb-plan.fixes > 0", description: "some items are fix" }
+  - { from: fb-plan, to: fb-replies, when: "fb-plan.fb-plan.fixes == 0", description: "nothing to fix" }
+  - { from: fb-implement, to: fb-fix, when: 'fb-implement.answer == "yes"', description: "you chose to implement now" }
+  - { from: fb-implement, to: fb-replies, when: 'fb-implement.answer == "no"', description: "you chose not now" }
+  - { from: fb-fix, to: fb-replies, when: 'fb-fix.fb-fix.result == "pass"', description: "fixes verified" }
+  - { from: fb-fix, to: fb-fix-failed, description: "a fix or its verification failed" }
+  - { from: fb-replies, to: fb-report }
+  - { from: fb-report, to: END }

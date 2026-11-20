@@ -1,0 +1,65 @@
+name: olko-plan-finalize
+version: 0.3.0
+description: "Step 13 and the triage of step 8: tracker triage (switch on), the write-free Domain changes recommendation, the memory record, opening the plan in the editor (switch on) and the completion report."
+source: "skills/workflow/olko-feature-plan-workflow/workflow.md (step 8: impact triage when a Task boundary changed; step 13: olko-plan-finalization with Domain changes recommendation, memory, editor, scope check, completion report)"
+roles:
+  plan-gate: medium
+  plan-worker: medium
+entry: tracker-triage
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: tracker-triage
+    description: "Drafts an issue-level change when decisions changed Task scope; skipped when switches.tracker is off."
+    kind: subgraph
+    workflow: olko-plan-tracker-triage
+    enabledWhen: "switches.tracker == true"
+  - id: knowledge-final
+    description: "Knowledge manager recommends Obsidian note changes without writing the vault."
+    kind: llm
+    role: plan-worker
+    agent: olko-obsidian-knowledge-manager
+    parse: text
+    prompt: |
+      Write-free post-implementation Obsidian recommendation for the approved plan {{state.feature.feature.featureDir}} (project {{input.project}}): list the affected note paths, whether each needs creation or an update, and the related mechanism. Do not change the vault.
+  - id: domain
+    description: "Writes the Domain changes section of business.md from that recommendation."
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    tools: [read, edit]
+    parse: text
+    prompt: |
+      Do only step 9 of olko-plan-finalization: add or replace the `## Domain changes` section of {{state.feature.feature.featureDir}}/business.md (project {{input.project}}) from this verified recommendation, stating that vault changes stay separately approval-gated after implementation. Edit only that section.
+      {{state.knowledge-final.knowledge-final}}
+  - id: memory
+    description: "Records verified flow improvements in the planner memory block and updates tracker.md."
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    tools: [read, edit]
+    parse: text
+    prompt: |
+      Do only step 10 of olko-plan-finalization in the project {{input.project}}: append verified flow improvements from this planning run to your own memory block .opencode/memory/olko-plan-documentation-orchestrator.md (create it when missing), then update the gate status in {{state.feature.feature.featureDir}}/tracker.md. Edit only those two files.
+  - id: editor
+    description: "Opens the plan folder in VS Code; skipped when switches.editor is off."
+    kind: subgraph
+    workflow: olko-plan-editor-open
+    enabledWhen: "switches.editor == true"
+  - id: report
+    description: "The plan documentation orchestrator writes the completion report with every plan path, the Domain changes result, the auditors and the readiness verdict."
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    tools: [read]
+    parse: text
+    prompt: |
+      Write only the COMPLETION REPORT of olko-plan-finalization for full Feature planning of {{state.feature.feature.featureDir}} (project {{input.project}}). Read the plan folder and its tracker.md; change no file, delegate nothing and ask nothing.
+      Include all four shared Feature paths and every Task plan path, the `## Domain changes` result of business.md (write-free recommendation, vault changes pending a separate approval after implementation), the consistency result or each resolved mismatch, grill approval, the auditors selected or skipped with reasons, whether either document changed, evidence-backed findings, the `Ready for implementation` verdict and unresolved blockers.
+edges:
+  - { from: tracker-triage, to: knowledge-final }
+  - { from: knowledge-final, to: domain }
+  - { from: domain, to: memory }
+  - { from: memory, to: editor }
+  - { from: editor, to: report }
+  - { from: report, to: END }

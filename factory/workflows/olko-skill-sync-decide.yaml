@@ -1,0 +1,86 @@
+name: olko-skill-sync-decide
+version: 0.4.0
+description: "Phase 3: one decision per non-identical artifact, one question per turn, each composed by grill-with-docs (the user question gate) from the complete decision table, the comparison evidence and the proposed bumps and versions, with the actions its classification allows; then one question for the accepted test suggestion ids across all artifacts, also composed by grill-with-docs, asked only when the advisor offered at least one id."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 3, user question gate, response language)"
+roles:
+  grill: medium
+entry: decide-next
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: decide-next
+    description: "Takes the next non-identical artifact."
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: rows.rows.decide }
+  - id: decide-grill
+    description: "grill-with-docs composes the decision question for this one artifact from the complete decision table, the comparison evidence and the proposed bump and version, in the user's response language; it asks nothing itself and changes no file."
+    kind: llm
+    role: grill
+    skill: grill-with-docs
+    tools: [read]
+    maxVisits: 200
+    parse: text
+    prompt: |
+      Compose the decision question for exactly one artifact, one question per turn. Earlier decisions are closed: do not re-ask them, do not split a recorded decision into new options, and add no follow-up.
+      Artifact {{state.decide-next.number}} of {{state.decide-next.total}}: {{state.decide-next.item.line}}
+      Allowed decisions, offer exactly these and no other: {{#state.decide-next.item.options}}`{{.}}` {{/state.decide-next.item.options}}
+      For a local-only artifact ask whether it should be created in the marketplace and show its candidate version; for an adapter-candidate recommend move-to-adapter. Say that nothing changes until the user decides, and that revert-local overwrites the local copy and gets one final confirmation before it runs.
+      Complete decision table:
+      {{state.rows.rows.table}}
+      Verified comparison evidence, per artifact:
+      {{#each.state.compare}}
+      - {{key}}: {{value.classification}}; marketplace {{value.marketplaceVersion}}; bump {{value.bump}}; proposed next version {{value.nextVersion}}; recommended {{value.action}}
+      {{/each.state.compare}}
+      Return the question text only; the workflow puts it to the user and waits for the answer. Change no file.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{state.discover.discover.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely; keep the decision words exactly as given.
+      If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
+  - id: decide
+    description: "Puts the decision question composed by grill-with-docs to the user (create, adopt, revert-local, move-to-adapter, leave...)."
+    kind: interrupt
+    askedBy: decide-grill
+    maxVisits: 200
+    question:
+      id: "q-sync-{{state.decide-next.index}}"
+      text: "{{state.decide-grill.decide-grill}}"
+      allowedFrom: state.decide-next.item.options
+  - id: tests-grill
+    description: "grill-with-docs composes the one question for the accepted test suggestions, across all artifacts (identical ones included), in the user's response language; it asks nothing itself and changes no file."
+    kind: llm
+    role: grill
+    skill: grill-with-docs
+    tools: [read]
+    parse: text
+    prompt: |
+      Compose one question: which test coverage advisor suggestions does the user accept? All per-artifact decisions are closed: do not re-ask them and add no follow-up.
+      Advisor suggestions, a draft for the user's review:
+      {{state.rows.rows.tests}}
+      Suggestion ids, offer exactly these and no other: {{#state.rows.rows.testIds}}`{{.}}` {{/state.rows.rows.testIds}}
+      Say that the answer is the accepted suggestion ids, comma separated, or `none`, and that accepted tests go into the marketplace pull request and cause no version bump.
+      Return the question text only; the workflow puts it to the user and waits for the answer. Change no file.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{state.discover.discover.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely; keep the suggestion ids and `none` exactly as given.
+      If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
+  - id: decide-tests
+    description: "Puts the test question composed by grill-with-docs to the user. Free text: suggestion ids, comma separated, or none."
+    kind: interrupt
+    askedBy: tests-grill
+    question:
+      id: q-tests
+      text: "{{state.tests-grill.tests-grill}}"
+  - id: grill-blocked-decide
+    description: "Stops the run when grill-with-docs cannot be loaded: the tooling blocker is reported and nothing is asked of the user directly."
+    kind: script
+    op: builtin.stop
+    with: { reason: "grill-with-docs cannot be loaded: the sync stopped in phase 3 without asking the user for decisions; nothing was changed." }
+edges:
+  - { from: decide-next, to: decide-grill, when: "decide-next.done == false", description: "a non-identical artifact is left: grill-with-docs composes its question" }
+  - { from: decide-next, to: tests-grill, when: "decide-next.done == true && rows.rows.testIds > 0", description: "all decided and the advisor offered suggestion ids: grill-with-docs composes the one test question" }
+  - { from: decide-next, to: END, when: "decide-next.done == true", description: "all decided and no suggestion id was offered: no test question; the plan reads an unanswered q-tests as none" }
+  - { from: decide-grill, to: grill-blocked-decide, when: 'decide-grill.decide-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded: stop" }
+  - { from: decide-grill, to: decide, description: "grill-with-docs composed the question: put it to the user" }
+  - { from: tests-grill, to: grill-blocked-decide, when: 'tests-grill.tests-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded: stop" }
+  - { from: tests-grill, to: decide-tests, description: "grill-with-docs composed the test question: put it to the user" }
+  - { from: grill-blocked-decide, to: END, description: "never reached: grill-blocked-decide fails the run" }
+  - { from: decide, to: decide-next }
+  - { from: decide-tests, to: END }

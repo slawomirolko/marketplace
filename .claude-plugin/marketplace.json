@@ -9,6 +9,11 @@
       "name": "olko-sync",
       "source": "./plugins/olko-sync",
       "description": "Sync skills and agents between a Claude plugin marketplace, the Olko marketplace, and ~/.claude; consolidate overlapping skills"
+    },
+    {
+      "name": "skill-factory",
+      "source": "./factory",
+      "description": "Software factory over MCP with per-agent cost and a local run page; starts by itself when the plugin is enabled"
     }
   ]
 }

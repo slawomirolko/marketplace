@@ -1,0 +1,111 @@
+name: olko-impl-checks
+version: 0.2.0
+description: "Steps 4-5 as a callable step: style check of the changed files and the affected tests of every stack, with fix rounds by the stack implementers (style problems in test files go to the test author); stops after four rounds. Input: plan (the Task plan file), featureDir (its Feature folder) and base (the branch the worktree started from)."
+source: "agents/opencode/olko-implementation-orchestrator.md (steps 4 and 5, report every failure, never waive it)"
+roles:
+  implementer: medium
+  runner: low
+  orchestrator: medium
+entry: stacks
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: stacks
+    description: "The implementation orchestrator names the stacks of the Task plan and their implementers, test runners and test author from its allowlist."
+    kind: llm
+    role: orchestrator
+    agent: olko-implementation-orchestrator
+    tools: [read]
+    dirs: ["{{input.featureDir}}"]
+    parse: { json: [stacks, authors, implementers, runners] }
+    prompt: |
+      Read only: name the stacks that the Task plan {{input.plan}} touches and choose the agents of each stack by your stack rule and your permission.task allowlist. Delegate nothing, ask nothing and change no file.
+      Stack ids: dotnet, army-python, mobile, react, react-native. Never invent an agent name and never leave one null: the implementer of a stack is olko-<stack id>-implementer and its test runner is olko-<stack id>-test-runner, both in your permission.task allowlist.
+      End with one ```json block, one item per stack in each list: {"stacks": ["<stack id>"], "authors": [{"id": "<stack id>", "agentName": "olko-test-first-author"}], "implementers": [{"id": "<stack id>", "agentName": "<the stack implementer>"}], "runners": [{"id": "<stack id>", "agentName": "<the stack test runner>"}]}
+  - id: checks-round
+    description: "Counts the check rounds."
+    kind: script
+    op: builtin.count
+    maxVisits: 4
+  - id: style
+    description: "olko-commit-style checks the changed files of the worktree (read only)."
+    kind: llm
+    role: runner
+    skill: olko-commit-style
+    tools: [read, bash]
+    maxVisits: 4
+    parse: { line: [check, verdict, detail] }
+    prompt: |
+      Check coding style of the files changed in this worktree against branch {{input.base}} (git diff {{input.base}}... and new files). Report only; do not change files, commit or push.
+      End with one line, the verdict in lowercase: `style | <pass|fail> | <violations with file:line, or none>`
+  - id: runners
+    description: "The stack test runners run the affected tests in parallel (read only)."
+    kind: llm
+    role: runner
+    agentsFrom: state.stacks.stacks.runners
+    tools: [read, bash]
+    maxVisits: 4
+    parse: { line: [check, verdict, detail] }
+    prompt: |
+      Run the affected {{agent.id}} test scope for the changes in this worktree against branch {{input.base}}. Task plan: {{input.plan}}. Do not change any file.
+      End with one line, the verdict in lowercase: `tests | <pass|fail> | <command and first actionable failure, or none>`
+  - id: check
+    description: "The implementation orchestrator collects style and test results, records them in the journal and decides: pass, style problems in test files to the test author, other failures to the implementers."
+    kind: llm
+    role: orchestrator
+    agent: olko-implementation-orchestrator
+    tools: [read, edit]
+    maxVisits: 4
+    dirs: ["{{input.featureDir}}"]
+    parse: { json: [verdict, failures, testFailures] }
+    prompt: |
+      Steps 4 and 5, check round {{state.checks-round.count}}: collect these results, record them in the implementation journal of {{input.plan}} (### Verification) and decide. Report every failure; never hide or waive one. Delegate nothing, ask nothing and change no code or test.
+      Style: {{state.style.style.verdict}} | {{state.style.style.detail}}
+      Tests:
+      {{#each.state.runners}}
+      {{key}}: {{value.verdict}} | {{value.detail}}
+      {{/each.state.runners}}
+      Verdict: `pass` only when style and every test runner pass; `fix-tests` when a style problem is in a test file (only the test author may change tests); otherwise `fix`.
+      End with one ```json block: {"verdict": "<pass|fix|fix-tests>", "failures": ["<style or test failure outside test files>"], "testFailures": ["<style problem inside a test file>"]}
+  - id: fix
+    description: "The stack implementers fix the reported failures without touching the failing-test-first files."
+    kind: llm
+    role: implementer
+    agentsFrom: state.stacks.stacks.implementers
+    tools: [read, edit, bash]
+    maxVisits: 3
+    parse: text
+    prompt: |
+      Fix only these {{agent.id}} style or test failures in this worktree (Task plan {{input.plan}}). Do not change the failing-test-first tests, do not add comments or plan ids to code, do not touch CI/CD workflow files. When a failing test looks wrong, report `Test dispute:` instead of changing it.
+      {{#state.check.check.failures}}
+      - {{.}}
+      {{/state.check.check.failures}}
+  - id: fix-tests
+    description: "olko-test-first-author fixes style problems in the test files without changing what the tests prove; implementers never touch tests."
+    kind: llm
+    role: implementer
+    agent: olko-test-first-author
+    tools: [read, edit, bash]
+    maxVisits: 3
+    parse: text
+    prompt: |
+      Mode: style fix of your own tests. Task plan {{input.plan}}. Fix only these style problems in the test files of this worktree; keep every test proving the same criterion, never weaken an assertion, add no comments, change no production code, and run the changed tests.
+      {{#state.check.check.testFailures}}
+      - {{.}}
+      {{/state.check.check.testFailures}}
+  - id: stop-checks
+    description: "Stops: failures are reported, never waived."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Implementation stopped: style or tests still fail after {{state.checks-round.count}} rounds:\n{{#state.check.check.failures}}{{.}}\n{{/state.check.check.failures}}{{#state.check.check.testFailures}}{{.}}\n{{/state.check.check.testFailures}}" }
+edges:
+  - { from: stacks, to: checks-round }
+  - { from: checks-round, to: style }
+  - { from: style, to: runners }
+  - { from: runners, to: check }
+  - { from: check, to: END, when: 'check.check.verdict == "pass"', description: "style and tests pass" }
+  - { from: check, to: stop-checks, when: "checks-round.count >= 4", description: "still failing after four rounds" }
+  - { from: check, to: fix-tests, when: 'check.check.verdict == "fix-tests"', description: "style problems in test files" }
+  - { from: check, to: fix, description: "production code or tests fail" }
+  - { from: fix-tests, to: checks-round }
+  - { from: fix, to: checks-round }

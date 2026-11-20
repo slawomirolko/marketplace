@@ -1,0 +1,78 @@
+name: olko-skill-sync-sources
+version: 0.3.0
+description: "Prepares both sides: the marketplace path, memory and missing skills, and a safe, current marketplace checkout (phase 1 by the sync manager: clean, on main, fast-forwarded; asks before switching branch through a question composed by grill-with-docs and stops the run otherwise)."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (startup, phase 1, user question gate, response language)"
+roles:
+  sync: medium
+  grill: medium
+entry: path
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: path
+    description: "Finds the marketplace checkout (input, MARKETPLACE_PATH, project adapter, fallback) and asks before using the built-in fallback."
+    kind: group
+    workflow: olko-skill-sync-path
+  - id: prepare
+    description: "Loads the manager memory and lets the bootstrapper install registry skills missing from the project."
+    kind: group
+    workflow: olko-skill-sync-prepare
+  - id: safe-source
+    description: "Phase 1: the sync manager requires a clean marketplace worktree on main, then fetches and pulls origin/main fast-forward only. It switches to main only after your answer."
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    tools: [read, bash]
+    dirs: ["{{state.resolve-path.resolve-path.path}}"]
+    maxVisits: 2
+    parse: { json: [ok, reason, detail, head?] }
+    prompt: |
+      Do only Phase 1 (establish safe sources) for the marketplace checkout {{state.resolve-path.resolve-path.path}}. Use `git -C` on that path. Do not compare, edit or commit anything.
+      {{#answers.q-marketplace-main}}The user answered `{{answers.q-marketplace-main}}` to switching the checkout to main: when the answer is `switch` and the worktree is clean, run `git checkout main` first.{{/answers.q-marketplace-main}}{{^answers.q-marketplace-main}}The user has not approved a branch switch: when the checkout is not on main, do not switch; report the branch.{{/answers.q-marketplace-main}}
+      Stop at the first failing check: not a Git repository or status fails, dirty worktree, not on main, missing origin remote, fetch failure, fast-forward pull failure.
+
+      End with one ```json block:
+      {"ok": <true only when the checkout is clean, on main and fast-forwarded to origin/main>, "reason": "<ok|status|dirty|not-main|checkout|no-remote|fetch|pull>", "detail": "<the branch name for not-main, else what failed or the head>", "head": "<HEAD sha when ok, else null>"}
+  - id: main-grill
+    description: "grill-with-docs composes the one question whether to switch the marketplace checkout to main, in the user's response language; it asks nothing itself and changes no file."
+    kind: llm
+    role: grill
+    skill: grill-with-docs
+    tools: [read]
+    maxVisits: 2
+    parse: text
+    prompt: |
+      Compose one question, one question per turn: the marketplace checkout {{state.resolve-path.resolve-path.path}} is on branch {{state.safe-source.safe-source.detail}}, not main. The sync compares only against a clean main fast-forwarded to origin/main. Switch the checkout to main, or stop the sync?
+      Return the question text only, with the choices `switch` and `stop`; the workflow puts it to the user and waits for the answer. Add no other option or follow-up and change no file.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely; keep the choice words exactly as given.
+      If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
+  - id: ask-main
+    description: "Puts the switch-to-main question composed by grill-with-docs to the user: switch or stop."
+    kind: interrupt
+    askedBy: main-grill
+    question:
+      id: q-marketplace-main
+      text: "{{state.main-grill.main-grill}}"
+      allowed: [switch, stop]
+  - id: grill-blocked-sources
+    description: "Stops the run when grill-with-docs cannot be loaded: the tooling blocker is reported and nothing is asked of the user directly."
+    kind: script
+    op: builtin.stop
+    with: { reason: "grill-with-docs cannot be loaded: the sync stopped without asking the user about switching the marketplace checkout to main." }
+  - id: stop-unsafe
+    description: "Stops the run: the marketplace checkout is not safe to compare against."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Sync stopped before any comparison: the marketplace checkout is not safe; the safe-source step names what failed." }
+edges:
+  - { from: path, to: prepare }
+  - { from: prepare, to: safe-source }
+  - { from: safe-source, to: END, when: "safe-source.safe-source.ok == true", description: "clean and current" }
+  - { from: safe-source, to: main-grill, when: 'safe-source.safe-source.reason == "not-main"', description: "not on main: grill-with-docs composes the question" }
+  - { from: safe-source, to: stop-unsafe, description: "dirty, no remote or pull failed" }
+  - { from: main-grill, to: grill-blocked-sources, when: 'main-grill.main-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded: stop" }
+  - { from: main-grill, to: ask-main, description: "grill-with-docs composed the question: put it to the user" }
+  - { from: grill-blocked-sources, to: END, description: "never reached: grill-blocked-sources fails the run" }
+  - { from: ask-main, to: safe-source, when: 'ask-main.answer == "switch"', description: "you chose switch" }
+  - { from: ask-main, to: stop-unsafe, when: 'ask-main.answer == "stop"', description: "you chose stop" }
+  - { from: stop-unsafe, to: END, description: "never reached: stop-unsafe fails the run" }

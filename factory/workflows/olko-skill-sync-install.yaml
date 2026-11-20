@@ -1,0 +1,32 @@
+name: olko-skill-sync-install
+version: 0.3.0
+description: "After the merge, the sync manager installs the merged artifacts from origin/main into the project and verifies them against the published commit. Memory saving happens in olko-skill-sync-publish, after the local delivery."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 5, install)"
+roles:
+  sync: medium
+entry: install
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: install
+    description: "The sync manager installs the merged skills (OpenSkills, relocated into .agents/skills) and agents (agent installer) from origin/main into the project and verifies each against the published commit."
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    tools: [read, edit, bash]
+    dirs: ["{{state.resolve-path.resolve-path.path}}", "{{state.discover.discover.project}}"]
+    parse: { json: [lines, failed] }
+    prompt: |
+      The marketplace pull request is squash merged{{#state.pr.merge.merge.commit}} as {{state.pr.merge.merge.commit}}{{/state.pr.merge.merge.commit}}. Do only the reinstall part of Phase 5: re-check that the approved commit is on origin/main, verify the installed OpenSkills CLI help, then install each approved marketplace artifact below into the local project exactly as your instructions say (skills by their exact subpath with `--universal --yes`, relocated into `.agents/skills`; agents with the agent installer and `--force`). Install reads origin/main, never the working tree. Do not commit, push or ask.
+      Local project: {{state.discover.discover.project}}
+      Marketplace: {{state.resolve-path.resolve-path.path}}
+      Approved artifacts (skip every revert route):
+      {{#state.plan.plan.accepted}}
+      - {{type}} {{name}} {{version}} (route {{route}})
+      {{/state.plan.plan.accepted}}
+
+      Verify every installed skill and agent definition against the published commit on origin/main.
+      End with one ```json block:
+      {"lines": ["<type> <name>: <installed, matches origin/main | installed, DIFFERS from origin/main | FAIL reason>"], "failed": <number of artifacts that failed or differ>}
+edges:
+  - { from: install, to: END }

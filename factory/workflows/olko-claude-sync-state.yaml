@@ -1,0 +1,58 @@
+name: olko-claude-sync-state
+version: 0.2.0
+description: "Phase 0: the sync manager prepares the sync state (Olko path, target, user scope) and saves the leak terms the user adds once, words that must never reach Olko."
+source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 0)"
+roles:
+  sync: medium
+entry: setup
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: setup
+    description: "The sync manager runs STATE init, saves the Olko path and the target the user gave, and reads the targets back."
+    kind: llm
+    role: sync
+    agent: olko-claude-sync-manager
+    tools: [read, bash]
+    dirs: ["{{input.olko}}", "{{input.target}}", "{{input.user}}"]
+    parse: { json: [stateDir, olko, target, user, leakTermsText, error?] }
+    prompt: |
+      Do only steps 1 to 3 of your Phase 0. Ask nothing and dispatch no worker: the factory asks the user every question.
+      Sync state directory: {{#input.stateDir}}{{input.stateDir}}. Pass `--state-dir {{input.stateDir}}` to every STATE command; never touch any other sync state directory.{{/input.stateDir}}{{^input.stateDir}}the default of the state script; report it as an absolute path.{{/input.stateDir}}
+      {{#input.olko}}The user gave the Olko checkout {{input.olko}}: save it with `target set-olko --path {{input.olko}}`.{{/input.olko}}
+      {{#input.target}}The user gave the Claude marketplace {{input.target}} with the name {{input.targetName}}: save it with `target set --name {{input.targetName}} --path {{input.target}}`.{{/input.target}}
+      User scope: {{#input.user}}{{input.user}}{{/input.user}}{{^input.user}}~/.claude of the current user{{/input.user}}.
+      Then run `target get` and take the target {{#input.targetName}}{{input.targetName}}{{/input.targetName}}{{^input.targetName}}marked default{{/input.targetName}}.
+      When there is still no Olko path or no target, run nothing more and name what is missing in error.
+      Never write the target name or path into a log or a file. Give all paths as absolute paths.
+      End with one ```json block: {"stateDir": "<sync state directory>", "olko": "<Olko checkout>", "target": "<target marketplace checkout>", "user": "<user scope>", "leakTermsText": "<n saved, or none saved>", "error": null}
+  - id: stop-setup
+    description: "Stops the run: no Olko checkout or no Claude marketplace target."
+    kind: script
+    op: builtin.stop
+    with: { reason: "No Olko checkout or no Claude marketplace target: give input.olko, input.target and input.targetName. The setup step names what is missing." }
+  - id: ask-leak
+    description: "Asks once for more leak terms (free text, or none)."
+    kind: interrupt
+    askedBy: setup
+    question:
+      id: q-claude-sync-leak
+      text: "Leak terms are words that must never reach Olko ({{state.setup.setup.leakTermsText}}). Add more? Reply with comma-separated words, or none."
+  - id: leak-save
+    description: "The sync manager saves each new leak term with target add-leak-term."
+    kind: llm
+    role: sync
+    agent: olko-claude-sync-manager
+    tools: [bash]
+    parse: text
+    prompt: |
+      Do only step 4 of your Phase 0. The user answered the leak-term question with: {{state.ask-leak.answer}}
+      Save each comma-separated word with `target add-leak-term --term <word> --state-dir {{state.setup.setup.stateDir}}`. Never repeat a leak term in your reply.
+      Reply with one line: `saved | <number of terms>`.
+edges:
+  - { from: setup, to: stop-setup, when: "setup.setup.error != null", description: "no Olko checkout or no target" }
+  - { from: setup, to: ask-leak, description: "Olko checkout and target set" }
+  - { from: stop-setup, to: END }
+  - { from: ask-leak, to: END, when: 'ask-leak.answer == "none" || ask-leak.answer == "None" || ask-leak.answer == "NONE"', description: "you added no leak term" }
+  - { from: ask-leak, to: leak-save, description: "you added leak terms" }
+  - { from: leak-save, to: END }

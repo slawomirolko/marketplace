@@ -1,0 +1,497 @@
+{
+  "olko-adr-store-reconcile": {
+    "commit": "7aabb50165eba9b076d2fbfce1880edbc69147d8",
+    "files": {
+      "agents/opencode/olko-adr-store-reconciler.md": "cfca23f50094166b"
+    }
+  },
+  "olko-claude-sync": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+    }
+  },
+  "olko-claude-sync-apply": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+    }
+  },
+  "olko-claude-sync-compare": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+    }
+  },
+  "olko-claude-sync-consolidate": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+    }
+  },
+  "olko-claude-sync-decide": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+    }
+  },
+  "olko-claude-sync-inventories": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+    }
+  },
+  "olko-claude-sync-probable": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+    }
+  },
+  "olko-claude-sync-publish": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+    }
+  },
+  "olko-claude-sync-sources": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+    }
+  },
+  "olko-claude-sync-stage": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+    }
+  },
+  "olko-claude-sync-state": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+    }
+  },
+  "olko-impl-adopt": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-implementation-orchestrator.md": "f376a55745b54223",
+      "skills/workflow/olko-task-implementation-workflow/SKILL.md": "9f8d5b1d85bc55a9",
+      "skills/workflow/olko-task-scope-gates/SKILL.md": "0b8c95a15f8ca8c3"
+    }
+  },
+  "olko-impl-build": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-implementation-orchestrator.md": "f376a55745b54223",
+      "skills/workflow/olko-task-implementation-workflow/SKILL.md": "9f8d5b1d85bc55a9"
+    }
+  },
+  "olko-impl-checks": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-implementation-orchestrator.md": "f376a55745b54223"
+    }
+  },
+  "olko-impl-closure": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "skills/workflow/olko-implementation-closure/SKILL.md": "369ceb915c69c846",
+      "skills/workflow/olko-task-implementation-workflow/SKILL.md": "9f8d5b1d85bc55a9"
+    }
+  },
+  "olko-impl-context": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-implementation-orchestrator.md": "f376a55745b54223"
+    }
+  },
+  "olko-impl-deliver": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-implementation-orchestrator.md": "f376a55745b54223",
+      "skills/workflow/olko-implementation-pr-gates/SKILL.md": "af0ba442ac362df5",
+      "skills/workflow/olko-task-implementation-workflow/SKILL.md": "9f8d5b1d85bc55a9"
+    }
+  },
+  "olko-impl-docker": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-implementation-orchestrator.md": "f376a55745b54223",
+      "skills/workflow/olko-worktree-compose-isolation/SKILL.md": "a5fc1d88b38a599c"
+    }
+  },
+  "olko-impl-editor": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "skills/workflow/olko-implementation-pr-gates/SKILL.md": "af0ba442ac362df5"
+    }
+  },
+  "olko-impl-entry": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-implementation-orchestrator.md": "f376a55745b54223"
+    }
+  },
+  "olko-impl-obsidian": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "skills/workflow/olko-implementation-pr-gates/SKILL.md": "af0ba442ac362df5"
+    }
+  },
+  "olko-impl-preflight": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-implementation-orchestrator.md": "f376a55745b54223",
+      "skills/workflow/olko-task-implementation-workflow/SKILL.md": "9f8d5b1d85bc55a9"
+    }
+  },
+  "olko-impl-review": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-implementation-orchestrator.md": "f376a55745b54223"
+    }
+  },
+  "olko-impl-scope": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-implementation-orchestrator.md": "f376a55745b54223",
+      "skills/workflow/olko-task-scope-gates/SKILL.md": "0b8c95a15f8ca8c3"
+    }
+  },
+  "olko-impl-tests-first": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-implementation-orchestrator.md": "f376a55745b54223",
+      "skills/workflow/olko-task-implementation-workflow/SKILL.md": "9f8d5b1d85bc55a9"
+    }
+  },
+  "olko-impl-tracker-task": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-implementation-orchestrator.md": "f376a55745b54223"
+    }
+  },
+  "olko-impl-verify": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-implementation-orchestrator.md": "f376a55745b54223",
+      "skills/workflow/olko-task-implementation-workflow/SKILL.md": "9f8d5b1d85bc55a9"
+    }
+  },
+  "olko-impl-workspace": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-implementation-orchestrator.md": "f376a55745b54223",
+      "skills/workflow/olko-task-implementation-workflow/SKILL.md": "9f8d5b1d85bc55a9"
+    }
+  },
+  "olko-implementation": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-implementation-orchestrator.md": "f376a55745b54223",
+      "skills/workflow/olko-task-implementation-workflow/SKILL.md": "9f8d5b1d85bc55a9"
+    }
+  },
+  "olko-marketplace-skill-sync": {
+    "commit": "84ea35a",
+    "files": {
+      "agents/opencode/olko-marketplace-skill-sync-manager.md": "be3eef691e75716b"
+    }
+  },
+  "olko-obsidian-knowledge": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-obsidian-knowledge-manager.md": "e49500c4e644ef23"
+    }
+  },
+  "olko-obsidian-knowledge-apply": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-obsidian-knowledge-manager.md": "e49500c4e644ef23"
+    }
+  },
+  "olko-obsidian-knowledge-compare": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-obsidian-knowledge-manager.md": "e49500c4e644ef23"
+    }
+  },
+  "olko-obsidian-knowledge-verify": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-obsidian-knowledge-manager.md": "e49500c4e644ef23"
+    }
+  },
+  "olko-plan-audit": {
+    "commit": "b3e27fd926f2527ce51fe891dbe9afa6e2cf176d",
+    "files": {
+      "skills/workflow/olko-feature-plan-workflow/SKILL.md": "a07afbed2e2807d4"
+    }
+  },
+  "olko-plan-discovery": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-plan-documentation-orchestrator.md": "7aa4a583f042319d",
+      "skills/workflow/olko-plan-backlog-discovery/SKILL.md": "361ff718f0926587"
+    }
+  },
+  "olko-plan-documentation": {
+    "commit": "b3e27fd926f2527ce51fe891dbe9afa6e2cf176d",
+    "files": {
+      "agents/opencode/olko-plan-documentation-orchestrator.md": "7aa4a583f042319d",
+      "skills/workflow/olko-feature-plan-workflow/SKILL.md": "a07afbed2e2807d4"
+    }
+  },
+  "olko-plan-editor-open": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "skills/workflow/olko-plan-finalization/SKILL.md": "75a2afad30759434"
+    }
+  },
+  "olko-plan-entry": {
+    "commit": "b3e27fd926f2527ce51fe891dbe9afa6e2cf176d",
+    "files": {
+      "agents/opencode/olko-plan-documentation-orchestrator.md": "7aa4a583f042319d",
+      "skills/workflow/olko-feature-plan-workflow/SKILL.md": "a07afbed2e2807d4"
+    }
+  },
+  "olko-plan-finalize": {
+    "commit": "b3e27fd926f2527ce51fe891dbe9afa6e2cf176d",
+    "files": {
+      "skills/workflow/olko-feature-plan-workflow/SKILL.md": "a07afbed2e2807d4"
+    }
+  },
+  "olko-plan-gate": {
+    "commit": "b3e27fd926f2527ce51fe891dbe9afa6e2cf176d",
+    "files": {
+      "skills/workflow/olko-feature-plan-workflow/SKILL.md": "a07afbed2e2807d4"
+    }
+  },
+  "olko-plan-grill": {
+    "commit": "b3e27fd926f2527ce51fe891dbe9afa6e2cf176d",
+    "files": {
+      "agents/opencode/olko-plan-documentation-orchestrator.md": "7aa4a583f042319d",
+      "skills/workflow/olko-feature-plan-workflow/SKILL.md": "a07afbed2e2807d4"
+    }
+  },
+  "olko-plan-package": {
+    "commit": "b3e27fd926f2527ce51fe891dbe9afa6e2cf176d",
+    "files": {
+      "agents/opencode/olko-plan-documentation-orchestrator.md": "7aa4a583f042319d",
+      "skills/workflow/olko-feature-plan-workflow/SKILL.md": "a07afbed2e2807d4"
+    }
+  },
+  "olko-plan-readiness": {
+    "commit": "b3e27fd926f2527ce51fe891dbe9afa6e2cf176d",
+    "files": {
+      "agents/opencode/olko-plan-documentation-orchestrator.md": "7aa4a583f042319d",
+      "skills/workflow/olko-feature-plan-workflow/SKILL.md": "a07afbed2e2807d4"
+    }
+  },
+  "olko-plan-review-files": {
+    "commit": "b3e27fd926f2527ce51fe891dbe9afa6e2cf176d",
+    "files": {
+      "skills/workflow/olko-feature-plan-workflow/SKILL.md": "a07afbed2e2807d4"
+    }
+  },
+  "olko-plan-tracker-context": {
+    "commit": "b3e27fd926f2527ce51fe891dbe9afa6e2cf176d",
+    "files": {
+      "agents/opencode/olko-plan-documentation-orchestrator.md": "7aa4a583f042319d",
+      "skills/workflow/olko-feature-plan-workflow/SKILL.md": "a07afbed2e2807d4"
+    }
+  },
+  "olko-plan-tracker-publish": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "agents/opencode/olko-plan-documentation-orchestrator.md": "7aa4a583f042319d",
+      "skills/workflow/olko-plan-backlog-discovery/SKILL.md": "361ff718f0926587"
+    }
+  },
+  "olko-plan-tracker-triage": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "skills/workflow/olko-plan-change-triage/SKILL.md": "70d1dd627864dd3a"
+    }
+  },
+  "olko-pr-merge": {
+    "commit": "84ea35a",
+    "files": {
+      "agents/opencode/olko-marketplace-skill-sync-manager.md": "be3eef691e75716b",
+      "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334",
+      "skills/git/olko-commit/SKILL.md": "0e786b220ac7e31d"
+    }
+  },
+  "olko-review": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+    }
+  },
+  "olko-review-feedback": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+    }
+  },
+  "olko-review-feedback-items": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+    }
+  },
+  "olko-review-feedback-replies": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+    }
+  },
+  "olko-review-findings": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+    }
+  },
+  "olko-review-plan": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+    }
+  },
+  "olko-review-plan-findings": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+    }
+  },
+  "olko-review-plan-rules": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+    }
+  },
+  "olko-review-post": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+    }
+  },
+  "olko-review-review": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+    }
+  },
+  "olko-review-rules": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+    }
+  },
+  "olko-review-scope": {
+    "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
+    "files": {
+      "agents/opencode/olko-review-orchestrator.md": "a7cc03c22417cf4c"
+    }
+  },
+  "olko-safe-source": {
+    "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
+    "files": {
+      "plugins/olko-sync/agents/olko-claude-sync-manager.md": "029a02425bb84334"
+    }
+  },
+  "olko-skill-optimizer": {
+    "commit": "c56cdbfaa8d541a2f8d5abb5cad67fe9df8358eb",
+    "files": {
+      "agents/opencode/olko-skill-optimizer.md": "c9ac80644dc314d2"
+    }
+  },
+  "olko-skill-optimizer-apply": {
+    "commit": "c56cdbfaa8d541a2f8d5abb5cad67fe9df8358eb",
+    "files": {
+      "agents/opencode/olko-skill-optimizer.md": "c9ac80644dc314d2"
+    }
+  },
+  "olko-skill-optimizer-audit": {
+    "commit": "c56cdbfaa8d541a2f8d5abb5cad67fe9df8358eb",
+    "files": {
+      "agents/opencode/olko-skill-optimizer.md": "c9ac80644dc314d2"
+    }
+  },
+  "olko-skill-optimizer-propose": {
+    "commit": "c56cdbfaa8d541a2f8d5abb5cad67fe9df8358eb",
+    "files": {
+      "agents/opencode/olko-skill-optimizer.md": "c9ac80644dc314d2"
+    }
+  },
+  "olko-skill-sync-adapt": {
+    "commit": "84ea35a",
+    "files": {
+      "agents/opencode/olko-marketplace-skill-sync-manager.md": "be3eef691e75716b"
+    }
+  },
+  "olko-skill-sync-apply": {
+    "commit": "84ea35a",
+    "files": {
+      "agents/opencode/olko-marketplace-skill-sync-manager.md": "be3eef691e75716b"
+    }
+  },
+  "olko-skill-sync-compare": {
+    "commit": "84ea35a",
+    "files": {
+      "agents/opencode/olko-marketplace-skill-sync-manager.md": "be3eef691e75716b"
+    }
+  },
+  "olko-skill-sync-decide": {
+    "commit": "84ea35a",
+    "files": {
+      "agents/opencode/olko-marketplace-skill-sync-manager.md": "be3eef691e75716b"
+    }
+  },
+  "olko-skill-sync-install": {
+    "commit": "84ea35a",
+    "files": {
+      "agents/opencode/olko-marketplace-skill-sync-manager.md": "be3eef691e75716b"
+    }
+  },
+  "olko-skill-sync-local": {
+    "commit": "84ea35a",
+    "files": {
+      "agents/opencode/olko-marketplace-skill-sync-manager.md": "be3eef691e75716b"
+    }
+  },
+  "olko-skill-sync-path": {
+    "commit": "84ea35a",
+    "files": {
+      "agents/opencode/olko-marketplace-skill-sync-manager.md": "be3eef691e75716b"
+    }
+  },
+  "olko-skill-sync-prepare": {
+    "commit": "84ea35a",
+    "files": {
+      "agents/opencode/olko-marketplace-skill-sync-manager.md": "be3eef691e75716b"
+    }
+  },
+  "olko-skill-sync-publish": {
+    "commit": "84ea35a",
+    "files": {
+      "agents/opencode/olko-marketplace-skill-sync-manager.md": "be3eef691e75716b"
+    }
+  },
+  "olko-skill-sync-sources": {
+    "commit": "84ea35a",
+    "files": {
+      "agents/opencode/olko-marketplace-skill-sync-manager.md": "be3eef691e75716b"
+    }
+  },
+  "olko-workflow-sync": {
+    "commit": "723c0ed30a8c8056e87b80ce83233522d77a9658",
+    "files": {
+      "agents/opencode/olko-workflow-mapper.md": "2903c2b1cc85fdc1",
+      "agents/opencode/olko-workflow-sync-orchestrator.md": "c40450658a04de6c",
+      "agents/opencode/olko-workflow-verifier.md": "44115716facc1d6c",
+      "skills/software-factory/olko-factory-workflow-sync/SKILL.md": "15c33dc70e3aa9af",
+      "skills/software-factory/olko-factory-workflow-yaml/SKILL.md": "23092725feb31af6"
+    }
+  }
+}

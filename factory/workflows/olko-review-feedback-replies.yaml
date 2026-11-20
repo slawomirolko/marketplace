@@ -1,0 +1,71 @@
+name: olko-review-feedback-replies
+version: 0.2.0
+description: "Drafts one reply per wont-fix or question item and posts it only after the user says post."
+source: "agents/opencode/olko-review-feedback-handler.md (step 7: replies)"
+roles:
+  feedback: medium
+entry: fb-reply-next
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: fb-reply-next
+    description: "Takes the next item that needs a reply."
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: fb-plan.fb-plan.replies }
+  - id: fb-draft
+    description: "The feedback handler drafts one reply (not posted)."
+    kind: llm
+    role: feedback
+    agent: olko-review-feedback-handler
+    maxVisits: 200
+    parse: text
+    prompt: |
+      Do only step 7 of your workflow for this one item: draft one reply, and do not post it or change any file.
+      Decision: {{state.fb-reply-next.item.decision}}.
+
+      Comments:
+      {{#state.fb-reply-next.item.comments}}
+      - {{author}} ({{url}}): {{body}}
+      {{/state.fb-reply-next.item.comments}}
+
+      Reply with the reply text only.
+  - id: fb-reply-ask
+    description: "Asks post or skip for the drafted reply."
+    kind: interrupt
+    askedBy: fb-draft
+    maxVisits: 200
+    question:
+      id: "q-reply-{{state.fb-reply-next.index}}"
+      text: "Post this reply?\n{{state.fb-draft.fb-draft}}"
+      allowed: [post, skip]
+  - id: fb-post
+    description: "The feedback handler posts the approved reply in its review thread."
+    kind: llm
+    role: feedback
+    agent: olko-review-feedback-handler
+    tools: [read, bash]
+    maxVisits: 200
+    parse: { json: [posted] }
+    prompt: |
+      Step 7 of your workflow: the user approved posting exactly this reply. Post it once and never resolve the thread.
+      - kind thread: reply in review thread {{state.fb-reply-next.item.comments.0.id}} (`gh api graphql`, mutation addPullRequestReviewThreadReply).
+      - kind comment: `gh pr comment {{input.pr}} --repo {{input.repo}} --body "<reply>"`.
+      This item's kind: {{state.fb-reply-next.item.comments.0.kind}}.
+
+      Reply:
+      {{state.fb-draft.fb-draft}}
+
+      Posted before:
+      {{#state.fb-post.fb-post.posted}}
+      - {{.}}
+      {{/state.fb-post.fb-post.posted}}
+      End with one ```json block: {"posted": [<every url posted before, then the url of this reply>]}
+edges:
+  - { from: fb-reply-next, to: fb-draft, when: "fb-reply-next.done == false", description: "a reply is left" }
+  - { from: fb-reply-next, to: END, when: "fb-reply-next.done == true", description: "every reply handled" }
+  - { from: fb-draft, to: fb-reply-ask }
+  - { from: fb-reply-ask, to: fb-post, when: 'fb-reply-ask.answer == "post"', description: "you chose post" }
+  - { from: fb-reply-ask, to: fb-reply-next, when: 'fb-reply-ask.answer == "skip"', description: "you chose skip" }
+  - { from: fb-post, to: fb-reply-next }

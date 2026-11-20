@@ -1,0 +1,100 @@
+name: olko-pr-merge
+version: 0.3.0
+description: "Shared step after a PR was opened, called with input path, prUrl, prBranch, label and optional project: asks leave, wait for CI or merge; olko-commit waits for the checks, or marks a draft ready, squash merges, updates the local default branch and checks the commit is on the origin default branch. For the marketplace skill sync (label marketplace or local) the question is composed by grill-with-docs, the user question gate of that agent; other callers get the question directly. The caller reads ask-pr.answer to know whether it merged."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 5, phase 6 local pull request decision, user question gate, response language) and plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 5), run through skills/git/olko-commit (post-PR decision and post-merge cleanup)"
+roles:
+  publisher: medium
+  grill: medium
+entry: pr-route
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: pr-route
+    description: "Decides who composes the leave, wait or merge question: grill-with-docs for the marketplace skill sync (label marketplace or local), the plain question for every other caller."
+    kind: script
+    op: builtin.pass
+    maxVisits: 20
+  - id: pr-grill
+    description: "grill-with-docs composes the leave, wait or merge question for a marketplace skill sync pull request, in the user's response language; it asks nothing itself and changes no file."
+    kind: llm
+    role: grill
+    skill: grill-with-docs
+    tools: [read]
+    maxVisits: 20
+    parse: text
+    prompt: |
+      Compose one question, one question per turn, for the {{input.label}} pull request {{input.prUrl}} (branch {{input.prBranch}}){{#state.wait-ci}}; CI checks passed: {{state.wait-ci.wait-ci.passed}} ({{state.wait-ci.wait-ci.detail}}){{/state.wait-ci}}. Ask: leave it open, wait for CI, or squash merge it (a draft is marked ready first)? Say that anything that needs the merge runs only after the merge. Earlier answers are closed: do not re-ask them and add no follow-up.
+      Return the question text only, with the choices `leave`, `wait` and `merge`; the workflow puts it to the user and waits for the answer. Change no file.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{#input.project}}{{input.project}}{{/input.project}}{{^input.project}}{{input.path}}{{/input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely; keep the URL and the choice words exactly as given.
+      If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
+  - id: grill-blocked-pr
+    description: "Stops the run when grill-with-docs cannot be loaded: the tooling blocker is reported and nothing is asked of the user directly; the pull request stays open."
+    kind: script
+    op: builtin.stop
+    with: { reason: "grill-with-docs cannot be loaded: the sync stopped without asking the user about the open pull request; it stays open and unmerged." }
+  - id: ask-pr
+    description: "Asks: leave the PR open, wait for CI, or squash merge (a draft is marked ready first). For the marketplace skill sync the text is the question composed by grill-with-docs."
+    kind: interrupt
+    askedBy: pr-grill
+    maxVisits: 20
+    question:
+      id: "q-pr-merge-{{state.wait-round.count}}"
+      text: "{{#state.pr-grill}}{{state.pr-grill.pr-grill}}{{/state.pr-grill}}{{^state.pr-grill}}PR: {{input.prUrl}}{{#state.wait-ci}}\nCI checks passed: {{state.wait-ci.wait-ci.passed}}{{/state.wait-ci}}\nLeave it open, wait for CI, or squash merge? Anything that needs the merge (installing) runs only after merge.{{/state.pr-grill}}"
+      allowed: [leave, wait, merge]
+  - id: wait-round
+    description: "Counts the CI waits, so each later question is new."
+    kind: script
+    op: builtin.count
+    maxVisits: 20
+  - id: wait-ci
+    description: "olko-commit waits for the PR checks and reports whether they passed. It does not merge."
+    kind: llm
+    role: publisher
+    skill: olko-commit
+    tools: [read, bash]
+    dirs: ["{{input.path}}"]
+    maxVisits: 20
+    parse: { json: [passed, detail] }
+    prompt: |
+      Do only the CI wait of the post-PR decision of olko-commit for the {{input.label}} PR {{input.prUrl}} (repository {{input.path}}): watch its checks until they finish (`gh pr checks <url> --watch --fail-fast`). Do not merge, switch branches, commit or delete anything, and do not ask: the user decides after this step.
+
+      End with one ```json block:
+      {"passed": <true when every check passed, else false>, "detail": "<the last lines of the check output, or the failing check names>"}
+  - id: merge
+    description: "olko-commit marks a draft ready, squash merges with branch deletion, updates the local default branch and verifies the merge commit on the origin default branch."
+    kind: llm
+    role: publisher
+    skill: olko-commit
+    tools: [read, bash]
+    dirs: ["{{input.path}}"]
+    parse: { json: [merged, commit, detail] }
+    prompt: |
+      The user explicitly approved the squash merge of the {{input.label}} PR {{input.prUrl}} (branch {{input.prBranch}}, repository {{input.path}}; use `gh` with that URL and `git -C` on that path). Do only the squash merge and the post-merge cleanup of olko-commit, without asking:
+      1. If the PR is a draft, mark it ready (`gh pr ready`).
+      2. `gh pr merge <url> --squash --delete-branch`.
+      3. Read the merge commit (`gh pr view <url> --json mergeCommit`).
+      4. Switch the repository to its default branch (main, unless the repository's .agents/skill-config.md sets `defaultBranch`), pull it from origin fast-forward only, and delete the local branch {{input.prBranch}}.
+      5. Verify the merge commit is on the origin default branch (`git merge-base --is-ancestor <commit> origin/<default branch>`).
+      Stop at the first failing step.
+
+      End with one ```json block:
+      {"merged": <true only when every step passed and the commit is on the origin default branch>, "commit": "<merge commit sha, or null>", "detail": "<what was done, or which step failed and its error>"}
+  - id: stop-merge
+    description: "Stops the run: the squash merge or its verification failed."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Squash merge failed or the merge commit is not on the origin default branch; the merge step names the failing step." }
+edges:
+  - { from: pr-route, to: pr-grill, when: 'input.label == "marketplace" || input.label == "local"', description: "a marketplace skill sync pull request: grill-with-docs composes the question" }
+  - { from: pr-route, to: ask-pr, description: "any other caller: the question is asked directly" }
+  - { from: pr-grill, to: grill-blocked-pr, when: 'pr-grill.pr-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded: stop" }
+  - { from: pr-grill, to: ask-pr, description: "grill-with-docs composed the question: put it to the user" }
+  - { from: grill-blocked-pr, to: END, description: "never reached: grill-blocked-pr fails the run" }
+  - { from: ask-pr, to: merge, when: 'ask-pr.answer == "merge"', description: "you chose merge" }
+  - { from: ask-pr, to: wait-round, when: 'ask-pr.answer == "wait"', description: "you chose wait" }
+  - { from: ask-pr, to: END, when: 'ask-pr.answer == "leave"', description: "you chose leave" }
+  - { from: wait-round, to: wait-ci }
+  - { from: wait-ci, to: pr-route }
+  - { from: merge, to: stop-merge, when: "merge.merge.merged != true", description: "the merge or its verification failed" }
+  - { from: merge, to: END, description: "merged and verified on the origin default branch" }
+  - { from: stop-merge, to: END, description: "never reached: stop-merge fails the run" }

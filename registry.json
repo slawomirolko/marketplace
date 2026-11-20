@@ -1170,6 +1170,7 @@
       "cost": 3,
       "files": [
         "SKILL.md",
+        "check-store.mjs",
         "edge-cases.md",
         "examples.md",
         "overview.md",
@@ -1578,6 +1579,67 @@
       ]
     },
     {
+      "name": "olko-factory-run-supervision",
+      "category": "software-factory",
+      "version": "0.1.0",
+      "description": "Rules to read the summary of one finished Software Factory run and find its bottleneck and optimizations: the summary fields, how to rank cost and time, and which changes to propose (cheaper tier, fewer rounds, a script instead of an LLM step, fewer questions). Use when you supervise or review the cost and time of a factory run. Triggers: 'supervise factory run', 'factory run bottleneck', 'optimize factory run', 'olko-factory-run-supervision'.",
+      "tags": [
+        "software-factory",
+        "factory",
+        "run",
+        "supervision"
+      ],
+      "capabilities": [
+        "software-factory",
+        "software-factory.factory.run.supervision"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-factory-workflow-sync",
+      "category": "software-factory",
+      "version": "0.1.0",
+      "description": "Script commands that keep the Software Factory workflows in step with the Olko marketplace: scan the lock for changed, removed and new sources, count mapping rounds and validate, build the YAML diff, and lock or revert. Use when you run the workflow sync loop or a mapping round of it. Triggers: 'workflow sync', 'sync factory workflows', 'factory workflows stale', 'olko-factory-workflow-sync'.",
+      "tags": [
+        "software-factory",
+        "factory",
+        "workflow",
+        "sync"
+      ],
+      "capabilities": [
+        "software-factory",
+        "software-factory.factory.workflow.sync"
+      ],
+      "cost": 2,
+      "files": [
+        "SKILL.md",
+        "scripts/workflow-sync.mjs"
+      ]
+    },
+    {
+      "name": "olko-factory-workflow-yaml",
+      "category": "software-factory",
+      "version": "0.2.0",
+      "description": "Rules for the Software Factory workflow YAML in factory/workflows: how an Olko agent's steps map to phase groups, nodes, edges and conditions, which engine operations exist, how a workflow names its sources, and how to validate it. Use when you write, update or verify a factory workflow from an Olko agent or skill. Triggers: 'factory workflow', 'map agent to yaml', 'update factory yaml', 'verify factory workflow', 'olko-factory-workflow-yaml'.",
+      "tags": [
+        "software-factory",
+        "factory",
+        "workflow",
+        "yaml"
+      ],
+      "capabilities": [
+        "software-factory",
+        "software-factory.factory.workflow.yaml"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
       "name": "olko-test",
       "category": "testing",
       "version": "2.2.0",
@@ -1600,6 +1662,40 @@
         "scripts/invoke-gradle-watchdog.ps1",
         "scripts/invoke-instrumentation-watchdog.ps1",
         "scripts/invoke-instrumentation-watchdog.Tests.ps1",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
+      "name": "olko-test-coverage-advisor",
+      "category": "testing",
+      "version": "1.0.0",
+      "description": "Advise which test principles the tests of an agent or skill miss. In suggest mode, read the artifact and its tests, and report gaps by severity with a TypeScript sketch per gap. In apply mode, write the accepted suggestions as real tests and check that each test can fail. Use when an agent or skill is added or changed, or when asked what tests an agent or skill is missing. Triggers: 'test coverage advisor', 'which tests are missing', 'test principles gap'.",
+      "tags": [
+        "testing",
+        "test",
+        "coverage",
+        "advisor"
+      ],
+      "capabilities": [
+        "testing",
+        "testing.test.coverage.advisor"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
         "workflow.md"
       ],
       "loading": {

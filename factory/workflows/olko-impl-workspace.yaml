@@ -1,0 +1,79 @@
+name: olko-impl-workspace
+version: 0.3.0
+description: "Step 1: creates or resumes the Task worktree (every later agent runs there), adopts existing changes when switches.adopt is on, starts the implementation journal and the shared Feature tracker, then runs the acceptance E2E baseline (gate 2) in the worktree project from the approved Task manifest under plans/; a missing manifest returns to the planning E2E MATRIX GATE and is never authored here."
+source: "agents/opencode/olko-implementation-orchestrator.md and skills/workflow/olko-task-implementation-workflow/SKILL.md (workflow.md gate 1, gate 2 Baseline E2E, Adoption, journal and Feature tracker)"
+entry: worktree
+roles:
+  runner: medium
+  publisher: medium
+  orchestrator: medium
+nodes:
+  - id: worktree
+    description: "The worktree lifecycle manager creates or resumes the Task worktree on feature/<task>; the run workspace moves there."
+    kind: llm
+    role: publisher
+    agent: olko-worktree-lifecycle-manager
+    tools: [read, bash]
+    dirs: ["{{input.project}}", "{{state.task.task.featureDir}}"]
+    workspace: "{{state.worktree.worktree.path}}"
+    parse: { json: [path, branch, base, baseCommit, resumed] }
+    prompt: |
+      Phase create, or resume when the worktree already exists. Main repository path: {{input.project}}. Plan path: {{state.task.task.taskFile}}. Branch name: feature/<the Task name {{state.task.task.taskName}} in lowercase kebab case>. Worktree path: {{input.project}}-worktrees/<the same kebab-case name>.
+      Follow your worktree-create skill. Do not edit source, plan, configuration or agent files.
+      End with one ```json block, with the absolute path: {"path": "<worktree>", "branch": "<branch>", "base": "<the branch or ref the worktree started from, usable in git diff>", "baseCommit": "<base commit SHA>", "resumed": <true|false>}
+  - id: adopt
+    description: "Transfers changes that already exist into the worktree with olko-implement-current-code; skipped when switches.adopt is off."
+    kind: subgraph
+    workflow: olko-impl-adopt
+    enabledWhen: "switches.adopt == true"
+  - id: journal
+    description: "The implementation orchestrator creates or resumes the ## Implementation journal in the Task plan and the shared feature-tracker.md."
+    kind: llm
+    role: orchestrator
+    agent: olko-implementation-orchestrator
+    tools: [read, edit]
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: text
+    prompt: |
+      Maintain your implementation journal for Task {{state.task.task.taskName}} of Feature {{state.task.task.featureId}}. Delegate nothing, ask nothing and change no code.
+      {{#state.worktree.worktree.resumed}}This is a resumed run: read the ## Implementation section of {{state.task.task.taskFile}} first and follow the resume procedure of olko-implementation-journal.{{/state.worktree.worktree.resumed}}{{^state.worktree.worktree.resumed}}Create the ## Implementation journal in {{state.task.task.taskFile}} from the olko-implementation-journal template, or resume it when it already exists.{{/state.worktree.worktree.resumed}}
+      Session: status in_progress, worktree {{state.worktree.worktree.path}}, branch {{state.worktree.worktree.branch}} (base {{state.worktree.worktree.base}}); mark steps 0 and 1 complete.
+      Create the shared Feature tracker {{state.task.task.tracker}} when it is missing (Feature base commit {{state.worktree.worktree.baseCommit}}, this Task in the ordered Task/PR list, pending items, final Feature audit not run), or add this Task to it.
+      Reply with one line: `journal | <created|resumed>`.
+  - id: e2e-baseline
+    description: "Gate 2: the acceptance E2E runner reads the current Task criteria from the tracker, passes every exact criterion ID, and runs the baseline phase of the approved Task manifest (under plans/) in the isolated worktree project; a missing manifest, a missing or extra mapping, or an unavailable environment blocks implementation."
+    kind: llm
+    role: runner
+    agent: olko-e2e-acceptance-runner
+    tools: [read, bash]
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: { line: [phase, verdict, detail] }
+    prompt: |
+      Phase baseline for Task {{state.task.task.taskName}}. Approved Task plan with the acceptance-to-E2E matrix: {{state.task.task.taskFile}}. Manifest: the Task manifest <e2eManifestDir>/<Task ID>.acceptance.json (e2eManifestDir from the project adapter, default {{state.task.task.featureDir}}/e2e); manifests live under plans/, never under tests/e2e. Run only in the isolated worktree project of {{state.worktree.worktree.path}}, never the main stack or the shared database. Do not change any file.
+      Read the current Task acceptance criteria from the tracker and pass every exact criterion ID to the runner CLI; a missing or extra mapping blocks. If the manifest is missing, run nothing: report NOT VERIFIED and that the Task returns to the planning E2E MATRIX GATE. Never author or invent a mapping here.
+      Report PASS, FAIL or NOT VERIFIED per criterion, the manifest and commit, each criterion result, and the cleanup proof.
+      NOT VERIFIED only when the manifest is missing, a criterion has no mapping or an extra one, or the environment is unavailable; a scenario that runs and fails, including a test that does not exist yet, is FAIL, and a FAIL baseline does not block implementation.
+      End with one line, the verdict in lowercase: `baseline | <pass|fail|not verified> | <manifest, commit, blocker>`
+  - id: save-baseline
+    description: "Saves the acceptance E2E baseline report in the Task plan under ## Implementation, before any stop."
+    kind: llm
+    role: runner
+    skill: olko-implementation-journal
+    tools: [read, edit]
+    dirs: ["{{state.task.task.featureDir}}"]
+    prompt: |
+      Append the acceptance E2E baseline report below under the ## Implementation section of the Task plan {{state.task.task.taskFile}}, as given, and update the baseline E2E step. Change nothing else in the plan.
+      Report:
+      {{state.e2e-baseline.e2e-baseline.text}}
+  - id: stop-e2e-baseline
+    description: "Stops implementation: the acceptance E2E baseline is NOT VERIFIED because the manifest is missing, a mapping is missing or extra, or the environment is unavailable; the Task returns to the planning E2E MATRIX GATE. A FAIL baseline does not stop the run."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Implementation stopped: acceptance E2E baseline not verified: {{state.e2e-baseline.e2e-baseline.detail}}. A missing manifest or mapping returns the Task to the planning E2E MATRIX GATE." }
+edges:
+  - { from: worktree, to: adopt }
+  - { from: adopt, to: journal }
+  - { from: journal, to: e2e-baseline }
+  - { from: e2e-baseline, to: save-baseline, description: "the baseline ran; its report is saved to the Task plan" }
+  - { from: save-baseline, to: stop-e2e-baseline, when: 'e2e-baseline.e2e-baseline.verdict == "not verified"', description: "baseline NOT VERIFIED: missing manifest, missing or extra mapping, or unavailable environment: implementation is blocked" }
+  - { from: save-baseline, to: END, description: "baseline PASS or FAIL: implementation may continue" }
