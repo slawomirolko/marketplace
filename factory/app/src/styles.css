@@ -169,3 +169,10 @@ table.calls tbody tr:hover { background: color-mix(in srgb, var(--accent) 8%, tr
 table.calls tbody tr.selected { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 table.calls tr.status-failed td:nth-child(6) { color: var(--unknown); font-weight: 600; }
 table.calls th, table.calls td { padding: 4px 4px; }
+.pending { margin: 8px 16px; padding: 8px 12px; border: 1px solid var(--accent); border-radius: 8px; background: var(--panel); }
+.pending h2 { font-size: 15px; margin: 0 0 6px; }
+.pending ul { list-style: none; margin: 0; padding: 0; }
+.pending-item + .pending-item { border-top: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); padding-top: 6px; margin-top: 6px; }
+.pending-actions { display: flex; gap: 8px; }
+.pending-error { color: var(--unknown); }
+.pending button.link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; }
