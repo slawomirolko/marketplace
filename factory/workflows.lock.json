@@ -322,6 +322,12 @@
       "skills/git/olko-commit/SKILL.md": "0e786b220ac7e31d"
     }
   },
+  "olko-project-status": {
+    "commit": "627d9d41f6a4b280f41a5a3a51ba8ec48d55fc98",
+    "files": {
+      "skills/software-factory/olko-factory-project/SKILL.md": "c8575954d4ddbcaa"
+    }
+  },
   "olko-review": {
     "commit": "f93e871167817879a86f19635bc6c84651e6e8b7",
     "files": {
@@ -485,12 +491,12 @@
     }
   },
   "olko-workflow-sync": {
-    "commit": "723c0ed30a8c8056e87b80ce83233522d77a9658",
+    "commit": "627d9d41f6a4b280f41a5a3a51ba8ec48d55fc98",
     "files": {
       "agents/opencode/olko-workflow-mapper.md": "2903c2b1cc85fdc1",
       "agents/opencode/olko-workflow-sync-orchestrator.md": "c40450658a04de6c",
       "agents/opencode/olko-workflow-verifier.md": "44115716facc1d6c",
-      "skills/software-factory/olko-factory-workflow-sync/SKILL.md": "15c33dc70e3aa9af",
+      "skills/software-factory/olko-factory-workflow-sync/SKILL.md": "84d5f6db25240910",
       "skills/software-factory/olko-factory-workflow-yaml/SKILL.md": "23092725feb31af6"
     }
   }
