@@ -41,6 +41,11 @@ nodes:
 
       End with one ```json block:
       {"stage": "<absolute stage directory>", "classification": "<absolute path of classification.json>"}
+  - id: stage-blocked
+    description: "Stops the run when the stage step returned no stage directory: the agent's report says why. Nothing was published."
+    kind: script
+    op: builtin.stop
+    with: { reason: "The stage step returned no stage directory (see its report). Nothing was published." }
   - id: optimize
     description: "Optimizes the staged copy only (tokens, cache, wording) with olko-agents-optimizer rules, without changing behavior. The draft PR review is the approval of these edits."
     kind: llm
@@ -99,7 +104,9 @@ edges:
   - { from: ask-upstream, to: record-rejected, when: 'ask-upstream.answer == "no"', description: "you chose no" }
   - { from: ask-upstream, to: stage, description: "you chose ok" }
   - { from: record-rejected, to: END }
-  - { from: stage, to: optimize }
+  - { from: stage, to: stage-blocked, when: "stage.stage.stage == null || stage.stage.classification == null", description: "the stage step returned no stage directory" }
+  - { from: stage, to: optimize, description: "the staged copy and its classification exist" }
+  - { from: stage-blocked, to: END, description: "never reached: stage-blocked fails the run" }
   - { from: optimize, to: sanitize }
   - { from: sanitize, to: sanitize-blocked, when: "sanitize.code != 0", description: "the gate found a leak" }
   - { from: sanitize, to: plan, description: "the staged copy is clean" }

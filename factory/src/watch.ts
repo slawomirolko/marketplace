@@ -123,7 +123,9 @@ export async function checkWatch(watch: WatchSpec, context: WatchContext): Promi
       const input: RunInput = Object.fromEntries(Object.entries(watch.input).map(([name, template]) => [name, RENDER(template, itemView)]));
       const { run, reused } = factory.start(RENDER(watch.goal, itemView), `watch:${watch.id}:${key}`, { workflow: watch.workflow, input });
       if (reused) continue;
-      factory.confirm(run.runId, { backend: watch.backend });
+      // The config never names a model; FACTORY_WATCH_MODEL picks one model for every tier of watch runs.
+      const model = process.env.FACTORY_WATCH_MODEL;
+      factory.confirm(run.runId, { backend: watch.backend, ...(model ? { tierModels: { low: model, medium: model, high: model } } : {}) });
       started.push(run.runId);
       log(`watch ${watch.id}: started run ${run.runId}`);
     }

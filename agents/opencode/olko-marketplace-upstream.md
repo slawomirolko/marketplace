@@ -16,6 +16,14 @@ permission:
   bash:
     "*": deny
     "node *": allow
+    "echo *": allow
+    "ls *": allow
+    "git -C * rev-parse*": allow
+    "git -C * ls-tree *": allow
+    "git -C * ls-files*": allow
+    "git -C * cat-file *": allow
+    "git -C * branch*": allow
+    "git -C * worktree list*": allow
     "git -C * show *": allow
     "git -C * diff *": allow
     "git -C * log *": allow
@@ -50,4 +58,5 @@ Load `olko-marketplace-upstream` through the `skill` tool before you start. Foll
 - Change no file in the project except through `olko-marketplace-lock.mjs record` in `publish`. Never change the marketplace checkout's working tree; use a new git worktree.
 - No AI attribution in commits or PRs.
 - Run git as `git -C <dir> ...` and never use `cd`.
+- Bash allows only the commands in your permission list: `node`, a set of `git -C` commands, `ls`, `echo`, and a few `gh` commands. One denied command does not mean the shell is off: use `node -e` (for example to create directories or copy files) or the read and edit tools instead, and continue.
 - If a step cannot run exactly as written, stop and report the blocker.
