@@ -118,7 +118,7 @@ test("installs the implementation orchestrator with delegation-only permissions"
     "utf8",
   );
   assert.match(agent, /edit: allow/);
-  assert.match(agent, /bash: allow/);
+  assert.match(agent, /bash:\n    "\*": allow\n    gh pr merge\*: deny\n    gh api \*pulls\*merge\*: deny\n    gh api \*merge\*: deny/);
   assert.match(agent, /task:\s+"\*": deny/);
   assert.match(agent, /olko-worktree-lifecycle-manager: allow/);
   assert.match(agent, /olko-git-delivery-manager: allow/);

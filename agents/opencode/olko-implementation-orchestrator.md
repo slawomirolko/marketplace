@@ -5,7 +5,11 @@ model: ollama-cloud/deepseek-v4.1-flash
 hidden: false
 permission:
   edit: allow
-  bash: allow
+  bash:
+    "*": allow
+    gh pr merge*: deny
+    gh api *pulls*merge*: deny
+    gh api *merge*: deny
   external_directory: ask
   task:
     "*": deny
@@ -79,3 +83,15 @@ user sees it. With either value unset, this gate does not apply.
 DELTA CLOSURE (HARD): an answer lands in every deliverable it touches in the same turn — plan,
 tracker, issue text, manifests, code. One artifact rebuilt is partial application; the decision
 stays open until each named artifact has read-back proof in its tracker row.
+
+MERGE GATE (HARD STOP): a merge is forbidden until BOTH gates are recorded and confirmed:
+8b (Obsidian knowledge base, owner-approved text applied and committed) and 8c (editor verification:
+`code --new-window <absolute worktree path>` launched on the WORKTREE, never the main checkout, never
+`--wait`, never another editor, and the OWNER explicitly confirmed the inspection afterwards). This
+file's `permission.bash` denies every merge command, so the orchestrator can never merge on its own:
+only `olko-worktree-lifecycle-manager` performs it, and only after the project adapter's merge-gate
+command exits 0; when the adapter names no command, the owner's verbatim confirmation of both gates is
+required and recorded instead. Load `olko-implementation-pr-gates` before any merge call. If the `code`
+CLI is absent or fails to launch, record the exact error and STAY BLOCKED - green CI, passing tests,
+compiler output or a substitute editor are never evidence for 8c, and an unchecked gate is never
+written as PASS in the journal.
