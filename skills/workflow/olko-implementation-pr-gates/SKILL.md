@@ -1,12 +1,14 @@
 ---
 name: olko-implementation-pr-gates
-version: 1.0.0
+version: 1.1.0
 description: "Steps 8b (Obsidian knowledge-base gate) and 8c (editor verification gate) of olko-implementation-orchestrator; both must pass before the merge."
 ---
 
 # olko-implementation-pr-gates
 
-Load in step 8b of `olko-implementation-orchestrator`, after the PR is green.
+Load at step 8b of `olko-implementation-orchestrator` AND again immediately before any merge call. A merge attempted without this file loaded in the session is forbidden.
+
+MERGE GATE (HARD, NEVER WAIVED): the project adapter names the merge-gate command; run it and record its result before any merge. When the adapter names no command, the owner's verbatim confirmation that 8b and 8c were performed is required and recorded. Green CI, passing tests, compiler/build output or any other automated check are NEVER 8c evidence, and a gate that was not performed is never recorded as PASS.
 
 ## Adaptation
 1. Read `.agents/skill-config.md` when present.
@@ -48,4 +50,7 @@ confirmation that the syntax/structure inspection is complete before delegating
 the merge. The `code` COMMAND is non-blocking (no `--wait`); the GATE is
 blocking — without the user's explicit confirmation the orchestrator stays
 blocked and MUST NOT start the merge. Record the command, worktree path, and
-user confirmation in the journal.
+user confirmation in the journal. Green CI, passing tests, compiler/build output
+or any other automated check are NEVER 8c evidence: only the owner's explicit
+confirmation of the opened worktree closes 8c, and a gate that was not performed
+is never written as PASS.
