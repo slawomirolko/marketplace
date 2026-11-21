@@ -57,7 +57,7 @@ HARD RULE — STRUCTURE OF NEW AND CHANGED CODE (owner directive):
 - ✅ When test code is in scope, follow the project's documented test naming and builder conventions.
 
 HARD RULE — BUILD WARNING HYGIENE (owner directive):
-- ✅ Build the changed projects and treat EVERY new analyzer warning on a changed file as a defect, including StyleCop spacing (`SA1117` parameters on one line or one per line, `SA1000`, `SA1011`, `SA1118`) and `IDE0130` namespace/folder mismatch. `dotnet format` does NOT fix them.
+- ✅ Build the changed projects and treat EVERY new analyzer warning on a changed file as a defect, including StyleCop spacing (`SA1117` parameters on one line or one per line, `SA1000`, `SA1011`, `SA1118`, `SA1137` block elements at identical indentation) and `IDE0130` namespace/folder mismatch, and fix the WHOLE file, not only the edited hunk. `dotnet format` does NOT fix them.
 - ✅ `var` is correct where the initializer makes the type obvious. NEVER convert `var` to an explicit type for `IDE0008`, and never treat `IDE0007`/`IDE0008` as violations.
 - ❌ NEVER silence a warning with a pragma or `NoWarn`; fix the code, or report why the warning is structural.
 

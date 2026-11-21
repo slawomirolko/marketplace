@@ -169,7 +169,7 @@ Owner directives; they apply to every project that uses this skill.
 
 Owner directive.
 - Build the changed projects. Every NEW analyzer warning on a changed file is a violation, not noise.
-- Fix StyleCop spacing rules in the edit: `SA1117` (parameters all on one line or each on its own line), `SA1000`, `SA1011`, `SA1118`. `dotnet format` does not address them.
+- Fix StyleCop spacing rules in the edit: `SA1117` (parameters all on one line or each on its own line), `SA1000`, `SA1011`, `SA1118`, `SA1137` (elements sharing a block keep identical indentation). `dotnet format` does not address them, so fix the whole file rather than only the edited hunk.
 - Fix `IDE0130` by matching the namespace to the folder; a pre-existing sibling namespace is not a reason to copy it into new code.
 - Treat `IDE0007` and `IDE0008` as non-violations. `var` is correct where the initializer makes the type obvious, and a project may disable `IDE0008` in `.editorconfig`.
 - Never silence a warning with a pragma or `NoWarn`. Fix the code, or report why the warning is structural, such as host-level `IL2026`/`IL3050` on a `Map*` registration in top-level statements.

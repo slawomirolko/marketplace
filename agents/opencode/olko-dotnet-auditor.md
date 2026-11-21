@@ -36,7 +36,7 @@ STRUCTURAL AND TEST-STYLE FINDINGS — ALWAYS REPORT (owner directive):
 - ✅ Flag a closed domain value set modelled as loose `string` constants, a plain enum stored by name, or an open string column; it must be a smart enum persisted via `HasConversion(x => x.Name, name => T.FromName(name))` with a matching `HasMaxLength`.
 - ✅ Flag a wire constant or timestamp format duplicated across types or slices; it belongs in one `<Slice>Contract` type or one UTC-format helper.
 - ✅ Flag a repeated generic transport-error conversion for the same invalid-input rule; it needs a named exception type.
-- ✅ Flag every new analyzer warning on a changed file as a finding, including StyleCop spacing (`SA1117`, `SA1000`, `SA1011`, `SA1118`) and `IDE0130`. `dotnet format` does not fix them, so they are real findings.
+- ✅ Flag every new analyzer warning on a changed file as a finding, including StyleCop spacing (`SA1117`, `SA1000`, `SA1011`, `SA1118`, `SA1137`) and `IDE0130`. `dotnet format` does not fix them, so they are real findings.
 - ✅ Flag test names that use one underscore between method and scenario; the contract is `MethodUnderTest__scenario_expectedResult` (two underscores). Flag mixed naming styles inside one touched test file.
 - ✅ Flag a test body missing any of `// Arrange`, `// Act`, `// Assert`, or assertions placed outside `// Assert`.
 - ✅ Flag a local test-only record, class, or constant that mirrors a production wire type or contract value; the test must read the real type through `InternalsVisibleTo`.
