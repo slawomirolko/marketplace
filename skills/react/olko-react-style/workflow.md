@@ -8,6 +8,9 @@ Also apply the `olko-design-rules` catalogue to the changed lines: its design ru
 ### Language and target
 - Write all component/JSX files as `.tsx`; write non-JSX logic (hooks, utils, API clients, types) as `.ts`.
 - Keep `strict` mode enabled in `tsconfig.json`.
+- Write every identifier, comment, log message and analytics/event name in English. Only documentation files may follow the project's documentation language.
+- Never hardcode user-visible copy in a component: keep UI text in the project's localization/resource layer (or one shared copy module when the project has none), in English, so a translation replaces it without touching components.
+- Keep test names, fixtures and test data English-only.
 
 ### Naming
 - Component directory and file names: PascalCase matching the component (`UserCard/UserCard.tsx`).

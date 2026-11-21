@@ -34,10 +34,42 @@ HARD RULE — NEVER ADD CI/CD WORKFLOW FILES WITHOUT EXPLICIT USER PERMISSION:
 HARD RULE — INJECT INTERFACES, NEVER CONCRETE DEPENDENCIES:
 - ❌ NEVER inject or register a concrete class AS the dependency type a consumer takes — resolve DEPENDENCIES through an interface (`I*`) and map it (`AddSingleton<IFoo, Foo>()`).
 
-HARD RULE — NO CODE COMMENTS:
-- ❌ NEVER add inline comments in C#, and absolutely NEVER in tests — even if the caller's brief or plan asks you to explain or document the code.
+HARD RULE — NO PARTIAL TYPES (owner directive, strict):
+- ❌ NEVER use `partial` anywhere: not for a unit of work, DI registration, endpoint, handler, test helper, or any other hand-written type. NEVER split one type across files.
+- ✅ Split by responsibility into separate types in separate files. A file/type size cap is never a reason to create a partial — extract a separate type instead.
+- 📜 Sanctioned exemptions only: compiler-required top-level-statement `Program.cs`, source-generated `JsonSerializerContext`, EF-generated migrations/designers, and a project-documented pre-existing set scheduled for refactor. Never add a member to such a set.
+
+HARD RULE — PERSISTENCE BOUNDARIES AND DB-NATIVE WRITES (owner directive, strict):
+- ❌ NEVER implement more than one unit-of-work interface per class. One unit of work per responsibility; shared `SaveChangesAsync` lives in one non-partial base class.
+- ❌ NEVER add a repository from another feature slice to an existing unit-of-work interface, and NEVER add a transport/broker member to one.
+- ❌ NEVER hand-roll a race: no `GetBy…` then filter "pending" then insert, no `ResolveRace*` helper, no catching `DbUpdateException`/`PostgresException` outside `UnitOfWorkBase` to turn an existing row into success, and no raw `INSERT … ON CONFLICT`. Stage through the mapped `DbSet<TEntity>`, let the unit of work save, and treat the translated unique-violation as already stored.
+- ❌ NEVER manipulate EF entity state (`context.Entry(entity).State = …`, `ChangeTracker` surgery) to escape a failed write.
+- ❌ NEVER reach a table through a table-name string compared at runtime; use the mapped `DbSet<TEntity>`.
+- ✅ A multi-row batch owns one transaction when the caller has none.
+
+HARD RULE — STRUCTURE OF NEW AND CHANGED CODE (owner directive):
+- ✅ Put transport-to-domain and domain-to-read-model conversion in extension methods on a dedicated `<Thing>MappingExtensions` or `<Thing>ReadModelExtensions` type. NEVER inline a mapping lambda, projection, or DTO construction block in an endpoint, handler, or service body.
+- ✅ Keep a host endpoint file to routing, authorization, parameter parsing, and delegation. Move a non-trivial read composition to an `I<Thing>ReadService` registered in host DI. NEVER put repository or unit-of-work access, mapping, formatting, ordering, or state-name selection in an endpoint.
+- ✅ Group `activity?.SetTag(...)` calls into a private `Setup<Operation>Instrumentation` method.
+- ✅ Model a closed domain value set as a smart enum (`Id`, `Name`, `All`, `FromId`, `FromName`, `TryParse`) and persist it with `HasConversion(x => x.Name, name => T.FromName(name))` plus a `HasMaxLength` sized for the longest name. NEVER use loose `string` constants or an open string column.
+- ✅ Keep a wire constant or timestamp format read by more than one type or slice in ONE shared place: a `<Slice>Contract` type or a single UTC-format helper. NEVER copy the same private constant into a second type.
+- ✅ Give a recurring invalid-input rule that must surface as a specific transport failure code its own exception type instead of repeating a generic error conversion at several call sites.
+- ✅ When test code is in scope, follow the project's documented test naming and builder conventions.
+
+HARD RULE — BUILD WARNING HYGIENE (owner directive):
+- ✅ Build the changed projects and treat EVERY new analyzer warning on a changed file as a defect, including StyleCop spacing (`SA1117` parameters on one line or one per line, `SA1000`, `SA1011`, `SA1118`, `SA1137` block elements at identical indentation) and `IDE0130` namespace/folder mismatch, and fix the WHOLE file, not only the edited hunk. `dotnet format` does NOT fix them.
+- ✅ `var` is correct where the initializer makes the type obvious. NEVER convert `var` to an explicit type for `IDE0008`, and never treat `IDE0007`/`IDE0008` as violations.
+- ❌ NEVER silence a warning with a pragma or `NoWarn`; fix the code, or report why the warning is structural.
+
+HARD RULE — NO CODE COMMENTS (AAA markers excepted):
+- ❌ NEVER add inline comments in C#, with ONE exception: every test body must be split by `// Arrange`, `// Act`, `// Assert` block comments. No other test-body narration, no rationale notes.
 - ❌ NEVER reference an acceptance criterion, a plan/deviation id (`AC*`/`D*`/`MAIN-*`), another stack, or a PR inside code (comments, names, strings, or test helpers).
 - ✅ Make code self-documenting through naming. If a comment is truly unavoidable it sits ABOVE the method/type. XML docs only where the file type requires them.
+
+HARD RULE — TESTS USE PRODUCTION TYPES AND SHARED BUILDERS:
+- ✅ Assert on the real response DTO / contract record the host emits, including internal production types reachable through `InternalsVisibleTo`. NEVER re-declare a local record, class, or constant that mirrors a production wire type or contract value.
+- ✅ Build input with one shared test-data builder per slice, every parameter with a named default.
+- ✅ Name tests `MethodUnderTest__scenario_expectedResult` (two underscores) and, when you touch a test file, convert every test name in it to that shape.
 
 Load the `olko-dotnet-architecture` and `olko-dotnet-style` skills in that
 order through the `skill` tool. Implement only the caller's explicitly scoped

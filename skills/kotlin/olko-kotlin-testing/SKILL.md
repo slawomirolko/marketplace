@@ -1,7 +1,7 @@
 ---
 name: olko-kotlin-testing
-version: 1.1.0
-description: "Check Kotlin/Android test conventions for changed Kotlin projects with marketplace defaults. Reads project docs/adapters, maps source changes to test files, verifies instrumentation vs unit tier rules, Gradle harness conventions, no-skip/no-silent-pass policy, MockK/fake test-double boundaries, parametrization, fixture reuse, Compose UI testing conventions, Windows Gradle hang handling, new-component test requirements, cross-boundary contract tests, and reports violations with rule sources. Use when validating Kotlin/Android tests, before commit/test gates, or when olko-test/olko-commit-style delegates Kotlin test-convention checks."
+version: 1.2.0
+description: "Check Kotlin/Android test conventions for changed Kotlin projects with marketplace defaults. Reads project docs/adapters, maps source changes to test files, verifies instrumentation vs unit tier rules, Gradle harness conventions, no-skip/no-silent-pass policy, MockK/fake test-double boundaries, parametrization, fixture reuse, shared internal test builders, English-only self-explanatory test names with zero comments, Compose UI testing conventions, Windows Gradle hang handling, new-component test requirements, cross-boundary contract tests, and reports violations with rule sources. Use when validating Kotlin/Android tests, before commit/test gates, or when olko-test/olko-commit-style delegates Kotlin test-convention checks."
 ---
 
 # Olko Kotlin Testing
@@ -80,6 +80,9 @@ Apply these defaults unless config, adapter, or project docs override them.
 - One test class per source class.
 - Each test case verifies exactly one behavior; write separate `@Test` methods per behavior, not one mega-test.
 - Test one behavior at a time — bundling behaviors makes failure diagnosis difficult.
+- Write every test name, assertion message, fixture value and inline data string in English.
+- Do not write comments in a test body, and do not add KDoc above a test: the test name must be self-explanatory. The `// Arrange`/`// Act`/`// Assert` convention belongs to .NET only and never appears in Kotlin.
+- Reuse one internal test-data builder for shared fixtures instead of repeating DTO/request construction; expose production values (smart enum names, contract constants) through it instead of re-typed literals.
 
 ### Instrumentation test naming (non-inferable)
 - Do not use backtick function names with spaces — the DEX compiler rejects spaces in method names for minSdk < 34.
@@ -186,6 +189,8 @@ Check only changed files plus directly related test files. Common checks:
 - missing `waitForIdle()` after a click that changes state, or bare `assertIsDisplayed()` inside a `LazyColumn`
 - missing tests for a newly added screen/ViewModel/feature
 - new screens/features added to navigation without test coverage
+- comments in a test body or KDoc above a test, or a test name that is not self-explanatory
+- non-English test names, assertion messages or fixture data
 
 ### Step 4 - Run tests when configured
 If `kotlinTestCommand` is configured or documented, run it for related test files after convention checks pass, using the explicit timeout from `kotlinTestTimeoutMs`.

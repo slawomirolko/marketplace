@@ -1,7 +1,7 @@
 ---
 name: olko-python-testing
-version: 1.1.0
-description: "Check Python test conventions for changed Python projects with marketplace defaults. Reads project docs/adapters, maps source changes to test files, verifies integration vs unit tier rules, pytest harness conventions, no-skip/no-silent-pass policy, monkeypatch/unit-only doubles, parametrization, fixture reuse, integration boundary rules, new-component test requirements, contract tests, and reports violations with rule sources. Use when validating Python tests, before commit/test gates, or when olko-test/olko-commit-style delegates Python test-convention checks."
+version: 1.2.0
+description: "Check Python test conventions for changed Python projects with marketplace defaults. Reads project docs/adapters, maps source changes to test files, verifies integration vs unit tier rules, pytest harness conventions, no-skip/no-silent-pass policy, monkeypatch/unit-only doubles, parametrization, fixture reuse, English-only self-explanatory test names with zero comments, integration boundary rules, new-component test requirements, contract tests, and reports violations with rule sources. Use when validating Python tests, before commit/test gates, or when olko-test/olko-commit-style delegates Python test-convention checks."
 ---
 
 # Olko Python Testing
@@ -77,6 +77,8 @@ Apply these defaults unless config, adapter, or project docs override them.
 - Test file names should mirror source file names, for example `test_workflow.py` for `workflow.py`.
 - Each test file may contain parameterized tests for multiple scenarios.
 - Use the `-v` flag for verbose output in CI and local runs.
+- Write every test name, assertion message, fixture value and inline data string in English.
+- Do not write comments in a test body and do not add a docstring above a test: the test name must be self-explanatory. The `// Arrange`/`// Act`/`// Assert` convention belongs to .NET only and never appears in Python tests.
 
 ### What not to test
 - Do not write tests that verify configuration files (YAML, JSON, TOML) contain or do not contain specific keys. Testing file contents breaks on legitimate config changes and tests structure instead of behavior.

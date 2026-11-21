@@ -27,6 +27,8 @@ If none found, ask the user to specify the target file path.
 
 **Small File Check**: If the target file has fewer than 20 lines, inform the user that the file is already minimal and optimization is unnecessary. Stop unless the user explicitly requests to proceed.
 
+**Markdown Size Caps** (check before and after optimizing): a file named `AGENTS.md`, `CODING_STYLE.md`, `TESTING.md` or `SKILL.md` is at most 150 lines, and a repository-root `AGENTS.md` is at most 50 lines. Verify with `wc -l`. When a file exceeds its cap, split the overflow into a co-located document one level down (a scoped `AGENTS.md` beside the code it governs, or a `CODE_REVIEW_RULES.md`/reference file) and link it from the parent; never delete a rule to fit, and never move code into another over-long file.
+
 ### Step 1: Baseline Analysis
 
 Read the target file. Collect line statistics.
