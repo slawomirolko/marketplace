@@ -1,5 +1,5 @@
 name: olko-plan-discovery
-version: 0.5.0
+version: 0.6.0
 description: "Discovery: the backlog writer drafts the Epic/Feature/Task hierarchy, the writer checks it against the locked answers (a contradiction, a repeated answered question or a decision not yet rewritten into every deliverable it touches returns it for a corrected draft, so no question is asked while a decision is open), grill-with-docs presents the open questions as one batch per round and the one draft review and the revise question; the approved draft is published to the tracker when the tracker switch is on."
 source: "agents/opencode/olko-plan-documentation-orchestrator.md (DISCOVERY: backlog writer draft with question batches, one draft review, approval-gated tracker publish); skills/workflow/olko-plan-backlog-discovery/SKILL.md (question ownership gate, reconciliation after each answer batch, decision closure, approval-gated publish)"
 roles:
@@ -27,7 +27,11 @@ nodes:
       none yet
       {{/state.draft.draft.decisions}}
       {{#state.ask-questions.answer}}
-      The user's latest answer to the question batch (it can repeat a decision already locked above):
+      The question batch you returned last time, which the answer below refers to:
+      {{#state.draft.draft.questions}}
+      - {{.}}
+      {{/state.draft.draft.questions}}
+      The user's latest answer to that question batch (it can repeat a decision already locked above):
       {{state.ask-questions.answer}}
       {{/state.ask-questions.answer}}
       {{#state.ask-revise.answer}}
@@ -63,6 +67,19 @@ nodes:
       {{/state.draft.draft.decisions}}
       Draft:
       {{state.draft.draft.hierarchy}}
+      Feature: {{state.draft.draft.feature.title}}
+      Goal: {{state.draft.draft.feature.goal}}
+      Acceptance criteria:
+      {{#state.draft.draft.feature.criteria}}
+      - {{.}}
+      {{/state.draft.draft.feature.criteria}}
+      Tasks and their acceptance criteria:
+      {{#state.draft.draft.tasks}}
+      - {{id}}: {{title}}
+      {{#criteria}}
+        - {{.}}
+      {{/criteria}}
+      {{/state.draft.draft.tasks}}
       Open questions listed in the draft:
       {{#state.draft.draft.questions}}
       - {{.}}
@@ -91,6 +108,19 @@ nodes:
       {{/state.draft.draft.decisions}}
       Draft:
       {{state.draft.draft.hierarchy}}
+      Feature: {{state.draft.draft.feature.title}}
+      Goal: {{state.draft.draft.feature.goal}}
+      Acceptance criteria:
+      {{#state.draft.draft.feature.criteria}}
+      - {{.}}
+      {{/state.draft.draft.feature.criteria}}
+      Tasks and their acceptance criteria:
+      {{#state.draft.draft.tasks}}
+      - {{id}}: {{title}}
+      {{#criteria}}
+        - {{.}}
+      {{/criteria}}
+      {{/state.draft.draft.tasks}}
       Questions, all together:
       {{#state.draft.draft.questions}}
       - {{.}}
@@ -118,6 +148,19 @@ nodes:
     prompt: |
       Present the one content review of this draft for the project {{input.project}} (idea: {{input.idea}}; locked answers: {{#state.draft.draft.decisions}}{{.}}; {{/state.draft.draft.decisions}}): approve it, or revise it. Draft:
       {{state.draft.draft.hierarchy}}
+      Feature: {{state.draft.draft.feature.title}}
+      Goal: {{state.draft.draft.feature.goal}}
+      Acceptance criteria:
+      {{#state.draft.draft.feature.criteria}}
+      - {{.}}
+      {{/state.draft.draft.feature.criteria}}
+      Tasks and their acceptance criteria:
+      {{#state.draft.draft.tasks}}
+      - {{id}}: {{title}}
+      {{#criteria}}
+        - {{.}}
+      {{/criteria}}
+      {{/state.draft.draft.tasks}}
       Return the question text only, with the choices approve and revise; the workflow puts it to the user. Do not change any file.
       Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely.
       If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
@@ -142,6 +185,19 @@ nodes:
     prompt: |
       Present the question: what should change in this draft for the project {{input.project}} (idea: {{input.idea}}; locked answers: {{#state.draft.draft.decisions}}{{.}}; {{/state.draft.draft.decisions}})? Draft:
       {{state.draft.draft.hierarchy}}
+      Feature: {{state.draft.draft.feature.title}}
+      Goal: {{state.draft.draft.feature.goal}}
+      Acceptance criteria:
+      {{#state.draft.draft.feature.criteria}}
+      - {{.}}
+      {{/state.draft.draft.feature.criteria}}
+      Tasks and their acceptance criteria:
+      {{#state.draft.draft.tasks}}
+      - {{id}}: {{title}}
+      {{#criteria}}
+        - {{.}}
+      {{/criteria}}
+      {{/state.draft.draft.tasks}}
       Return the question text only; the workflow puts it to the user. Do not change any file.
       Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely.
       If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
