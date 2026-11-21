@@ -7,7 +7,9 @@ import { homeDataDir, readSources } from "../src/paths.ts";
 import { describeAgent, marketplaceDir } from "../src/marketplace-agents.ts";
 import { readQuestions } from "../src/questions.ts";
 import type { AskedQuestion } from "../src/questions.ts";
-import { memoryLayerOf } from "../src/config.ts";
+import { memoryLayerOf, projectsOf } from "../src/config.ts";
+import { projectsAction, readRegistry } from "../src/projects.ts";
+import type { Project, ProjectsActionRequest } from "../src/projects.ts";
 import { standaloneNames, workflowsThatRan } from "../src/standalone.ts";
 import { readLock, scanMarketplace, updateMarketplace } from "../src/sources-lock.ts";
 import type { MarketplaceScan, UpdateResult } from "../src/sources-lock.ts";
@@ -39,6 +41,21 @@ export interface RunListItem {
   source: string;
   workflow: string;
   ran: string[];
+  projectId: string | null;
+}
+
+/** The latest finished status run of a project and the status file it wrote. */
+export interface ProjectStatusView {
+  runId: string;
+  status: Run["status"];
+  createdAt: string | null;
+  data: unknown;
+}
+
+export interface ProjectView extends Project {
+  exists: boolean;
+  runs: number;
+  status: { runId: string; createdAt: string | null; summary: string | null; counts: Record<string, number> | null } | null;
 }
 
 export interface RunDetail {
@@ -57,12 +74,74 @@ export interface DataApi {
   run(runId: string): RunDetail | null;
   stale(): MarketplaceScan;
   update(): Promise<UpdateResult & MarketplaceScan>;
+  projects(): { roots: string[]; projects: ProjectView[]; statusWorkflow: string };
+  projectStatus(id: string): ProjectStatusView | null;
+  projectsAction(request: ProjectsActionRequest): object;
 }
 
 export interface ApiRequest {
   method?: string | undefined;
   url?: string | undefined;
   headers?: Record<string, string | string[] | undefined>;
+  on?(event: string, listener: (chunk?: unknown) => void): unknown;
+}
+
+const MAX_BODY = 16 * 1024;
+
+function readBody(req: ApiRequest): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    if (!req.on) return resolve(undefined);
+    let data = "";
+    req.on("data", (chunk) => {
+      data += String(chunk);
+      if (data.length > MAX_BODY) reject(new Error("request body is too large"));
+    });
+    req.on("end", () => {
+      try {
+        resolve(data ? JSON.parse(data) : undefined);
+      } catch {
+        reject(new Error("request body is not JSON"));
+      }
+    });
+    req.on("error", (error) => reject(error instanceof Error ? error : new Error(String(error))));
+  });
+}
+
+const PROJECT_ACTIONS = new Set(["add", "remove", "add_root", "remove_root", "discover"]);
+
+/** A project registry action from the viewer: only the known fields, only strings. */
+export function parseProjectsAction(body: unknown): ProjectsActionRequest {
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("the request body must be a JSON object");
+  const b = body as Record<string, unknown>;
+  if (typeof b.action !== "string" || !PROJECT_ACTIONS.has(b.action)) throw new Error("action must be add, remove, add_root, remove_root or discover");
+  const text = (name: string) => {
+    const value = b[name];
+    if (value === undefined || value === "") return undefined;
+    if (typeof value !== "string" || value.length > 1000) throw new Error(`${name} must be a string`);
+    return value;
+  };
+  const dir = text("path");
+  const id = text("id");
+  const marketplace = text("marketplace");
+  return { action: b.action as ProjectsActionRequest["action"], ...(dir ? { path: dir } : {}), ...(id ? { id } : {}), ...(marketplace ? { marketplace } : {}) };
+}
+
+/** The status file named in a status run's state; only JSON files in the factory home's project-status folder. */
+export function statusFileOf(state: unknown, statusDir = path.join(homeDataDir(), "project-status")): string | null {
+  if (!state || typeof state !== "object") return null;
+  const root = path.resolve(statusDir);
+  const queue: unknown[] = [state];
+  while (queue.length) {
+    const value = queue.shift();
+    if (!value || typeof value !== "object") continue;
+    for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
+      if (key === "file" && typeof inner === "string" && inner.endsWith(".json")) {
+        const full = path.resolve(inner);
+        if (full.startsWith(root + path.sep) && fs.existsSync(full)) return full;
+      } else if (inner && typeof inner === "object") queue.push(inner);
+    }
+  }
+  return null;
 }
 
 export interface JsonResponse {
@@ -170,6 +249,7 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo }: DataApi
           runId: run.runId,
           goal: run.goal,
           workflow: report.workflow.split("@")[0] ?? report.workflow,
+          projectId: typeof run.input?.projectId === "string" ? run.input.projectId : null,
           ran: workflowsThatRan(specs, report.workflow.split("@")[0] ?? report.workflow, run.events.filter((e) => e.type === "node_started" && typeof e.node === "string").map((e) => String(e.node))),
           status: run.status,
           createdAt: run.events[0]?.at ?? null,
@@ -200,7 +280,58 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo }: DataApi
       const result = await updateMarketplace(hostExec, marketplaceDir());
       return { ...result, ...scan(factoryDir) };
     },
+
+    projects() {
+      const statusWorkflow = projectsOf(readConfig()).statusWorkflow;
+      const registry = readRegistry();
+      const runs = projectRuns();
+      return {
+        roots: registry.roots,
+        statusWorkflow,
+        projects: registry.projects.map((p) => {
+          const own = runs.filter((r) => r.run.input?.projectId === p.id);
+          const latest = latestStatus(own, statusWorkflow);
+          const data = latest ? (readStatusFile(latest.run) as { summary?: string; counts?: Record<string, number> } | null) : null;
+          return { ...p, exists: fs.existsSync(p.path), runs: own.length, status: latest ? { runId: latest.run.runId, createdAt: latest.createdAt, summary: data?.summary ?? null, counts: data?.counts ?? null } : null };
+        }),
+      };
+    },
+
+    projectStatus(id) {
+      const latest = latestStatus(projectRuns().filter((r) => r.run.input?.projectId === id), projectsOf(readConfig()).statusWorkflow);
+      if (!latest) return null;
+      return { runId: latest.run.runId, status: latest.run.status, createdAt: latest.createdAt, data: readStatusFile(latest.run) };
+    },
+
+    projectsAction(request) {
+      return projectsAction(request);
+    },
   };
+
+  function projectRuns(): { run: Run; createdAt: string | null }[] {
+    return allRunFiles().flatMap(({ file }) => {
+      try {
+        const run = readJson(file) as Run;
+        return run.input?.projectId ? [{ run, createdAt: run.events[0]?.at ?? null }] : [];
+      } catch {
+        return [];
+      }
+    });
+  }
+}
+
+function latestStatus(runs: { run: Run; createdAt: string | null }[], workflow: string): { run: Run; createdAt: string | null } | null {
+  return runs.filter((r) => r.run.workflow === workflow && r.run.status === "done").sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0] ?? null;
+}
+
+function readStatusFile(run: Run): unknown {
+  const file = statusFileOf(run.state);
+  if (!file) return null;
+  try {
+    return readJson(file);
+  } catch {
+    return null;
+  }
 }
 
 function scan(factoryDir: string): MarketplaceScan {
@@ -228,12 +359,27 @@ export function apiMiddleware(api: DataApi) {
         return send(409, { error: errorMessage(error) });
       }
     }
+    if (req.method === "POST" && url.pathname === "/api/projects") {
+      const origin = String(req.headers?.origin ?? "");
+      if (req.headers?.["x-factory-action"] !== "projects" || (origin && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin))) return send(403, { error: "projects needs the viewer's own request" });
+      try {
+        return send(200, api.projectsAction(parseProjectsAction(await readBody(req))));
+      } catch (error) {
+        return send(400, { error: errorMessage(error) });
+      }
+    }
     if (req.method !== "GET") return next();
     try {
       if (url.pathname === "/api/stale") return send(200, api.stale());
       if (url.pathname === "/api/workflows") return send(200, api.workflows());
       if (url.pathname === "/api/agents") return send(200, api.agents());
       if (url.pathname === "/api/config") return send(200, api.config());
+      if (url.pathname === "/api/projects") return send(200, api.projects());
+      const projectMatch = url.pathname.match(/^\/api\/projects\/([a-z0-9][a-z0-9-]*)\/status$/);
+      if (projectMatch?.[1] !== undefined) {
+        const status = api.projectStatus(projectMatch[1]);
+        return status ? send(200, status) : send(404, { error: "no finished status run for this project" });
+      }
       if (url.pathname === "/api/runs") {
         await api.ensureDemo();
         return send(200, api.runs());

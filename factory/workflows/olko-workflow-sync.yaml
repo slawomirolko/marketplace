@@ -1,6 +1,6 @@
 name: olko-workflow-sync
-version: 0.2.0
-description: "Keeps the factory workflows synchronized with the Olko marketplace. The sync orchestrator scans the lock for changed, removed, and new sources. For each source, the mapper updates the YAML and ends its round with the sync script (count and validate). Then the verifier compares the YAML with the agent text. Each source gets a maximum of three rounds. You approve the full YAML diff before the lock is updated. If you do not approve, all changes are reverted."
+version: 0.3.0
+description: "Keeps the factory workflows synchronized with the Olko marketplace. The sync orchestrator scans the lock for changed, removed, and new sources. With input artifacts (for example the skills and agents installed in one project), only those sources are processed. For each source, the mapper updates the YAML and ends its round with the sync script (count and validate). Then the verifier compares the YAML with the agent text. Each source gets a maximum of three rounds. You approve the full YAML diff before the lock is updated. If you do not approve, all changes are reverted."
 source: "agents/opencode/olko-workflow-sync-orchestrator.md (LOOP), agents/opencode/olko-workflow-mapper.md, agents/opencode/olko-workflow-verifier.md, skills/software-factory/olko-factory-workflow-sync, skills/software-factory/olko-factory-workflow-yaml"
 roles:
   orchestrator: low
@@ -18,7 +18,7 @@ nodes:
     tools: [read, bash]
     parse: { json: [stateDir, workflows, marketplace, factory, head, items, pending, summary] }
     prompt: |
-      Do only step 1 (SCAN) of your LOOP. Do not delegate. Do not ask questions. Run the `scan` command of `scripts/workflow-sync.mjs` in the olko-factory-workflow-sync skill{{#input.marketplace}} with `--marketplace {{input.marketplace}}`{{/input.marketplace}}{{#input.workflowsDir}} and `--workflows {{input.workflowsDir}}`{{/input.workflowsDir}}.
+      Do only step 1 (SCAN) of your LOOP. Do not delegate. Do not ask questions. Run the `scan` command of `scripts/workflow-sync.mjs` in the olko-factory-workflow-sync skill{{#input.marketplace}} with `--marketplace {{input.marketplace}}`{{/input.marketplace}}{{#input.workflowsDir}} and `--workflows {{input.workflowsDir}}`{{/input.workflowsDir}}{{#input.artifacts}} `--only {{.}}`{{/input.artifacts}}.
       End with one ```json block that holds the command's stdout exactly as printed.
   - id: item-next
     description: "Selects the next source to process."

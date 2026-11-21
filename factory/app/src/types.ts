@@ -244,6 +244,7 @@ export interface RunListItem {
   source?: string;
   workflow?: string;
   ran?: string[];
+  projectId?: string | null;
   runId: string;
   goal: string;
   status: string;

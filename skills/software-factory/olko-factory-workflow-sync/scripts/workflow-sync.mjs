@@ -20,7 +20,7 @@ function parseArgs(argv) {
     if (!arg.startsWith("--")) fail(`unexpected argument ${arg}`);
     const name = arg.slice(2);
     const value = rest[i + 1] !== undefined && !rest[i + 1].startsWith("--") ? rest[(i += 1)] : "true";
-    if (name === "needs-op") (flags[name] ??= []).push(value);
+    if (name === "needs-op" || name === "only") (flags[name] ??= []).push(value);
     else flags[name] = value;
   }
   return { command, flags };
@@ -114,6 +114,13 @@ function recordLast(sync, flags) {
   result.engineGaps = Number(flags["last-engine-gaps"] ?? 0) || 0;
 }
 
+/** The skill or agent name of a marketplace source path: `agents/<harness>/<name>.md` or `skills/<category>/<name>/...`. */
+export function artifactName(source) {
+  const parts = source.split("/");
+  if (parts[0] === "skills" && parts.length >= 3) return parts[2];
+  return path.posix.basename(source).replace(/\.md$/, "");
+}
+
 function scan(flags) {
   const marketplace = path.resolve(flags.marketplace ?? CHECKOUT);
   const factory = path.resolve(flags.factory ?? path.join(CHECKOUT, "factory"));
@@ -133,8 +140,10 @@ function scan(flags) {
   }
   const raw = [...bySource.values()].map((item) => ({ ...item, diff: item.kind === "missing" ? `${item.source} was removed from the marketplace` : diffOf(marketplace, item.commit, item.source) }));
   for (const agent of found.unmapped) raw.push({ kind: "new", source: agent.file, commit: found.head, workflows: [], diff: fs.readFileSync(path.join(marketplace, agent.file), "utf8") });
+  const only = flags.only ? new Set(flags.only.flatMap((v) => v.split(",")).map((v) => v.trim()).filter(Boolean)) : null;
+  const selected = only ? raw.filter((item) => only.has(artifactName(item.source))) : raw;
   fs.mkdirSync(path.join(stateDir, "items"), { recursive: true });
-  const items = raw.map((item, index) => {
+  const items = selected.map((item, index) => {
     const n = index + 1;
     const diffFile = path.join(stateDir, "items", `${n}.diff`);
     fs.writeFileSync(diffFile, item.diff);

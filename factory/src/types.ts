@@ -97,6 +97,8 @@ export interface RunInput {
   taskId?: string;
   adopt?: boolean;
   workflowsDir?: string;
+  /** The registered project this run belongs to; the factory fills `project` from it. */
+  projectId?: string;
 }
 
 export interface ExecResult {
@@ -471,4 +473,11 @@ export interface FactoryConfigFile {
   roles: Record<string, string>;
   switches?: Record<string, boolean>;
   memoryLayer?: string;
+  projects?: ProjectsConfig;
+}
+
+export interface ProjectsConfig {
+  markers?: string[];
+  maxDepth?: number;
+  statusWorkflow?: string;
 }

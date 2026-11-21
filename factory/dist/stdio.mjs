@@ -1,11 +1,11 @@
-import { _ as require_ajv, a as hostExec, c as parseBackend, d as FACTORY_DIR, g as require_dist, i as cliExecutor, l as parseCli, m as registerDataSource, o as Factory, p as defaultDataDir, r as viewerUrlFor, s as errorMessage, v as __toESM } from "./viewer-routes.mjs";
+import { a as projectsAction, b as __toESM, c as Factory, d as parseCli, g as registerDataSource, h as defaultDataDir, i as projectScopedInput, l as errorMessage, o as cliExecutor, p as FACTORY_DIR, r as viewerUrlFor, s as hostExec, u as parseBackend, v as require_dist, y as require_ajv } from "./viewer-routes.mjs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import process$1 from "node:process";
 import fs from "node:fs";
 import os from "node:os";
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js
 function getEnumValues(entries) {
 	const numericValues = Object.values(entries).filter((v) => typeof v === "number");
 	return Object.entries(entries).filter(([k, _]) => numericValues.indexOf(+k) === -1).map(([_, v]) => v);
@@ -539,7 +539,7 @@ function constantCatch(value) {
 	fn[CONSTANT_CATCH] = true;
 	return fn;
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/core.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/core.js
 var _a$1;
 var _zodDesc = {
 	value: void 0,
@@ -645,7 +645,7 @@ function config(newConfig) {
 	if (newConfig) Object.assign(globalConfig, newConfig);
 	return globalConfig;
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/errors.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/errors.js
 function _getMessage() {
 	const internals = this._zod;
 	internals.message ?? (internals.message = JSON.stringify(internals.def, jsonStringifyReplacer, 2));
@@ -760,7 +760,7 @@ function formatError(error, mapper = (issue) => issue.message) {
 	processError(error);
 	return fieldErrors;
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/parse.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/parse.js
 function finalizeParams(callee, params) {
 	return {
 		callee: params?.callee ?? callee,
@@ -966,7 +966,7 @@ var _safeEncodeAsync = (_Err) => async (schema, value, _ctx) => {
 var _safeDecodeAsync = (_Err) => async (schema, value, _ctx) => {
 	return _safeParseAsync(_Err)(schema, value, _ctx);
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/regexes.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/regexes.js
 /**
 * @deprecated CUID v1 is deprecated by its authors due to information leakage
 * (timestamps embedded in the id). Use {@link cuid2} instead.
@@ -1038,7 +1038,7 @@ var boolean$1 = /^(?:true|false)$/i;
 var _null$2 = /^null$/i;
 var lowercase = /^[^A-Z]*$/;
 var uppercase = /^[^a-z]*$/;
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/checks.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/checks.js
 var $ZodCheck = /*@__PURE__*/ $constructor("$ZodCheck", (inst, def) => {
 	var _a;
 	inst._zod ?? (inst._zod = {});
@@ -1333,7 +1333,7 @@ var $ZodCheckOverwrite = /*@__PURE__*/ $constructor("$ZodCheckOverwrite", (inst,
 		payload.value = def.tx(payload.value);
 	};
 });
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/doc.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/doc.js
 var Doc = class {
 	constructor(args = [], closed = {}) {
 		this.content = [];
@@ -1366,13 +1366,13 @@ var Doc = class {
 		return new F(...Object.keys(this.closed), `return function (${this.args.join(", ")}) {\n${content.join("\n")}\n};`)(...Object.values(this.closed));
 	}
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/versions.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/versions.js
 var version = {
 	major: 4,
 	minor: 6,
 	patch: 7
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/schemas.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/schemas.js
 var $ZodType = /*@__PURE__*/ $constructor("$ZodType", (inst, def) => {
 	var _a;
 	inst ?? (inst = {});
@@ -2845,7 +2845,7 @@ function handleRefineResult(result, payload, input, inst) {
 		payload.issues.push(issue(_iss));
 	}
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/memoizer.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/memoizer.js
 var $ZodCyclicError = class extends Error {
 	constructor() {
 		super(`Cannot parse a reference cycle that closes through a transform`);
@@ -3097,7 +3097,7 @@ function isBackEdge(ctx, value) {
 	const backEdges = ctx[STATE]?.backEdges;
 	return backEdges !== void 0 && isRef(value) && backEdges.has(value);
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/en.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/en.js
 var error = () => {
 	const Sizable = {
 		string: {
@@ -3204,7 +3204,7 @@ var error = () => {
 function en_default() {
 	return { localeError: error() };
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/registries.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/registries.js
 var _a;
 var $ZodRegistry = class {
 	constructor() {
@@ -3250,7 +3250,7 @@ function registry() {
 }
 (_a = globalThis).__zod_globalRegistry ?? (_a.__zod_globalRegistry = registry());
 var globalRegistry = globalThis.__zod_globalRegistry;
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/api.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/api.js
 function snapshotChecks(def) {
 	if (def.checks) def.checks = [...def.checks];
 	return def;
@@ -3776,7 +3776,7 @@ function _check(fn, params) {
 	ch._zod.check = fn;
 	return ch;
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/to-json-schema.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/to-json-schema.js
 function assignProps(target, ...sources) {
 	for (const source of sources) for (const key of Reflect.ownKeys(source)) if (Object.prototype.propertyIsEnumerable.call(source, key)) assignProp(target, key, source[key]);
 	return target;
@@ -4219,7 +4219,7 @@ var createStandardJSONSchemaMethod = (schema, io, processors = {}) => (params) =
 	extractDefs(ctx, schema);
 	return finalize(ctx, schema);
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema-processors.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema-processors.js
 var narrowMin = (agg, key, value) => {
 	if (agg[key] === void 0 || value > agg[key]) agg[key] = value;
 };
@@ -4864,7 +4864,7 @@ function toJSONSchema(input, params) {
 	extractDefs(ctx, input);
 	return finalize(ctx, input);
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/errors.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/errors.js
 var _installedErrorProtos = /* @__PURE__ */ new WeakSet([Object.prototype, Error.prototype]);
 function _lazyMethod(proto, key, make) {
 	Object.defineProperty(proto, key, {
@@ -4913,7 +4913,7 @@ var initializer = (inst, issues) => {
 	});
 };
 var ZodRealError = /*@__PURE__*/ $constructor("ZodError", initializer, void 0, { Parent: Error });
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/parse.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/parse.js
 var parse = /* @__PURE__ */ _parse(ZodRealError);
 var parseAsync = /* @__PURE__ */ _parseAsync(ZodRealError);
 var safeParse$1 = /* @__PURE__ */ _safeParse(ZodRealError);
@@ -4926,7 +4926,7 @@ var safeEncode = /* @__PURE__ */ _safeEncode(ZodRealError);
 var safeDecode = /* @__PURE__ */ _safeDecode(ZodRealError);
 var safeEncodeAsync = /* @__PURE__ */ _safeEncodeAsync(ZodRealError);
 var safeDecodeAsync = /* @__PURE__ */ _safeDecodeAsync(ZodRealError);
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/schemas.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/schemas.js
 function _ensureDefaultLocale() {
 	if (!globalConfig.localeError) config(en_default());
 }
@@ -5835,11 +5835,11 @@ function preprocess(fn, schema) {
 		out: schema
 	});
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/iso.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/iso.js
 function datetime(params) {
 	return /* @__PURE__ */ _isoDateTime(ZodISODateTime, params);
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
 var LATEST_PROTOCOL_VERSION = "2025-11-25";
 var SUPPORTED_PROTOCOL_VERSIONS = [
 	LATEST_PROTOCOL_VERSION,
@@ -7771,7 +7771,7 @@ function deserializeMessage(line) {
 function serializeMessage(message) {
 	return JSON.stringify(message) + "\n";
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
 /**
 * Server transport for stdio: this communicates with an MCP client by reading from the current process' stdin and writing to stdout.
 *
@@ -7829,7 +7829,7 @@ var StdioServerTransport = class {
 		});
 	}
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v3/helpers/util.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v3/helpers/util.js
 var util;
 (function(util) {
 	util.assertEqual = (_) => {};
@@ -7924,7 +7924,7 @@ var getParsedType = (data) => {
 		default: return ZodParsedType.unknown;
 	}
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v3/ZodError.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v3/ZodError.js
 var ZodIssueCode = util.arrayToEnum([
 	"invalid_type",
 	"invalid_literal",
@@ -8033,7 +8033,7 @@ var ZodError = class ZodError extends Error {
 ZodError.create = (issues) => {
 	return new ZodError(issues);
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v3/locales/en.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v3/locales/en.js
 var errorMap = (issue, _ctx) => {
 	let message;
 	switch (issue.code) {
@@ -8110,12 +8110,12 @@ var errorMap = (issue, _ctx) => {
 	}
 	return { message };
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v3/errors.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v3/errors.js
 var overrideErrorMap = errorMap;
 function getErrorMap() {
 	return overrideErrorMap;
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v3/helpers/parseUtil.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
 	const { data, path, errorMaps, issueData } = params;
 	const fullPath = [...path, ...issueData.path || []];
@@ -8218,13 +8218,13 @@ var isAborted = (x) => x.status === "aborted";
 var isDirty = (x) => x.status === "dirty";
 var isValid = (x) => x.status === "valid";
 var isAsync = (x) => typeof Promise !== "undefined" && x instanceof Promise;
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v3/helpers/errorUtil.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v3/helpers/errorUtil.js
 var errorUtil;
 (function(errorUtil) {
 	errorUtil.errToObj = (message) => typeof message === "string" ? { message } : message || {};
 	errorUtil.toString = (message) => typeof message === "string" ? message : message?.message;
 })(errorUtil || (errorUtil = {}));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v3/types.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
 	constructor(parent, value, path, key) {
 		this._cachedPath = [];
@@ -11381,7 +11381,7 @@ ZodOptional.create;
 ZodNullable.create;
 ZodEffects.createWithPreprocess;
 ZodPipeline.create;
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/mini/schemas.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/mini/schemas.js
 var ZodMiniType = /*@__PURE__*/ $constructor("ZodMiniType", (inst, def) => {
 	if (!inst._zod) throw new Error("Uninitialized schema in ZodMiniType.");
 	$ZodType.init(inst, def);
@@ -11444,7 +11444,7 @@ function object(shape, params) {
 		...normalizeParams(params)
 	});
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-compat.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-compat.js
 function isZ4Schema(s) {
 	return !!s._zod;
 }
@@ -11566,7 +11566,7 @@ function getLiteralValue(schema) {
 	const directValue = schema.value;
 	if (directValue !== void 0) return directValue;
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js
 /**
 * Experimental task interfaces for MCP SDK.
 * WARNING: These APIs are experimental and may change without notice.
@@ -11582,7 +11582,7 @@ function getLiteralValue(schema) {
 function isTerminal(status) {
 	return status === "completed" || status === "failed" || status === "cancelled";
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/Options.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/Options.js
 var ignoreOverride = Symbol("Let zodToJsonSchema decide on which parser to use");
 var defaultOptions = {
 	name: void 0,
@@ -11615,7 +11615,7 @@ var getDefaultOptions = (options) => typeof options === "string" ? {
 	...defaultOptions,
 	...options
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/Refs.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/Refs.js
 var getRefs = (options) => {
 	const _options = getDefaultOptions(options);
 	const currentPath = _options.name !== void 0 ? [
@@ -11639,7 +11639,7 @@ var getRefs = (options) => {
 		}]))
 	};
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/errorMessages.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/errorMessages.js
 function addErrorMessage(res, key, errorMessage, refs) {
 	if (!refs?.errorMessages) return;
 	if (errorMessage) res.errorMessage = {
@@ -11651,13 +11651,13 @@ function setResponseValueAndErrors(res, key, value, errorMessage, refs) {
 	res[key] = value;
 	addErrorMessage(res, key, errorMessage, refs);
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/getRelativePath.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/getRelativePath.js
 var getRelativePath = (pathA, pathB) => {
 	let i = 0;
 	for (; i < pathA.length && i < pathB.length; i++) if (pathA[i] !== pathB[i]) break;
 	return [(pathA.length - i).toString(), ...pathB.slice(i)].join("/");
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/any.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/any.js
 function parseAnyDef(refs) {
 	if (refs.target !== "openAi") return {};
 	const anyDefinitionPath = [
@@ -11668,7 +11668,7 @@ function parseAnyDef(refs) {
 	refs.flags.hasReferencedOpenAiAnyType = true;
 	return { $ref: refs.$refStrategy === "relative" ? getRelativePath(anyDefinitionPath, refs.currentPath) : anyDefinitionPath.join("/") };
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/array.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/array.js
 function parseArrayDef(def, refs) {
 	const res = { type: "array" };
 	if (def.type?._def && def.type?._def?.typeName !== ZodFirstPartyTypeKind.ZodAny) res.items = parseDef(def.type._def, {
@@ -11683,7 +11683,7 @@ function parseArrayDef(def, refs) {
 	}
 	return res;
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/bigint.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/bigint.js
 function parseBigintDef(def, refs) {
 	const res = {
 		type: "integer",
@@ -11713,19 +11713,19 @@ function parseBigintDef(def, refs) {
 	}
 	return res;
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/boolean.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/boolean.js
 function parseBooleanDef() {
 	return { type: "boolean" };
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/branded.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/branded.js
 function parseBrandedDef(_def, refs) {
 	return parseDef(_def.type._def, refs);
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/catch.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/catch.js
 var parseCatchDef = (def, refs) => {
 	return parseDef(def.innerType._def, refs);
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/date.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/date.js
 function parseDateDef(def, refs, overrideDateStrategy) {
 	const strategy = overrideDateStrategy ?? refs.dateStrategy;
 	if (Array.isArray(strategy)) return { anyOf: strategy.map((item, i) => parseDateDef(def, refs, item)) };
@@ -11756,25 +11756,25 @@ var integerDateParser = (def, refs) => {
 	}
 	return res;
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/default.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/default.js
 function parseDefaultDef(_def, refs) {
 	return {
 		...parseDef(_def.innerType._def, refs),
 		default: _def.defaultValue()
 	};
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/effects.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/effects.js
 function parseEffectsDef(_def, refs) {
 	return refs.effectStrategy === "input" ? parseDef(_def.schema._def, refs) : parseAnyDef(refs);
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/enum.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/enum.js
 function parseEnumDef(def) {
 	return {
 		type: "string",
 		enum: Array.from(def.values)
 	};
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/intersection.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/intersection.js
 var isJsonSchema7AllOfType = (type) => {
 	if ("type" in type && type.type === "string") return false;
 	return "allOf" in type;
@@ -11815,7 +11815,7 @@ function parseIntersectionDef(def, refs) {
 		...unevaluatedProperties
 	} : void 0;
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/literal.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/literal.js
 function parseLiteralDef(def, refs) {
 	const parsedType = typeof def.value;
 	if (parsedType !== "bigint" && parsedType !== "number" && parsedType !== "boolean" && parsedType !== "string") return { type: Array.isArray(def.value) ? "array" : "object" };
@@ -11828,7 +11828,7 @@ function parseLiteralDef(def, refs) {
 		const: def.value
 	};
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/string.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/string.js
 var emojiRegex = void 0;
 /**
 * Generated from the regular expressions found here as of 2024-05-22:
@@ -12090,7 +12090,7 @@ function stringifyRegExpWithFlags(regex, refs) {
 	}
 	return pattern;
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/record.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/record.js
 function parseRecordDef(def, refs) {
 	if (refs.target === "openAi") console.warn("Warning: OpenAI may not support records in schemas! Try an array of key-value pairs instead.");
 	if (refs.target === "openApi3" && def.keyType?._def.typeName === ZodFirstPartyTypeKind.ZodEnum) return {
@@ -12136,7 +12136,7 @@ function parseRecordDef(def, refs) {
 	}
 	return schema;
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/map.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/map.js
 function parseMapDef(def, refs) {
 	if (refs.mapStrategy === "record") return parseRecordDef(def, refs);
 	return {
@@ -12166,7 +12166,7 @@ function parseMapDef(def, refs) {
 		}
 	};
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/nativeEnum.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/nativeEnum.js
 function parseNativeEnumDef(def) {
 	const object = def.values;
 	const actualValues = Object.keys(def.values).filter((key) => {
@@ -12178,21 +12178,21 @@ function parseNativeEnumDef(def) {
 		enum: actualValues
 	};
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/never.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/never.js
 function parseNeverDef(refs) {
 	return refs.target === "openAi" ? void 0 : { not: parseAnyDef({
 		...refs,
 		currentPath: [...refs.currentPath, "not"]
 	}) };
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/null.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/null.js
 function parseNullDef(refs) {
 	return refs.target === "openApi3" ? {
 		enum: ["null"],
 		nullable: true
 	} : { type: "null" };
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/union.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/union.js
 var primitiveMappings = {
 	ZodString: "string",
 	ZodNumber: "number",
@@ -12247,7 +12247,7 @@ var asAnyOf = (def, refs) => {
 	})).filter((x) => !!x && (!refs.strictUnions || typeof x === "object" && Object.keys(x).length > 0));
 	return anyOf.length ? { anyOf } : void 0;
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/nullable.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/nullable.js
 function parseNullableDef(def, refs) {
 	if ([
 		"ZodString",
@@ -12286,7 +12286,7 @@ function parseNullableDef(def, refs) {
 	});
 	return base && { anyOf: [base, { type: "null" }] };
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/number.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/number.js
 function parseNumberDef(def, refs) {
 	const res = { type: "number" };
 	if (!def.checks) return res;
@@ -12317,7 +12317,7 @@ function parseNumberDef(def, refs) {
 	}
 	return res;
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/object.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/object.js
 function parseObjectDef(def, refs) {
 	const forceOptionalIntoNullable = refs.target === "openAi";
 	const result = {
@@ -12375,7 +12375,7 @@ function safeIsOptional(schema) {
 		return true;
 	}
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/optional.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/optional.js
 var parseOptionalDef = (def, refs) => {
 	if (refs.currentPath.toString() === refs.propertyPath?.toString()) return parseDef(def.innerType._def, refs);
 	const innerSchema = parseDef(def.innerType._def, {
@@ -12388,7 +12388,7 @@ var parseOptionalDef = (def, refs) => {
 	});
 	return innerSchema ? { anyOf: [{ not: parseAnyDef(refs) }, innerSchema] } : parseAnyDef(refs);
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/pipeline.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/pipeline.js
 var parsePipelineDef = (def, refs) => {
 	if (refs.pipeStrategy === "input") return parseDef(def.in._def, refs);
 	else if (refs.pipeStrategy === "output") return parseDef(def.out._def, refs);
@@ -12409,11 +12409,11 @@ var parsePipelineDef = (def, refs) => {
 		]
 	})].filter((x) => x !== void 0) };
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/promise.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/promise.js
 function parsePromiseDef(def, refs) {
 	return parseDef(def.type._def, refs);
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/set.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/set.js
 function parseSetDef(def, refs) {
 	const schema = {
 		type: "array",
@@ -12427,7 +12427,7 @@ function parseSetDef(def, refs) {
 	if (def.maxSize) setResponseValueAndErrors(schema, "maxItems", def.maxSize.value, def.maxSize.message, refs);
 	return schema;
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/tuple.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/tuple.js
 function parseTupleDef(def, refs) {
 	if (def.rest) return {
 		type: "array",
@@ -12459,19 +12459,19 @@ function parseTupleDef(def, refs) {
 		})).reduce((acc, x) => x === void 0 ? acc : [...acc, x], [])
 	};
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/undefined.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/undefined.js
 function parseUndefinedDef(refs) {
 	return { not: parseAnyDef(refs) };
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/unknown.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/unknown.js
 function parseUnknownDef(refs) {
 	return parseAnyDef(refs);
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/readonly.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parsers/readonly.js
 var parseReadonlyDef = (def, refs) => {
 	return parseDef(def.innerType._def, refs);
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/selectParser.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/selectParser.js
 var selectParser = (def, typeName, refs) => {
 	switch (typeName) {
 		case ZodFirstPartyTypeKind.ZodString: return parseStringDef(def, refs);
@@ -12513,7 +12513,7 @@ var selectParser = (def, typeName, refs) => {
 		default: return ((_) => void 0)(typeName);
 	}
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parseDef.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/parseDef.js
 function parseDef(def, refs, forceResolution = false) {
 	const seenItem = refs.seen.get(def);
 	if (refs.override) {
@@ -12561,7 +12561,7 @@ var addMeta = (def, refs, jsonSchema) => {
 	}
 	return jsonSchema;
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/zodToJsonSchema.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod-to-json-schema@3.25.2_zod@4.6.7/node_modules/zod-to-json-schema/dist/esm/zodToJsonSchema.js
 var zodToJsonSchema = (schema, options) => {
 	const refs = getRefs(options);
 	let definitions = typeof options === "object" && options.definitions ? Object.entries(options.definitions).reduce((acc, [name, schema]) => ({
@@ -12623,7 +12623,7 @@ var zodToJsonSchema = (schema, options) => {
 	if (refs.target === "openAi" && ("anyOf" in combined || "oneOf" in combined || "allOf" in combined || "type" in combined && Array.isArray(combined.type))) console.warn("Warning: OpenAI may not support schemas with unions as roots! Try wrapping it in an object property.");
 	return combined;
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-json-schema-compat.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-json-schema-compat.js
 function mapMiniTarget(t) {
 	if (!t) return "draft-7";
 	if (t === "jsonSchema7" || t === "draft-7") return "draft-7";
@@ -13519,7 +13519,7 @@ function mergeCapabilities(base, additional) {
 	}
 	return result;
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
 var import_ajv = /* @__PURE__ */ __toESM(require_ajv(), 1);
 var import_dist = /* @__PURE__ */ __toESM(require_dist(), 1);
 function createDefaultAjvInstance() {
@@ -13594,7 +13594,7 @@ var AjvJsonSchemaValidator = class {
 		};
 	}
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/server.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/server.js
 /**
 * Experimental server task features for MCP SDK.
 * WARNING: These APIs are experimental and may change without notice.
@@ -13811,7 +13811,7 @@ var ExperimentalServerTasks = class {
 		return this._server.cancelTask({ taskId }, options);
 	}
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/helpers.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/helpers.js
 /**
 * Experimental task capability assertion helpers.
 * WARNING: These APIs are experimental and may change without notice.
@@ -13855,7 +13855,7 @@ function assertClientRequestTaskCapability(requests, method, entityName) {
 		case "elicitation/create": if (!requests.elicitation?.create) throw new Error(`${entityName} does not support task creation for elicitation/create (required for ${method})`);
 	}
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/server/index.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/server/index.js
 /**
 * An MCP server on top of a pluggable transport.
 *
@@ -14177,7 +14177,7 @@ var Server = class extends Protocol {
 		return this.notification({ method: "notifications/prompts/list_changed" });
 	}
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/server/completable.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/server/completable.js
 var COMPLETABLE_SYMBOL = Symbol.for("mcp.completable");
 /**
 * Checks if a schema is completable (has completion metadata).
@@ -14195,7 +14195,7 @@ var McpZodTypeKind;
 (function(McpZodTypeKind) {
 	McpZodTypeKind["Completable"] = "McpCompletable";
 })(McpZodTypeKind || (McpZodTypeKind = {}));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/shared/toolNameValidation.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/shared/toolNameValidation.js
 /**
 * Tool name validation utilities according to SEP: Specify Format for Tool Names
 *
@@ -14265,7 +14265,7 @@ function validateAndWarnToolName(name) {
 	issueToolNameWarning(name, result.warnings);
 	return result.isValid;
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/mcp-server.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/mcp-server.js
 /**
 * Experimental McpServer task features for MCP SDK.
 * WARNING: These APIs are experimental and may change without notice.
@@ -14295,7 +14295,7 @@ var ExperimentalMcpServerTasks = class {
 		return this._mcpServer._createRegisteredTool(name, config.title, config.description, config.inputSchema, config.outputSchema, config.annotations, execution, config._meta, handler);
 	}
 };
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/@modelcontextprotocol+sdk@1_58621db215a90a9006709c42d91a3547/node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js
 function toolInputElementCount(value, max) {
 	let count = 0;
 	const stack = [value];
@@ -15093,7 +15093,7 @@ function createFactoryTools(factory, publicUrl) {
 			version: "0.1.0"
 		});
 		server.registerTool("factory_start", {
-			description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name and pr number, plus fresh: true for a fresh review of your own PR; or plan, a plan file path in the workspace, and optional criteria; for olko-marketplace-skill-sync: project, the absolute path of the local project, optional marketplace, the absolute path of the marketplace checkout, and optional artifacts, the skill and agent names to sync; for olko-claude-sync: target and targetName, a Claude Code plugin marketplace checkout and a kebab-case name for it, olko, the Olko checkout, optional user, the user scope (default ~/.claude), optional stateDir (default ~/.olko-sync) and optional artifacts). The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
+			description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name and pr number, plus fresh: true for a fresh review of your own PR; or plan, a plan file path in the workspace, and optional criteria; for olko-marketplace-skill-sync: project, the absolute path of the local project, optional marketplace, the absolute path of the marketplace checkout, and optional artifacts, the skill and agent names to sync; for olko-claude-sync: target and targetName, a Claude Code plugin marketplace checkout and a kebab-case name for it, olko, the Olko checkout, optional user, the user scope (default ~/.claude), optional stateDir (default ~/.olko-sync) and optional artifacts). projectId names a registered project (see factory_projects): the factory sets input.project to its folder and keeps the id on the run. The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
 			inputSchema: {
 				goal: string().min(1),
 				workflow: string().regex(/^[a-z][a-z0-9-]*$/).optional(),
@@ -15124,9 +15124,10 @@ function createFactoryTools(factory, publicUrl) {
 					adopt: boolean().optional(),
 					workflowsDir: string().min(1).optional()
 				}).strict().optional(),
+				projectId: string().regex(/^[a-z0-9][a-z0-9-]*$/).optional(),
 				idempotencyKey: string().optional()
 			}
-		}, guarded(({ goal, workflow, input, idempotencyKey }) => {
+		}, guarded(({ goal, workflow, input, projectId, idempotencyKey }) => {
 			const runInput = {
 				...input?.repo ? { repo: input.repo } : {},
 				...input?.pr ? { pr: input.pr } : {},
@@ -15152,7 +15153,7 @@ function createFactoryTools(factory, publicUrl) {
 			};
 			const { run, reused } = factory.start(goal, idempotencyKey, {
 				...workflow ? { workflow } : {},
-				input: runInput
+				input: projectScopedInput(projectId, runInput)
 			});
 			return {
 				...factory.status(run),
@@ -15273,6 +15274,27 @@ function createFactoryTools(factory, publicUrl) {
 			description: "Get the steps to install this factory permanently in a harness, so that every new session starts it. Call this tool when the user asks how to install, add or set up the factory. Without harness, the tool uses the harness that is connected now. Show the steps to the user. Run the commands only after the user agrees, because they change the user's harness configuration.",
 			inputSchema: { harness: _enum(HARNESSES).optional() }
 		}, guarded(({ harness }) => installGuide(harness, server.server.getClientVersion()?.name)));
+		server.registerTool("factory_projects", {
+			description: "List, add or remove the local projects that use the marketplace, manage the root folders that discovery searches, or discover candidate projects under them. Discovery only proposes candidates; add one to register it. The list lives in the user's factory home, outside every repository.",
+			inputSchema: {
+				action: _enum([
+					"list",
+					"add",
+					"remove",
+					"add_root",
+					"remove_root",
+					"discover"
+				]),
+				path: string().min(1).optional(),
+				id: string().regex(/^[a-z0-9][a-z0-9-]*$/).optional(),
+				marketplace: string().min(1).optional()
+			}
+		}, guarded(({ action, path: dir, id, marketplace }) => projectsAction({
+			action,
+			...dir ? { path: dir } : {},
+			...id ? { id } : {},
+			...marketplace ? { marketplace } : {}
+		})));
 		server.registerTool("factory_cancel", {
 			description: "Cancel a factory run. Call this tool when the user asks to stop the run.",
 			inputSchema: { runId: string() }

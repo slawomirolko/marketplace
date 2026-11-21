@@ -52,7 +52,7 @@ export function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allo
       res.writeHead(403, { "content-type": "text/plain" }).end("forbidden host");
       return true;
     }
-    if (req.method !== "GET" && !(req.method === "POST" && url.pathname === `${PREFIX}/api/update`)) {
+    if (req.method !== "GET" && !(req.method === "POST" && (url.pathname === `${PREFIX}/api/update` || url.pathname === `${PREFIX}/api/projects`))) {
       res.writeHead(405, { allow: "GET" }).end();
       return true;
     }

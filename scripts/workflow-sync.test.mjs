@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { workflowFamily, workflowGraph } from "../skills/software-factory/olko-factory-workflow-sync/scripts/workflow-sync.mjs";
+import { artifactName, workflowFamily, workflowGraph } from "../skills/software-factory/olko-factory-workflow-sync/scripts/workflow-sync.mjs";
 
 const marketplaceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const scriptPath = path.join(marketplaceRoot, "skills", "software-factory", "olko-factory-workflow-sync", "scripts", "workflow-sync.mjs");
@@ -65,6 +65,23 @@ test("scan lists the changed source with its diff and the new main agent, and ke
   assert.deepEqual(item.yamlFiles, [path.join(ctx.workflows, "wf-a.yaml")]);
   assert.match(fs.readFileSync(item.diffFile, "utf8"), /\+step two/);
   assert.ok(fs.existsSync(path.join(out.stateDir, "snapshot", "wf-a.yaml")));
+});
+
+test("scan --only keeps only the items of the named skills and agents", () => {
+  const ctx = setup();
+  const args = ["scan", "--marketplace", ctx.marketplace, "--factory", factory, "--workflows", ctx.workflows];
+  const onlyB = run(ctx.env, ...args, "--state-dir", path.join(ctx.root, "state-b"), "--only", "olko-b");
+  assert.deepEqual(onlyB.items.map((i) => [i.n, i.source]), [[1, "agents/opencode/olko-b.md"]]);
+  const both = run(ctx.env, ...args, "--state-dir", path.join(ctx.root, "state-ab"), "--only", "olko-a,olko-x", "--only", "olko-b");
+  assert.equal(both.items.length, 2);
+  const none = run(ctx.env, ...args, "--state-dir", path.join(ctx.root, "state-none"), "--only", "olko-z");
+  assert.deepEqual(none.items, []);
+});
+
+test("artifactName reads skill and agent names from source paths", () => {
+  assert.equal(artifactName("agents/opencode/olko-a.md"), "olko-a");
+  assert.equal(artifactName("skills/software-factory/olko-factory-project/SKILL.md"), "olko-factory-project");
+  assert.equal(artifactName("skills/demo/sample-skill/scripts/x.mjs"), "sample-skill");
 });
 
 test("round counts rounds per source, validates, and records the last verifier verdict; finish approve locks only verified workflows", () => {

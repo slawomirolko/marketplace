@@ -8,6 +8,8 @@ import type { ViewerState } from "./context.ts";
 import { Details } from "./Details.tsx";
 import { CallsList } from "./Calls.tsx";
 import { QuestionsList } from "./Questions.tsx";
+import { Projects } from "./Projects.tsx";
+import type { ProjectList } from "./Projects.tsx";
 import { SupervisorRing, ringBounds } from "./SupervisorRing.tsx";
 import { layoutGraph, scriptsHeight } from "./layout.ts";
 import { agentsOnly } from "./agents-only.ts";
@@ -84,7 +86,9 @@ function Viewer() {
   const [runs, setRuns] = useState<RunListItem[]>([]);
   const [runId, setRunId] = useState("");
   const params = new URLSearchParams(window.location.search);
-  const [mode, setMode] = useState<"runs" | "workflows">(params.get("mode") === "workflows" ? "workflows" : "runs");
+  const [mode, setMode] = useState<"runs" | "workflows" | "projects">(params.get("mode") === "workflows" ? "workflows" : params.get("mode") === "projects" ? "projects" : "runs");
+  const [projectFilter, setProjectFilter] = useState(params.get("project") ?? "");
+  const [projectIds, setProjectIds] = useState<string[]>([]);
   const [workflowName, setWorkflowName] = useState(params.get("workflow") ?? "olko-review");
   const [requestedRun] = useState(params.get("run"));
   const [runFilter, setRunFilter] = useState(params.get("contains") ?? "");
@@ -146,6 +150,16 @@ function Viewer() {
       .catch((loadError: unknown) => setError(messageOf(loadError)));
     getJson<Record<string, AgentInfo>>("/agents").then(setAgents).catch(() => setAgents({}));
   }, []);
+  useEffect(() => {
+    if (mode !== "runs") return;
+    getJson<ProjectList>("/projects")
+      .then((r) => setProjectIds(r.projects.map((p) => p.id)))
+      .catch(() => setProjectIds([]));
+  }, [mode]);
+  const showProjectRuns = useCallback((projectId: string) => {
+    setProjectFilter(projectId);
+    setMode("runs");
+  }, []);
 
   const [runsLoaded, setRunsLoaded] = useState(false);
   useEffect(() => {
@@ -161,15 +175,16 @@ function Viewer() {
 
   useEffect(() => {
     const url = new URL(window.location.href);
-    const query = new URLSearchParams(mode === "workflows" ? { mode: "workflows", workflow: workflowName } : { ...(runFilter ? { contains: runFilter } : {}), ...(runFilter && onlyRan ? { ran: "1" } : {}), ...(runId ? { run: runId } : {}) });
+    const query = new URLSearchParams(mode === "workflows" ? { mode: "workflows", workflow: workflowName } : mode === "projects" ? { mode: "projects" } : { ...(projectFilter ? { project: projectFilter } : {}), ...(runFilter ? { contains: runFilter } : {}), ...(runFilter && onlyRan ? { ran: "1" } : {}), ...(runId ? { run: runId } : {}) });
     url.search = query.size ? `?${query.toString()}` : "";
     window.history.replaceState(null, "", url);
-  }, [mode, workflowName, runId, runFilter, onlyRan]);
+  }, [mode, workflowName, runId, runFilter, onlyRan, projectFilter]);
 
   const shownRuns = useMemo(() => {
-    if (!runFilter || !workflows) return runs;
-    return runs.filter((r) => (onlyRan ? (r.ran ?? []).includes(runFilter) : Boolean(r.workflow) && containedWorkflows(workflows, r.workflow ?? "").has(runFilter)));
-  }, [runs, runFilter, onlyRan, workflows]);
+    const ofProject = projectFilter ? runs.filter((r) => r.projectId === projectFilter) : runs;
+    if (!runFilter || !workflows) return ofProject;
+    return ofProject.filter((r) => (onlyRan ? (r.ran ?? []).includes(runFilter) : Boolean(r.workflow) && containedWorkflows(workflows, r.workflow ?? "").has(runFilter)));
+  }, [runs, runFilter, onlyRan, workflows, projectFilter]);
   useEffect(() => {
     if (mode !== "runs" || !runsLoaded) return;
     if (!runId || shownRuns.some((r) => r.runId === runId)) return;
@@ -296,9 +311,9 @@ function Viewer() {
           </label>
           <h1>Factory viewer</h1>
           <div className="mode" role="radiogroup" aria-label="View">
-            {(["runs", "workflows"] as const).map((m) => (
+            {(["runs", "workflows", "projects"] as const).map((m) => (
               <button key={m} type="button" role="radio" aria-checked={mode === m} className={mode === m ? "active" : ""} onClick={() => setMode(m)}>
-                {m === "runs" ? "Runs" : "Workflows (config)"}
+                {m === "runs" ? "Runs" : m === "workflows" ? "Workflows (config)" : "Projects"}
               </button>
             ))}
           </div>
@@ -307,6 +322,19 @@ function Viewer() {
               Workflow{" "}
               <select value={workflowName} onChange={(e) => setWorkflowName(e.target.value)}>
                 <WorkflowOptions workflows={workflows ?? []} stale={stale} />
+              </select>
+            </label>
+          )}
+          {mode === "runs" && (projectIds.length > 0 || projectFilter) && (
+            <label>
+              Project{" "}
+              <select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
+                <option value="">all runs</option>
+                {[...new Set([...projectIds, ...(projectFilter ? [projectFilter] : [])])].map((id) => (
+                  <option key={id} value={id}>
+                    {id}
+                  </option>
+                ))}
               </select>
             </label>
           )}
@@ -330,6 +358,7 @@ function Viewer() {
             Run{" "}
             <select value={runId} onChange={(e) => setRunId(e.target.value)}>
               <option value="">no run (structure only)</option>
+              {shownRuns.length === 0 && projectFilter && !runFilter && <option value="" disabled>no run of project {projectFilter}</option>}
               {shownRuns.length === 0 && runFilter && <option value="" disabled>{onlyRan ? `no run where ${runFilter} ran` : `no run contains ${runFilter}`}</option>}
               {shownRuns.map((r) => (
                 <option key={r.runId} value={r.runId}>
@@ -362,6 +391,9 @@ function Viewer() {
             {updateNote && <span className="muted" role="status"> {updateNote}</span>}
           </span>
         </header>
+        {mode === "projects" ? (
+          <Projects onShowRuns={showProjectRuns} />
+        ) : (
         <main>
           <div className="canvas">
             {built?.error ? (
@@ -408,6 +440,7 @@ function Viewer() {
             </div>
           </aside>
         </main>
+        )}
       </div>
     </ViewerContext.Provider>
   );

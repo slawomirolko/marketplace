@@ -90,6 +90,30 @@
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]*(:[a-z][a-z0-9-]*)?$",
       "default": "olko-memory-layer"
+    },
+    "projects": {
+      "description": "How the factory finds local projects that use the marketplace. The project list and the root folders stay outside the repository, in the user's factory home.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "markers": {
+          "description": "Paths relative to a folder that make it a candidate project when one exists.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "maxDepth": {
+          "description": "How many folder levels under a root folder discovery looks.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8,
+          "default": 3
+        },
+        "statusWorkflow": {
+          "description": "The workflow whose latest finished run gives a project's status in the viewer.",
+          "$ref": "#/$defs/name"
+        }
+      }
     }
   },
   "$defs": {

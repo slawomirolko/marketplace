@@ -41,3 +41,9 @@ switches:
   adopt: false
 # Marketplace skill that gives an agent persistent memory; the viewer marks agents that declare it.
 memoryLayer: olko-memory-layer
+# Local projects that use the marketplace. The project list and the root folders to search
+# are kept in ~/.skill-factory/projects.json, never in this repository.
+projects:
+  markers: [.agents/skill-config.md, .agents/skills, .opencode/agents, .claude/skills, .claude/agents]
+  maxDepth: 3
+  statusWorkflow: olko-project-status

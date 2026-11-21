@@ -108,7 +108,7 @@ function priceUsage(model, tokens, cacheWriteTtlKnown) {
 		costSource: hasUntimedWrites ? "estimated" : "measured"
 	};
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/mustache@4.2.0/node_modules/mustache/mustache.mjs
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/mustache@4.2.0/node_modules/mustache/mustache.mjs
 /*!
 * mustache.js - Logic-less {{mustache}} templates with JavaScript
 * http://github.com/janl/mustache.js
@@ -693,7 +693,7 @@ mustache.escape = escapeHtml;
 mustache.Scanner = Scanner;
 mustache.Context = Context;
 mustache.Writer = Writer;
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/identity.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/identity.js
 var require_identity = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var ALIAS = Symbol.for("yaml.alias");
 	var DOC = Symbol.for("yaml.document");
@@ -742,7 +742,7 @@ var require_identity = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.isScalar = isScalar;
 	exports.isSeq = isSeq;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/visit.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/visit.js
 var require_visit = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var BREAK = Symbol("break visit");
@@ -932,7 +932,7 @@ var require_visit = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.visit = visit;
 	exports.visitAsync = visitAsync;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/directives.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/directives.js
 var require_directives = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var visit = require_visit();
@@ -1095,7 +1095,7 @@ var require_directives = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Directives.defaultTags = { "!!": "tag:yaml.org,2002:" };
 	exports.Directives = Directives;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/anchors.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/anchors.js
 var require_anchors = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var visit = require_visit();
@@ -1161,7 +1161,7 @@ var require_anchors = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.createNodeAnchors = createNodeAnchors;
 	exports.findNewAnchor = findNewAnchor;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/applyReviver.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/applyReviver.js
 var require_applyReviver = /* @__PURE__ */ __commonJSMin(((exports) => {
 	/**
 	* Applies the JSON.parse reviver algorithm as defined in the ECMA-262 spec,
@@ -1202,7 +1202,7 @@ var require_applyReviver = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.applyReviver = applyReviver;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/toJS.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/toJS.js
 var require_toJS = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	/**
@@ -1238,7 +1238,7 @@ var require_toJS = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.toJS = toJS;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Node.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Node.js
 var require_Node = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var applyReviver = require_applyReviver();
 	var identity = require_identity();
@@ -1271,7 +1271,7 @@ var require_Node = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.NodeBase = NodeBase;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Alias.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Alias.js
 var require_Alias = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var anchors = require_anchors();
 	var visit = require_visit();
@@ -1366,7 +1366,7 @@ var require_Alias = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.Alias = Alias;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Scalar.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Scalar.js
 var require_Scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var Node = require_Node();
@@ -1392,7 +1392,7 @@ var require_Scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.Scalar = Scalar;
 	exports.isScalarValue = isScalarValue;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/createNode.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/createNode.js
 var require_createNode = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Alias = require_Alias();
 	var identity = require_identity();
@@ -1454,7 +1454,7 @@ var require_createNode = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.createNode = createNode;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Collection.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Collection.js
 var require_Collection = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var createNode = require_createNode();
 	var identity = require_identity();
@@ -1574,7 +1574,7 @@ var require_Collection = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.collectionFromPath = collectionFromPath;
 	exports.isEmptyPath = isEmptyPath;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyComment.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyComment.js
 var require_stringifyComment = /* @__PURE__ */ __commonJSMin(((exports) => {
 	/**
 	* Stringifies a comment.
@@ -1593,7 +1593,7 @@ var require_stringifyComment = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.lineComment = lineComment;
 	exports.stringifyComment = stringifyComment;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/foldFlowLines.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/foldFlowLines.js
 var require_foldFlowLines = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var FOLD_FLOW = "flow";
 	var FOLD_BLOCK = "block";
@@ -1712,7 +1712,7 @@ var require_foldFlowLines = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.FOLD_QUOTED = FOLD_QUOTED;
 	exports.foldFlowLines = foldFlowLines;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyString.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyString.js
 var require_stringifyString = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Scalar = require_Scalar();
 	var foldFlowLines = require_foldFlowLines();
@@ -1935,7 +1935,7 @@ var require_stringifyString = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.stringifyString = stringifyString;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringify.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringify.js
 var require_stringify = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var anchors = require_anchors();
 	var identity = require_identity();
@@ -2042,7 +2042,7 @@ var require_stringify = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.createStringifyContext = createStringifyContext;
 	exports.stringify = stringify;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyPair.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyPair.js
 var require_stringifyPair = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var Scalar = require_Scalar();
@@ -2138,7 +2138,7 @@ var require_stringifyPair = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.stringifyPair = stringifyPair;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/log.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/log.js
 var require_log = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var node_process = __require("process");
 	function debug(logLevel, ...messages) {
@@ -2153,7 +2153,7 @@ var require_log = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.debug = debug;
 	exports.warn = warn;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/merge.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/merge.js
 var require_merge = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var Scalar = require_Scalar();
@@ -2195,7 +2195,7 @@ var require_merge = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.isMergeKey = isMergeKey;
 	exports.merge = merge;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/addPairToJSMap.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/addPairToJSMap.js
 var require_addPairToJSMap = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var log = require_log();
 	var merge = require_merge();
@@ -2245,7 +2245,7 @@ var require_addPairToJSMap = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.addPairToJSMap = addPairToJSMap;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Pair.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/Pair.js
 var require_Pair = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var createNode = require_createNode();
 	var stringifyPair = require_stringifyPair();
@@ -2277,7 +2277,7 @@ var require_Pair = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.Pair = Pair;
 	exports.createPair = createPair;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyCollection.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyCollection.js
 var require_stringifyCollection = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var stringify = require_stringify();
@@ -2394,7 +2394,7 @@ var require_stringifyCollection = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.stringifyCollection = stringifyCollection;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/YAMLMap.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/YAMLMap.js
 var require_YAMLMap = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var stringifyCollection = require_stringifyCollection();
 	var addPairToJSMap = require_addPairToJSMap();
@@ -2502,7 +2502,7 @@ var require_YAMLMap = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.YAMLMap = YAMLMap;
 	exports.findPair = findPair;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/common/map.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/common/map.js
 var require_map = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var YAMLMap = require_YAMLMap();
@@ -2518,7 +2518,7 @@ var require_map = /* @__PURE__ */ __commonJSMin(((exports) => {
 		createNode: (schema, obj, ctx) => YAMLMap.YAMLMap.from(schema, obj, ctx)
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/YAMLSeq.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/YAMLSeq.js
 var require_YAMLSeq = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var createNode = require_createNode();
 	var stringifyCollection = require_stringifyCollection();
@@ -2623,7 +2623,7 @@ var require_YAMLSeq = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.YAMLSeq = YAMLSeq;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/common/seq.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/common/seq.js
 var require_seq = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var YAMLSeq = require_YAMLSeq();
@@ -2639,7 +2639,7 @@ var require_seq = /* @__PURE__ */ __commonJSMin(((exports) => {
 		createNode: (schema, obj, ctx) => YAMLSeq.YAMLSeq.from(schema, obj, ctx)
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/common/string.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/common/string.js
 var require_string = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var stringifyString = require_stringifyString();
 	exports.string = {
@@ -2653,7 +2653,7 @@ var require_string = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/common/null.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/common/null.js
 var require_null = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Scalar = require_Scalar();
 	var nullTag = {
@@ -2667,7 +2667,7 @@ var require_null = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.nullTag = nullTag;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/core/bool.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/core/bool.js
 var require_bool$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Scalar = require_Scalar();
 	var boolTag = {
@@ -2685,7 +2685,7 @@ var require_bool$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.boolTag = boolTag;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyNumber.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyNumber.js
 var require_stringifyNumber = /* @__PURE__ */ __commonJSMin(((exports) => {
 	function stringifyNumber({ format, minFractionDigits, tag, value }) {
 		if (typeof value === "bigint") return String(value);
@@ -2705,7 +2705,7 @@ var require_stringifyNumber = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.stringifyNumber = stringifyNumber;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/core/float.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/core/float.js
 var require_float$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Scalar = require_Scalar();
 	var stringifyNumber = require_stringifyNumber();
@@ -2745,7 +2745,7 @@ var require_float$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.floatExp = floatExp;
 	exports.floatNaN = floatNaN;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/core/int.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/core/int.js
 var require_int$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var stringifyNumber = require_stringifyNumber();
 	var intIdentify = (value) => typeof value === "bigint" || Number.isInteger(value);
@@ -2785,7 +2785,7 @@ var require_int$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.intHex = intHex;
 	exports.intOct = intOct;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/core/schema.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/core/schema.js
 var require_schema$2 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var map = require_map();
 	var _null = require_null();
@@ -2808,7 +2808,7 @@ var require_schema$2 = /* @__PURE__ */ __commonJSMin(((exports) => {
 		float.float
 	];
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/json/schema.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/json/schema.js
 var require_schema$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Scalar = require_Scalar();
 	var map = require_map();
@@ -2869,7 +2869,7 @@ var require_schema$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	});
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/binary.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/binary.js
 var require_binary = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var node_buffer = __require("buffer");
 	var Scalar = require_Scalar();
@@ -2924,7 +2924,7 @@ var require_binary = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/pairs.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/pairs.js
 var require_pairs = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var Pair = require_Pair();
@@ -2984,7 +2984,7 @@ var require_pairs = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.pairs = pairs;
 	exports.resolvePairs = resolvePairs;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/omap.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/omap.js
 var require_omap = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var toJS = require_toJS();
@@ -3048,7 +3048,7 @@ var require_omap = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.YAMLOMap = YAMLOMap;
 	exports.omap = omap;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/bool.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/bool.js
 var require_bool = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Scalar = require_Scalar();
 	function boolStringify({ value, source }, ctx) {
@@ -3074,7 +3074,7 @@ var require_bool = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.falseTag = falseTag;
 	exports.trueTag = trueTag;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/float.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/float.js
 var require_float = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Scalar = require_Scalar();
 	var stringifyNumber = require_stringifyNumber();
@@ -3117,7 +3117,7 @@ var require_float = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.floatExp = floatExp;
 	exports.floatNaN = floatNaN;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/int.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/int.js
 var require_int = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var stringifyNumber = require_stringifyNumber();
 	var intIdentify = (value) => typeof value === "bigint" || Number.isInteger(value);
@@ -3189,7 +3189,7 @@ var require_int = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.intHex = intHex;
 	exports.intOct = intOct;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/set.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/set.js
 var require_set = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var Pair = require_Pair();
@@ -3257,7 +3257,7 @@ var require_set = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.YAMLSet = YAMLSet;
 	exports.set = set;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/timestamp.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/timestamp.js
 var require_timestamp = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var stringifyNumber = require_stringifyNumber();
 	/** Internal types handle bigint as number, because TS can't figure it out. */
@@ -3339,7 +3339,7 @@ var require_timestamp = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.intTime = intTime;
 	exports.timestamp = timestamp;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/schema.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/yaml-1.1/schema.js
 var require_schema = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var map = require_map();
 	var _null = require_null();
@@ -3378,7 +3378,7 @@ var require_schema = /* @__PURE__ */ __commonJSMin(((exports) => {
 		timestamp.timestamp
 	];
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/tags.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/tags.js
 var require_tags = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var map = require_map();
 	var _null = require_null();
@@ -3463,7 +3463,7 @@ var require_tags = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.coreKnownTags = coreKnownTags;
 	exports.getTags = getTags;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/Schema.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/schema/Schema.js
 var require_Schema = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var map = require_map();
@@ -3490,7 +3490,7 @@ var require_Schema = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyDocument.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyDocument.js
 var require_stringifyDocument = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var stringify = require_stringify();
@@ -3551,7 +3551,7 @@ var require_stringifyDocument = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.stringifyDocument = stringifyDocument;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/Document.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/doc/Document.js
 var require_Document = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Alias = require_Alias();
 	var Collection = require_Collection();
@@ -3831,7 +3831,7 @@ var require_Document = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.Document = Document;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/errors.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/errors.js
 var require_errors$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var YAMLError = class extends Error {
 		constructor(name, pos, code, message) {
@@ -3883,7 +3883,7 @@ var require_errors$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.YAMLWarning = YAMLWarning;
 	exports.prettifyError = prettifyError;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-props.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-props.js
 var require_resolve_props = /* @__PURE__ */ __commonJSMin(((exports) => {
 	function resolveProps(tokens, { flow, indicator, next, offset, onError, parentIndent, startOnNewline }) {
 		let spaceBefore = false;
@@ -3989,7 +3989,7 @@ var require_resolve_props = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.resolveProps = resolveProps;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/util-contains-newline.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/util-contains-newline.js
 var require_util_contains_newline = /* @__PURE__ */ __commonJSMin(((exports) => {
 	function containsNewline(key) {
 		if (!key) return null;
@@ -4017,7 +4017,7 @@ var require_util_contains_newline = /* @__PURE__ */ __commonJSMin(((exports) => 
 	}
 	exports.containsNewline = containsNewline;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/util-flow-indent-check.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/util-flow-indent-check.js
 var require_util_flow_indent_check = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var utilContainsNewline = require_util_contains_newline();
 	function flowIndentCheck(indent, fc, onError) {
@@ -4028,7 +4028,7 @@ var require_util_flow_indent_check = /* @__PURE__ */ __commonJSMin(((exports) =>
 	}
 	exports.flowIndentCheck = flowIndentCheck;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/util-map-includes.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/util-map-includes.js
 var require_util_map_includes = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	function mapIncludes(ctx, items, search) {
@@ -4039,7 +4039,7 @@ var require_util_map_includes = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.mapIncludes = mapIncludes;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-block-map.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-block-map.js
 var require_resolve_block_map = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Pair = require_Pair();
 	var YAMLMap = require_YAMLMap();
@@ -4126,7 +4126,7 @@ var require_resolve_block_map = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.resolveBlockMap = resolveBlockMap;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-block-seq.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-block-seq.js
 var require_resolve_block_seq = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var YAMLSeq = require_YAMLSeq();
 	var resolveProps = require_resolve_props();
@@ -4170,7 +4170,7 @@ var require_resolve_block_seq = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.resolveBlockSeq = resolveBlockSeq;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-end.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-end.js
 var require_resolve_end = /* @__PURE__ */ __commonJSMin(((exports) => {
 	function resolveEnd(end, offset, reqSpace, onError) {
 		let comment = "";
@@ -4207,7 +4207,7 @@ var require_resolve_end = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.resolveEnd = resolveEnd;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-flow-collection.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-flow-collection.js
 var require_resolve_flow_collection = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var Pair = require_Pair();
@@ -4369,7 +4369,7 @@ var require_resolve_flow_collection = /* @__PURE__ */ __commonJSMin(((exports) =
 	}
 	exports.resolveFlowCollection = resolveFlowCollection;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/compose-collection.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/compose-collection.js
 var require_compose_collection = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var Scalar = require_Scalar();
@@ -4420,7 +4420,7 @@ var require_compose_collection = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.composeCollection = composeCollection;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-block-scalar.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-block-scalar.js
 var require_resolve_block_scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Scalar = require_Scalar();
 	function resolveBlockScalar(ctx, scalar, onError) {
@@ -4596,7 +4596,7 @@ var require_resolve_block_scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.resolveBlockScalar = resolveBlockScalar;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-flow-scalar.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/resolve-flow-scalar.js
 var require_resolve_flow_scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Scalar = require_Scalar();
 	var resolveEnd = require_resolve_end();
@@ -4800,7 +4800,7 @@ var require_resolve_flow_scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.resolveFlowScalar = resolveFlowScalar;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/compose-scalar.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/compose-scalar.js
 var require_compose_scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var identity = require_identity();
 	var Scalar = require_Scalar();
@@ -4860,7 +4860,7 @@ var require_compose_scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.composeScalar = composeScalar;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/util-empty-scalar-position.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/util-empty-scalar-position.js
 var require_util_empty_scalar_position = /* @__PURE__ */ __commonJSMin(((exports) => {
 	function emptyScalarPosition(offset, before, pos) {
 		if (before) {
@@ -4886,7 +4886,7 @@ var require_util_empty_scalar_position = /* @__PURE__ */ __commonJSMin(((exports
 	}
 	exports.emptyScalarPosition = emptyScalarPosition;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/compose-node.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/compose-node.js
 var require_compose_node = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Alias = require_Alias();
 	var identity = require_identity();
@@ -4976,7 +4976,7 @@ var require_compose_node = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.composeEmptyNode = composeEmptyNode;
 	exports.composeNode = composeNode;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/compose-doc.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/compose-doc.js
 var require_compose_doc = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var Document = require_Document();
 	var composeNode = require_compose_node();
@@ -5017,7 +5017,7 @@ var require_compose_doc = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.composeDoc = composeDoc;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/composer.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/compose/composer.js
 var require_composer = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var node_process = __require("process");
 	var directives = require_directives();
@@ -5214,7 +5214,7 @@ var require_composer = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.Composer = Composer;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/cst-scalar.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/cst-scalar.js
 var require_cst_scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var resolveBlockScalar = require_resolve_block_scalar();
 	var resolveFlowScalar = require_resolve_flow_scalar();
@@ -5480,7 +5480,7 @@ var require_cst_scalar = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.resolveAsScalar = resolveAsScalar;
 	exports.setScalarValue = setScalarValue;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/cst-stringify.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/cst-stringify.js
 var require_cst_stringify = /* @__PURE__ */ __commonJSMin(((exports) => {
 	/**
 	* Stringify a CST document, token, or collection item
@@ -5530,7 +5530,7 @@ var require_cst_stringify = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.stringify = stringify;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/cst-visit.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/cst-visit.js
 var require_cst_visit = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var BREAK = Symbol("break visit");
 	var SKIP = Symbol("skip children");
@@ -5620,7 +5620,7 @@ var require_cst_visit = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.visit = visit;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/cst.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/cst.js
 var require_cst = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var cstScalar = require_cst_scalar();
 	var cstStringify = require_cst_stringify();
@@ -5698,7 +5698,7 @@ var require_cst = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.prettyToken = prettyToken;
 	exports.tokenType = tokenType;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/lexer.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/lexer.js
 var require_lexer = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var cst = require_cst();
 	function isEmpty(ch) {
@@ -6230,7 +6230,7 @@ var require_lexer = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.Lexer = Lexer;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/line-counter.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/line-counter.js
 var require_line_counter = /* @__PURE__ */ __commonJSMin(((exports) => {
 	/**
 	* Tracks newlines during parsing in order to provide an efficient API for
@@ -6276,7 +6276,7 @@ var require_line_counter = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.LineCounter = LineCounter;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/parser.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/parser.js
 var require_parser = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var node_process = __require("process");
 	var cst = require_cst();
@@ -7141,7 +7141,7 @@ var require_parser = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.Parser = Parser;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/public-api.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/public-api.js
 var require_public_api = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var composer = require_composer();
 	var Document = require_Document();
@@ -7474,7 +7474,7 @@ function buildParser(spec) {
 		};
 	};
 }
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/code.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/code.js
 var require_code$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.regexpCode = exports.getEsmExportName = exports.getProperty = exports.safeStringify = exports.stringify = exports.strConcat = exports.addCodeArg = exports.str = exports._ = exports.nil = exports._Code = exports.Name = exports.IDENTIFIER = exports._CodeOrName = void 0;
@@ -7608,7 +7608,7 @@ var require_code$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.regexpCode = regexpCode;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/scope.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/scope.js
 var require_scope = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.ValueScope = exports.ValueScopeName = exports.Scope = exports.varKinds = exports.UsedValueState = void 0;
@@ -7744,7 +7744,7 @@ var require_scope = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.ValueScope = ValueScope;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/index.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/index.js
 var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.or = exports.and = exports.not = exports.CodeGen = exports.operators = exports.varKinds = exports.ValueScopeName = exports.ValueScope = exports.Scope = exports.Name = exports.regexpCode = exports.stringify = exports.getProperty = exports.nil = exports.strConcat = exports.str = exports._ = void 0;
@@ -8412,7 +8412,7 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
 		return x instanceof code_1.Name ? x : (0, code_1._)`(${x})`;
 	}
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/util.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/util.js
 var require_util = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.checkStrictMode = exports.getErrorPath = exports.Type = exports.useFunc = exports.setEvaluated = exports.evaluatedPropsToName = exports.mergeEvaluated = exports.eachItem = exports.unescapeJsonPointer = exports.escapeJsonPointer = exports.escapeFragment = exports.unescapeFragment = exports.schemaRefOrVal = exports.schemaHasRulesButRef = exports.schemaHasRules = exports.checkUnknownRules = exports.alwaysValidSchema = exports.toHash = void 0;
@@ -8552,7 +8552,7 @@ var require_util = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.checkStrictMode = checkStrictMode;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/names.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/names.js
 var require_names = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -8575,7 +8575,7 @@ var require_names = /* @__PURE__ */ __commonJSMin(((exports) => {
 		jsonPart: new codegen_1.Name("jsonPart")
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/errors.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/errors.js
 var require_errors = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.extendErrors = exports.resetErrorsCount = exports.reportExtraError = exports.reportError = exports.keyword$DataError = exports.keywordError = void 0;
@@ -8670,7 +8670,7 @@ var require_errors = /* @__PURE__ */ __commonJSMin(((exports) => {
 		if (propertyName) keyValues.push([E.propertyName, propertyName]);
 	}
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/boolSchema.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/boolSchema.js
 var require_boolSchema = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.boolOrEmptySchema = exports.topBoolOrEmptySchema = void 0;
@@ -8711,7 +8711,7 @@ var require_boolSchema = /* @__PURE__ */ __commonJSMin(((exports) => {
 		(0, errors_1.reportError)(cxt, boolError, void 0, overrideAllErrors);
 	}
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/rules.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/rules.js
 var require_rules = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.getRules = exports.isJSONType = void 0;
@@ -8768,7 +8768,7 @@ var require_rules = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.getRules = getRules;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/applicability.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/applicability.js
 var require_applicability = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.shouldUseRule = exports.shouldUseGroup = exports.schemaHasRulesForType = void 0;
@@ -8787,7 +8787,7 @@ var require_applicability = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.shouldUseRule = shouldUseRule;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/dataType.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/dataType.js
 var require_dataType = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.reportTypeError = exports.checkDataTypes = exports.checkDataType = exports.coerceAndCheckDataType = exports.getJSONTypes = exports.getSchemaTypes = exports.DataType = void 0;
@@ -8950,7 +8950,7 @@ var require_dataType = /* @__PURE__ */ __commonJSMin(((exports) => {
 		};
 	}
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/defaults.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/defaults.js
 var require_defaults = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.assignDefaults = void 0;
@@ -8975,7 +8975,7 @@ var require_defaults = /* @__PURE__ */ __commonJSMin(((exports) => {
 		gen.if(condition, (0, codegen_1._)`${childData} = ${(0, codegen_1.stringify)(defaultValue)}`);
 	}
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/code.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/code.js
 var require_code = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.validateUnion = exports.validateArray = exports.usePattern = exports.callValidateCode = exports.schemaProperties = exports.allSchemaProperties = exports.noPropertyInData = exports.propertyInData = exports.isOwnProperty = exports.hasPropFunc = exports.reportMissingProp = exports.checkMissingProp = exports.checkReportMissingProp = void 0;
@@ -9098,7 +9098,7 @@ var require_code = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.validateUnion = validateUnion;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/keyword.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/keyword.js
 var require_keyword = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.validateKeywordUsage = exports.validSchemaType = exports.funcKeywordCode = exports.macroKeywordCode = void 0;
@@ -9203,7 +9203,7 @@ var require_keyword = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.validateKeywordUsage = validateKeywordUsage;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/subschema.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/subschema.js
 var require_subschema = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.extendSubschemaMode = exports.extendSubschemaData = exports.getSubschema = void 0;
@@ -9269,7 +9269,7 @@ var require_subschema = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.extendSubschemaMode = extendSubschemaMode;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/fast-deep-equal@3.1.3/node_modules/fast-deep-equal/index.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/fast-deep-equal@3.1.3/node_modules/fast-deep-equal/index.js
 var require_fast_deep_equal = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	module.exports = function equal(a, b) {
 		if (a === b) return true;
@@ -9298,7 +9298,7 @@ var require_fast_deep_equal = /* @__PURE__ */ __commonJSMin(((exports, module) =
 		return a !== a && b !== b;
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/json-schema-traverse@1.0.0/node_modules/json-schema-traverse/index.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/json-schema-traverse@1.0.0/node_modules/json-schema-traverse/index.js
 var require_json_schema_traverse = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var traverse = module.exports = function(schema, opts, cb) {
 		if (typeof opts == "function") {
@@ -9372,7 +9372,7 @@ var require_json_schema_traverse = /* @__PURE__ */ __commonJSMin(((exports, modu
 		return str.replace(/~/g, "~0").replace(/\//g, "~1");
 	}
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/resolve.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/resolve.js
 var require_resolve = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.getSchemaRefs = exports.resolveUrl = exports.normalizeId = exports._getFullPath = exports.getFullPath = exports.inlineRef = void 0;
@@ -9500,7 +9500,7 @@ var require_resolve = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.getSchemaRefs = getSchemaRefs;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/index.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/validate/index.js
 var require_validate = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.getData = exports.KeywordCxt = exports.validateFunctionCode = void 0;
@@ -9918,7 +9918,7 @@ var require_validate = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.getData = getData;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/validation_error.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/validation_error.js
 var require_validation_error = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var ValidationError = class extends Error {
@@ -9930,7 +9930,7 @@ var require_validation_error = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.default = ValidationError;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/ref_error.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/ref_error.js
 var require_ref_error = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var resolve_1 = require_resolve();
@@ -9943,7 +9943,7 @@ var require_ref_error = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.default = MissingRefError;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/index.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/index.js
 var require_compile = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.resolveSchema = exports.getCompilingSchema = exports.resolveRef = exports.compileSchema = exports.SchemaEnv = void 0;
@@ -10156,7 +10156,7 @@ var require_compile = /* @__PURE__ */ __commonJSMin(((exports) => {
 		if (env.schema !== env.root.schema) return env;
 	}
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/data.json
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/data.json
 var data_exports = /* @__PURE__ */ __exportAll({
 	$id: () => $id$9,
 	additionalProperties: () => false,
@@ -10184,7 +10184,7 @@ var init_data = __esmMin((() => {
 		additionalProperties: false
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/fast-uri@3.1.9/node_modules/fast-uri/lib/utils.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/fast-uri@3.1.9/node_modules/fast-uri/lib/utils.js
 var require_utils = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	/** @type {(value: string) => boolean} */
 	var isUUID = RegExp.prototype.test.bind(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/iu);
@@ -10820,7 +10820,7 @@ var require_utils = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		stringArrayToHexStripped
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/fast-uri@3.1.9/node_modules/fast-uri/lib/schemes.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/fast-uri@3.1.9/node_modules/fast-uri/lib/schemes.js
 var require_schemes = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var { isUUID } = require_utils();
 	var URN_REG = /^([\da-z][\d\-a-z]{0,31}):((?:[\w!$'()*+,\-./:;=@]|%[\da-f]{2})+)$/iu;
@@ -11003,7 +11003,7 @@ var require_schemes = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		getSchemeHandler
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/fast-uri@3.1.9/node_modules/fast-uri/index.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/fast-uri@3.1.9/node_modules/fast-uri/index.js
 var require_fast_uri = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var { normalizeIPv6, removeDotSegments, removeDotSegmentsRelative, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, serializePathEncoding, normalizeQueryFragmentEncoding, encodeQuery, encodeFragment, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils();
 	var { SCHEMES, getSchemeHandler } = require_schemes();
@@ -11453,14 +11453,14 @@ var require_fast_uri = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	module.exports.default = fastUri;
 	module.exports.fastUri = fastUri;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/uri.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/uri.js
 var require_uri = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var uri = require_fast_uri();
 	uri.code = "require(\"ajv/dist/runtime/uri\").default";
 	exports.default = uri;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/core.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/core.js
 var require_core$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = void 0;
@@ -12028,7 +12028,7 @@ var require_core$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 		return { anyOf: [schema, $dataRef] };
 	}
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/core/id.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/core/id.js
 var require_id = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.default = {
@@ -12038,7 +12038,7 @@ var require_id = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/core/ref.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/core/ref.js
 var require_ref = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.callRef = exports.getValidate = void 0;
@@ -12144,7 +12144,7 @@ var require_ref = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.callRef = callRef;
 	exports.default = def;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/core/index.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/core/index.js
 var require_core = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var id_1 = require_id();
@@ -12160,7 +12160,7 @@ var require_core = /* @__PURE__ */ __commonJSMin(((exports) => {
 		ref_1.default
 	];
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitNumber.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitNumber.js
 var require_limitNumber = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -12202,7 +12202,7 @@ var require_limitNumber = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/multipleOf.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/multipleOf.js
 var require_multipleOf = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -12224,7 +12224,7 @@ var require_multipleOf = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/ucs2length.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/ucs2length.js
 var require_ucs2length = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	function ucs2length(str) {
@@ -12245,7 +12245,7 @@ var require_ucs2length = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.default = ucs2length;
 	ucs2length.code = "require(\"ajv/dist/runtime/ucs2length\").default";
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitLength.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitLength.js
 var require_limitLength = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -12271,7 +12271,7 @@ var require_limitLength = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/pattern.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/pattern.js
 var require_pattern = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var code_1 = require_code();
@@ -12302,7 +12302,7 @@ var require_pattern = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitProperties.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitProperties.js
 var require_limitProperties = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -12325,7 +12325,7 @@ var require_limitProperties = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/required.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/required.js
 var require_required = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var code_1 = require_code();
@@ -12390,7 +12390,7 @@ var require_required = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitItems.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitItems.js
 var require_limitItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -12413,14 +12413,14 @@ var require_limitItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/equal.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/runtime/equal.js
 var require_equal = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var equal = require_fast_deep_equal();
 	equal.code = "require(\"ajv/dist/runtime/equal\").default";
 	exports.default = equal;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/uniqueItems.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/uniqueItems.js
 var require_uniqueItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var dataType_1 = require_dataType();
@@ -12482,7 +12482,7 @@ var require_uniqueItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/const.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/const.js
 var require_const = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -12502,7 +12502,7 @@ var require_const = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/enum.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/enum.js
 var require_enum = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -12544,7 +12544,7 @@ var require_enum = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/index.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/index.js
 var require_validation = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var limitNumber_1 = require_limitNumber();
@@ -12578,7 +12578,7 @@ var require_validation = /* @__PURE__ */ __commonJSMin(((exports) => {
 		enum_1.default
 	];
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/additionalItems.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/additionalItems.js
 var require_additionalItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.validateAdditionalItems = void 0;
@@ -12629,7 +12629,7 @@ var require_additionalItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.validateAdditionalItems = validateAdditionalItems;
 	exports.default = def;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/items.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/items.js
 var require_items = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.validateTuple = void 0;
@@ -12681,7 +12681,7 @@ var require_items = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.validateTuple = validateTuple;
 	exports.default = def;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/prefixItems.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/prefixItems.js
 var require_prefixItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var items_1 = require_items();
@@ -12693,7 +12693,7 @@ var require_prefixItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 		code: (cxt) => (0, items_1.validateTuple)(cxt, "items")
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/items2020.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/items2020.js
 var require_items2020 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -12719,7 +12719,7 @@ var require_items2020 = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/contains.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/contains.js
 var require_contains = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -12802,7 +12802,7 @@ var require_contains = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/dependencies.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/dependencies.js
 var require_dependencies = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.validateSchemaDeps = exports.validatePropertyDeps = exports.error = void 0;
@@ -12882,7 +12882,7 @@ var require_dependencies = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.validateSchemaDeps = validateSchemaDeps;
 	exports.default = def;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/propertyNames.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/propertyNames.js
 var require_propertyNames = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -12917,7 +12917,7 @@ var require_propertyNames = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js
 var require_additionalProperties = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var code_1 = require_code();
@@ -13005,7 +13005,7 @@ var require_additionalProperties = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/properties.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/properties.js
 var require_properties = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var validate_1 = require_validate();
@@ -13049,7 +13049,7 @@ var require_properties = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/patternProperties.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/patternProperties.js
 var require_patternProperties = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var code_1 = require_code();
@@ -13103,7 +13103,7 @@ var require_patternProperties = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/not.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/not.js
 var require_not = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var util_1 = require_util();
@@ -13129,7 +13129,7 @@ var require_not = /* @__PURE__ */ __commonJSMin(((exports) => {
 		error: { message: "must NOT be valid" }
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/anyOf.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/anyOf.js
 var require_anyOf = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.default = {
@@ -13140,7 +13140,7 @@ var require_anyOf = /* @__PURE__ */ __commonJSMin(((exports) => {
 		error: { message: "must match a schema in anyOf" }
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/oneOf.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/oneOf.js
 var require_oneOf = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -13185,7 +13185,7 @@ var require_oneOf = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/allOf.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/allOf.js
 var require_allOf = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var util_1 = require_util();
@@ -13209,7 +13209,7 @@ var require_allOf = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/if.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/if.js
 var require_if = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -13265,7 +13265,7 @@ var require_if = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.default = def;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/thenElse.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/thenElse.js
 var require_thenElse = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var util_1 = require_util();
@@ -13277,7 +13277,7 @@ var require_thenElse = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/index.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/index.js
 var require_applicator = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var additionalItems_1 = require_additionalItems();
@@ -13317,7 +13317,7 @@ var require_applicator = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.default = getApplicator;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/dynamicAnchor.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/dynamicAnchor.js
 var require_dynamicAnchor = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.dynamicAnchor = void 0;
@@ -13355,7 +13355,7 @@ var require_dynamicAnchor = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.default = def;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/dynamicRef.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/dynamicRef.js
 var require_dynamicRef = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.dynamicRef = void 0;
@@ -13393,7 +13393,7 @@ var require_dynamicRef = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.dynamicRef = dynamicRef;
 	exports.default = def;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/recursiveAnchor.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/recursiveAnchor.js
 var require_recursiveAnchor = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var dynamicAnchor_1 = require_dynamicAnchor();
@@ -13407,7 +13407,7 @@ var require_recursiveAnchor = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/recursiveRef.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/recursiveRef.js
 var require_recursiveRef = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var dynamicRef_1 = require_dynamicRef();
@@ -13417,7 +13417,7 @@ var require_recursiveRef = /* @__PURE__ */ __commonJSMin(((exports) => {
 		code: (cxt) => (0, dynamicRef_1.dynamicRef)(cxt, cxt.schema)
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/index.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/dynamic/index.js
 var require_dynamic = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var dynamicAnchor_1 = require_dynamicAnchor();
@@ -13431,7 +13431,7 @@ var require_dynamic = /* @__PURE__ */ __commonJSMin(((exports) => {
 		recursiveRef_1.default
 	];
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/dependentRequired.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/dependentRequired.js
 var require_dependentRequired = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var dependencies_1 = require_dependencies();
@@ -13443,7 +13443,7 @@ var require_dependentRequired = /* @__PURE__ */ __commonJSMin(((exports) => {
 		code: (cxt) => (0, dependencies_1.validatePropertyDeps)(cxt)
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/dependentSchemas.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/applicator/dependentSchemas.js
 var require_dependentSchemas = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var dependencies_1 = require_dependencies();
@@ -13454,7 +13454,7 @@ var require_dependentSchemas = /* @__PURE__ */ __commonJSMin(((exports) => {
 		code: (cxt) => (0, dependencies_1.validateSchemaDeps)(cxt)
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitContains.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/validation/limitContains.js
 var require_limitContains = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var util_1 = require_util();
@@ -13467,7 +13467,7 @@ var require_limitContains = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/next.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/next.js
 var require_next = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var dependentRequired_1 = require_dependentRequired();
@@ -13479,7 +13479,7 @@ var require_next = /* @__PURE__ */ __commonJSMin(((exports) => {
 		limitContains_1.default
 	];
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedProperties.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedProperties.js
 var require_unevaluatedProperties = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -13531,7 +13531,7 @@ var require_unevaluatedProperties = /* @__PURE__ */ __commonJSMin(((exports) => 
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedItems.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedItems.js
 var require_unevaluatedItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -13571,14 +13571,14 @@ var require_unevaluatedItems = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/unevaluated/index.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/unevaluated/index.js
 var require_unevaluated = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var unevaluatedProperties_1 = require_unevaluatedProperties();
 	var unevaluatedItems_1 = require_unevaluatedItems();
 	exports.default = [unevaluatedProperties_1.default, unevaluatedItems_1.default];
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/format/format.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/format/format.js
 var require_format$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -13665,12 +13665,12 @@ var require_format$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/format/index.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/format/index.js
 var require_format = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.default = [require_format$1().default];
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/metadata.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/metadata.js
 var require_metadata = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.contentVocabulary = exports.metadataVocabulary = void 0;
@@ -13689,7 +13689,7 @@ var require_metadata = /* @__PURE__ */ __commonJSMin(((exports) => {
 		"contentSchema"
 	];
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/draft2020.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/draft2020.js
 var require_draft2020 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var core_1 = require_core();
@@ -13712,7 +13712,7 @@ var require_draft2020 = /* @__PURE__ */ __commonJSMin(((exports) => {
 		unevaluated_1.default
 	];
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/discriminator/types.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/discriminator/types.js
 var require_types = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.DiscrError = void 0;
@@ -13722,7 +13722,7 @@ var require_types = /* @__PURE__ */ __commonJSMin(((exports) => {
 		DiscrError["Mapping"] = "mapping";
 	})(DiscrError || (exports.DiscrError = DiscrError = {}));
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/discriminator/index.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/discriminator/index.js
 var require_discriminator = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var codegen_1 = require_codegen();
@@ -13814,7 +13814,7 @@ var require_discriminator = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/schema.json
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/schema.json
 var schema_exports = /* @__PURE__ */ __exportAll({
 	$comment: () => $comment,
 	$dynamicAnchor: () => $dynamicAnchor$7,
@@ -13891,7 +13891,7 @@ var init_schema = __esmMin((() => {
 		properties: properties$8
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/applicator.json
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/applicator.json
 var applicator_exports = /* @__PURE__ */ __exportAll({
 	$defs: () => $defs$2,
 	$dynamicAnchor: () => $dynamicAnchor$6,
@@ -13957,7 +13957,7 @@ var init_applicator = __esmMin((() => {
 		$defs: $defs$2
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/unevaluated.json
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/unevaluated.json
 var unevaluated_exports = /* @__PURE__ */ __exportAll({
 	$dynamicAnchor: () => $dynamicAnchor$5,
 	$id: () => $id$6,
@@ -13990,7 +13990,7 @@ var init_unevaluated = __esmMin((() => {
 		properties: properties$6
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/content.json
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/content.json
 var content_exports = /* @__PURE__ */ __exportAll({
 	$dynamicAnchor: () => $dynamicAnchor$4,
 	$id: () => $id$5,
@@ -14024,7 +14024,7 @@ var init_content = __esmMin((() => {
 		properties: properties$5
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/core.json
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/core.json
 var core_exports = /* @__PURE__ */ __exportAll({
 	$defs: () => $defs$1,
 	$dynamicAnchor: () => $dynamicAnchor$3,
@@ -14091,7 +14091,7 @@ var init_core = __esmMin((() => {
 		$defs: $defs$1
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/format-annotation.json
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/format-annotation.json
 var format_annotation_exports = /* @__PURE__ */ __exportAll({
 	$dynamicAnchor: () => $dynamicAnchor$2,
 	$id: () => $id$3,
@@ -14121,7 +14121,7 @@ var init_format_annotation = __esmMin((() => {
 		properties: properties$3
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/meta-data.json
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/meta-data.json
 var meta_data_exports = /* @__PURE__ */ __exportAll({
 	$dynamicAnchor: () => $dynamicAnchor$1,
 	$id: () => $id$2,
@@ -14171,7 +14171,7 @@ var init_meta_data = __esmMin((() => {
 		properties: properties$2
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/validation.json
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/meta/validation.json
 var validation_exports = /* @__PURE__ */ __exportAll({
 	$defs: () => $defs,
 	$dynamicAnchor: () => $dynamicAnchor,
@@ -14272,7 +14272,7 @@ var init_validation = __esmMin((() => {
 		$defs
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/index.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-2020-12/index.js
 var require_json_schema_2020_12 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var metaSchema = (init_schema(), __toCommonJS(schema_exports).default);
@@ -14302,7 +14302,7 @@ var require_json_schema_2020_12 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	}
 	exports.default = addMetaSchema2020;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/2020.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/2020.js
 var require__2020 = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.MissingRefError = exports.ValidationError = exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = exports.Ajv2020 = void 0;
@@ -14400,7 +14400,7 @@ var require__2020 = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		}
 	});
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv-formats@3.0.1_ajv@8.20.0/node_modules/ajv-formats/dist/formats.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv-formats@3.0.1_ajv@8.20.0/node_modules/ajv-formats/dist/formats.js
 var require_formats = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.formatNames = exports.fastFormats = exports.fullFormats = void 0;
@@ -14587,7 +14587,7 @@ var require_formats = /* @__PURE__ */ __commonJSMin(((exports) => {
 		}
 	}
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/draft7.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/vocabularies/draft7.js
 var require_draft7 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var core_1 = require_core();
@@ -14604,7 +14604,7 @@ var require_draft7 = /* @__PURE__ */ __commonJSMin(((exports) => {
 		metadata_1.contentVocabulary
 	];
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-draft-07.json
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/refs/json-schema-draft-07.json
 var json_schema_draft_07_exports = /* @__PURE__ */ __exportAll({
 	$id: () => $id,
 	$schema: () => $schema,
@@ -14757,7 +14757,7 @@ var init_json_schema_draft_07 = __esmMin((() => {
 		"default": true
 	};
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/ajv.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/ajv.js
 var require_ajv = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.MissingRefError = exports.ValidationError = exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = exports.Ajv = void 0;
@@ -14848,7 +14848,7 @@ var require_ajv = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		}
 	});
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv-formats@3.0.1_ajv@8.20.0/node_modules/ajv-formats/dist/limit.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv-formats@3.0.1_ajv@8.20.0/node_modules/ajv-formats/dist/limit.js
 var require_limit = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.formatLimitDefinition = void 0;
@@ -14925,7 +14925,7 @@ var require_limit = /* @__PURE__ */ __commonJSMin(((exports) => {
 	};
 	exports.default = formatLimitPlugin;
 }));
-// ../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv-formats@3.0.1_ajv@8.20.0/node_modules/ajv-formats/dist/index.js
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv-formats@3.0.1_ajv@8.20.0/node_modules/ajv-formats/dist/index.js
 var require_dist = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	var formats_1 = require_formats();
@@ -15394,7 +15394,7 @@ function defaultDataDir() {
 	return process.env.FACTORY_DATA_DIR ?? homeDataDir();
 }
 function homeDataDir() {
-	return path.join(os.homedir(), ".skill-factory");
+	return process.env.FACTORY_HOME_DIR ?? path.join(os.homedir(), ".skill-factory");
 }
 function sourcesFile() {
 	return path.join(homeDataDir(), "sources.json");
@@ -15425,6 +15425,24 @@ function viewerOptions(dataDir) {
 }
 // src/config.ts
 var DEFAULT_MEMORY_LAYER = "olko-memory-layer";
+var DEFAULT_PROJECTS = {
+	markers: [
+		".agents/skill-config.md",
+		".agents/skills",
+		".opencode/agents",
+		".claude/skills",
+		".claude/agents"
+	],
+	maxDepth: 3,
+	statusWorkflow: "olko-project-status"
+};
+/** Project discovery settings from a parsed config file, with defaults. */
+function projectsOf(raw) {
+	return {
+		...DEFAULT_PROJECTS,
+		...raw?.projects ?? {}
+	};
+}
 /** The marketplace skill that gives an agent persistent memory, from a parsed config file. */
 function memoryLayerOf(raw) {
 	return raw?.memoryLayer ?? "olko-memory-layer";
@@ -15444,7 +15462,8 @@ function loadFactoryConfig(file = configFile()) {
 			pauseRatio: raw.budget.pauseRatio ?? .8
 		},
 		switches: raw.switches ?? {},
-		memoryLayer: memoryLayerOf(raw)
+		memoryLayer: memoryLayerOf(raw),
+		projects: projectsOf(raw)
 	};
 }
 // src/marketplace-agents.ts
@@ -17632,6 +17651,237 @@ function cspMiddleware({ nonceFactory = createNonce } = {}) {
 		next();
 	};
 }
+// src/projects.ts
+var ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
+var SKIP = /* @__PURE__ */ new Set([
+	"node_modules",
+	".git",
+	"dist",
+	"build",
+	"bin",
+	"obj",
+	"target",
+	".venv",
+	"venv"
+]);
+/** The registry file. It lives in the user's factory home, never in a repository. */
+function projectsFile() {
+	return process.env.FACTORY_PROJECTS_FILE ?? path.join(homeDataDir(), "projects.json");
+}
+function readRegistry(file = projectsFile()) {
+	try {
+		const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+		const projects = Array.isArray(raw.projects) ? raw.projects.filter((p) => !!p && typeof p.id === "string" && ID.test(p.id) && typeof p.path === "string") : [];
+		return {
+			schemaVersion: 1,
+			roots: Array.isArray(raw.roots) ? raw.roots.filter((r) => typeof r === "string") : [],
+			projects
+		};
+	} catch {
+		return {
+			schemaVersion: 1,
+			roots: [],
+			projects: []
+		};
+	}
+}
+function writeRegistry(registry, file = projectsFile()) {
+	fs.mkdirSync(path.dirname(file), { recursive: true });
+	const temp = `${file}.${process.pid}.tmp`;
+	fs.writeFileSync(temp, `${JSON.stringify(registry, null, 2)}\n`);
+	fs.renameSync(temp, file);
+	return registry;
+}
+function sameFolder(a, b) {
+	const norm = (p) => process.platform === "win32" ? path.resolve(p).toLowerCase() : path.resolve(p);
+	return norm(a) === norm(b);
+}
+function folder(dir, what) {
+	if (typeof dir !== "string" || !dir.trim()) throw new Error(`${what} must be a folder path`);
+	const full = path.resolve(dir);
+	if (!fs.existsSync(full) || !fs.statSync(full).isDirectory()) throw new Error(`${what} ${full} is not a folder`);
+	return full;
+}
+/** A kebab-case id from a folder name that no project uses yet. */
+function suggestId(dir, taken) {
+	const used = new Set(taken);
+	const base = path.basename(path.resolve(dir)).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "project";
+	const start = /^[a-z0-9]/.test(base) ? base : `p-${base}`;
+	let id = start;
+	for (let n = 2; used.has(id); n += 1) id = `${start}-${n}`;
+	return id;
+}
+function projectById(id, file = projectsFile()) {
+	const project = readRegistry(file).projects.find((p) => p.id === id);
+	if (!project) throw new Error(`unknown project ${id}; add it first`);
+	return project;
+}
+function addProject(request, file = projectsFile()) {
+	const registry = readRegistry(file);
+	const dir = folder(request.path, "project");
+	const existing = registry.projects.find((p) => sameFolder(p.path, dir));
+	if (existing) throw new Error(`folder already registered as ${existing.id}`);
+	if (request.id !== void 0 && !ID.test(request.id)) throw new Error("id must be kebab-case: lowercase letters, digits and -");
+	if (request.id && registry.projects.some((p) => p.id === request.id)) throw new Error(`id ${request.id} is taken`);
+	const project = {
+		id: request.id ?? suggestId(dir, registry.projects.map((p) => p.id)),
+		path: dir,
+		...request.marketplace ? { marketplace: folder(request.marketplace, "marketplace") } : {}
+	};
+	writeRegistry({
+		...registry,
+		projects: [...registry.projects, project]
+	}, file);
+	return project;
+}
+function removeProject(id, file = projectsFile()) {
+	const registry = readRegistry(file);
+	const project = registry.projects.find((p) => p.id === id);
+	if (!project) throw new Error(`unknown project ${id}`);
+	writeRegistry({
+		...registry,
+		projects: registry.projects.filter((p) => p.id !== id)
+	}, file);
+	return project;
+}
+function addRoot(dir, file = projectsFile()) {
+	const registry = readRegistry(file);
+	const full = folder(dir, "root");
+	if (registry.roots.some((r) => sameFolder(r, full))) return registry.roots;
+	return writeRegistry({
+		...registry,
+		roots: [...registry.roots, full]
+	}, file).roots;
+}
+function removeRoot(dir, file = projectsFile()) {
+	const registry = readRegistry(file);
+	return writeRegistry({
+		...registry,
+		roots: registry.roots.filter((r) => !sameFolder(r, dir))
+	}, file).roots;
+}
+/** A linked git worktree has a `.git` file, not a folder; its main checkout is the project. */
+function isLinkedWorktree(dir) {
+	const dotGit = path.join(dir, ".git");
+	try {
+		return fs.statSync(dotGit).isFile() && /\/worktrees\//.test(fs.readFileSync(dotGit, "utf8").replace(/\\/g, "/"));
+	} catch {
+		return false;
+	}
+}
+/**
+* Folders under the roots that hold at least one marker and are not registered yet.
+* It never descends into a candidate, a linked worktree, a skipped folder or a hidden folder.
+* Discovery only proposes; nothing is registered until the user adds a candidate.
+*/
+function discoverProjects(settings, roots, file = projectsFile()) {
+	const registry = readRegistry(file);
+	const searched = (roots ?? registry.roots).filter((r) => fs.existsSync(r));
+	const taken = registry.projects.map((p) => p.id);
+	const found = [];
+	const visit = (dir, depth) => {
+		if (isLinkedWorktree(dir)) return;
+		const markers = settings.markers.filter((m) => fs.existsSync(path.join(dir, m)));
+		if (markers.length) {
+			if (!registry.projects.some((p) => sameFolder(p.path, dir)) && !found.some((c) => sameFolder(c.path, dir))) {
+				const suggestedId = suggestId(dir, [...taken, ...found.map((c) => c.suggestedId)]);
+				found.push({
+					path: dir,
+					suggestedId,
+					markers
+				});
+			}
+			return;
+		}
+		if (depth >= settings.maxDepth) return;
+		let entries = [];
+		try {
+			entries = fs.readdirSync(dir, { withFileTypes: true });
+		} catch {
+			return;
+		}
+		for (const entry of entries) {
+			if (!entry.isDirectory() || entry.name.startsWith(".") || SKIP.has(entry.name)) continue;
+			visit(path.join(dir, entry.name), depth + 1);
+		}
+	};
+	for (const root of searched) visit(path.resolve(root), 0);
+	return found.sort((a, b) => a.path.localeCompare(b.path));
+}
+/** The run input for a registered project: its folder, its id and, when set, its marketplace. */
+function projectInput(id, file = projectsFile()) {
+	const project = projectById(id, file);
+	if (!fs.existsSync(project.path)) throw new Error(`project ${id}: folder ${project.path} does not exist`);
+	return {
+		project: project.path,
+		projectId: project.id,
+		...project.marketplace ? { marketplace: project.marketplace } : {}
+	};
+}
+function longPath(p) {
+	const resolved = path.resolve(p);
+	return fs.existsSync(resolved) ? fs.realpathSync.native(resolved) : resolved;
+}
+/** The run input of a run started for a registered project: its folder as `project`, its id, and its marketplace unless the input names one. */
+function projectScopedInput(projectId, input) {
+	if (!projectId) return input;
+	const scoped = projectInput(projectId);
+	if (input.project && longPath(input.project) !== longPath(scoped.project)) throw new Error(`input.project is not the folder of project ${projectId}; pass one of them`);
+	return {
+		...scoped.marketplace ? { marketplace: scoped.marketplace } : {},
+		...input,
+		project: scoped.project,
+		projectId: scoped.projectId
+	};
+}
+/** One project registry action, shared by the MCP tool and the viewer. */
+function projectsAction({ action, path: dir, id, marketplace }) {
+	if (action === "list") return readRegistry();
+	if (action === "add") return { project: addProject({
+		path: dir ?? "",
+		...id ? { id } : {},
+		...marketplace ? { marketplace } : {}
+	}) };
+	if (action === "remove") return { project: removeProject(id ?? "") };
+	if (action === "add_root") return { roots: addRoot(dir ?? "") };
+	if (action === "remove_root") return { roots: removeRoot(dir ?? "") };
+	if (action === "discover") return { candidates: discoverProjects(loadFactoryConfig().projects, dir ? [dir] : void 0) };
+	throw new Error(`unknown projects action ${String(action)}`);
+}
+var USAGE = "usage: projects.ts list | add <folder> [--id <id>] [--marketplace <folder>] | remove <id> | roots | roots add <folder> | roots remove <folder> | discover [--root <folder>]";
+/** The command line: every command prints one JSON value. */
+function projectsCli(argv, file = projectsFile()) {
+	const [command, ...rest] = argv;
+	const flag = (name) => {
+		const index = rest.indexOf(`--${name}`);
+		return index >= 0 ? rest[index + 1] : void 0;
+	};
+	const positional = rest.filter((arg, index) => !arg.startsWith("--") && !(index > 0 && rest[index - 1]?.startsWith("--")));
+	switch (command) {
+		case "list": return readRegistry(file);
+		case "add": return addProject({
+			path: positional[0] ?? "",
+			...flag("id") ? { id: flag("id") } : {},
+			...flag("marketplace") ? { marketplace: flag("marketplace") } : {}
+		}, file);
+		case "remove": return removeProject(positional[0] ?? "", file);
+		case "roots":
+			if (positional[0] === "add") return addRoot(positional[1] ?? "", file);
+			if (positional[0] === "remove") return removeRoot(positional[1] ?? "", file);
+			return readRegistry(file).roots;
+		case "discover": {
+			const root = flag("root");
+			return discoverProjects(loadFactoryConfig().projects, root ? [root] : void 0, file);
+		}
+		default: throw new Error(USAGE);
+	}
+}
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) try {
+	process.stdout.write(`${JSON.stringify(projectsCli(process.argv.slice(2)), null, 2)}\n`);
+} catch (error) {
+	console.error(error instanceof Error ? error.message : String(error));
+	process.exit(2);
+}
 // src/standalone.ts
 var AGENT_FILE = /(agents\/opencode\/[a-z0-9-]+\.md|plugins\/[a-z0-9-]+\/agents\/[a-z0-9-]+\.md)/;
 function sourceAgentFile(spec) {
@@ -17858,6 +18108,68 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 }
 // app/data.ts
 var RUN_ID = /^r-[a-f0-9]{8}$/;
+var MAX_BODY = 16384;
+function readBody(req) {
+	return new Promise((resolve, reject) => {
+		if (!req.on) return resolve(void 0);
+		let data = "";
+		req.on("data", (chunk) => {
+			data += String(chunk);
+			if (data.length > MAX_BODY) reject(/* @__PURE__ */ new Error("request body is too large"));
+		});
+		req.on("end", () => {
+			try {
+				resolve(data ? JSON.parse(data) : void 0);
+			} catch {
+				reject(/* @__PURE__ */ new Error("request body is not JSON"));
+			}
+		});
+		req.on("error", (error) => reject(error instanceof Error ? error : new Error(String(error))));
+	});
+}
+var PROJECT_ACTIONS = /* @__PURE__ */ new Set([
+	"add",
+	"remove",
+	"add_root",
+	"remove_root",
+	"discover"
+]);
+/** A project registry action from the viewer: only the known fields, only strings. */
+function parseProjectsAction(body) {
+	if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("the request body must be a JSON object");
+	const b = body;
+	if (typeof b.action !== "string" || !PROJECT_ACTIONS.has(b.action)) throw new Error("action must be add, remove, add_root, remove_root or discover");
+	const text = (name) => {
+		const value = b[name];
+		if (value === void 0 || value === "") return void 0;
+		if (typeof value !== "string" || value.length > 1e3) throw new Error(`${name} must be a string`);
+		return value;
+	};
+	const dir = text("path");
+	const id = text("id");
+	const marketplace = text("marketplace");
+	return {
+		action: b.action,
+		...dir ? { path: dir } : {},
+		...id ? { id } : {},
+		...marketplace ? { marketplace } : {}
+	};
+}
+/** The status file named in a status run's state; only JSON files in the factory home's project-status folder. */
+function statusFileOf(state, statusDir = path.join(homeDataDir(), "project-status")) {
+	if (!state || typeof state !== "object") return null;
+	const root = path.resolve(statusDir);
+	const queue = [state];
+	while (queue.length) {
+		const value = queue.shift();
+		if (!value || typeof value !== "object") continue;
+		for (const [key, inner] of Object.entries(value)) if (key === "file" && typeof inner === "string" && inner.endsWith(".json")) {
+			const full = path.resolve(inner);
+			if (full.startsWith(root + path.sep) && fs.existsSync(full)) return full;
+		} else if (inner && typeof inner === "object") queue.push(inner);
+	}
+	return null;
+}
 function readJson(file) {
 	return JSON.parse(fs.readFileSync(file, "utf8"));
 }
@@ -17956,6 +18268,7 @@ function createDataApi({ factoryDir, dataDir, configFile, demo }) {
 				runId: run.runId,
 				goal: run.goal,
 				workflow: report.workflow.split("@")[0] ?? report.workflow,
+				projectId: typeof run.input?.projectId === "string" ? run.input.projectId : null,
 				ran: workflowsThatRan(specs, report.workflow.split("@")[0] ?? report.workflow, run.events.filter((e) => e.type === "node_started" && typeof e.node === "string").map((e) => String(e.node))),
 				status: run.status,
 				createdAt: run.events[0]?.at ?? null,
@@ -17997,8 +18310,71 @@ function createDataApi({ factoryDir, dataDir, configFile, demo }) {
 				...await updateMarketplace(hostExec, marketplaceDir()),
 				...scan(factoryDir)
 			};
+		},
+		projects() {
+			const statusWorkflow = projectsOf(readConfig()).statusWorkflow;
+			const registry = readRegistry();
+			const runs = projectRuns();
+			return {
+				roots: registry.roots,
+				statusWorkflow,
+				projects: registry.projects.map((p) => {
+					const own = runs.filter((r) => r.run.input?.projectId === p.id);
+					const latest = latestStatus(own, statusWorkflow);
+					const data = latest ? readStatusFile(latest.run) : null;
+					return {
+						...p,
+						exists: fs.existsSync(p.path),
+						runs: own.length,
+						status: latest ? {
+							runId: latest.run.runId,
+							createdAt: latest.createdAt,
+							summary: data?.summary ?? null,
+							counts: data?.counts ?? null
+						} : null
+					};
+				})
+			};
+		},
+		projectStatus(id) {
+			const latest = latestStatus(projectRuns().filter((r) => r.run.input?.projectId === id), projectsOf(readConfig()).statusWorkflow);
+			if (!latest) return null;
+			return {
+				runId: latest.run.runId,
+				status: latest.run.status,
+				createdAt: latest.createdAt,
+				data: readStatusFile(latest.run)
+			};
+		},
+		projectsAction(request) {
+			return projectsAction(request);
 		}
 	};
+	function projectRuns() {
+		return allRunFiles().flatMap(({ file }) => {
+			try {
+				const run = readJson(file);
+				return run.input?.projectId ? [{
+					run,
+					createdAt: run.events[0]?.at ?? null
+				}] : [];
+			} catch {
+				return [];
+			}
+		});
+	}
+}
+function latestStatus(runs, workflow) {
+	return runs.filter((r) => r.run.workflow === workflow && r.run.status === "done").sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0] ?? null;
+}
+function readStatusFile(run) {
+	const file = statusFileOf(run.state);
+	if (!file) return null;
+	try {
+		return readJson(file);
+	} catch {
+		return null;
+	}
 }
 function scan(factoryDir) {
 	const marketplace = marketplaceDir();
@@ -18035,12 +18411,27 @@ function apiMiddleware(api) {
 				return send(409, { error: errorMessage(error) });
 			}
 		}
+		if (req.method === "POST" && url.pathname === "/api/projects") {
+			const origin = String(req.headers?.origin ?? "");
+			if (req.headers?.["x-factory-action"] !== "projects" || origin && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin)) return send(403, { error: "projects needs the viewer's own request" });
+			try {
+				return send(200, api.projectsAction(parseProjectsAction(await readBody(req))));
+			} catch (error) {
+				return send(400, { error: errorMessage(error) });
+			}
+		}
 		if (req.method !== "GET") return next();
 		try {
 			if (url.pathname === "/api/stale") return send(200, api.stale());
 			if (url.pathname === "/api/workflows") return send(200, api.workflows());
 			if (url.pathname === "/api/agents") return send(200, api.agents());
 			if (url.pathname === "/api/config") return send(200, api.config());
+			if (url.pathname === "/api/projects") return send(200, api.projects());
+			const projectMatch = url.pathname.match(/^\/api\/projects\/([a-z0-9][a-z0-9-]*)\/status$/);
+			if (projectMatch?.[1] !== void 0) {
+				const status = api.projectStatus(projectMatch[1]);
+				return status ? send(200, status) : send(404, { error: "no finished status run for this project" });
+			}
 			if (url.pathname === "/api/runs") {
 				await api.ensureDemo();
 				return send(200, api.runs());
@@ -18097,7 +18488,7 @@ function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHost
 			res.writeHead(403, { "content-type": "text/plain" }).end("forbidden host");
 			return true;
 		}
-		if (req.method !== "GET" && !(req.method === "POST" && url.pathname === `${PREFIX}/api/update`)) {
+		if (req.method !== "GET" && !(req.method === "POST" && (url.pathname === `${PREFIX}/api/update` || url.pathname === `${PREFIX}/api/projects`))) {
 			res.writeHead(405, { allow: "GET" }).end();
 			return true;
 		}
@@ -18132,4 +18523,4 @@ function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHost
 		return true;
 	};
 }
-export { require_ajv as _, hostExec as a, parseBackend as c, FACTORY_DIR$1 as d, VIEWER_HEALTH as f, require_dist as g, viewerOptions as h, cliExecutor as i, parseCli as l, registerDataSource as m, viewerHandler as n, Factory as o, defaultDataDir as p, viewerUrlFor as r, errorMessage as s, allowedHostsFor as t, DEFAULT_VIEWER_PORT as u, __toESM as v };
+export { viewerOptions as _, projectsAction as a, __toESM as b, Factory as c, parseCli as d, DEFAULT_VIEWER_PORT as f, registerDataSource as g, defaultDataDir as h, projectScopedInput as i, errorMessage as l, VIEWER_HEALTH as m, viewerHandler as n, cliExecutor as o, FACTORY_DIR$1 as p, viewerUrlFor as r, hostExec as s, allowedHostsFor as t, parseBackend as u, require_dist as v, require_ajv as y };
