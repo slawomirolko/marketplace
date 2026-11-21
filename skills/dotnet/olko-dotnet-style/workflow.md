@@ -145,13 +145,15 @@ Owner directives; they apply to every project that uses this skill.
 - A repository reaches its table through the mapped `DbSet<TEntity>` on the context, never through a table-name string matched or compared at runtime.
 - When several repositories repeat the same CRUD shape, prefer a generic abstract repository parameterized by the entity/`DbSet<TEntity>` over repeating the code; the table and column names come from the entity mapping, not from literals.
 
-### DB-native idempotency and concurrency
-- Insert-only rows (snapshots, assessments, immutable log entries) are written with one `INSERT … ON CONFLICT (<unique columns>) DO NOTHING` per row, so the unique index decides the duplicate and a repeated batch is a no-op.
-- Never hand-roll a race: no `GetBy…` then filter "pending" then insert, no `ResolveRace*` helper, no catching `DbUpdateException`/`PostgresException` to turn an existing row into success.
+### Idempotent writes and concurrency
+- A repository only stages (`AddAsync`/`AddRangeAsync`); the unit of work saves. The table's unique index is the concurrency guard, so an idempotent insert needs no `ON CONFLICT`, no hand-rolled transaction, and no entity-state surgery.
+- Translate a unique-index violation once, in the base unit of work: `SaveChangesAsync` catches the provider exception and rethrows a framework-agnostic `UniqueConstraintViolationException(constraintName)`, detaching the failed entries. Callers react to that specific constraint, never to EF Core or Npgsql exception types.
+- An idempotent insert treats that collision as "already stored" at the caller — a cache hit — and a multi-row batch lands whole or not at all because it is one `SaveChangesAsync`.
+- Never hand-roll a race: no `GetBy…` then filter "pending" then insert, no `ResolveRace*` helper, no catch of `DbUpdateException`/`PostgresException` outside the base unit of work.
 - Never manipulate Entity Framework entity state to escape a failed write (`context.Entry(entity).State = EntityState.Detached/Modified`, `ChangeTracker` surgery). If the write needs that, the repository is doing the wrong thing.
-- A multi-row batch opens one transaction when the caller has none, so it lands whole or not at all.
+- Use a concurrency token (`Version`/`xmin` plus `.IsConcurrencyToken()`, `DbUpdateConcurrencyException`) only where rows are actually UPDATED; it does nothing for insert-only rows, so never add a dead token column.
 - Resolve an optimistic-concurrency failure by fixing its cause (missing token, stale tracked batch, read-modify-write) or by an explicit, user-visible conflict path; never swallow it.
-- Raw ADO is the exception, not the norm: allow it only for a DB-native `ON CONFLICT` statement inside the repository that owns the table. Bind `jsonb` parameters with `NpgsqlDbType.Jsonb` and array parameters with `NpgsqlDbType.Array | <element>`.
+- Raw ADO is banned for writes: no new `INSERT … ON CONFLICT` and no `DbCommand` for an insert or upsert. Remaining legacy upsert statements are a migration target, never a pattern to copy.
 
 ### Mappers, endpoints, instrumentation
 - Put transport-to-domain and domain-to-read-model conversion in extension methods on a dedicated `<Thing>MappingExtensions` or `<Thing>ReadModelExtensions` type. Never inline a mapping lambda, projection, or DTO construction block in an endpoint, handler, or service body.

@@ -86,6 +86,7 @@ This skill discovers projects by convention — it does not hardcode project nam
 - Kotlin: `./gradlew test` (JVM unit) and `./gradlew connectedCheck` (instrumentation) from the Android project root — run whenever any Kotlin/Android source file changes.
 - React Native: run the configured unit/component command from the owning app/package root; run the configured device/E2E command when required by project instructions.
 - React: `vitest run` from the discovered React project root — run whenever any `.ts`/`.tsx` source file changes. Manual e2e verification (`agent-browser` against the running dev server) is on-demand only; `olko-test` never runs it automatically.
+- Repository automation scripts: a changed file under a repository `scripts/` tree runs its companion test module (for example `python3 -m unittest discover scripts/tests`). A gate script with no test is a finding, not a skipped suite — report it instead of treating the script change as untested.
 
 **Kotlin/Android instrumentation rule (MANDATORY, user directive 2026-09-04):** any
 Kotlin change (production or test) triggers the FULL instrumentation suite

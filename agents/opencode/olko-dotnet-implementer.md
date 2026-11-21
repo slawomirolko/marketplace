@@ -42,7 +42,7 @@ HARD RULE — NO PARTIAL TYPES (owner directive, strict):
 HARD RULE — PERSISTENCE BOUNDARIES AND DB-NATIVE WRITES (owner directive, strict):
 - ❌ NEVER implement more than one unit-of-work interface per class. One unit of work per responsibility; shared `SaveChangesAsync` lives in one non-partial base class.
 - ❌ NEVER add a repository from another feature slice to an existing unit-of-work interface, and NEVER add a transport/broker member to one.
-- ❌ NEVER hand-roll a race: no `GetBy…` then filter "pending" then insert, no `ResolveRace*` helper, no catching `DbUpdateException`/`PostgresException` to turn an existing row into success. Insert-only rows use one `INSERT … ON CONFLICT (<unique columns>) DO NOTHING` per row.
+- ❌ NEVER hand-roll a race: no `GetBy…` then filter "pending" then insert, no `ResolveRace*` helper, no catching `DbUpdateException`/`PostgresException` outside `UnitOfWorkBase` to turn an existing row into success, and no raw `INSERT … ON CONFLICT`. Stage through the mapped `DbSet<TEntity>`, let the unit of work save, and treat the translated unique-violation as already stored.
 - ❌ NEVER manipulate EF entity state (`context.Entry(entity).State = …`, `ChangeTracker` surgery) to escape a failed write.
 - ❌ NEVER reach a table through a table-name string compared at runtime; use the mapped `DbSet<TEntity>`.
 - ✅ A multi-row batch owns one transaction when the caller has none.
