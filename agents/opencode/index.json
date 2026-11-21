@@ -757,6 +757,17 @@
       "skills": [
         "olko-factory-run-supervision"
       ]
+    },
+    {
+      "name": "olko-marketplace-upstream",
+      "version": "1.0.0",
+      "file": "olko-marketplace-upstream.md",
+      "stack": "cross-stack",
+      "role": "writer",
+      "skills": [
+        "olko-marketplace-upstream",
+        "olko-agents-optimizer"
+      ]
     }
   ]
 }

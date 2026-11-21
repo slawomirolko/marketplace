@@ -4,11 +4,9 @@
 // project edits them. These tests pass on main and must keep passing: the new
 // flow adds detection next to the installers, it does not change them.
 //
-// Part 2 ("proposed flow") is the executable specification of stage 1. Every
-// test is marked `todo` until the scripts exist, so it reports instead of
-// failing the suite. Remove `todo` per test as each piece lands. The CLI
-// contracts below follow the recommended answers to the open questions P1-P8;
-// change the test first if a decision differs.
+// Part 2 ("stage 1 flow") is the executable specification of stage 1: the
+// lock, sanitize and plan scripts and the upstream agent. Change the test first
+// when a contract changes.
 //
 // All fixture values are fictional. Never put a real company, product, or
 // project name in this file.
@@ -31,7 +29,6 @@ const sanitizeScript = path.join(scriptsDir, "olko-sanitize.mjs");
 const planScript = path.join(scriptsDir, "olko-upstream-plan.mjs");
 const upstreamAgent = path.join(marketplaceRoot, "agents", "opencode", "olko-marketplace-upstream.md");
 
-const PROPOSED = { todo: "stage 1 not implemented yet" };
 const FICTIONAL_PROJECT = "billing-portal";
 const FICTIONAL_ORG = "fictionalcorp";
 const forbiddenHashes = new Set(
@@ -198,14 +195,14 @@ test("current: the sync-state content hash ignores line endings", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Part 2: proposed flow (stage 1 acceptance criteria, todo until implemented)
+// Part 2: stage 1 flow (acceptance criteria)
 // ---------------------------------------------------------------------------
 
 function lock(project, marketplace, command, ...extra) {
   return node(lockScript, [command, "--project", project, "--marketplace", marketplace, "--json", ...extra]);
 }
 
-test("AC1: lock init finds the installed base version in marketplace history", PROPOSED, () => {
+test("AC1: lock init finds the installed base version in marketplace history", () => {
   const market = fixtureMarketplace();
   const { root } = fixtureProject();
   const lockFile = json(lock(root, market.root, "init"));
@@ -218,7 +215,7 @@ test("AC1: lock init finds the installed base version in marketplace history", P
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, ".agents", "marketplace.lock.json"), "utf8")), lockFile);
 });
 
-test("AC1: a copy that matches no marketplace version is flagged with an unknown base", PROPOSED, () => {
+test("AC1: a copy that matches no marketplace version is flagged with an unknown base", () => {
   const market = fixtureMarketplace();
   const { root } = fixtureProject({ ...skillV1, "workflow.md": "# Workflow\n\nEdited before any lock existed.\n" });
   const entry = json(lock(root, market.root, "init"))["skill:sample-skill"];
@@ -226,7 +223,7 @@ test("AC1: a copy that matches no marketplace version is flagged with an unknown
   assert.equal(entry.nearestVersion, "1.0.0");
 });
 
-test("AC1: adapter-only edits keep status clean (project.md, skill-config.md, agent model)", PROPOSED, () => {
+test("AC1: adapter-only edits keep status clean (project.md, skill-config.md, agent model)", () => {
   const market = fixtureMarketplace();
   const { root, skillDir } = fixtureProject();
   json(lock(root, market.root, "init"));
@@ -237,7 +234,7 @@ test("AC1: adapter-only edits keep status clean (project.md, skill-config.md, ag
   assert.deepEqual(json(lock(root, market.root, "status")).changed, []);
 });
 
-test("AC2: an edit to a portable skill file is reported with its base and files", PROPOSED, () => {
+test("AC2: an edit to a portable skill file is reported with its base and files", () => {
   const market = fixtureMarketplace();
   const { root, skillDir } = fixtureProject();
   json(lock(root, market.root, "init"));
@@ -259,7 +256,7 @@ function sanitize(stage, project, terms = []) {
   return node(sanitizeScript, ["--path", stage, "--project", project, "--terms-file", termsFile, "--json"]);
 }
 
-test("AC4: sanitize blocks names derived from the project and never prints them", PROPOSED, () => {
+test("AC4: sanitize blocks names derived from the project and never prints them", () => {
   const { root } = fixtureProject();
   const stage = tmp("stage");
   write(path.join(stage, "workflow.md"), `# Workflow\n\nRun the ${FICTIONAL_PROJECT} smoke test.\n`);
@@ -272,7 +269,7 @@ test("AC4: sanitize blocks names derived from the project and never prints them"
   assert.equal(`${result.stdout}${result.stderr}`.toLowerCase().includes(FICTIONAL_PROJECT), false);
 });
 
-test("AC4: sanitize blocks configured leak terms and passes clean content", PROPOSED, () => {
+test("AC4: sanitize blocks configured leak terms and passes clean content", () => {
   const { root } = fixtureProject();
   const dirty = tmp("stage");
   write(path.join(dirty, "SKILL.md"), "Used by the zebraproject team.\n");
@@ -312,7 +309,7 @@ function stagedChange() {
   return { stage, classification };
 }
 
-test("AC3+AC5: plan opens one draft PR per artifact, keeps adapter hunks local, names nothing", PROPOSED, () => {
+test("AC3+AC5: plan opens one draft PR per artifact, keeps adapter hunks local, names nothing", () => {
   const result = json(plan(stagedChange()));
   assert.equal(result.action, "open");
   assert.equal(result.draft, true);
@@ -327,7 +324,7 @@ test("AC3+AC5: plan opens one draft PR per artifact, keeps adapter hunks local, 
   assert.equal(forbiddenWords(published).length, 0, "PR text contains a word listed in forbidden-terms.json");
 });
 
-test("AC6: plan skips a change that already has an open PR with the same content", PROPOSED, () => {
+test("AC6: plan skips a change that already has an open PR with the same content", () => {
   const change = stagedChange();
   const first = json(plan(change));
   const again = json(plan({ ...change, openPrs: [{ number: 7, branch: first.branch, contentHash: first.contentHash, base: "1.0.0" }] }));
@@ -335,7 +332,7 @@ test("AC6: plan skips a change that already has an open PR with the same content
   assert.equal(again.reason, "duplicate");
 });
 
-test("AC6: plan appends to the open PR on the same base and skips a rejected hash", PROPOSED, () => {
+test("AC6: plan appends to the open PR on the same base and skips a rejected hash", () => {
   const change = stagedChange();
   const first = json(plan(change));
   const other = json(plan({ ...change, openPrs: [{ number: 7, branch: first.branch, contentHash: "0".repeat(64), base: "1.0.0" }] }));
@@ -347,7 +344,7 @@ test("AC6: plan appends to the open PR on the same base and skips a rejected has
   assert.equal(rejected.reason, "rejected");
 });
 
-test("AC6: plan opens a new PR when the open PR is on another base", PROPOSED, () => {
+test("AC6: plan opens a new PR when the open PR is on another base", () => {
   const change = stagedChange();
   const first = json(plan(change));
   const result = json(plan({ ...change, openPrs: [{ number: 7, branch: first.branch, contentHash: "0".repeat(64), base: "0.9.0" }] }));
@@ -355,10 +352,41 @@ test("AC6: plan opens a new PR when the open PR is on another base", PROPOSED, (
   assert.notEqual(result.branch, first.branch);
 });
 
-test("AC7: the upstream agent can open draft PRs but never merge, mark ready, request reviewers, or call the raw API", PROPOSED, () => {
+test("AC7: the upstream agent can open draft PRs but never merge, mark ready, request reviewers, or call the raw API", () => {
   const agent = fs.readFileSync(upstreamAgent, "utf8");
   assert.match(agent, /"gh pr create --draft\*": (allow|ask)/);
   for (const forbidden of ["gh pr merge*", "gh pr ready*", "gh pr edit*--add-reviewer*", "gh api*"]) {
     assert.match(agent, new RegExp(`"${forbidden.replace(/[*]/g, "\\*")}": deny`));
   }
+});
+
+test("AC6: lock record marks a content hash rejected or pending, and status reports both", () => {
+  const market = fixtureMarketplace();
+  const { root, skillDir } = fixtureProject();
+  json(lock(root, market.root, "init"));
+  fs.appendFileSync(path.join(skillDir, "workflow.md"), "3. Validate the input first.\n");
+  const [changed] = json(lock(root, market.root, "status")).changed;
+  assert.equal(changed.rejected, false);
+
+  const record = (...args) => node(lockScript, ["record", "--project", root, "--artifact", "skill:sample-skill", "--json", ...args]);
+  assert.equal(record("--rejected", "not-a-hash").status, 1, "a malformed hash is refused");
+  json(record("--pending-pr", "7", "--content-hash", changed.contentHash));
+  assert.deepEqual(json(lock(root, market.root, "status")).changed[0].pending, { pr: 7, contentHash: changed.contentHash });
+
+  json(record("--rejected", changed.contentHash));
+  const after = json(lock(root, market.root, "status")).changed[0];
+  assert.equal(after.rejected, true);
+  assert.equal(after.pending, null, "rejecting the pending content clears the pending PR");
+
+  json(lock(root, market.root, "init"));
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, ".agents", "marketplace.lock.json"), "utf8"))["skill:sample-skill"].rejected, [changed.contentHash], "init keeps recorded decisions");
+});
+
+test("AC6: plan reads open PRs in gh's shape (headRefName and body)", () => {
+  const change = stagedChange();
+  const first = json(plan(change));
+  const ghShape = [{ number: 9, headRefName: first.branch, body: first.body }];
+  const again = json(plan({ ...change, openPrs: ghShape }));
+  assert.equal(again.action, "skip");
+  assert.equal(again.reason, "duplicate");
 });

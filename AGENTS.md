@@ -6,6 +6,7 @@
 - [Layered Skill Adaptation Pattern](docs/layered-skill-adaptation.md)
 - [Skill Adaptation Contract](docs/skill-adaptation-contract.md) — every skill must be adaptable by design
 - [Explicit Skill Reuse](docs/explicit-skill-reuse.md) — isolated by default; reuse needs explicit `uses`
+- [Project Change Upstream](docs/project-change-upstream.md) — lock, watch and draft PR flow for local changes to installed artifacts
 
 ## Registry format
 
