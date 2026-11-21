@@ -89,7 +89,15 @@ async function checkWatch(watch, context) {
 				input
 			});
 			if (reused) continue;
-			factory.confirm(run.runId, { backend: watch.backend });
+			const model = process.env.FACTORY_WATCH_MODEL;
+			factory.confirm(run.runId, {
+				backend: watch.backend,
+				...model ? { tierModels: {
+					low: model,
+					medium: model,
+					high: model
+				} } : {}
+			});
 			started.push(run.runId);
 			log(`watch ${watch.id}: started run ${run.runId}`);
 		}

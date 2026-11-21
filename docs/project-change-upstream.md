@@ -23,7 +23,7 @@ after a person says so. A person always merges or closes the PR.
 2. The factory knows a project when a factory run used it (`input.project`) or when it is listed in `projects.json` in the factory data directory.
 3. Edit an installed artifact in the project. After two checks without further change, the viewer asks.
 4. `no`: the content hash is recorded as rejected; the same content is never offered again.
-5. `ok`: the factory runs the steps in the background with the watch's CLI backend: stage (adapter hunks stay out), optimize, sanitize gate, plan, publish (draft PR, label `upstream-candidate`). The PR is recorded as pending in the lock.
+5. `ok`: the factory runs the steps in the background with the watch's CLI backend (set `FACTORY_WATCH_MODEL` in the factory's environment to pick the model for every tier, for example the model your OpenCode agents use): stage (adapter hunks stay out), optimize, sanitize gate, plan, publish (draft PR, label `upstream-candidate`). The PR is recorded as pending in the lock.
 6. Review the draft PR on GitHub. Merge or close it yourself.
 
 ## Security
