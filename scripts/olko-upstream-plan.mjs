@@ -106,7 +106,8 @@ export function plan({ artifact, stage, classification, openPrs, lockEntry }) {
 
 function openPrsOf(source) {
   if (!source.startsWith("gh:")) return readJson(source);
-  const result = spawnSync("gh", ["pr", "list", "--state", "open", "--label", LABEL, "--json", "number,headRefName,body", "--limit", "100"], { cwd: source.slice(3), encoding: "utf8" });
+  // A fixed command line, no input in it; the shell lets Windows find gh as .exe or .cmd on PATH.
+  const result = spawnSync(`gh pr list --state open --label ${LABEL} --json number,headRefName,body --limit 100`, { cwd: source.slice(3), encoding: "utf8", shell: true });
   if (result.status !== 0) throw new Error(`gh pr list failed: ${result.stderr.trim().slice(-300)}`);
   return JSON.parse(result.stdout);
 }
