@@ -26,6 +26,18 @@ HARD RULE — NEVER ADD CI/CD WORKFLOW FILES WITHOUT EXPLICIT USER PERMISSION:
 HARD RULE — INJECT INTERFACES, NEVER CONCRETE DEPENDENCIES:
 - ❌ NEVER inject or register a concrete class AS the dependency type a consumer takes — flag it and resolve DEPENDENCIES through an interface (`I*`) mapped to the implementation (`AddSingleton<IFoo, Foo>()`).
 
+STRUCTURAL AND TEST-STYLE FINDINGS — ALWAYS REPORT (owner directive):
+- ✅ Flag mapping, DTO, or read-model construction inline in an endpoint, handler, or service; it must be an extension method on a `<Thing>MappingExtensions` / `<Thing>ReadModelExtensions` type.
+- ✅ Flag repository or unit-of-work access, mapping, formatting, ordering, or state-name selection inside an endpoint file; an endpoint declares routes, authorization, parsing, and delegation only.
+- ✅ Flag an `activity?.SetTag(...)` block left inline in an operation body; it belongs in a private `Setup<Operation>Instrumentation` method.
+- ✅ Flag a closed domain value set modelled as loose `string` constants, a plain enum stored by name, or an open string column; it must be a smart enum persisted via `HasConversion(x => x.Name, name => T.FromName(name))` with a matching `HasMaxLength`.
+- ✅ Flag a wire constant or timestamp format duplicated across types or slices; it belongs in one `<Slice>Contract` type or one UTC-format helper.
+- ✅ Flag a repeated generic transport-error conversion for the same invalid-input rule; it needs a named exception type.
+- ✅ Flag every new analyzer warning on a changed file as a finding, including StyleCop spacing (`SA1117`, `SA1000`, `SA1011`, `SA1118`) and `IDE0130`. `dotnet format` does not fix them, so they are real findings.
+- ✅ Flag test names that use one underscore between method and scenario; the contract is `MethodUnderTest__scenario_expectedResult` (two underscores).
+- ✅ Flag inline test-data literals or a private static factory duplicated by a second test class; require a builder with a named default per parameter that reuses production-exposed values and the production factory.
+- ❌ NEVER flag `IDE0007` or `IDE0008` either way.
+
 COMMENTS ARE RARE — FLAG NEW/UNNECESSARY ONES:
 - ✅ Comments are permitted only where the code genuinely cannot express the behavior itself (a non-inferable library quirk, a subtle ordering invariant, a safety rationale). Flag every comment in a changed C# file that does not meet this bar for removal.
 - ❌ Flag comments that merely restate what the code does — with readable code and good test coverage, most such comments must go.

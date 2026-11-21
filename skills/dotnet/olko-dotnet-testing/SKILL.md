@@ -78,6 +78,9 @@ Apply these defaults unless config, adapter, or project docs override them.
 - Extract shared fixtures, builders, and test base classes into a shared test location.
 - Use `IClassFixture<T>` for integration test shared state such as test database or `WebApplicationFactory`.
 - Test data builders should be static factory methods on the model or dedicated builder classes.
+- Give every builder method a named default for each parameter, so a test names only the field it varies (owner directive).
+- Builders read production-exposed values (smart enum `Name`s, contract constants) and call the production factory instead of re-typing literals or construction rules (owner directive).
+- Do not keep an inline static factory inside one test class when a second test class needs the same data; extract it to the shared test setup location (owner directive).
 - Do not duplicate the same `WebApplicationFactory` setup across multiple test classes.
 
 ### Database reset in integration tests
@@ -111,7 +114,10 @@ Apply these defaults unless config, adapter, or project docs override them.
 - Do not write tests that only assert a plain DTO or data-class property returns the value just set.
 
 ### Test naming and organization
-- Name tests after one behavior using `MethodName_scenario_expectedResult`.
+- Name tests after one behavior using `MethodUnderTest__scenario_expectedResult` with exactly TWO underscores between the method under test and the scenario (owner directive).
+- Use the real production entry point as the method under test, never `Test` or `Should`.
+- Rename an existing test to this shape whenever you touch it; a full-suite rename needs separate approval.
+- Do not use one underscore between method and scenario; it is indistinguishable from the scenario words.
 - Do not use `Or` or `And` in test names.
 - Do not combine multiple outcomes in one test name, such as `returnsSuccessOrBlocked` or `createsAndPublishes`.
 - If two outcomes must be covered, write two separate tests.

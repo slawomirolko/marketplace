@@ -34,6 +34,20 @@ HARD RULE — NEVER ADD CI/CD WORKFLOW FILES WITHOUT EXPLICIT USER PERMISSION:
 HARD RULE — INJECT INTERFACES, NEVER CONCRETE DEPENDENCIES:
 - ❌ NEVER inject or register a concrete class AS the dependency type a consumer takes — resolve DEPENDENCIES through an interface (`I*`) and map it (`AddSingleton<IFoo, Foo>()`).
 
+HARD RULE — STRUCTURE OF NEW AND CHANGED CODE (owner directive):
+- ✅ Put transport-to-domain and domain-to-read-model conversion in extension methods on a dedicated `<Thing>MappingExtensions` or `<Thing>ReadModelExtensions` type. NEVER inline a mapping lambda, projection, or DTO construction block in an endpoint, handler, or service body.
+- ✅ Keep a host endpoint file to routing, authorization, parameter parsing, and delegation. Move a non-trivial read composition to an `I<Thing>ReadService` registered in host DI. NEVER put repository or unit-of-work access, mapping, formatting, ordering, or state-name selection in an endpoint.
+- ✅ Group `activity?.SetTag(...)` calls into a private `Setup<Operation>Instrumentation` method.
+- ✅ Model a closed domain value set as a smart enum (`Id`, `Name`, `All`, `FromId`, `FromName`, `TryParse`) and persist it with `HasConversion(x => x.Name, name => T.FromName(name))` plus a `HasMaxLength` sized for the longest name. NEVER use loose `string` constants or an open string column.
+- ✅ Keep a wire constant or timestamp format read by more than one type or slice in ONE shared place: a `<Slice>Contract` type or a single UTC-format helper. NEVER copy the same private constant into a second type.
+- ✅ Give a recurring invalid-input rule that must surface as a specific transport failure code its own exception type instead of repeating a generic error conversion at several call sites.
+- ✅ When test code is in scope, follow the project's documented test naming and builder conventions.
+
+HARD RULE — BUILD WARNING HYGIENE (owner directive):
+- ✅ Build the changed projects and treat EVERY new analyzer warning on a changed file as a defect, including StyleCop spacing (`SA1117` parameters on one line or one per line, `SA1000`, `SA1011`, `SA1118`) and `IDE0130` namespace/folder mismatch. `dotnet format` does NOT fix them.
+- ✅ `var` is correct where the initializer makes the type obvious. NEVER convert `var` to an explicit type for `IDE0008`, and never treat `IDE0007`/`IDE0008` as violations.
+- ❌ NEVER silence a warning with a pragma or `NoWarn`; fix the code, or report why the warning is structural.
+
 HARD RULE — NO CODE COMMENTS:
 - ❌ NEVER add inline comments in C#, and absolutely NEVER in tests — even if the caller's brief or plan asks you to explain or document the code.
 - ❌ NEVER reference an acceptance criterion, a plan/deviation id (`AC*`/`D*`/`MAIN-*`), another stack, or a PR inside code (comments, names, strings, or test helpers).

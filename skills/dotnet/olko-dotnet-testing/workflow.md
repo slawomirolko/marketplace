@@ -8,7 +8,8 @@ Short path:
 3. Map source changes to related test projects.
 4. Inspect test conventions.
 5. Run configured test command when needed.
-6. Report violations with rule sources.
+6. Check test naming and test data: `MethodUnderTest__scenario_expectedResult` with two underscores, and builders with a named default per parameter that reuse production-exposed values and the production factory (`olko-dotnet-testing:Test naming and organization`, `:Fixtures and builders`). Source: `olko-dotnet-testing:Default .NET test rules`.
+7. Report violations with rule sources.
 
 ## NO COMMENTS IN TESTS
 - ❌ Do NOT write explanatory comments inside tests (arrange/act/assert narration, "this is a regression guard", "unique per test", rationale notes). A comment explaining what a test should do signals a missing or non-deterministic assertion and masks flakiness.

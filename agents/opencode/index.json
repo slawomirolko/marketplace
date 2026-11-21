@@ -283,7 +283,7 @@
     },
     {
       "name": "olko-dotnet-auditor",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "file": "olko-dotnet-auditor.md",
       "stack": "dotnet",
       "role": "auditor",
@@ -314,7 +314,7 @@
     },
     {
       "name": "olko-dotnet-implementer",
-      "version": "1.6.1",
+      "version": "1.7.0",
       "file": "olko-dotnet-implementer.md",
       "stack": "dotnet",
       "role": "implementer",

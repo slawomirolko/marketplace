@@ -105,6 +105,22 @@ Also apply the `olko-design-rules` catalogue to the changed lines: its design ru
 - Use `ExecuteUpdateAsync()` and `ExecuteDeleteAsync()` for bulk operations on .NET 7+ when appropriate.
 - Use compiled queries for frequently executed hot-path queries.
 
+### Structural rules (owner directive)
+- Put transport-to-domain and domain-to-read-model conversion in extension methods on a dedicated `<Thing>MappingExtensions` or `<Thing>ReadModelExtensions` type. Never inline a mapping lambda, projection, or DTO construction block in an endpoint, handler, or service body.
+- Keep a host endpoint file to routing, authorization, parameter parsing, and delegation. A non-trivial read composition goes to an `I<Thing>ReadService` registered in host DI. Never place repository or unit-of-work access, mapping, formatting, ordering, or state-name selection in an endpoint.
+- Extract a group of `activity?.SetTag(...)` calls into a private `Setup<Operation>Instrumentation` method and call it once per operation.
+- Model a closed domain value set as a smart enum with `Id`, `Name`, `All`, `FromId`, `FromName`, and `TryParse`, even when the column is text. Persist it with `HasConversion(x => x.Name, name => T.FromName(name))` and a `HasMaxLength` sized for the longest name. Never model such a set as loose `string` constants, a plain enum stored by name, or an open string column.
+- Parse closed values at the boundary; an unknown wire value becomes a validation error, never free text written to the column.
+- Keep a wire value or timestamp format read by more than one type or slice in ONE shared place: a `<Slice>Contract` type for constants, a single UTC-format helper for time strings. Never copy the same private constant or `FormatUtc` into a second type.
+- Give a recurring invalid-input rule that must surface as a specific transport failure code its own exception type (for gRPC, an `RpcException` subtype) instead of repeating a generic error conversion at several call sites.
+
+### Build warning hygiene (owner directive)
+- Build the changed projects. Every NEW analyzer warning on a changed file is a violation, not noise.
+- Fix StyleCop spacing rules in the edit: `SA1117` (parameters all on one line or each on its own line), `SA1000`, `SA1011`, `SA1118`. `dotnet format` does not address them.
+- Fix `IDE0130` by matching the namespace to the folder; a pre-existing sibling namespace is not a reason to copy it into new code.
+- Treat `IDE0007` and `IDE0008` as non-violations. `var` is correct where the initializer makes the type obvious, and a project may disable `IDE0008` in `.editorconfig`.
+- Never silence a warning with a pragma or `NoWarn`. Fix the code, or report why the warning is structural, such as host-level `IL2026`/`IL3050` on a `Map*` registration in top-level statements.
+
 ### Auto-styling
 - Use `dotnet format` to apply repo-wide formatting and style fixes.
 - Prefer `dotnet format` when code should be restyled automatically.
