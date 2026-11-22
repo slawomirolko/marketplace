@@ -70,7 +70,11 @@ After a change, `pnpm build` (from `factory/`) rebuilds `app/dist` and `dist`; c
 
 `node factory/setup.ts` builds the viewer and the Docker image (`skill-factory-poc:0.3`) for the HTTP variant (`src/server.ts`, bearer token, used by the container tests and LangGraph). That server serves the same run page at `http://127.0.0.1:7340/viewer/`. Every response that has a `runId` also has `viewerUrl` (`/viewer/?run=<runId>`), and the end hint and the `factory_report` description tell the client to show it to the user. `FACTORY_PUBLIC_URL` changes the base when the port is mapped differently.
 
-The run page needs no MCP token. It is read-only (GET), answers only requests whose Host is the factory's own local address (protection against DNS rebinding), and sends a Content-Security-Policy with a new nonce per request. The page shows prompts and agent outputs, so keep the port bound to 127.0.0.1.
+The run page needs no MCP token. It is read-only (GET), answers only requests whose Host is the factory's own local address (protection against DNS rebinding), and sends a Content-Security-Policy with a new nonce per request. The page shows prompts and agent outputs, so keep the port bound to 127.0.0.1. It accepts two POSTs, both only with the page's own `x-factory-action` header and a local `Origin`: `/viewer/api/update` (marketplace update) and `/viewer/api/runs/<runId>/answer?question=&answer=`, which answers a question of a run that the run page process itself owns.
+
+## Interval watches
+
+The run page process outlives the harness sessions, so it also runs the `watches` of `config/factory.yaml` (turn them off with `FACTORY_WATCHES=off`). A watch runs its command every `everyMinutes` once per known project (listed in `projects.json` in the data directory, or the `input.project` of any run) that has the `projectsWhen` file, reads a list of items from the command's JSON output, and starts one run of its workflow for each item whose key stayed the same for `stableChecks` checks. Items with a truthy `skipWhen` field are skipped, and a key never starts a second run. The run uses the watch's CLI backend and stops at its first question; the run page lists it under "Waiting for your decision" with one button per allowed answer. The engine knows no watch-specific code: the `marketplace-upstream` watch and the `olko-marketplace-upstream` workflow are configuration (see `docs/project-change-upstream.md` in the marketplace). The `builtin.exec` script operation runs one command without a shell for such deterministic steps.
 
 ## Viewer app
 

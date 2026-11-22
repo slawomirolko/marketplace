@@ -6,6 +6,7 @@ export const handlers = [
   http.get("/api/agents", () => HttpResponse.json(agents)),
   http.get("/api/config", () => HttpResponse.json(config)),
   http.get("/api/stale", () => HttpResponse.json({ marketplace: "", stale: [] })),
+  http.get("/api/pending", () => HttpResponse.json([])),
   http.get("/api/runs", () => HttpResponse.json([runListItem])),
   http.get(`/api/runs/${RUN_ID}`, () => HttpResponse.json(runDetail)),
 ];

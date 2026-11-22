@@ -3,6 +3,7 @@ import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { cspMiddleware } from "../app/csp.ts";
 import { apiMiddleware, createDataApi } from "../app/data.ts";
+import type { Factory } from "./engine.ts";
 
 export interface ViewerOptions {
   viewerDir: string;
@@ -10,6 +11,7 @@ export interface ViewerOptions {
   factoryDir: string;
   configFile: string;
   allowedHosts: Set<string>;
+  factory?: Factory;
 }
 
 const PREFIX = "/viewer";
@@ -41,8 +43,10 @@ function staticFile(viewerDir: string, relativePath: string): string | null {
   return full;
 }
 
-export function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHosts }: ViewerOptions): (req: IncomingMessage, res: ServerResponse) => boolean {
-  const api = apiMiddleware(createDataApi({ factoryDir, dataDir, configFile, demo: false }));
+const POST_PATHS = [/^\/viewer\/api\/update$/, /^\/viewer\/api\/runs\/[^/]+\/answer$/];
+
+export function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHosts, factory }: ViewerOptions): (req: IncomingMessage, res: ServerResponse) => boolean {
+  const api = apiMiddleware(createDataApi({ factoryDir, dataDir, configFile, demo: false, ...(factory ? { factory } : {}) }));
   const csp = cspMiddleware();
 
   return (req, res) => {
@@ -52,7 +56,7 @@ export function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allo
       res.writeHead(403, { "content-type": "text/plain" }).end("forbidden host");
       return true;
     }
-    if (req.method !== "GET" && !(req.method === "POST" && url.pathname === `${PREFIX}/api/update`)) {
+    if (req.method !== "GET" && !(req.method === "POST" && POST_PATHS.some((p) => p.test(url.pathname)))) {
       res.writeHead(405, { allow: "GET" }).end();
       return true;
     }

@@ -43,7 +43,27 @@ const listCount: Operation = async ({ state, args }) => {
   return { state: { counts, total: list.length }, metrics: { total: list.length, values: counts.length }, output: `${list.length} items, ${counts.length} distinct values.` };
 };
 
+/**
+ * Runs one command without a shell. `with.command` is a list of Mustache templates over
+ * input, state and answers; `{{node}}` is this Node binary. `with.cwd` sets the directory,
+ * `with.okCodes` the accepted exit codes (default [0]) and `with.parse: json` parses stdout.
+ */
+const execCommand: Operation = async ({ args, state, input, answers, exec, cwd }) => {
+  if (!Array.isArray(args.command) || args.command.length === 0) throw new Error("with.command must be a non-empty list");
+  if (!exec) throw new Error("this factory process has no host exec");
+  const view = { ...withEach({ state, input, answers }), node: process.execPath };
+  const render = (template: unknown) => Mustache.render(String(template), view, {}, { escape: (value: unknown) => String(value) });
+  const [command, ...rest] = args.command.map(render);
+  const okCodes = Array.isArray(args.okCodes) ? args.okCodes.map(Number) : [0];
+  const result = await exec(command as string, rest, { cwd: typeof args.cwd === "string" ? render(args.cwd) : cwd });
+  const stdout = result.stdout.trim();
+  if (!okCodes.includes(Number(result.code))) throw new Error(`command exited ${result.code}: ${result.stderr.trim().slice(-300)}`);
+  const json = args.parse === "json" && stdout ? (JSON.parse(stdout) as unknown) : null;
+  return { state: { code: result.code, stdout: stdout.slice(0, 20_000), json }, metrics: { code: Number(result.code) }, output: stdout.split(/\r?\n/)[0]?.slice(0, 200) ?? "" };
+};
+
 export const OPERATIONS: Record<string, Operation> = {
+  "builtin.exec": execCommand,
   "builtin.pass": pass,
   "builtin.count": async ({ state, nodeId }) => {
     const count = ((nodeId ? (state[nodeId] as { count?: number } | undefined)?.count : 0) ?? 0) + 1;

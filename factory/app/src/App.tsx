@@ -8,6 +8,7 @@ import type { ViewerState } from "./context.ts";
 import { Details } from "./Details.tsx";
 import { CallsList } from "./Calls.tsx";
 import { QuestionsList } from "./Questions.tsx";
+import { PendingDecisions } from "./Pending.tsx";
 import { SupervisorRing, ringBounds } from "./SupervisorRing.tsx";
 import { layoutGraph, scriptsHeight } from "./layout.ts";
 import { agentsOnly } from "./agents-only.ts";
@@ -362,6 +363,18 @@ function Viewer() {
             {updateNote && <span className="muted" role="status"> {updateNote}</span>}
           </span>
         </header>
+        <PendingDecisions
+          api={API}
+          onOpenRun={(id) => {
+            setMode("runs");
+            getJson<RunListItem[]>("/runs")
+              .then((list) => {
+                setRuns(list);
+                setRunId(id);
+              })
+              .catch(() => setRunId(id));
+          }}
+        />
         <main>
           <div className="canvas">
             {built?.error ? (
