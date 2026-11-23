@@ -52,6 +52,28 @@ const listPick: Operation = async ({ state, args }) => {
   return { state: { items, count: items.length }, metrics: { count: items.length }, output: `${items.length} of ${args.items.length} items picked.` };
 };
 
+/** Adds the values of the `from` state list to this node's list once each; a value already kept is never removed, even when a later `from` list leaves it out. */
+const listMerge: Operation = async ({ state, args, nodeId }) => {
+  if (typeof args.from !== "string") throw new Error("with.from must be a state path");
+  const incoming = readState(state, args.from);
+  const previous = (nodeId ? (state[nodeId] as { items?: unknown[] } | undefined)?.items : undefined) ?? [];
+  const items = [...previous];
+  for (const value of Array.isArray(incoming) ? incoming : []) if (!items.includes(value)) items.push(value);
+  const added = items.length - previous.length;
+  return { state: { items, count: items.length, added }, metrics: { count: items.length, added }, output: `${added} added, ${items.length} kept.` };
+};
+
+/** Counts consecutive visits on which `when` holds; a visit where it does not hold resets the count, and the visit after the count reached `limit` starts again from zero. */
+const streak: Operation = async ({ state, args, nodeId }) => {
+  if (typeof args.when !== "string") throw new Error("with.when must be a condition");
+  if (typeof args.limit !== "number" || args.limit < 1) throw new Error("with.limit must be a positive number");
+  const previous = nodeId ? (state[nodeId] as { count?: number; reached?: boolean } | undefined) : undefined;
+  const base = previous?.reached ? 0 : (previous?.count ?? 0);
+  const count = evaluateWhen(args.when, state) ? base + 1 : 0;
+  const reached = count >= args.limit;
+  return { state: { count, reached }, metrics: { count }, output: reached ? `Streak ${count} reached the limit ${args.limit}.` : `Streak ${count}.` };
+};
+
 export const OPERATIONS: Record<string, Operation> = {
   "builtin.pass": pass,
   "builtin.count": async ({ state, nodeId }) => {
@@ -76,6 +98,8 @@ export const OPERATIONS: Record<string, Operation> = {
   "list.append": listAppend,
   "list.count": listCount,
   "list.pick": listPick,
+  "list.merge": listMerge,
+  "builtin.streak": streak,
 };
 
 export function operationNamed(name: string): Operation | undefined {

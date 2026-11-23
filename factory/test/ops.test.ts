@@ -40,3 +40,26 @@ test("list.pick keeps every item when the ids path holds no list", async () => {
   const result = await pick({ state: { apply: { areas: null } }, args: { items: workers, ids: "apply.areas" } } as any);
   assert.deepEqual(result.state, { items: workers, count: 3 });
 });
+
+const merge = operationNamed("list.merge")!;
+
+test("list.merge adds new values once and keeps every value already kept", async () => {
+  const first = await merge({ state: { d: ["a", "b"] }, args: { from: "d" }, nodeId: "locked" } as any);
+  assert.deepEqual(first.state, { items: ["a", "b"], count: 2, added: 2 });
+  const second = await merge({ state: { d: ["b", "c"], locked: first.state }, args: { from: "d" }, nodeId: "locked" } as any);
+  assert.deepEqual(second.state, { items: ["a", "b", "c"], count: 3, added: 1 });
+  const third = await merge({ state: { d: null, locked: second.state }, args: { from: "d" }, nodeId: "locked" } as any);
+  assert.deepEqual(third.state, { items: ["a", "b", "c"], count: 3, added: 0 });
+});
+
+const streak = operationNamed("builtin.streak")!;
+
+test("builtin.streak counts consecutive hits, resets on a miss and starts again after reaching the limit", async () => {
+  const run = async (verdict: string, previous: unknown) => (await streak({ state: { c: { verdict }, s: previous }, args: { when: 'c.verdict == "fail"', limit: 2 }, nodeId: "s" } as any)).state;
+  const one = await run("fail", undefined);
+  assert.deepEqual(one, { count: 1, reached: false });
+  const two = await run("fail", one);
+  assert.deepEqual(two, { count: 2, reached: true });
+  assert.deepEqual(await run("fail", two), { count: 1, reached: false }, "the visit after the limit starts again");
+  assert.deepEqual(await run("pass", one), { count: 0, reached: false });
+});
