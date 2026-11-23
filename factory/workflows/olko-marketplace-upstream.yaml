@@ -1,0 +1,116 @@
+name: olko-marketplace-upstream
+version: 0.1.0
+description: "Turns one local change to a marketplace skill or agent in a project into a draft marketplace PR. The marketplace-upstream watch starts it when the change has stayed the same for two checks; it asks first and does nothing until you answer. ok: copy the change into a stage directory without the project adapter, keep project-specific hunks out, optimize the staged copy, run the sanitize gate, plan the PR (open, append or skip) and open or extend a draft PR. no: the content hash is recorded as rejected and never offered again. Merge or close of the PR is always yours."
+source: "agents/opencode/olko-marketplace-upstream.md"
+roles:
+  sync: medium
+  publisher: medium
+entry: ask-upstream
+limits:
+  maxCycleIterations: 2
+nodes:
+  - id: ask-upstream
+    description: "Asks whether to send this local change upstream as a draft PR. Nothing runs before the answer."
+    kind: interrupt
+    question:
+      id: q-upstream-decision
+      text: "{{input.artifact}} changed in a project (base {{input.base}}; files: {{input.files}}).\nok: optimize it, run the sanitize gate and open a draft PR to the marketplace.\nno: do not send it, and never ask again for this exact content."
+      allowed: [ok, no]
+  - id: record-rejected
+    description: "Records the content hash as rejected in the project's marketplace lock, so the watch skips it from now on."
+    kind: script
+    op: builtin.exec
+    with:
+      command: ["{{node}}", "{{input.marketplace}}/scripts/olko-marketplace-lock.mjs", record, --project, "{{input.project}}", --artifact, "{{input.artifact}}", --rejected, "{{input.contentHash}}", --json]
+  - id: stage
+    description: "Copies the changed artifact into a new stage directory without the project adapter, and classifies every changed hunk as portable or project-specific (adapter). Only portable hunks stay in the staged copy."
+    kind: llm
+    role: sync
+    agent: olko-marketplace-upstream
+    tools: [read, edit, bash]
+    dirs: ["{{input.project}}", "{{input.marketplace}}"]
+    parse: { json: [stage, classification] }
+    prompt: |
+      Do the stage step of olko-marketplace-upstream for one artifact.
+      Artifact: {{input.artifact}}
+      Project: {{input.project}}
+      Marketplace checkout: {{input.marketplace}}
+      Base version: {{input.base}}
+      Changed files: {{input.files}}
+      Follow the stage step of the olko-marketplace-upstream skill exactly. Change no file in the project or in the marketplace checkout.
+
+      End with one ```json block:
+      {"stage": "<absolute stage directory>", "classification": "<absolute path of classification.json>"}
+  - id: stage-blocked
+    description: "Stops the run when the stage step returned no stage directory: the agent's report says why. Nothing was published."
+    kind: script
+    op: builtin.stop
+    with: { reason: "The stage step returned no stage directory (see its report). Nothing was published." }
+  - id: optimize
+    description: "Optimizes the staged copy only (tokens, cache, wording) with olko-agents-optimizer rules, without changing behavior. The draft PR review is the approval of these edits."
+    kind: llm
+    role: sync
+    agent: olko-marketplace-upstream
+    tools: [read, edit, bash]
+    dirs: ["{{state.stage.stage.stage}}"]
+    parse: { json: [changed, summary] }
+    prompt: |
+      Do the optimize step of olko-marketplace-upstream on the staged copy in {{state.stage.stage.stage}} only.
+      Edit only files inside that directory. Keep behavior, frontmatter contracts, commands, paths and hard rules unchanged.
+
+      End with one ```json block:
+      {"changed": <true or false>, "summary": "<one line: what you changed, or why nothing>"}
+  - id: sanitize
+    description: "The sanitize gate: blocks when the staged copy names the project, its owner, a configured leak term or a forbidden word. Exit 2 means blocked."
+    kind: script
+    op: builtin.exec
+    with:
+      command: ["{{node}}", "{{input.marketplace}}/scripts/olko-sanitize.mjs", --path, "{{state.stage.stage.stage}}", --project, "{{input.project}}", --json]
+      okCodes: [0, 2]
+      parse: json
+  - id: sanitize-blocked
+    description: "Stops the run when the sanitize gate found a leak. Nothing is published; edit the change in the project and the watch offers the new content again."
+    kind: script
+    op: builtin.stop
+    with: { reason: "The sanitize gate blocked {{state.sanitize.json.hits.length}} line(s) of the staged copy (see the sanitize step). Nothing was published. Remove the project-specific text from the change in the project; the watch offers the new content again." }
+  - id: plan
+    description: "Lists the open upstream-candidate PRs with gh and decides open, append or skip for this change: skip when the same content already has a PR or was rejected, append when an open PR has the same base, otherwise open a new draft PR."
+    kind: script
+    op: builtin.exec
+    with:
+      command: ["{{node}}", "{{input.marketplace}}/scripts/olko-upstream-plan.mjs", --artifact, "{{input.artifact}}", --stage, "{{state.stage.stage.stage}}", --classification, "{{state.stage.stage.classification}}", --open-prs, "gh:{{input.marketplace}}", --project, "{{input.project}}", --json]
+      parse: json
+  - id: publish
+    description: "Opens the draft PR (or pushes a commit to the open one) from a fresh marketplace worktree, then records the PR as pending in the project's lock. It never merges, marks ready or requests reviewers."
+    kind: llm
+    role: publisher
+    agent: olko-marketplace-upstream
+    tools: [read, edit, bash]
+    dirs: ["{{input.marketplace}}", "{{state.stage.stage.stage}}", "{{input.project}}"]
+    parse: { json: [pr, url] }
+    prompt: |
+      Do the publish step of olko-marketplace-upstream.
+      Plan (from scripts/olko-upstream-plan.mjs): {{state.plan.stdout}}
+      Staged copy: {{state.stage.stage.stage}}
+      Optimizer: {{state.optimize.optimize.summary}}
+      Marketplace checkout: {{input.marketplace}}
+      Project: {{input.project}}
+      Content hash: {{input.contentHash}}
+      Follow the publish step of the olko-marketplace-upstream skill exactly.
+
+      End with one ```json block:
+      {"pr": <PR number>, "url": "<PR URL>"}
+edges:
+  - { from: ask-upstream, to: record-rejected, when: 'ask-upstream.answer == "no"', description: "you chose no" }
+  - { from: ask-upstream, to: stage, description: "you chose ok" }
+  - { from: record-rejected, to: END }
+  - { from: stage, to: stage-blocked, when: "stage.stage.stage == null || stage.stage.classification == null", description: "the stage step returned no stage directory" }
+  - { from: stage, to: optimize, description: "the staged copy and its classification exist" }
+  - { from: stage-blocked, to: END, description: "never reached: stage-blocked fails the run" }
+  - { from: optimize, to: sanitize }
+  - { from: sanitize, to: sanitize-blocked, when: "sanitize.code != 0", description: "the gate found a leak" }
+  - { from: sanitize, to: plan, description: "the staged copy is clean" }
+  - { from: sanitize-blocked, to: END, description: "never reached: sanitize-blocked fails the run" }
+  - { from: plan, to: END, when: 'plan.json.action == "skip"', description: "duplicate, rejected or adapter-only: nothing to publish" }
+  - { from: plan, to: publish, description: "open a new draft PR or append to the open one" }
+  - { from: publish, to: END }

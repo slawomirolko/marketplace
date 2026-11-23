@@ -241,7 +241,7 @@ test("installs the visible marketplace skill sync manager and its comparator", (
     JSON.parse(fs.readFileSync(path.join(marketplaceRoot, "agents", "opencode", "index.json"), "utf8")).agents.find(
       (agent) => agent.name === "olko-marketplace-skill-sync-manager",
     ).version,
-    "2.7.1",
+    "2.8.0",
   );
   assert.match(manager, /bash: allow/);
   assert.match(manager, /Never pass `--force` to `olko-commit`/);

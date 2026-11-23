@@ -47,3 +47,27 @@ projects:
   markers: [.agents/skill-config.md, .agents/skills, .opencode/agents, .claude/skills, .claude/agents]
   maxDepth: 3
   statusWorkflow: olko-project-status
+
+# Interval watches. Each one runs its command per known project (projects.json in the
+# data dir plus every run's input.project), and starts one run of its workflow per item
+# that stayed the same for stableChecks checks. The run stops at its first question,
+# so nothing happens until you answer it in the viewer. The viewer process runs them.
+watches:
+  - id: marketplace-upstream
+    everyMinutes: 10
+    stableChecks: 2
+    command: ["{{node}}", "{{marketplace}}/scripts/olko-marketplace-lock.mjs", status, --project, "{{project}}", --marketplace, "{{marketplace}}", --json]
+    projectsWhen: .agents/marketplace.lock.json
+    items: changed
+    skipWhen: [rejected, pending]
+    key: "{{item.artifact}}@{{item.contentHash}}"
+    workflow: olko-marketplace-upstream
+    goal: "Upstream {{item.artifact}} changed in {{projectName}}"
+    input:
+      project: "{{project}}"
+      marketplace: "{{marketplace}}"
+      artifact: "{{item.artifact}}"
+      contentHash: "{{item.contentHash}}"
+      base: "{{item.base}}"
+      files: "{{item.files}}"
+    backend: { kind: cli, cli: opencode }

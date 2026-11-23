@@ -80,6 +80,9 @@ export interface RunInput {
   project?: string;
   marketplace?: string;
   artifacts?: string[];
+  artifact?: string;
+  contentHash?: string;
+  files?: string;
   target?: string;
   targetName?: string;
   olko?: string;

@@ -25,6 +25,17 @@ export interface DataApiOptions {
   dataDir: string;
   configFile: string;
   demo: boolean;
+  /** The factory of this process. Only its own runs can be answered from the viewer. */
+  factory?: Factory;
+}
+
+export interface PendingDecision {
+  runId: string;
+  goal: string;
+  workflow: string;
+  questionId: string;
+  text: string;
+  allowed: string[];
 }
 
 export interface RunListItem {
@@ -77,6 +88,8 @@ export interface DataApi {
   projects(): { roots: string[]; projects: ProjectView[]; statusWorkflow: string };
   projectStatus(id: string): ProjectStatusView | null;
   projectsAction(request: ProjectsActionRequest): object;
+  pending(): PendingDecision[];
+  answer(runId: string, questionId: string, answer: string): PendingDecision[];
 }
 
 export interface ApiRequest {
@@ -166,7 +179,13 @@ async function finishFakeRun(factory: Factory, goal: string): Promise<Run> {
   }
 }
 
-export function createDataApi({ factoryDir, dataDir, configFile, demo }: DataApiOptions): DataApi {
+/** Runs of this process that wait for an answer with fixed choices: the viewer can answer them. */
+function answerable(factory: Factory | undefined): Run[] {
+  if (!factory) return [];
+  return [...factory.runs.values()].filter((run) => run.status === "waiting_for_user" && run.ownerPid === process.pid && Boolean(run.pendingQuestion?.allowed?.length));
+}
+
+export function createDataApi({ factoryDir, dataDir, configFile, demo, factory }: DataApiOptions): DataApi {
   const readConfig = (): FactoryConfigFile => {
     const text = fs.readFileSync(configFile, "utf8");
     return (/\.ya?ml$/i.test(configFile) ? parseYaml(text) : JSON.parse(text)) as FactoryConfigFile;
@@ -276,6 +295,24 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo }: DataApi
       return scan(factoryDir);
     },
 
+    pending() {
+      return answerable(factory).map((run) => ({
+        runId: run.runId,
+        goal: run.goal,
+        workflow: run.workflow ?? "",
+        questionId: run.pendingQuestion?.id ?? "",
+        text: run.pendingQuestion?.text ?? "",
+        allowed: run.pendingQuestion?.allowed ?? [],
+      }));
+    },
+
+    answer(runId, questionId, answer) {
+      const run = answerable(factory).find((r) => r.runId === runId);
+      if (!factory || !run) throw new Error("this run does not wait for an answer from the viewer; answer it in the session that owns it");
+      factory.answer(runId, questionId, answer);
+      return this.pending();
+    },
+
     async update() {
       const result = await updateMarketplace(hostExec, marketplaceDir());
       return { ...result, ...scan(factoryDir) };
@@ -368,9 +405,20 @@ export function apiMiddleware(api: DataApi) {
         return send(400, { error: errorMessage(error) });
       }
     }
+    const answerMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/answer$/);
+    if (req.method === "POST" && answerMatch?.[1] !== undefined) {
+      const origin = String(req.headers?.origin ?? "");
+      if (req.headers?.["x-factory-action"] !== "answer" || (origin && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin))) return send(403, { error: "an answer needs the viewer's own request" });
+      try {
+        return send(200, api.answer(answerMatch[1], url.searchParams.get("question") ?? "", url.searchParams.get("answer") ?? ""));
+      } catch (error) {
+        return send(409, { error: errorMessage(error) });
+      }
+    }
     if (req.method !== "GET") return next();
     try {
       if (url.pathname === "/api/stale") return send(200, api.stale());
+      if (url.pathname === "/api/pending") return send(200, api.pending());
       if (url.pathname === "/api/workflows") return send(200, api.workflows());
       if (url.pathname === "/api/agents") return send(200, api.agents());
       if (url.pathname === "/api/config") return send(200, api.config());

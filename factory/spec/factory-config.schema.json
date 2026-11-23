@@ -114,6 +114,101 @@
           "$ref": "#/$defs/name"
         }
       }
+    },
+    "watches": {
+      "description": "Interval watches: each runs a command per known project, reads a list of items from its JSON output, and starts one run of a workflow per item that stayed the same for stableChecks checks. The run stops at its first question until the user answers it in the viewer.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "everyMinutes",
+          "command",
+          "projectsWhen",
+          "items",
+          "key",
+          "workflow",
+          "goal",
+          "input",
+          "backend"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/name"
+          },
+          "everyMinutes": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "stableChecks": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2
+          },
+          "command": {
+            "description": "Executable and arguments; Mustache: project, projectName, marketplace, node (this Node binary).",
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "projectsWhen": {
+            "description": "A project is checked only when this relative path exists in it.",
+            "type": "string",
+            "minLength": 1
+          },
+          "items": {
+            "description": "Dotted path of the item list in the command's JSON output.",
+            "type": "string",
+            "minLength": 1
+          },
+          "skipWhen": {
+            "description": "Item fields that skip the item when truthy.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "key": {
+            "description": "Mustache key of an item; a run starts once per project and key.",
+            "type": "string",
+            "minLength": 1
+          },
+          "workflow": {
+            "$ref": "#/$defs/name"
+          },
+          "goal": {
+            "type": "string",
+            "minLength": 1
+          },
+          "input": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "backend": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "cli"
+            ],
+            "properties": {
+              "kind": {
+                "const": "cli"
+              },
+              "cli": {
+                "description": "Name of a CLI backend this factory supports (see backends).",
+                "$ref": "#/$defs/name"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "$defs": {

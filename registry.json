@@ -1045,6 +1045,40 @@
       }
     },
     {
+      "name": "olko-marketplace-upstream",
+      "category": "marketplace",
+      "version": "1.0.0",
+      "description": "Send one local change to an installed marketplace skill or agent back to the marketplace as a draft PR. Stage the change without the project adapter, keep project-specific hunks out, optimize the staged copy, and publish a draft PR that only a person merges or closes. Use when the factory marketplace-upstream watch or the person asks to upstream a changed artifact. Triggers: 'upstream this skill change', 'send local change to marketplace', 'olko-marketplace-upstream'.",
+      "tags": [
+        "marketplace",
+        "upstream",
+        "sync",
+        "pull-request"
+      ],
+      "capabilities": [
+        "marketplace",
+        "marketplace.upstream"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
       "name": "olko-optimize-project-skill",
       "category": "marketplace",
       "version": "1.0.0",
@@ -1683,6 +1717,40 @@
         "scripts/invoke-gradle-watchdog.ps1",
         "scripts/invoke-instrumentation-watchdog.ps1",
         "scripts/invoke-instrumentation-watchdog.Tests.ps1",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
+    },
+    {
+      "name": "olko-test-coverage-advisor",
+      "category": "testing",
+      "version": "1.0.0",
+      "description": "Advise which test principles the tests of an agent or skill miss. In suggest mode, read the artifact and its tests, and report gaps by severity with a TypeScript sketch per gap. In apply mode, write the accepted suggestions as real tests and check that each test can fail. Use when an agent or skill is added or changed, or when asked what tests an agent or skill is missing. Triggers: 'test coverage advisor', 'which tests are missing', 'test principles gap'.",
+      "tags": [
+        "testing",
+        "test",
+        "coverage",
+        "advisor"
+      ],
+      "capabilities": [
+        "testing",
+        "testing.test.coverage.advisor"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
         "workflow.md"
       ],
       "loading": {

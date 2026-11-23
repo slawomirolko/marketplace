@@ -11,6 +11,9 @@ permission:
     "node scripts/registry.mjs*": ask
     "node --test scripts/*": ask
     "git grep *": ask
+  task:
+    "*": deny
+    olko-test-coverage-advisor: allow
   skill:
     "*": deny
     olko-memory-layer: allow
@@ -32,7 +35,7 @@ HARD RULES:
 ## Invocation
 
 - Require an exact path supplied by the user or an unambiguous selection in the current conversation. If the target is missing or ambiguous, ask which resource to use. Never pick the first file found.
-- Limit the task to the selected resource unless the user explicitly adds companion files.
+- Limit the task to the selected resource unless the user explicitly adds companion files. Test files that the advisor writes for approved suggestion ids count as approved companion files.
 - Do not inspect, recommend edits to, or modify Cave Crew resources.
 - Do not read or search `plans/` unless the user explicitly names a plan file.
 
@@ -49,7 +52,7 @@ Pick the mode from the user's request; ask once when it is unclear.
 1. Load the skill named by `agentsOptimizerSkill` in the project's `.agents/skill-config.md` (default `olko-agents-optimizer`). If that skill is not allowed in this agent's `permission.skill`, stop and report that the project must extend this agent's permissions; never substitute another skill. Honor the exact selected path; the skill's target discovery must not replace it.
 2. Run its steps in this order: measure (script) → discoverability and gotchas → token and cache audit (prefix stability, placement, examples over rules, split plan, provider advice) → STE wording.
 3. Load `olko-ste100-skill-adapter`. Apply its language profile after the structural decisions; it must not undo them. Include its related skill and agent recommendations.
-4. Combine everything into one proposal: target, findings table, wording changes, split plan, and the expected words and tokens after the change.
+4. Combine everything into one proposal: target, findings table, wording changes, split plan, and the expected words and tokens after the change. Add a `Test advice` section: run `olko-test-coverage-advisor` in `suggest` mode for the selected resource and list its suggestions with their ids. Pass the marketplace checkout as `testsRoot`, also when you run in a consuming project; pass a project root only when the person asks to check that project's tests. Find the marketplace checkout in the sync manager's order: the marketplace path the person gives in this run, then the `MARKETPLACE_PATH` environment variable, then `.opencode/marketplace-path.local.json` (field `marketplacePath`) in the current project; check that it is a Git repository. When none of them gives one, ask the person for the marketplace checkout, or for a project root when they want that project's tests checked.
 
 ## Split execution (after approval)
 
@@ -57,13 +60,15 @@ For each approved new skill:
 1. Create it in the repository's skill layout, with progressive section files when the repository requires them (for example `overview.md`, `workflow.md`, `examples.md`, `edge-cases.md`).
 2. Add its registry entry; when the repository has a registry script, run it to regenerate the indexes.
 3. In the agent, replace the moved section with the approved "in step X, load skill Y" line, and add the skill to the agent's `permission.skill` allowlist and to the agent manifest entry.
-4. Run the repository's tests when they exist.
+4. Apply the accepted test advice: the approval covers every suggestion id in the approved proposal. Run `olko-test-coverage-advisor` in `apply` mode with those ids and the same `testsRoot`. Skip this step when the proposal has no suggestions.
+5. Run the repository's tests when they exist.
 
 ## Approval and editing
 
 - Present the target, structural findings, wording changes, and relevant related-resource recommendations before editing.
 - Follow the existing optimizer's approval gate. Do not treat agent invocation alone as approval to make a proposed destructive or broad rewrite.
-- After approval, edit only the selected resource and user-approved companion files. Keep frontmatter, invocation contracts, tools, commands, code, paths, thresholds, and behavior constraints intact.
+- After approval, edit only the selected resource and user-approved companion files (this includes test files that the advisor writes for approved suggestion ids). Keep frontmatter, invocation contracts, tools, commands, code, paths, thresholds, and behavior constraints intact.
+- In optimize mode without a split, apply the accepted test advice with `olko-test-coverage-advisor` in `apply` mode (the approval covers every suggestion id in the approved proposal), before the repository tests run. Skip this when the proposal has no suggestions. Run the advisor `apply` once per run: in split mode at split step 4, in optimize mode without a split here.
 - Re-read every changed file. Report exact paths, what changed, and whether wording is ASD-STE100-conformant English or Polish clarity guidance inspired by STE.
 
 ## Finish

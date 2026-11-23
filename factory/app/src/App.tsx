@@ -10,6 +10,7 @@ import { CallsList } from "./Calls.tsx";
 import { QuestionsList } from "./Questions.tsx";
 import { Projects } from "./Projects.tsx";
 import type { ProjectList } from "./Projects.tsx";
+import { PendingDecisions } from "./Pending.tsx";
 import { SupervisorRing, ringBounds } from "./SupervisorRing.tsx";
 import { layoutGraph, scriptsHeight } from "./layout.ts";
 import { agentsOnly } from "./agents-only.ts";
@@ -391,6 +392,18 @@ function Viewer() {
             {updateNote && <span className="muted" role="status"> {updateNote}</span>}
           </span>
         </header>
+        <PendingDecisions
+          api={API}
+          onOpenRun={(id) => {
+            setMode("runs");
+            getJson<RunListItem[]>("/runs")
+              .then((list) => {
+                setRuns(list);
+                setRunId(id);
+              })
+              .catch(() => setRunId(id));
+          }}
+        />
         {mode === "projects" ? (
           <Projects onShowRuns={showProjectRuns} />
         ) : (

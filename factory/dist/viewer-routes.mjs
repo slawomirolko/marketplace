@@ -7365,7 +7365,41 @@ var listPick = async ({ state, args }) => {
 		output: `${items.length} of ${args.items.length} items picked.`
 	};
 };
+/**
+* Runs one command without a shell. `with.command` is a list of Mustache templates over
+* input, state and answers; `{{node}}` is this Node binary. `with.cwd` sets the directory,
+* `with.okCodes` the accepted exit codes (default [0]) and `with.parse: json` parses stdout.
+*/
+var execCommand = async ({ args, state, input, answers, exec, cwd }) => {
+	if (!Array.isArray(args.command) || args.command.length === 0) throw new Error("with.command must be a non-empty list");
+	if (!exec) throw new Error("this factory process has no host exec");
+	const view = {
+		...withEach({
+			state,
+			input,
+			answers
+		}),
+		node: process.execPath
+	};
+	const render = (template) => mustache.render(String(template), view, {}, { escape: (value) => String(value) });
+	const [command, ...rest] = args.command.map(render);
+	const okCodes = Array.isArray(args.okCodes) ? args.okCodes.map(Number) : [0];
+	const result = await exec(command, rest, { cwd: typeof args.cwd === "string" ? render(args.cwd) : cwd });
+	const stdout = result.stdout.trim();
+	if (!okCodes.includes(Number(result.code))) throw new Error(`command exited ${result.code}: ${result.stderr.trim().slice(-300)}`);
+	const json = args.parse === "json" && stdout ? JSON.parse(stdout) : null;
+	return {
+		state: {
+			code: result.code,
+			stdout: stdout.slice(0, 2e4),
+			json
+		},
+		metrics: { code: Number(result.code) },
+		output: stdout.split(/\r?\n/)[0]?.slice(0, 200) ?? ""
+	};
+};
 var OPERATIONS = {
+	"builtin.exec": execCommand,
 	"builtin.pass": pass,
 	"builtin.count": async ({ state, nodeId }) => {
 		const count = ((nodeId ? state[nodeId]?.count : 0) ?? 0) + 1;
@@ -15463,7 +15497,12 @@ function loadFactoryConfig(file = configFile()) {
 		},
 		switches: raw.switches ?? {},
 		memoryLayer: memoryLayerOf(raw),
-		projects: projectsOf(raw)
+		projects: projectsOf(raw),
+		watches: (raw.watches ?? []).map((watch) => ({
+			...watch,
+			stableChecks: watch.stableChecks ?? 2,
+			skipWhen: watch.skipWhen ?? []
+		}))
 	};
 }
 // src/marketplace-agents.ts
@@ -18186,7 +18225,12 @@ async function finishFakeRun(factory, goal) {
 		if (current.status !== "running") return current;
 	}
 }
-function createDataApi({ factoryDir, dataDir, configFile, demo }) {
+/** Runs of this process that wait for an answer with fixed choices: the viewer can answer them. */
+function answerable(factory) {
+	if (!factory) return [];
+	return [...factory.runs.values()].filter((run) => run.status === "waiting_for_user" && run.ownerPid === process.pid && Boolean(run.pendingQuestion?.allowed?.length));
+}
+function createDataApi({ factoryDir, dataDir, configFile, demo, factory }) {
 	const readConfig = () => {
 		const text = fs.readFileSync(configFile, "utf8");
 		return /\.ya?ml$/i.test(configFile) ? (0, import_dist.parse)(text) : JSON.parse(text);
@@ -18305,6 +18349,22 @@ function createDataApi({ factoryDir, dataDir, configFile, demo }) {
 		stale() {
 			return scan(factoryDir);
 		},
+		pending() {
+			return answerable(factory).map((run) => ({
+				runId: run.runId,
+				goal: run.goal,
+				workflow: run.workflow ?? "",
+				questionId: run.pendingQuestion?.id ?? "",
+				text: run.pendingQuestion?.text ?? "",
+				allowed: run.pendingQuestion?.allowed ?? []
+			}));
+		},
+		answer(runId, questionId, answer) {
+			const run = answerable(factory).find((r) => r.runId === runId);
+			if (!factory || !run) throw new Error("this run does not wait for an answer from the viewer; answer it in the session that owns it");
+			factory.answer(runId, questionId, answer);
+			return this.pending();
+		},
 		async update() {
 			return {
 				...await updateMarketplace(hostExec, marketplaceDir()),
@@ -18420,9 +18480,20 @@ function apiMiddleware(api) {
 				return send(400, { error: errorMessage(error) });
 			}
 		}
+		const answerMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/answer$/);
+		if (req.method === "POST" && answerMatch?.[1] !== void 0) {
+			const origin = String(req.headers?.origin ?? "");
+			if (req.headers?.["x-factory-action"] !== "answer" || origin && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin)) return send(403, { error: "an answer needs the viewer's own request" });
+			try {
+				return send(200, api.answer(answerMatch[1], url.searchParams.get("question") ?? "", url.searchParams.get("answer") ?? ""));
+			} catch (error) {
+				return send(409, { error: errorMessage(error) });
+			}
+		}
 		if (req.method !== "GET") return next();
 		try {
 			if (url.pathname === "/api/stale") return send(200, api.stale());
+			if (url.pathname === "/api/pending") return send(200, api.pending());
 			if (url.pathname === "/api/workflows") return send(200, api.workflows());
 			if (url.pathname === "/api/agents") return send(200, api.agents());
 			if (url.pathname === "/api/config") return send(200, api.config());
@@ -18473,12 +18544,14 @@ function staticFile(viewerDir, relativePath) {
 	if (!fs.existsSync(full) || !fs.statSync(full).isFile()) return null;
 	return full;
 }
-function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHosts }) {
+var POST_PATHS = [/^\/viewer\/api\/update$/, /^\/viewer\/api\/runs\/[^/]+\/answer$/];
+function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHosts, factory }) {
 	const api = apiMiddleware(createDataApi({
 		factoryDir,
 		dataDir,
 		configFile,
-		demo: false
+		demo: false,
+		...factory ? { factory } : {}
 	}));
 	const csp = cspMiddleware();
 	return (req, res) => {
@@ -18488,7 +18561,7 @@ function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHost
 			res.writeHead(403, { "content-type": "text/plain" }).end("forbidden host");
 			return true;
 		}
-		if (req.method !== "GET" && !(req.method === "POST" && (url.pathname === `${PREFIX}/api/update` || url.pathname === `${PREFIX}/api/projects`))) {
+		if (req.method !== "GET" && !(req.method === "POST" && POST_PATHS.some((p) => p.test(url.pathname)))) {
 			res.writeHead(405, { allow: "GET" }).end();
 			return true;
 		}
@@ -18523,4 +18596,4 @@ function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHost
 		return true;
 	};
 }
-export { viewerOptions as _, projectsAction as a, __toESM as b, Factory as c, parseCli as d, DEFAULT_VIEWER_PORT as f, registerDataSource as g, defaultDataDir as h, projectScopedInput as i, errorMessage as l, VIEWER_HEALTH as m, viewerHandler as n, cliExecutor as o, FACTORY_DIR$1 as p, viewerUrlFor as r, hostExec as s, allowedHostsFor as t, parseBackend as u, require_dist as v, require_ajv as y };
+export { __toESM as C, mustache as S, defaultDataDir as _, projectsAction as a, require_dist as b, Factory as c, parseCli as d, marketplaceDir as f, VIEWER_HEALTH as g, FACTORY_DIR$1 as h, projectScopedInput as i, errorMessage as l, DEFAULT_VIEWER_PORT as m, viewerHandler as n, cliExecutor as o, loadFactoryConfig as p, viewerUrlFor as r, hostExec as s, allowedHostsFor as t, parseBackend as u, registerDataSource as v, require_ajv as x, viewerOptions as y };
