@@ -130,6 +130,7 @@ describe("Projects", () => {
     render(<Projects onShowRuns={() => {}} pollMs={10} />);
     expect(await screen.findByRole("button", { name: /^Analyzing…/ })).toBeDisabled();
     expect(screen.queryByText("No finished status yet.")).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Analyzing… (unknown)" })).toBeDisabled();
     server.use(http.get("/api/runs/:runId", () => HttpResponse.json({ run: { status: "failed" } })));
     expect(await screen.findByText("Analysis of sample-busy failed (run r-0000000t).")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Analyze" })).toBeEnabled();
