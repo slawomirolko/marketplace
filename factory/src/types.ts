@@ -483,4 +483,6 @@ export interface ProjectsConfig {
   markers?: string[];
   maxDepth?: number;
   statusWorkflow?: string;
+  /** The CLI backend that runs the status workflow when the viewer starts it. */
+  statusBackend?: { kind: "cli"; cli: CliName };
 }

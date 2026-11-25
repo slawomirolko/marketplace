@@ -7,6 +7,7 @@ import { Factory } from "./engine.ts";
 import { cliExecutor, hostExec } from "./cli-backend.ts";
 import { marketplaceDir } from "./marketplace-agents.ts";
 import { loadWatches, startWatches } from "./watch.ts";
+import { loadFactoryConfig } from "./config.ts";
 
 const port = Number(process.env.FACTORY_VIEWER_PORT ?? DEFAULT_VIEWER_PORT);
 const publicUrl = `http://127.0.0.1:${port}`;
@@ -14,7 +15,8 @@ const dataDir = defaultDataDir();
 // The viewer process outlives the harness sessions, so it owns the interval watches and
 // the runs they start; their questions are answered on the run page.
 const watches = process.env.FACTORY_WATCHES === "off" ? [] : loadWatches();
-const executors = Object.fromEntries(watches.map((watch) => [watch.backend.cli, cliExecutor(watch.backend.cli)]));
+const statusBackend = loadFactoryConfig().projects.statusBackend;
+const executors = Object.fromEntries([...watches.map((watch) => watch.backend.cli), ...(statusBackend ? [statusBackend.cli] : [])].map((cli) => [cli, cliExecutor(cli)]));
 const factory = new Factory(dataDir, { backend: "delegate", executors: { exec: hostExec, ...executors } });
 const viewer = viewerHandler({ ...viewerOptions(dataDir), allowedHosts: allowedHostsFor(publicUrl, port), factory });
 

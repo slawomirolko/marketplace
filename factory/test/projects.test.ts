@@ -12,7 +12,7 @@ const { addProject, addRoot, discoverProjects, listProjects, projectById, projec
 const { apiMiddleware, createDataApi, parseProjectsAction, statusFileOf } = await import("../app/data.ts");
 const { loadFactoryConfig, projectsOf, DEFAULT_PROJECTS } = await import("../src/config.ts");
 const { validate } = await import("../src/spec.ts");
-const { loadedWorkflows } = await import("../src/engine.ts");
+const { Factory, loadedWorkflows } = await import("../src/engine.ts");
 
 const factoryDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const settings = { markers: [".agents/skills", ".opencode/agents"], maxDepth: 3 };
@@ -144,6 +144,8 @@ test("project settings come from the factory config with defaults, and the schem
   const config = JSON.parse(fs.readFileSync(path.join(factoryDir, "spec", "examples", "valid", "factory-config.json"), "utf8"));
   assert.equal(validate("factory-config", { ...config, projects: { markers: [".agents"], maxDepth: 2, statusWorkflow: "olko-project-status" } }).valid, true);
   assert.equal(validate("factory-config", { ...config, projects: { maxDepth: 99 } }).valid, false);
+  assert.deepEqual(loadFactoryConfig().projects.statusBackend, { kind: "cli", cli: "opencode" });
+  assert.equal(validate("factory-config", { ...config, projects: { statusBackend: { kind: "delegate" } } }).valid, false);
 });
 
 test("the project status workflow is one script-runner step that reads the project only", () => {
@@ -241,4 +243,81 @@ test("project action bodies and status files are checked", () => {
   assert.equal(statusFileOf({ scan: { scan: { file: outside } } }, dir), null, "only files in the status folder");
   assert.equal(statusFileOf({ scan: { file: path.join(dir, "missing.json") } }, dir), null);
   assert.equal(statusFileOf(null, dir), null);
+});
+
+test("the viewer's analyze action starts the status workflow for a project once, on the configured status backend", async () => {
+  reset();
+  const ws = workspace();
+  const app = folder(ws, "app");
+  addProject({ path: app, id: "sample-app" });
+  const statusFile = path.join(folder(home, "project-status"), "sample-app-analyze.json");
+  fs.writeFileSync(statusFile, JSON.stringify({ summary: "0 artifacts", counts: {}, artifacts: [] }));
+  const prompts: string[] = [];
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const stub = async (request: { prompt: string }) => {
+    prompts.push(request.prompt);
+    await gate;
+    return { ok: true, text: `\`\`\`json\n${JSON.stringify({ file: statusFile, head: null, counts: {}, harnesses: [], workflows: [], summary: "0 artifacts" })}\n\`\`\``, turns: 1 };
+  };
+  const dataDir = workspace();
+  const factory = new Factory(dataDir, { backend: "delegate", executors: { opencode: stub as never } });
+  const data = createDataApi({ factoryDir, dataDir, configFile: path.join(factoryDir, "config", "factory.yaml"), demo: false, factory });
+  const call = apiCall(data);
+  const headers = { "x-factory-action": "projects", origin: "http://127.0.0.1:7340" };
+
+  const listed = data.projects();
+  assert.equal(listed.statusWorkflowInstalled, true);
+  assert.equal(listed.canAnalyze, true);
+  const first = await call("POST", "/api/projects", { headers, body: { action: "analyze", id: "sample-app" } });
+  assert.equal(first.status, 200);
+  const started = first.body as { runId: string; status: string; reused: boolean };
+  assert.equal(started.reused, false);
+  const run = factory.get(started.runId);
+  assert.equal(run.workflow, "olko-project-status");
+  assert.equal(run.input?.projectId, "sample-app");
+  assert.equal(run.input?.project, app);
+  assert.deepEqual(run.config?.backend, { kind: "cli", cli: "opencode" });
+  assert.equal(data.projects().projects[0]?.analyzing, started.runId);
+  const again = (await call("POST", "/api/projects", { headers, body: { action: "analyze", id: "sample-app" } })).body as { runId: string; reused: boolean };
+  assert.deepEqual([again.runId, again.reused], [started.runId, true], "a running analysis is reused");
+
+  release();
+  for (let i = 0; i < 500 && factory.get(started.runId).status === "running"; i++) await new Promise((r) => setTimeout(r, 10));
+  assert.equal(factory.get(started.runId).status, "done");
+  assert.match(prompts[0] ?? "", /--id sample-app/);
+  assert.equal(data.projects().projects[0]?.analyzing, null);
+  assert.equal(data.projectStatus("sample-app")?.runId, started.runId);
+
+  assert.equal((await call("POST", "/api/projects", { headers, body: { action: "analyze", id: "nope" } })).status, 400);
+  const noFactory = apiCall(createDataApi({ factoryDir, dataDir, configFile: path.join(factoryDir, "config", "factory.yaml"), demo: false }));
+  const refused = await noFactory("POST", "/api/projects", { headers, body: { action: "analyze", id: "sample-app" } });
+  assert.equal(refused.status, 400);
+  assert.match((refused.body as { error: string }).error, /cannot start runs/);
+});
+
+test("analyze refuses a missing status workflow and a delegate backend without a status backend", async () => {
+  reset();
+  const app = folder(workspace(), "app");
+  addProject({ path: app, id: "sample-app" });
+  const dataDir = workspace();
+  const factory = new Factory(dataDir, { backend: "delegate" });
+  const headers = { "x-factory-action": "projects", origin: "http://127.0.0.1:7340" };
+  const missing = path.join(workspace(), "factory.yaml");
+  fs.writeFileSync(missing, fs.readFileSync(path.join(factoryDir, "config", "factory.yaml"), "utf8").replace("statusWorkflow: olko-project-status", "statusWorkflow: sample-missing"));
+  const missingApi = createDataApi({ factoryDir, dataDir, configFile: missing, demo: false, factory });
+  assert.equal(missingApi.projects().statusWorkflowInstalled, false);
+  assert.throws(() => missingApi.projectsAction({ action: "analyze", id: "sample-app" }), /workflow sample-missing is not installed/);
+
+  const noBackend = path.join(workspace(), "factory.yaml");
+  fs.writeFileSync(noBackend, fs.readFileSync(path.join(factoryDir, "config", "factory.yaml"), "utf8").replace(/\n\s*statusBackend:.*\n/, "\n"));
+  process.env.FACTORY_CONFIG = noBackend;
+  try {
+    const api = createDataApi({ factoryDir, dataDir, configFile: noBackend, demo: false, factory });
+    assert.throws(() => api.projectsAction({ action: "analyze", id: "sample-app" }), /needs a CLI backend: set projects.statusBackend/);
+    assert.equal(factory.runs.size, 0, "no run is created");
+  } finally {
+    delete process.env.FACTORY_CONFIG;
+  }
+  assert.deepEqual(parseProjectsAction({ action: "analyze", id: "sample-app" }), { action: "analyze", id: "sample-app" });
 });

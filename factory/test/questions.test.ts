@@ -117,6 +117,9 @@ test("a run stores every question with its rendered text, the step that asks it,
     assert.equal(response.status, 200);
     const body = (await response.json()) as { questions: unknown };
     assert.deepEqual(body.questions, stored, "the viewer server sends the stored questions over HTTP");
+    const projects = await fetch(`http://127.0.0.1:${port}/viewer/api/projects`, { method: "POST", headers: { "content-type": "application/json", "x-factory-action": "projects" }, body: JSON.stringify({ action: "drop" }) });
+    assert.equal(projects.status, 400, "the served viewer passes project actions to the API");
+    assert.equal((await fetch(`http://127.0.0.1:${port}/viewer/api/workflows`, { method: "POST" })).status, 405, "other POSTs stay refused");
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

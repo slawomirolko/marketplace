@@ -43,7 +43,7 @@ function staticFile(viewerDir: string, relativePath: string): string | null {
   return full;
 }
 
-const POST_PATHS = [/^\/viewer\/api\/update$/, /^\/viewer\/api\/runs\/[^/]+\/answer$/];
+const POST_PATHS = [/^\/viewer\/api\/update$/, /^\/viewer\/api\/projects$/, /^\/viewer\/api\/runs\/[^/]+\/answer$/];
 
 export function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHosts, factory }: ViewerOptions): (req: IncomingMessage, res: ServerResponse) => boolean {
   const api = apiMiddleware(createDataApi({ factoryDir, dataDir, configFile, demo: false, ...(factory ? { factory } : {}) }));

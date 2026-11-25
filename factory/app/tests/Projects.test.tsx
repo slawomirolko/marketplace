@@ -9,9 +9,11 @@ const artifact = (extra: Partial<ProjectArtifact>): ProjectArtifact => ({ id: "s
 const list: ProjectList = {
   roots: ["/src"],
   statusWorkflow: "olko-project-status",
+  statusWorkflowInstalled: true,
+  canAnalyze: true,
   projects: [
-    { id: "sample-app", path: "/src/sample-app", exists: true, runs: 2, status: { runId: "r-0000000a", createdAt: null, summary: "1 current", counts: { current: 1, outdated: 1, missing: 1 } } },
-    { id: "sample-web", path: "/src/sample-web", exists: false, runs: 0, status: null },
+    { id: "sample-app", path: "/src/sample-app", exists: true, runs: 2, analyzing: null, status: { runId: "r-0000000a", createdAt: null, summary: "1 current", counts: { current: 1, outdated: 1, missing: 1 } } },
+    { id: "sample-web", path: "/src/sample-web", exists: false, runs: 0, analyzing: null, status: null },
   ],
 };
 
@@ -35,9 +37,9 @@ const status: ProjectStatusView = {
 
 type Posted = Record<string, string>;
 
-function serve(posted: Posted[] = [], statuses: Record<string, ProjectStatusView | null> = { "sample-app": status, "sample-web": null }) {
+function serve(posted: Posted[] = [], statuses: Record<string, ProjectStatusView | null> = { "sample-app": status, "sample-web": null }, projects: ProjectList = list) {
   server.use(
-    http.get("/api/projects", () => HttpResponse.json(list)),
+    http.get("/api/projects", () => HttpResponse.json(projects)),
     http.get("/api/projects/:id/status", ({ params }) => {
       const view = statuses[String(params.id)];
       return view ? HttpResponse.json(view) : HttpResponse.json({ error: "none" }, { status: 404 });
@@ -50,6 +52,8 @@ function serve(posted: Posted[] = [], statuses: Record<string, ProjectStatusView
       if (body.action === "add" && body.path === "/bad") return HttpResponse.json({ error: "project /bad is not a folder" }, { status: 400 });
       if (body.action === "add") return HttpResponse.json({ project: { id: body.id || "sample-x", path: body.path } });
       if (body.action === "remove") return HttpResponse.json({ project: { id: body.id } });
+      if (body.action === "analyze" && body.id === "sample-bad") return HttpResponse.json({ error: "project sample-bad: folder /x does not exist" }, { status: 400 });
+      if (body.action === "analyze") return HttpResponse.json({ runId: "r-0000000s", status: "running", reused: body.id === "sample-busy" });
       return HttpResponse.json({ roots: [] });
     }),
   );
@@ -76,17 +80,87 @@ describe("Projects", () => {
     expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(4);
   });
 
-  test("a project without a finished status run explains how to start one", async () => {
+  test("a project without a finished status run offers Analyze, disabled while its folder is missing", async () => {
     serve();
     const user = userEvent.setup();
     render(<Projects onShowRuns={() => {}} />);
     await screen.findByRole("table");
+    expect(screen.getByRole("button", { name: "Re-analyze" })).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: /sample-web/ }));
 
-    expect(await screen.findByText(/No finished status yet/)).toBeInTheDocument();
-    expect(screen.getByText("projectId: sample-web")).toBeInTheDocument();
+    expect(await screen.findByText("No finished status yet.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Analyze" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Runs (0)" })).toBeDisabled();
+  });
+
+  test("Analyze starts the status workflow, shows its progress and reloads the status when the run finishes", async () => {
+    const posted = serve();
+    let statusCalls = 0;
+    let runCalls = 0;
+    server.use(
+      http.get("/api/projects/:id/status", () => {
+        statusCalls += 1;
+        return HttpResponse.json(status);
+      }),
+      http.get("/api/runs/:runId", ({ params }) => {
+        runCalls += 1;
+        return HttpResponse.json({ run: { runId: params.runId, status: runCalls < 2 ? "running" : "done" } });
+      }),
+    );
+    const user = userEvent.setup();
+    render(<Projects onShowRuns={() => {}} pollMs={10} />);
+    await screen.findByRole("table");
+    expect(statusCalls).toBe(1);
+
+    await user.click(screen.getByRole("button", { name: "Re-analyze" }));
+
+    expect(await screen.findByText("Started the analysis of sample-app (run r-0000000s).")).toBeInTheDocument();
+    expect(posted).toEqual([{ action: "analyze", id: "sample-app" }]);
+    expect(screen.getByRole("button", { name: /^Analyzing…/ })).toBeDisabled();
+    expect(await screen.findByText("Analysis of sample-app finished (run r-0000000s).")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Re-analyze" })).toBeEnabled();
+    await waitFor(() => expect(statusCalls).toBe(2));
+    expect(runCalls).toBe(2);
+  });
+
+  test("a status run already in progress keeps Analyze disabled, and a failed run is reported", async () => {
+    serve([], { "sample-busy": null }, { ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: "r-0000000t", status: null }] });
+    server.use(http.get("/api/runs/:runId", () => HttpResponse.json({ error: "gone" }, { status: 404 })));
+    render(<Projects onShowRuns={() => {}} pollMs={10} />);
+    expect(await screen.findByRole("button", { name: /^Analyzing…/ })).toBeDisabled();
+    expect(screen.queryByText("No finished status yet.")).not.toBeInTheDocument();
+    server.use(http.get("/api/runs/:runId", () => HttpResponse.json({ run: { status: "failed" } })));
+    expect(await screen.findByText("Analysis of sample-busy failed (run r-0000000t).")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Analyze" })).toBeEnabled();
+  });
+
+  test("an already running analysis is reused, and an analyze error is shown", async () => {
+    const projects = { ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: null, status: null }, { id: "sample-bad", path: "/x", exists: true, runs: 0, analyzing: null, status: null }] };
+    serve([], { "sample-busy": null, "sample-bad": null }, projects);
+    server.use(http.get("/api/runs/:runId", () => HttpResponse.json({ run: { status: "running" } })));
+    const user = userEvent.setup();
+    render(<Projects onShowRuns={() => {}} pollMs={10} />);
+    await user.click(await screen.findByRole("button", { name: "Analyze" }));
+    expect(await screen.findByText("Analysis of sample-busy is already running (run r-0000000s).")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /sample-bad/ }));
+    await user.click(await screen.findByRole("button", { name: "Analyze" }));
+    expect(await screen.findByText("project sample-bad: folder /x does not exist")).toBeInTheDocument();
+  });
+
+  test("without the status workflow or a run-capable viewer, Analyze is replaced by a note", async () => {
+    serve([], undefined, { ...list, statusWorkflowInstalled: false });
+    const { unmount } = render(<Projects onShowRuns={() => {}} />);
+    expect(await screen.findByText(/workflow is not installed, so the project cannot be analyzed/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /analyze/i })).not.toBeInTheDocument();
+    unmount();
+
+    serve([], undefined, { ...list, canAnalyze: false });
+    render(<Projects onShowRuns={() => {}} />);
+    expect(await screen.findByText(/This viewer cannot start runs/)).toBeInTheDocument();
+    expect(screen.getByText("projectId: sample-app")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /analyze/i })).not.toBeInTheDocument();
   });
 
   test("adds a project, discovers candidates and adds one, manages roots, and shows errors", async () => {
@@ -138,7 +212,7 @@ describe("Projects", () => {
   });
 
   test("an empty list invites adding a project, and discovery needs a root", async () => {
-    server.use(http.get("/api/projects", () => HttpResponse.json({ roots: [], projects: [], statusWorkflow: "olko-project-status" })));
+    server.use(http.get("/api/projects", () => HttpResponse.json({ roots: [], projects: [], statusWorkflow: "olko-project-status", statusWorkflowInstalled: true, canAnalyze: true })));
     render(<Projects onShowRuns={() => {}} />);
     expect(await screen.findByText(/No project yet/)).toBeInTheDocument();
     expect(screen.getByText("Select a project.")).toBeInTheDocument();

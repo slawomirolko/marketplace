@@ -2,13 +2,13 @@ import fs from "node:fs";
 import { loadWorkflowSpecs } from "../src/workflow-yaml.ts";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
-import { Factory, errorMessage, runReport } from "../src/engine.ts";
+import { Factory, errorMessage, loadedWorkflows, runReport } from "../src/engine.ts";
 import { homeDataDir, readSources } from "../src/paths.ts";
 import { describeAgent, marketplaceDir } from "../src/marketplace-agents.ts";
 import { readQuestions } from "../src/questions.ts";
 import type { AskedQuestion } from "../src/questions.ts";
-import { memoryLayerOf, projectsOf } from "../src/config.ts";
-import { projectsAction, readRegistry } from "../src/projects.ts";
+import { loadFactoryConfig, memoryLayerOf, projectsOf } from "../src/config.ts";
+import { projectScopedInput, projectsAction, readRegistry } from "../src/projects.ts";
 import type { Project, ProjectsActionRequest } from "../src/projects.ts";
 import { standaloneNames, workflowsThatRan } from "../src/standalone.ts";
 import { readLock, scanMarketplace, updateMarketplace } from "../src/sources-lock.ts";
@@ -66,6 +66,8 @@ export interface ProjectStatusView {
 export interface ProjectView extends Project {
   exists: boolean;
   runs: number;
+  /** The status run that is in progress for this project, if any. */
+  analyzing: string | null;
   status: { runId: string; createdAt: string | null; summary: string | null; counts: Record<string, number> | null } | null;
 }
 
@@ -85,9 +87,9 @@ export interface DataApi {
   run(runId: string): RunDetail | null;
   stale(): MarketplaceScan;
   update(): Promise<UpdateResult & MarketplaceScan>;
-  projects(): { roots: string[]; projects: ProjectView[]; statusWorkflow: string };
+  projects(): { roots: string[]; projects: ProjectView[]; statusWorkflow: string; statusWorkflowInstalled: boolean; canAnalyze: boolean };
   projectStatus(id: string): ProjectStatusView | null;
-  projectsAction(request: ProjectsActionRequest): object;
+  projectsAction(request: ViewerProjectsRequest): object;
   pending(): PendingDecision[];
   answer(runId: string, questionId: string, answer: string): PendingDecision[];
 }
@@ -120,13 +122,17 @@ function readBody(req: ApiRequest): Promise<unknown> {
   });
 }
 
-const PROJECT_ACTIONS = new Set(["add", "remove", "add_root", "remove_root", "discover"]);
+/** A project action from the viewer: a registry action, or analyze, which starts the status workflow for one project. */
+export type ViewerProjectsRequest = Omit<ProjectsActionRequest, "action"> & { action: ProjectsActionRequest["action"] | "analyze" };
 
-/** A project registry action from the viewer: only the known fields, only strings. */
-export function parseProjectsAction(body: unknown): ProjectsActionRequest {
+const PROJECT_ACTIONS = new Set(["add", "remove", "add_root", "remove_root", "discover", "analyze"]);
+const IN_PROGRESS = new Set<Run["status"]>(["needs_confirmation", "running", "waiting_for_user", "waiting_for_client"]);
+
+/** A project action from the viewer: only the known fields, only strings. */
+export function parseProjectsAction(body: unknown): ViewerProjectsRequest {
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("the request body must be a JSON object");
   const b = body as Record<string, unknown>;
-  if (typeof b.action !== "string" || !PROJECT_ACTIONS.has(b.action)) throw new Error("action must be add, remove, add_root, remove_root or discover");
+  if (typeof b.action !== "string" || !PROJECT_ACTIONS.has(b.action)) throw new Error("action must be add, remove, add_root, remove_root, discover or analyze");
   const text = (name: string) => {
     const value = b[name];
     if (value === undefined || value === "") return undefined;
@@ -136,7 +142,7 @@ export function parseProjectsAction(body: unknown): ProjectsActionRequest {
   const dir = text("path");
   const id = text("id");
   const marketplace = text("marketplace");
-  return { action: b.action as ProjectsActionRequest["action"], ...(dir ? { path: dir } : {}), ...(id ? { id } : {}), ...(marketplace ? { marketplace } : {}) };
+  return { action: b.action as ViewerProjectsRequest["action"], ...(dir ? { path: dir } : {}), ...(id ? { id } : {}), ...(marketplace ? { marketplace } : {}) };
 }
 
 /** The status file named in a status run's state; only JSON files in the factory home's project-status folder. */
@@ -325,11 +331,13 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo, factory }
       return {
         roots: registry.roots,
         statusWorkflow,
+        statusWorkflowInstalled: loadedWorkflows().has(statusWorkflow),
+        canAnalyze: Boolean(factory),
         projects: registry.projects.map((p) => {
           const own = runs.filter((r) => r.run.input?.projectId === p.id);
           const latest = latestStatus(own, statusWorkflow);
           const data = latest ? (readStatusFile(latest.run) as { summary?: string; counts?: Record<string, number> } | null) : null;
-          return { ...p, exists: fs.existsSync(p.path), runs: own.length, status: latest ? { runId: latest.run.runId, createdAt: latest.createdAt, summary: data?.summary ?? null, counts: data?.counts ?? null } : null };
+          return { ...p, exists: fs.existsSync(p.path), runs: own.length, analyzing: activeStatus(own, statusWorkflow)?.runId ?? null, status: latest ? { runId: latest.run.runId, createdAt: latest.createdAt, summary: data?.summary ?? null, counts: data?.counts ?? null } : null };
         }),
       };
     },
@@ -341,9 +349,24 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo, factory }
     },
 
     projectsAction(request) {
-      return projectsAction(request);
+      if (request.action === "analyze") return analyze(request.id ?? "");
+      return projectsAction({ ...request, action: request.action });
     },
   };
+
+  function analyze(id: string): { runId: string; status: Run["status"]; reused: boolean } {
+    if (!factory) throw new Error("this viewer cannot start runs; open the viewer of the factory server");
+    const statusWorkflow = projectsOf(readConfig()).statusWorkflow;
+    if (!loadedWorkflows().has(statusWorkflow)) throw new Error(`workflow ${statusWorkflow} is not installed`);
+    const input = projectScopedInput(id, {});
+    const active = activeStatus(projectRuns().filter((r) => r.run.input?.projectId === id), statusWorkflow);
+    if (active) return { runId: active.runId, status: active.status, reused: true };
+    const { statusBackend } = loadFactoryConfig().projects;
+    if (!statusBackend && factory.defaultConfig.backend.kind === "delegate") throw new Error("the status workflow needs a CLI backend: set projects.statusBackend in the factory config");
+    const { run } = factory.start(`Status of project ${id}`, undefined, { workflow: statusWorkflow, input });
+    const started = factory.confirm(run.runId, statusBackend ? { backend: statusBackend } : {});
+    return { runId: started.runId, status: started.status, reused: false };
+  }
 
   function projectRuns(): { run: Run; createdAt: string | null }[] {
     return allRunFiles().flatMap(({ file }) => {
@@ -355,6 +378,10 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo, factory }
       }
     });
   }
+}
+
+function activeStatus(runs: { run: Run }[], workflow: string): Run | null {
+  return runs.find((r) => r.run.workflow === workflow && IN_PROGRESS.has(r.run.status))?.run ?? null;
 }
 
 function latestStatus(runs: { run: Run; createdAt: string | null }[], workflow: string): { run: Run; createdAt: string | null } | null {

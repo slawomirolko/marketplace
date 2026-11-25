@@ -11,15 +11,18 @@ export interface FactoryConfig {
   budget: { maxCostUsd: number; infoRatio: number; pauseRatio: number };
   switches: Record<string, boolean>;
   memoryLayer: string;
-  projects: Required<ProjectsConfig>;
+  projects: ProjectSettings;
   watches: WatchSpec[];
 }
 
+/** Project settings with defaults; the status backend stays optional. */
+export type ProjectSettings = Required<Omit<ProjectsConfig, "statusBackend">> & Pick<ProjectsConfig, "statusBackend">;
+
 export const DEFAULT_MEMORY_LAYER = "olko-memory-layer";
-export const DEFAULT_PROJECTS: Required<ProjectsConfig> = { markers: [".agents/skill-config.md", ".agents/skills", ".opencode/agents", ".claude/skills", ".claude/agents"], maxDepth: 3, statusWorkflow: "olko-project-status" };
+export const DEFAULT_PROJECTS: ProjectSettings = { markers: [".agents/skill-config.md", ".agents/skills", ".opencode/agents", ".claude/skills", ".claude/agents"], maxDepth: 3, statusWorkflow: "olko-project-status" };
 
 /** Project discovery settings from a parsed config file, with defaults. */
-export function projectsOf(raw: { projects?: ProjectsConfig } | null | undefined): Required<ProjectsConfig> {
+export function projectsOf(raw: { projects?: ProjectsConfig } | null | undefined): ProjectSettings {
   return { ...DEFAULT_PROJECTS, ...(raw?.projects ?? {}) };
 }
 

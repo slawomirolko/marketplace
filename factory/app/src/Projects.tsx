@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const API = `${import.meta.env.BASE_URL}api`;
 
@@ -8,6 +8,7 @@ export interface ProjectSummary {
   marketplace?: string;
   exists: boolean;
   runs: number;
+  analyzing: string | null;
   status: { runId: string; createdAt: string | null; summary: string | null; counts: Record<string, number> | null } | null;
 }
 
@@ -15,7 +16,12 @@ export interface ProjectList {
   roots: string[];
   projects: ProjectSummary[];
   statusWorkflow: string;
+  statusWorkflowInstalled: boolean;
+  canAnalyze: boolean;
 }
+
+const FINISHED = new Set(["done", "stopped", "cancelled", "failed"]);
+const POLL_MS = 2000;
 
 export interface ProjectCandidate {
   path: string;
@@ -102,7 +108,7 @@ export function countsText(counts: Record<string, number> | null | undefined): s
   return STATES.filter((s) => counts[s]).map((s) => `${counts[s]} ${s}`).join(" · ");
 }
 
-export function Projects({ onShowRuns }: { onShowRuns: (projectId: string) => void }) {
+export function Projects({ onShowRuns, pollMs = POLL_MS }: { onShowRuns: (projectId: string) => void; pollMs?: number }) {
   const [list, setList] = useState<ProjectList | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [status, setStatus] = useState<ProjectStatusView | null>(null);
@@ -114,11 +120,17 @@ export function Projects({ onShowRuns }: { onShowRuns: (projectId: string) => vo
   const [stateFilter, setStateFilter] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [statusVersion, setStatusVersion] = useState(0);
+  const [analyzing, setAnalyzing] = useState<Record<string, string>>({});
+  const [analyzeState, setAnalyzeState] = useState<Record<string, string>>({});
+  const [pollTick, setPollTick] = useState(0);
+  const finishedRuns = useRef(new Set<string>());
 
   const load = useCallback(async () => {
     try {
       const result = await getJson<ProjectList>("/projects");
       setList(result);
+      setAnalyzing((current) => ({ ...Object.fromEntries(result.projects.flatMap((p) => (p.analyzing && !finishedRuns.current.has(p.analyzing) ? [[p.id, p.analyzing]] : []))), ...current }));
       setSelectedId((current) => (current && result.projects.some((p) => p.id === current) ? current : (result.projects[0]?.id ?? null)));
     } catch (error) {
       setNote(messageOf(error));
@@ -145,7 +157,42 @@ export function Projects({ onShowRuns }: { onShowRuns: (projectId: string) => vo
     return () => {
       cancelled = true;
     };
-  }, [selectedId]);
+  }, [selectedId, statusVersion]);
+
+  useEffect(() => {
+    const entries = Object.entries(analyzing);
+    if (entries.length === 0) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void Promise.all(
+        entries.map(async ([projectId, runId]) => {
+          try {
+            const detail = await getJson<{ run: { status: string } }>(`/runs/${encodeURIComponent(runId)}`);
+            return { projectId, runId, status: detail.run.status };
+          } catch {
+            return { projectId, runId, status: "unknown" };
+          }
+        }),
+      ).then((results) => {
+        if (cancelled) return;
+        setAnalyzeState((current) => ({ ...current, ...Object.fromEntries(results.map((r) => [r.projectId, r.status])) }));
+        const finished = results.filter((r) => FINISHED.has(r.status));
+        if (finished.length === 0) {
+          setPollTick((t) => t + 1);
+          return;
+        }
+        for (const f of finished) finishedRuns.current.add(f.runId);
+        setAnalyzing((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !finished.some((f) => f.projectId === id))));
+        setNote(finished.map((f) => `Analysis of ${f.projectId} ${f.status === "done" ? "finished" : f.status} (run ${f.runId}).`).join(" "));
+        setStatusVersion((v) => v + 1);
+        void load();
+      });
+    }, pollMs);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [analyzing, pollTick, load, pollMs]);
 
   const act = useCallback(
     async (body: Record<string, string>, done: (result: never) => string | null) => {
@@ -173,6 +220,13 @@ export function Projects({ onShowRuns }: { onShowRuns: (projectId: string) => vo
       return `Added ${r.project.id}.`;
     });
 
+  const analyze = (projectId: string) =>
+    act({ action: "analyze", id: projectId }, (r: { runId: string; status: string; reused: boolean }) => {
+      setAnalyzing((current) => ({ ...current, [projectId]: r.runId }));
+      setAnalyzeState((current) => ({ ...current, [projectId]: r.status }));
+      return r.reused ? `Analysis of ${projectId} is already running (run ${r.runId}).` : `Started the analysis of ${projectId} (run ${r.runId}).`;
+    });
+
   const discover = () =>
     act({ action: "discover" }, (r: { candidates: ProjectCandidate[] }) => {
       setCandidates(r.candidates);
@@ -180,6 +234,7 @@ export function Projects({ onShowRuns }: { onShowRuns: (projectId: string) => vo
     });
 
   const selected = list?.projects.find((p) => p.id === selectedId) ?? null;
+  const selectedRun = selected ? analyzing[selected.id] : undefined;
   const rows = useMemo(() => (status?.data?.artifacts ?? []).filter((a) => !stateFilter || a.state === stateFilter), [status, stateFilter]);
 
   if (!list) return <p className="muted pad">{note ?? "Loading projects…"}</p>;
@@ -270,6 +325,11 @@ export function Projects({ onShowRuns }: { onShowRuns: (projectId: string) => vo
               <h2>{selected.id}</h2>
               <code>{selected.path}</code>
               <span className="project-actions">
+                {list.statusWorkflowInstalled && list.canAnalyze && (
+                  <button type="button" disabled={busy || Boolean(selectedRun) || !selected.exists} onClick={() => void analyze(selected.id)} title={`Start the ${list.statusWorkflow} workflow for this project.`}>
+                    {selectedRun ? `Analyzing… (${analyzeState[selected.id] ?? "running"})` : status || selected.status ? "Re-analyze" : "Analyze"}
+                  </button>
+                )}
                 <button type="button" onClick={() => onShowRuns(selected.id)} disabled={selected.runs === 0}>
                   Runs ({selected.runs})
                 </button>
@@ -284,11 +344,17 @@ export function Projects({ onShowRuns }: { onShowRuns: (projectId: string) => vo
                 </button>
               </span>
             </header>
-            {statusMissing && (
-              <p className="muted">
-                No finished status yet. Start the <code>{list.statusWorkflow}</code> workflow with <code>projectId: {selected.id}</code> (factory_start).
+            {!list.statusWorkflowInstalled && (
+              <p className="warn">
+                The <code>{list.statusWorkflow}</code> workflow is not installed, so the project cannot be analyzed.
               </p>
             )}
+            {list.statusWorkflowInstalled && !list.canAnalyze && (
+              <p className="muted">
+                This viewer cannot start runs. Start the <code>{list.statusWorkflow}</code> workflow with <code>projectId: {selected.id}</code> (factory_start).
+              </p>
+            )}
+            {statusMissing && !selectedRun && <p className="muted">No finished status yet.</p>}
             {status?.data && <StatusView view={status} data={status.data} rows={rows} stateFilter={stateFilter} onStateFilter={setStateFilter} />}
             {status && !status.data && <p className="warn">The status file of run {status.runId} is missing.</p>}
           </>

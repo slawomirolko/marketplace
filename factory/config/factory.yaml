@@ -47,6 +47,8 @@ projects:
   markers: [.agents/skill-config.md, .agents/skills, .opencode/agents, .claude/skills, .claude/agents]
   maxDepth: 3
   statusWorkflow: olko-project-status
+  # The viewer's Analyze button runs the status workflow on this CLI backend.
+  statusBackend: { kind: cli, cli: opencode }
 
 # Interval watches. Each one runs its command per known project (projects.json in the
 # data dir plus every run's input.project), and starts one run of its workflow per item
