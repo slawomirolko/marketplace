@@ -8,9 +8,11 @@ import { cliExecutor, hostExec } from "./cli-backend.ts";
 import type { CliName, Executors } from "./types.ts";
 import type { DefaultBackend } from "./engine.ts";
 import { allowedHostsFor, viewerHandler } from "./viewer-routes.ts";
-import { registerDataSource } from "./paths.ts";
+import { loadHomeEnv, registerDataSource } from "./paths.ts";
 import { createFactoryTools } from "./tools.ts";
 import { loadFactoryConfig } from "./config.ts";
+
+loadHomeEnv();
 
 const PORT = Number(process.env.FACTORY_PORT ?? 7340);
 const HOST = process.env.FACTORY_HOST ?? "127.0.0.1";

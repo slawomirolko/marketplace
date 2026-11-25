@@ -8,6 +8,9 @@ import { cliExecutor, hostExec } from "./cli-backend.ts";
 import { marketplaceDir } from "./marketplace-agents.ts";
 import { loadWatches, startWatches } from "./watch.ts";
 import { loadFactoryConfig } from "./config.ts";
+import { loadHomeEnv } from "./paths.ts";
+
+loadHomeEnv();
 
 const port = Number(process.env.FACTORY_VIEWER_PORT ?? DEFAULT_VIEWER_PORT);
 const publicUrl = `http://127.0.0.1:${port}`;
