@@ -91,6 +91,40 @@
       "pattern": "^[a-z][a-z0-9-]*(:[a-z][a-z0-9-]*)?$",
       "default": "olko-memory-layer"
     },
+    "projects": {
+      "description": "How the factory finds local projects that use the marketplace. The project list and the root folders stay outside the repository, in the user's factory home.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "markers": {
+          "description": "Paths relative to a folder that make it a candidate project when one exists.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "maxDepth": {
+          "description": "How many folder levels under a root folder discovery looks.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8,
+          "default": 3
+        },
+        "statusWorkflow": {
+          "description": "The workflow whose latest finished run gives a project's status in the viewer.",
+          "$ref": "#/$defs/name"
+        },
+        "statusBackend": {
+          "description": "The CLI backend that runs the status workflow when the viewer's Analyze button starts it.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "cli"],
+          "properties": {
+            "kind": { "const": "cli" },
+            "cli": { "$ref": "#/$defs/name" }
+          }
+        }
+      }
+    },
     "watches": {
       "description": "Interval watches: each runs a command per known project, reads a list of items from its JSON output, and starts one run of a workflow per item that stayed the same for stableChecks checks. The run stops at its first question until the user answers it in the viewer.",
       "type": "array",

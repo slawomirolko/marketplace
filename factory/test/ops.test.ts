@@ -22,3 +22,21 @@ test("list.count on an empty list gives no counts", async () => {
 test("list.count stops when the path is not a list", async () => {
   await assert.rejects(count({ state: {}, args: { over: "v.items" } } as any), /state\.v\.items is not a list/);
 });
+
+const pick = operationNamed("list.pick")!;
+const workers = [{ id: "flow" }, { id: "runtime" }, { id: "test" }];
+
+test("list.pick keeps the items named in the ids list, in the order of the fixed list", async () => {
+  const result = await pick({ state: { apply: { areas: ["test", "flow", "unknown"] } }, args: { items: workers, ids: "apply.areas" } } as any);
+  assert.deepEqual(result.state, { items: [{ id: "flow" }, { id: "test" }], count: 2 });
+});
+
+test("list.pick keeps no item when the ids list is empty", async () => {
+  const result = await pick({ state: { apply: { areas: [] } }, args: { items: workers, ids: "apply.areas" } } as any);
+  assert.deepEqual(result.state, { items: [], count: 0 });
+});
+
+test("list.pick keeps every item when the ids path holds no list", async () => {
+  const result = await pick({ state: { apply: { areas: null } }, args: { items: workers, ids: "apply.areas" } } as any);
+  assert.deepEqual(result.state, { items: workers, count: 3 });
+});

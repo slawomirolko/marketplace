@@ -1,0 +1,21 @@
+name: olko-project-status
+version: 0.1.0
+description: "Reports the Olko marketplace status of one registered project: the harnesses set up in it, every installed skill and agent with its state against the marketplace history (current, adapted, outdated, modified, unknown-base, missing, removed, local-only) and the factory workflows that run them. One script step; it never writes inside the project. Start it with projectId so the viewer shows the result on the project."
+source: "skills/software-factory/olko-factory-project (status command)"
+roles:
+  runner: low
+entry: scan
+nodes:
+  - id: scan
+    description: "Runs the status command of the project scan script. The full status goes to a JSON file in the factory home; the run keeps the counts, the harnesses, the workflows and the file path."
+    kind: llm
+    role: runner
+    skill: olko-factory-project
+    tools: [read, bash]
+    dirs: ["{{input.project}}"]
+    parse: { json: [file, head, counts, harnesses, workflows, summary] }
+    prompt: |
+      Run the `status` command of `scripts/project-scan.mjs` in the olko-factory-project skill once, with `--project {{input.project}}`{{#input.projectId}} `--id {{input.projectId}}`{{/input.projectId}}{{#input.marketplace}} `--marketplace {{input.marketplace}}`{{/input.marketplace}}. Do not change any file. Do not ask questions.
+      End with one ```json block that holds the command's stdout exactly as printed.
+edges:
+  - { from: scan, to: END }

@@ -1,4 +1,4 @@
-import { _ as viewerOptions, a as hostExec, b as mustache, d as loadFactoryConfig, h as defaultDataDir, i as cliExecutor, m as VIEWER_HEALTH, n as viewerHandler, o as Factory, t as allowedHostsFor, u as marketplaceDir } from "./viewer-routes.mjs";
+import { S as mustache, _ as defaultDataDir, c as Factory, f as marketplaceDir, g as VIEWER_HEALTH, n as viewerHandler, o as cliExecutor, p as loadFactoryConfig, s as hostExec, t as allowedHostsFor, y as viewerOptions } from "./viewer-routes.mjs";
 import path from "node:path";
 import fs from "node:fs";
 import http from "node:http";
@@ -23,10 +23,11 @@ function writeJson(file, value) {
 function projectsFile(dataDir) {
 	return path.join(dataDir, "projects.json");
 }
-/** Projects the factory knows: the ones listed in projects.json and every run's input.project. */
+/** Projects the factory knows: the ones listed in projects.json (`dirs`, or the registry's `projects[].path`) and every run's input.project. */
 function knownProjects(dataDir) {
-	const listed = readJson(projectsFile(dataDir), {}).dirs;
-	const dirs = new Set(Array.isArray(listed) ? listed.filter((d) => typeof d === "string") : []);
+	const file = readJson(projectsFile(dataDir), {});
+	const listed = [...Array.isArray(file.dirs) ? file.dirs : [], ...Array.isArray(file.projects) ? file.projects.map((p) => p && typeof p === "object" ? p.path : void 0) : []];
+	const dirs = new Set(listed.filter((d) => typeof d === "string").map((d) => path.resolve(d)));
 	const runsDir = path.join(dataDir, "runs");
 	if (fs.existsSync(runsDir)) for (const file of fs.readdirSync(runsDir).filter((f) => f.endsWith(".json"))) {
 		const project = readJson(path.join(runsDir, file), {}).input?.project;

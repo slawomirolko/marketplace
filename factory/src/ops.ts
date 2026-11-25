@@ -43,6 +43,15 @@ const listCount: Operation = async ({ state, args }) => {
   return { state: { counts, total: list.length }, metrics: { total: list.length, values: counts.length }, output: `${list.length} items, ${counts.length} distinct values.` };
 };
 
+/** Keeps the items of a fixed list whose `id` is named in the `ids` state list; when `ids` is not a list, keeps every item. */
+const listPick: Operation = async ({ state, args }) => {
+  if (!Array.isArray(args.items)) throw new Error("with.items must be a list");
+  if (typeof args.ids !== "string") throw new Error("with.ids must be a state path");
+  const ids = readState(state, args.ids);
+  const items = Array.isArray(ids) ? args.items.filter((item) => ids.includes((item as { id?: unknown }).id)) : args.items;
+  return { state: { items, count: items.length }, metrics: { count: items.length }, output: `${items.length} of ${args.items.length} items picked.` };
+};
+
 /**
  * Runs one command without a shell. `with.command` is a list of Mustache templates over
  * input, state and answers; `{{node}}` is this Node binary. `with.cwd` sets the directory,
@@ -86,6 +95,7 @@ export const OPERATIONS: Record<string, Operation> = {
   "list.next": listNext,
   "list.append": listAppend,
   "list.count": listCount,
+  "list.pick": listPick,
 };
 
 export function operationNamed(name: string): Operation | undefined {

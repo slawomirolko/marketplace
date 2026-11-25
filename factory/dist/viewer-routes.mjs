@@ -7350,6 +7350,21 @@ var listCount = async ({ state, args }) => {
 		output: `${list.length} items, ${counts.length} distinct values.`
 	};
 };
+/** Keeps the items of a fixed list whose `id` is named in the `ids` state list; when `ids` is not a list, keeps every item. */
+var listPick = async ({ state, args }) => {
+	if (!Array.isArray(args.items)) throw new Error("with.items must be a list");
+	if (typeof args.ids !== "string") throw new Error("with.ids must be a state path");
+	const ids = readState(state, args.ids);
+	const items = Array.isArray(ids) ? args.items.filter((item) => ids.includes(item.id)) : args.items;
+	return {
+		state: {
+			items,
+			count: items.length
+		},
+		metrics: { count: items.length },
+		output: `${items.length} of ${args.items.length} items picked.`
+	};
+};
 /**
 * Runs one command without a shell. `with.command` is a list of Mustache templates over
 * input, state and answers; `{{node}}` is this Node binary. `with.cwd` sets the directory,
@@ -7432,7 +7447,8 @@ var OPERATIONS = {
 	},
 	"list.next": listNext,
 	"list.append": listAppend,
-	"list.count": listCount
+	"list.count": listCount,
+	"list.pick": listPick
 };
 function operationNamed(name) {
 	return OPERATIONS[name];
@@ -15183,6 +15199,7 @@ function buildNode(workflow, spec) {
 	if (spec.parallel) node.parallel = spec.parallel;
 	if (spec.prompt) node.prompt = render(spec.prompt);
 	if (spec.agentsFrom) node.agentsFrom = agentsFromPath(spec.agentsFrom);
+	if (spec.freshResults) node.freshResults = true;
 	if (isParseSpec(spec.parse)) node.parse = buildParser(spec.parse);
 	else if (spec.parse) throw new Error(`node ${spec.id}: unknown parser ${JSON.stringify(spec.parse)}; use text, {json: [...]} or {line: [...]}`);
 	if (spec.op) {
@@ -15411,7 +15428,7 @@ function defaultDataDir() {
 	return process.env.FACTORY_DATA_DIR ?? homeDataDir();
 }
 function homeDataDir() {
-	return path.join(os.homedir(), ".skill-factory");
+	return process.env.FACTORY_HOME_DIR ?? path.join(os.homedir(), ".skill-factory");
 }
 function sourcesFile() {
 	return path.join(homeDataDir(), "sources.json");
@@ -15442,6 +15459,24 @@ function viewerOptions(dataDir) {
 }
 // src/config.ts
 var DEFAULT_MEMORY_LAYER = "olko-memory-layer";
+var DEFAULT_PROJECTS = {
+	markers: [
+		".agents/skill-config.md",
+		".agents/skills",
+		".opencode/agents",
+		".claude/skills",
+		".claude/agents"
+	],
+	maxDepth: 3,
+	statusWorkflow: "olko-project-status"
+};
+/** Project discovery settings from a parsed config file, with defaults. */
+function projectsOf(raw) {
+	return {
+		...DEFAULT_PROJECTS,
+		...raw?.projects ?? {}
+	};
+}
 /** The marketplace skill that gives an agent persistent memory, from a parsed config file. */
 function memoryLayerOf(raw) {
 	return raw?.memoryLayer ?? "olko-memory-layer";
@@ -15462,6 +15497,7 @@ function loadFactoryConfig(file = configFile()) {
 		},
 		switches: raw.switches ?? {},
 		memoryLayer: memoryLayerOf(raw),
+		projects: projectsOf(raw),
 		watches: (raw.watches ?? []).map((watch) => ({
 			...watch,
 			stableChecks: watch.stableChecks ?? 2,
@@ -16722,6 +16758,10 @@ var Factory = class {
 			run.nodeAgents ??= {};
 			const selected = node.agentsFrom(this.view(run, node).state);
 			run.nodeAgents[node.id] = selected;
+			if (node.freshResults) {
+				const view = this.view(run, node);
+				delete view.state[view.key];
+			}
 			this.event(run, "agents_selected", {
 				node: node.path,
 				agents: selected.map((a) => a.id)
@@ -17650,6 +17690,237 @@ function cspMiddleware({ nonceFactory = createNonce } = {}) {
 		next();
 	};
 }
+// src/projects.ts
+var ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
+var SKIP = /* @__PURE__ */ new Set([
+	"node_modules",
+	".git",
+	"dist",
+	"build",
+	"bin",
+	"obj",
+	"target",
+	".venv",
+	"venv"
+]);
+/** The registry file. It lives in the user's factory home, never in a repository. */
+function projectsFile() {
+	return process.env.FACTORY_PROJECTS_FILE ?? path.join(homeDataDir(), "projects.json");
+}
+function readRegistry(file = projectsFile()) {
+	try {
+		const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+		const projects = Array.isArray(raw.projects) ? raw.projects.filter((p) => !!p && typeof p.id === "string" && ID.test(p.id) && typeof p.path === "string") : [];
+		return {
+			schemaVersion: 1,
+			roots: Array.isArray(raw.roots) ? raw.roots.filter((r) => typeof r === "string") : [],
+			projects
+		};
+	} catch {
+		return {
+			schemaVersion: 1,
+			roots: [],
+			projects: []
+		};
+	}
+}
+function writeRegistry(registry, file = projectsFile()) {
+	fs.mkdirSync(path.dirname(file), { recursive: true });
+	const temp = `${file}.${process.pid}.tmp`;
+	fs.writeFileSync(temp, `${JSON.stringify(registry, null, 2)}\n`);
+	fs.renameSync(temp, file);
+	return registry;
+}
+function sameFolder(a, b) {
+	const norm = (p) => process.platform === "win32" ? path.resolve(p).toLowerCase() : path.resolve(p);
+	return norm(a) === norm(b);
+}
+function folder(dir, what) {
+	if (typeof dir !== "string" || !dir.trim()) throw new Error(`${what} must be a folder path`);
+	const full = path.resolve(dir);
+	if (!fs.existsSync(full) || !fs.statSync(full).isDirectory()) throw new Error(`${what} ${full} is not a folder`);
+	return full;
+}
+/** A kebab-case id from a folder name that no project uses yet. */
+function suggestId(dir, taken) {
+	const used = new Set(taken);
+	const base = path.basename(path.resolve(dir)).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "project";
+	const start = /^[a-z0-9]/.test(base) ? base : `p-${base}`;
+	let id = start;
+	for (let n = 2; used.has(id); n += 1) id = `${start}-${n}`;
+	return id;
+}
+function projectById(id, file = projectsFile()) {
+	const project = readRegistry(file).projects.find((p) => p.id === id);
+	if (!project) throw new Error(`unknown project ${id}; add it first`);
+	return project;
+}
+function addProject(request, file = projectsFile()) {
+	const registry = readRegistry(file);
+	const dir = folder(request.path, "project");
+	const existing = registry.projects.find((p) => sameFolder(p.path, dir));
+	if (existing) throw new Error(`folder already registered as ${existing.id}`);
+	if (request.id !== void 0 && !ID.test(request.id)) throw new Error("id must be kebab-case: lowercase letters, digits and -");
+	if (request.id && registry.projects.some((p) => p.id === request.id)) throw new Error(`id ${request.id} is taken`);
+	const project = {
+		id: request.id ?? suggestId(dir, registry.projects.map((p) => p.id)),
+		path: dir,
+		...request.marketplace ? { marketplace: folder(request.marketplace, "marketplace") } : {}
+	};
+	writeRegistry({
+		...registry,
+		projects: [...registry.projects, project]
+	}, file);
+	return project;
+}
+function removeProject(id, file = projectsFile()) {
+	const registry = readRegistry(file);
+	const project = registry.projects.find((p) => p.id === id);
+	if (!project) throw new Error(`unknown project ${id}`);
+	writeRegistry({
+		...registry,
+		projects: registry.projects.filter((p) => p.id !== id)
+	}, file);
+	return project;
+}
+function addRoot(dir, file = projectsFile()) {
+	const registry = readRegistry(file);
+	const full = folder(dir, "root");
+	if (registry.roots.some((r) => sameFolder(r, full))) return registry.roots;
+	return writeRegistry({
+		...registry,
+		roots: [...registry.roots, full]
+	}, file).roots;
+}
+function removeRoot(dir, file = projectsFile()) {
+	const registry = readRegistry(file);
+	return writeRegistry({
+		...registry,
+		roots: registry.roots.filter((r) => !sameFolder(r, dir))
+	}, file).roots;
+}
+/** A linked git worktree has a `.git` file, not a folder; its main checkout is the project. */
+function isLinkedWorktree(dir) {
+	const dotGit = path.join(dir, ".git");
+	try {
+		return fs.statSync(dotGit).isFile() && /\/worktrees\//.test(fs.readFileSync(dotGit, "utf8").replace(/\\/g, "/"));
+	} catch {
+		return false;
+	}
+}
+/**
+* Folders under the roots that hold at least one marker and are not registered yet.
+* It never descends into a candidate, a linked worktree, a skipped folder or a hidden folder.
+* Discovery only proposes; nothing is registered until the user adds a candidate.
+*/
+function discoverProjects(settings, roots, file = projectsFile()) {
+	const registry = readRegistry(file);
+	const searched = (roots ?? registry.roots).filter((r) => fs.existsSync(r));
+	const taken = registry.projects.map((p) => p.id);
+	const found = [];
+	const visit = (dir, depth) => {
+		if (isLinkedWorktree(dir)) return;
+		const markers = settings.markers.filter((m) => fs.existsSync(path.join(dir, m)));
+		if (markers.length) {
+			if (!registry.projects.some((p) => sameFolder(p.path, dir)) && !found.some((c) => sameFolder(c.path, dir))) {
+				const suggestedId = suggestId(dir, [...taken, ...found.map((c) => c.suggestedId)]);
+				found.push({
+					path: dir,
+					suggestedId,
+					markers
+				});
+			}
+			return;
+		}
+		if (depth >= settings.maxDepth) return;
+		let entries = [];
+		try {
+			entries = fs.readdirSync(dir, { withFileTypes: true });
+		} catch {
+			return;
+		}
+		for (const entry of entries) {
+			if (!entry.isDirectory() || entry.name.startsWith(".") || SKIP.has(entry.name)) continue;
+			visit(path.join(dir, entry.name), depth + 1);
+		}
+	};
+	for (const root of searched) visit(path.resolve(root), 0);
+	return found.sort((a, b) => a.path.localeCompare(b.path));
+}
+/** The run input for a registered project: its folder, its id and, when set, its marketplace. */
+function projectInput(id, file = projectsFile()) {
+	const project = projectById(id, file);
+	if (!fs.existsSync(project.path)) throw new Error(`project ${id}: folder ${project.path} does not exist`);
+	return {
+		project: project.path,
+		projectId: project.id,
+		...project.marketplace ? { marketplace: project.marketplace } : {}
+	};
+}
+function longPath(p) {
+	const resolved = path.resolve(p);
+	return fs.existsSync(resolved) ? fs.realpathSync.native(resolved) : resolved;
+}
+/** The run input of a run started for a registered project: its folder as `project`, its id, and its marketplace unless the input names one. */
+function projectScopedInput(projectId, input) {
+	if (!projectId) return input;
+	const scoped = projectInput(projectId);
+	if (input.project && longPath(input.project) !== longPath(scoped.project)) throw new Error(`input.project is not the folder of project ${projectId}; pass one of them`);
+	return {
+		...scoped.marketplace ? { marketplace: scoped.marketplace } : {},
+		...input,
+		project: scoped.project,
+		projectId: scoped.projectId
+	};
+}
+/** One project registry action, shared by the MCP tool and the viewer. */
+function projectsAction({ action, path: dir, id, marketplace }) {
+	if (action === "list") return readRegistry();
+	if (action === "add") return { project: addProject({
+		path: dir ?? "",
+		...id ? { id } : {},
+		...marketplace ? { marketplace } : {}
+	}) };
+	if (action === "remove") return { project: removeProject(id ?? "") };
+	if (action === "add_root") return { roots: addRoot(dir ?? "") };
+	if (action === "remove_root") return { roots: removeRoot(dir ?? "") };
+	if (action === "discover") return { candidates: discoverProjects(loadFactoryConfig().projects, dir ? [dir] : void 0) };
+	throw new Error(`unknown projects action ${String(action)}`);
+}
+var USAGE = "usage: projects.ts list | add <folder> [--id <id>] [--marketplace <folder>] | remove <id> | roots | roots add <folder> | roots remove <folder> | discover [--root <folder>]";
+/** The command line: every command prints one JSON value. */
+function projectsCli(argv, file = projectsFile()) {
+	const [command, ...rest] = argv;
+	const flag = (name) => {
+		const index = rest.indexOf(`--${name}`);
+		return index >= 0 ? rest[index + 1] : void 0;
+	};
+	const positional = rest.filter((arg, index) => !arg.startsWith("--") && !(index > 0 && rest[index - 1]?.startsWith("--")));
+	switch (command) {
+		case "list": return readRegistry(file);
+		case "add": return addProject({
+			path: positional[0] ?? "",
+			...flag("id") ? { id: flag("id") } : {},
+			...flag("marketplace") ? { marketplace: flag("marketplace") } : {}
+		}, file);
+		case "remove": return removeProject(positional[0] ?? "", file);
+		case "roots":
+			if (positional[0] === "add") return addRoot(positional[1] ?? "", file);
+			if (positional[0] === "remove") return removeRoot(positional[1] ?? "", file);
+			return readRegistry(file).roots;
+		case "discover": {
+			const root = flag("root");
+			return discoverProjects(loadFactoryConfig().projects, root ? [root] : void 0, file);
+		}
+		default: throw new Error(USAGE);
+	}
+}
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) try {
+	process.stdout.write(`${JSON.stringify(projectsCli(process.argv.slice(2)), null, 2)}\n`);
+} catch (error) {
+	console.error(error instanceof Error ? error.message : String(error));
+	process.exit(2);
+}
 // src/standalone.ts
 var AGENT_FILE = /(agents\/opencode\/[a-z0-9-]+\.md|plugins\/[a-z0-9-]+\/agents\/[a-z0-9-]+\.md)/;
 function sourceAgentFile(spec) {
@@ -17876,6 +18147,68 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 }
 // app/data.ts
 var RUN_ID = /^r-[a-f0-9]{8}$/;
+var MAX_BODY = 16384;
+function readBody(req) {
+	return new Promise((resolve, reject) => {
+		if (!req.on) return resolve(void 0);
+		let data = "";
+		req.on("data", (chunk) => {
+			data += String(chunk);
+			if (data.length > MAX_BODY) reject(/* @__PURE__ */ new Error("request body is too large"));
+		});
+		req.on("end", () => {
+			try {
+				resolve(data ? JSON.parse(data) : void 0);
+			} catch {
+				reject(/* @__PURE__ */ new Error("request body is not JSON"));
+			}
+		});
+		req.on("error", (error) => reject(error instanceof Error ? error : new Error(String(error))));
+	});
+}
+var PROJECT_ACTIONS = /* @__PURE__ */ new Set([
+	"add",
+	"remove",
+	"add_root",
+	"remove_root",
+	"discover"
+]);
+/** A project registry action from the viewer: only the known fields, only strings. */
+function parseProjectsAction(body) {
+	if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("the request body must be a JSON object");
+	const b = body;
+	if (typeof b.action !== "string" || !PROJECT_ACTIONS.has(b.action)) throw new Error("action must be add, remove, add_root, remove_root or discover");
+	const text = (name) => {
+		const value = b[name];
+		if (value === void 0 || value === "") return void 0;
+		if (typeof value !== "string" || value.length > 1e3) throw new Error(`${name} must be a string`);
+		return value;
+	};
+	const dir = text("path");
+	const id = text("id");
+	const marketplace = text("marketplace");
+	return {
+		action: b.action,
+		...dir ? { path: dir } : {},
+		...id ? { id } : {},
+		...marketplace ? { marketplace } : {}
+	};
+}
+/** The status file named in a status run's state; only JSON files in the factory home's project-status folder. */
+function statusFileOf(state, statusDir = path.join(homeDataDir(), "project-status")) {
+	if (!state || typeof state !== "object") return null;
+	const root = path.resolve(statusDir);
+	const queue = [state];
+	while (queue.length) {
+		const value = queue.shift();
+		if (!value || typeof value !== "object") continue;
+		for (const [key, inner] of Object.entries(value)) if (key === "file" && typeof inner === "string" && inner.endsWith(".json")) {
+			const full = path.resolve(inner);
+			if (full.startsWith(root + path.sep) && fs.existsSync(full)) return full;
+		} else if (inner && typeof inner === "object") queue.push(inner);
+	}
+	return null;
+}
 function readJson(file) {
 	return JSON.parse(fs.readFileSync(file, "utf8"));
 }
@@ -17979,6 +18312,7 @@ function createDataApi({ factoryDir, dataDir, configFile, demo, factory }) {
 				runId: run.runId,
 				goal: run.goal,
 				workflow: report.workflow.split("@")[0] ?? report.workflow,
+				projectId: typeof run.input?.projectId === "string" ? run.input.projectId : null,
 				ran: workflowsThatRan(specs, report.workflow.split("@")[0] ?? report.workflow, run.events.filter((e) => e.type === "node_started" && typeof e.node === "string").map((e) => String(e.node))),
 				status: run.status,
 				createdAt: run.events[0]?.at ?? null,
@@ -18036,8 +18370,71 @@ function createDataApi({ factoryDir, dataDir, configFile, demo, factory }) {
 				...await updateMarketplace(hostExec, marketplaceDir()),
 				...scan(factoryDir)
 			};
+		},
+		projects() {
+			const statusWorkflow = projectsOf(readConfig()).statusWorkflow;
+			const registry = readRegistry();
+			const runs = projectRuns();
+			return {
+				roots: registry.roots,
+				statusWorkflow,
+				projects: registry.projects.map((p) => {
+					const own = runs.filter((r) => r.run.input?.projectId === p.id);
+					const latest = latestStatus(own, statusWorkflow);
+					const data = latest ? readStatusFile(latest.run) : null;
+					return {
+						...p,
+						exists: fs.existsSync(p.path),
+						runs: own.length,
+						status: latest ? {
+							runId: latest.run.runId,
+							createdAt: latest.createdAt,
+							summary: data?.summary ?? null,
+							counts: data?.counts ?? null
+						} : null
+					};
+				})
+			};
+		},
+		projectStatus(id) {
+			const latest = latestStatus(projectRuns().filter((r) => r.run.input?.projectId === id), projectsOf(readConfig()).statusWorkflow);
+			if (!latest) return null;
+			return {
+				runId: latest.run.runId,
+				status: latest.run.status,
+				createdAt: latest.createdAt,
+				data: readStatusFile(latest.run)
+			};
+		},
+		projectsAction(request) {
+			return projectsAction(request);
 		}
 	};
+	function projectRuns() {
+		return allRunFiles().flatMap(({ file }) => {
+			try {
+				const run = readJson(file);
+				return run.input?.projectId ? [{
+					run,
+					createdAt: run.events[0]?.at ?? null
+				}] : [];
+			} catch {
+				return [];
+			}
+		});
+	}
+}
+function latestStatus(runs, workflow) {
+	return runs.filter((r) => r.run.workflow === workflow && r.run.status === "done").sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0] ?? null;
+}
+function readStatusFile(run) {
+	const file = statusFileOf(run.state);
+	if (!file) return null;
+	try {
+		return readJson(file);
+	} catch {
+		return null;
+	}
 }
 function scan(factoryDir) {
 	const marketplace = marketplaceDir();
@@ -18074,6 +18471,15 @@ function apiMiddleware(api) {
 				return send(409, { error: errorMessage(error) });
 			}
 		}
+		if (req.method === "POST" && url.pathname === "/api/projects") {
+			const origin = String(req.headers?.origin ?? "");
+			if (req.headers?.["x-factory-action"] !== "projects" || origin && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin)) return send(403, { error: "projects needs the viewer's own request" });
+			try {
+				return send(200, api.projectsAction(parseProjectsAction(await readBody(req))));
+			} catch (error) {
+				return send(400, { error: errorMessage(error) });
+			}
+		}
 		const answerMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/answer$/);
 		if (req.method === "POST" && answerMatch?.[1] !== void 0) {
 			const origin = String(req.headers?.origin ?? "");
@@ -18091,6 +18497,12 @@ function apiMiddleware(api) {
 			if (url.pathname === "/api/workflows") return send(200, api.workflows());
 			if (url.pathname === "/api/agents") return send(200, api.agents());
 			if (url.pathname === "/api/config") return send(200, api.config());
+			if (url.pathname === "/api/projects") return send(200, api.projects());
+			const projectMatch = url.pathname.match(/^\/api\/projects\/([a-z0-9][a-z0-9-]*)\/status$/);
+			if (projectMatch?.[1] !== void 0) {
+				const status = api.projectStatus(projectMatch[1]);
+				return status ? send(200, status) : send(404, { error: "no finished status run for this project" });
+			}
 			if (url.pathname === "/api/runs") {
 				await api.ensureDemo();
 				return send(200, api.runs());
@@ -18184,4 +18596,4 @@ function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHost
 		return true;
 	};
 }
-export { viewerOptions as _, hostExec as a, mustache as b, parseBackend as c, loadFactoryConfig as d, DEFAULT_VIEWER_PORT as f, registerDataSource as g, defaultDataDir as h, cliExecutor as i, parseCli as l, VIEWER_HEALTH as m, viewerHandler as n, Factory as o, FACTORY_DIR$1 as p, viewerUrlFor as r, errorMessage as s, allowedHostsFor as t, marketplaceDir as u, require_dist as v, __toESM as x, require_ajv as y };
+export { __toESM as C, mustache as S, defaultDataDir as _, projectsAction as a, require_dist as b, Factory as c, parseCli as d, marketplaceDir as f, VIEWER_HEALTH as g, FACTORY_DIR$1 as h, projectScopedInput as i, errorMessage as l, DEFAULT_VIEWER_PORT as m, viewerHandler as n, cliExecutor as o, loadFactoryConfig as p, viewerUrlFor as r, hostExec as s, allowedHostsFor as t, parseBackend as u, registerDataSource as v, require_ajv as x, viewerOptions as y };

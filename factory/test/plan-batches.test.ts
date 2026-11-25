@@ -16,6 +16,13 @@ function questions(prefix: string, count: number): string {
   return `Batch.\n${FENCE}json\n${JSON.stringify({ questions: items })}\n${FENCE}`;
 }
 
+function applied(changes: string[], areas: string[]): string {
+  return `Applied.
+${FENCE}json
+${JSON.stringify({ changes, areas })}
+${FENCE}`;
+}
+
 function commonReply(step: string): string | undefined {
   if (step === "stack") return "stack | none";
   if (step === "consistency") return "consistency | pass | 0 | none";
@@ -23,12 +30,13 @@ function commonReply(step: string): string | undefined {
   return undefined;
 }
 
-async function drive(workflow: string, reply: (step: string, visit: number) => string, answerFor: (id: string) => string) {
+async function drive(workflow: string, reply: (step: string, visit: number, agentId?: string) => string | undefined, answerFor: (id: string) => string) {
   const factory = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-batches-")), { backend: "delegate" });
   const { run } = factory.start("plan batches", undefined, { workflow, input: { project: "/repo" } });
   factory.confirm(run.runId);
   const prompts: Record<string, string[]> = {};
   const asked: string[] = [];
+  const agents: Record<string, string[]> = {};
   for (let i = 0; i < 5000; i++) {
     const view = factory.status(factory.get(run.runId));
     if (ENDED.has(view.status)) break;
@@ -40,14 +48,16 @@ async function drive(workflow: string, reply: (step: string, visit: number) => s
       for (const work of view.pendingWorkItems ?? []) {
         const step = work.nodePath.split("/").pop()!;
         (prompts[step] ??= []).push(work.prompt);
-        const output = commonReply(step) ?? reply(step, prompts[step].length);
+        (agents[step] ??= []).push(work.agentId);
+        const output = reply(step, prompts[step].length, work.agentId) ?? commonReply(step);
+        if (output === undefined) throw new Error(`unexpected step ${step}`);
         factory.submit(run.runId, work.nodePath, output, { model: "claude-haiku-5-5", inputTokens: 10, outputTokens: 10 }, work.agentId);
       }
     } else {
       await new Promise((r) => setTimeout(r, 5));
     }
   }
-  return { done: factory.get(run.runId), prompts, asked };
+  return { done: factory.get(run.runId), prompts, asked, agents };
 }
 
 test("a grill batch is recorded in tracker.md by one step after every question of the batch is answered, and the next batch starts a new list", async () => {
@@ -56,8 +66,8 @@ test("a grill batch is recorded in tracker.md by one step after every question o
     if (step === "grill") return (batch = visit === 1 ? questions("First-batch question", 3) : visit === 2 ? questions("Follow-up question", 2) : questions("none", 0));
     if (step === "grill-review") return batch;
     if (step === "grill-record") return "recorded | batch";
-    if (step === "grill-apply") return "applied";
-    throw new Error(`unexpected step ${step}`);
+    if (step === "grill-apply") return applied([], []);
+    return undefined;
   };
   const { done, prompts, asked } = await drive("olko-plan-grill", reply, (id) => (id.endsWith("-1") ? "2" : "1"));
   assert.equal(done.status, "done", JSON.stringify(done.events.at(-1)));
@@ -69,6 +79,25 @@ test("a grill batch is recorded in tracker.md by one step after every question o
   assert.doesNotMatch(records[1]!, /First-batch question/, "a new batch starts a new list");
   assert.match(records[1]!, /Follow-up question 1[\s\S]*Follow-up question 2/);
   assert.equal(prompts["grill-apply"]?.length, 2);
+});
+
+test("re-validation runs only the workers whose area the applied answers changed, checks only the changed claims, and is skipped when no claim changed", async () => {
+  let batch = "";
+  const reply = (step: string, visit: number, agentId?: string) => {
+    if (step === "grill") return (batch = visit === 1 ? questions("First", 1) : visit === 2 ? questions("Second", 1) : questions("none", 0));
+    if (step === "grill-review") return batch;
+    if (step === "grill-record") return "recorded | 1";
+    if (step === "grill-apply") return visit === 1 ? applied(["implementation.md: the gate runs before the operation"], ["flow", "test"]) : applied([], []);
+    if (step === "revalidate") return agentId === "flow" ? "findings | found | 1 | the gate runs after the operation" : "findings | none | 0 | none";
+    if (step === "fold-reval") return "folded";
+    return undefined;
+  };
+  const { done, prompts, agents } = await drive("olko-plan-grill", reply, () => "1");
+  assert.equal(done.status, "done", JSON.stringify(done.events.at(-1)));
+  assert.deepEqual(agents["revalidate"], ["flow", "test"], "only the flow and test workers run, and only in the first round");
+  assert.match(prompts["revalidate"]![0]!, /- implementation.md: the gate runs before the operation/);
+  assert.equal(prompts["fold-reval"]?.length, 1, "a finding of the first round is not folded again in the second round");
+  assert.ok(done.events.some((e: any) => e.type === "node_skipped" && String(e.node).endsWith("/revalidate")), "the second round skips re-validation");
 });
 
 // olko-plan-readiness runs as a group inside olko-plan-documentation and reads the Feature (featureDir, taskIds)
@@ -124,7 +153,7 @@ test("a blocker batch is recorded in tracker.md by one step after every blocker 
     if (step === "readiness-review") return batch;
     if (step === "blocker-record") return "recorded | batch";
     if (step === "blocker-apply") return "applied";
-    throw new Error(`unexpected step ${step}`);
+    return undefined;
   };
   const { done, prompts, asked } = await drive(withFeatureWrapper(), reply, () => "1");
   assert.equal(done.status, "done", JSON.stringify(done.events.at(-1)));
@@ -135,6 +164,6 @@ test("a blocker batch is recorded in tracker.md by one step after every blocker 
 });
 
 test("the consistency check does not count a mismatch already recorded as a GAP item", async () => {
-  const { prompts } = await drive("olko-plan-gate", () => "unused", () => "1");
+  const { prompts } = await drive("olko-plan-gate", () => undefined, () => "1");
   assert.match(prompts["consistency"]?.[0] ?? "", /already recorded as an open GAP-<n> item or as an ACCEPTED-GAP in tracker\.md is not a mismatch/);
 });

@@ -1,4 +1,4 @@
-import { a as hostExec, c as parseBackend, g as registerDataSource, h as defaultDataDir, i as cliExecutor, l as parseCli, o as Factory, p as FACTORY_DIR, r as viewerUrlFor, s as errorMessage, v as require_dist, x as __toESM, y as require_ajv } from "./viewer-routes.mjs";
+import { C as __toESM, _ as defaultDataDir, a as projectsAction, b as require_dist, c as Factory, d as parseCli, h as FACTORY_DIR, i as projectScopedInput, l as errorMessage, o as cliExecutor, r as viewerUrlFor, s as hostExec, u as parseBackend, v as registerDataSource, x as require_ajv } from "./viewer-routes.mjs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15093,7 +15093,7 @@ function createFactoryTools(factory, publicUrl) {
 			version: "0.1.0"
 		});
 		server.registerTool("factory_start", {
-			description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name and pr number, plus fresh: true for a fresh review of your own PR; or plan, a plan file path in the workspace, and optional criteria; for olko-marketplace-skill-sync: project, the absolute path of the local project, optional marketplace, the absolute path of the marketplace checkout, and optional artifacts, the skill and agent names to sync; for olko-claude-sync: target and targetName, a Claude Code plugin marketplace checkout and a kebab-case name for it, olko, the Olko checkout, optional user, the user scope (default ~/.claude), optional stateDir (default ~/.olko-sync) and optional artifacts). The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
+			description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name and pr number, plus fresh: true for a fresh review of your own PR; or plan, a plan file path in the workspace, and optional criteria; for olko-marketplace-skill-sync: project, the absolute path of the local project, optional marketplace, the absolute path of the marketplace checkout, and optional artifacts, the skill and agent names to sync; for olko-claude-sync: target and targetName, a Claude Code plugin marketplace checkout and a kebab-case name for it, olko, the Olko checkout, optional user, the user scope (default ~/.claude), optional stateDir (default ~/.olko-sync) and optional artifacts). projectId names a registered project (see factory_projects): the factory sets input.project to its folder and keeps the id on the run. The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
 			inputSchema: {
 				goal: string().min(1),
 				workflow: string().regex(/^[a-z][a-z0-9-]*$/).optional(),
@@ -15124,9 +15124,10 @@ function createFactoryTools(factory, publicUrl) {
 					adopt: boolean().optional(),
 					workflowsDir: string().min(1).optional()
 				}).strict().optional(),
+				projectId: string().regex(/^[a-z0-9][a-z0-9-]*$/).optional(),
 				idempotencyKey: string().optional()
 			}
-		}, guarded(({ goal, workflow, input, idempotencyKey }) => {
+		}, guarded(({ goal, workflow, input, projectId, idempotencyKey }) => {
 			const runInput = {
 				...input?.repo ? { repo: input.repo } : {},
 				...input?.pr ? { pr: input.pr } : {},
@@ -15152,7 +15153,7 @@ function createFactoryTools(factory, publicUrl) {
 			};
 			const { run, reused } = factory.start(goal, idempotencyKey, {
 				...workflow ? { workflow } : {},
-				input: runInput
+				input: projectScopedInput(projectId, runInput)
 			});
 			return {
 				...factory.status(run),
@@ -15273,6 +15274,27 @@ function createFactoryTools(factory, publicUrl) {
 			description: "Get the steps to install this factory permanently in a harness, so that every new session starts it. Call this tool when the user asks how to install, add or set up the factory. Without harness, the tool uses the harness that is connected now. Show the steps to the user. Run the commands only after the user agrees, because they change the user's harness configuration.",
 			inputSchema: { harness: _enum(HARNESSES).optional() }
 		}, guarded(({ harness }) => installGuide(harness, server.server.getClientVersion()?.name)));
+		server.registerTool("factory_projects", {
+			description: "List, add or remove the local projects that use the marketplace, manage the root folders that discovery searches, or discover candidate projects under them. Discovery only proposes candidates; add one to register it. The list lives in the user's factory home, outside every repository.",
+			inputSchema: {
+				action: _enum([
+					"list",
+					"add",
+					"remove",
+					"add_root",
+					"remove_root",
+					"discover"
+				]),
+				path: string().min(1).optional(),
+				id: string().regex(/^[a-z0-9][a-z0-9-]*$/).optional(),
+				marketplace: string().min(1).optional()
+			}
+		}, guarded(({ action, path: dir, id, marketplace }) => projectsAction({
+			action,
+			...dir ? { path: dir } : {},
+			...id ? { id } : {},
+			...marketplace ? { marketplace } : {}
+		})));
 		server.registerTool("factory_cancel", {
 			description: "Cancel a factory run. Call this tool when the user asks to stop the run.",
 			inputSchema: { runId: string() }

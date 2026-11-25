@@ -100,6 +100,8 @@ export interface RunInput {
   taskId?: string;
   adopt?: boolean;
   workflowsDir?: string;
+  /** The registered project this run belongs to; the factory fills `project` from it. */
+  projectId?: string;
 }
 
 export interface ExecResult {
@@ -201,6 +203,7 @@ export interface WorkflowNode {
   prompt?: (context: PromptContext) => string;
   agents?: Agent[];
   agentsFrom?: (state: WorkflowState | undefined) => Agent[];
+  freshResults?: boolean;
   script?: (context: ScriptContext) => Promise<ScriptResult>;
   parse?: (text: string) => unknown;
   skipIf?: (state: WorkflowState | undefined) => boolean;
@@ -424,6 +427,7 @@ export interface WorkflowSpecNode {
   agent?: string;
   agents?: WorkflowSpecAgent[];
   agentsFrom?: string;
+  freshResults?: boolean;
   op?: string;
   with?: Record<string, unknown>;
   prompt?: string;
@@ -472,4 +476,13 @@ export interface FactoryConfigFile {
   roles: Record<string, string>;
   switches?: Record<string, boolean>;
   memoryLayer?: string;
+  projects?: ProjectsConfig;
+}
+
+export interface ProjectsConfig {
+  markers?: string[];
+  maxDepth?: number;
+  statusWorkflow?: string;
+  /** The CLI backend that runs the status workflow when the viewer starts it. */
+  statusBackend?: { kind: "cli"; cli: CliName };
 }

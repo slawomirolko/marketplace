@@ -595,6 +595,10 @@ export class Factory {
       run.nodeAgents ??= {};
       const selected = node.agentsFrom(this.view(run, node).state);
       run.nodeAgents[node.id] = selected;
+      if (node.freshResults) {
+        const view = this.view(run, node);
+        delete view.state[view.key];
+      }
       this.event(run, "agents_selected", { node: node.path, agents: selected.map((a) => a.id) });
     }
     if (agentsOf(run, node)?.length === 0 || node.skipIf?.(this.view(run, node).state)) {

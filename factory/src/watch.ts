@@ -66,10 +66,14 @@ export function projectsFile(dataDir: string): string {
   return path.join(dataDir, "projects.json");
 }
 
-/** Projects the factory knows: the ones listed in projects.json and every run's input.project. */
+/** Projects the factory knows: the ones listed in projects.json (`dirs`, or the registry's `projects[].path`) and every run's input.project. */
 export function knownProjects(dataDir: string): string[] {
-  const listed = readJson<{ dirs?: unknown }>(projectsFile(dataDir), {}).dirs;
-  const dirs = new Set<string>(Array.isArray(listed) ? listed.filter((d): d is string => typeof d === "string") : []);
+  const file = readJson<{ dirs?: unknown; projects?: unknown }>(projectsFile(dataDir), {});
+  const listed = [
+    ...(Array.isArray(file.dirs) ? file.dirs : []),
+    ...(Array.isArray(file.projects) ? file.projects.map((p) => (p && typeof p === "object" ? (p as { path?: unknown }).path : undefined)) : []),
+  ];
+  const dirs = new Set<string>(listed.filter((d): d is string => typeof d === "string").map((d) => path.resolve(d)));
   const runsDir = path.join(dataDir, "runs");
   if (fs.existsSync(runsDir)) {
     for (const file of fs.readdirSync(runsDir).filter((f) => f.endsWith(".json"))) {

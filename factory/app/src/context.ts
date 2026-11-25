@@ -11,7 +11,7 @@ export interface ViewerState {
   focusKey: string | null;
   index: RunIndex | null;
   disabled: string[];
-  mode: "runs" | "workflows";
+  mode: "runs" | "workflows" | "projects";
   workflow: Workflow | null;
   workflows: Workflow[];
   agents: Record<string, AgentInfo>;

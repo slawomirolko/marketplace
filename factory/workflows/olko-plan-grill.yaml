@@ -1,6 +1,6 @@
 name: olko-plan-grill
-version: 0.5.0
-description: "Steps 7 and 8: grill-with-docs composes the whole batch of questions (three options, recommendation first), the question reviewer approves them against the decision registry, the answered batch is recorded in tracker.md in one step, the answers are applied together, the investigation workers re-validate the plan and the consistency gate runs; repeated for follow-up questions, at most three rounds."
+version: 0.6.0
+description: "Steps 7 and 8: grill-with-docs composes the whole batch of questions (three options, recommendation first), the question reviewer approves them against the decision registry, the answered batch is recorded in tracker.md in one step, the answers are applied together, the investigation workers whose area changed re-validate only the changed claims and the consistency gate runs; repeated for follow-up questions, at most three rounds."
 source: "agents/opencode/olko-plan-documentation-orchestrator.md (FEATURE PLAN BATCH: one question batch for the Feature and every Task; USER QUESTION GATE: questions composed by grill-with-docs, checked by olko-question-reviewer); skills/workflow/olko-feature-plan-workflow/workflow.md (steps 7-8: grill-with-docs question batches, answers applied together, re-validation by the workers, consistency gate)"
 roles:
   plan-gate: medium
@@ -93,23 +93,38 @@ nodes:
     skill: olko-plan-editor
     tools: [read, edit]
     maxVisits: 4
-    parse: text
+    parse: { json: ["changes?", "areas?"] }
     prompt: |
       Apply ALL answers of grill batch {{state.grill-round.count}}, as recorded in {{state.feature.feature.featureDir}}/tracker.md, together to the plan package {{state.feature.feature.featureDir}} (project {{input.project}}) and record the batch closure in tracker.md. Edit only that folder.
       Keep each recorded decision as tracker.md states it, and add no new decision.
+      End with one ```json block that lists every claim about the code you added or changed, with its plan file, and the areas those claims touch: flow (the mechanism and its call path), runtime (configuration, runtime risks), test (tests and their reuse), readiness (implementation readiness). Use empty lists when no claim about the code changed.
+      {"changes": ["<plan file>: <new or changed claim>"], "areas": ["<flow|runtime|test|readiness>"]}
+  - id: reval-workers
+    description: "Keeps only the investigation workers whose area the applied answers changed; with no area list, all four run."
+    kind: script
+    op: list.pick
+    maxVisits: 4
+    with:
+      ids: grill-apply.grill-apply.areas
+      items:
+        - { id: flow, agentName: olko-investigation-flow-worker }
+        - { id: runtime, agentName: olko-investigation-runtime-worker }
+        - { id: test, agentName: olko-investigation-test-worker }
+        - { id: readiness, agentName: olko-investigation-readiness-worker }
   - id: revalidate
-    description: "Four investigation workers verify every new or changed claim against the code."
+    description: "The relevant investigation workers verify only the claims the applied answers added or changed against the code; with no worker picked the node is skipped."
     kind: llm
     role: plan-worker
     maxVisits: 4
-    agents:
-      - { id: flow, agent: olko-investigation-flow-worker }
-      - { id: runtime, agent: olko-investigation-runtime-worker }
-      - { id: test, agent: olko-investigation-test-worker }
-      - { id: readiness, agent: olko-investigation-readiness-worker }
+    agentsFrom: state.reval-workers.items
+    freshResults: true
     parse: { line: [check, verdict, count, detail] }
     prompt: |
-      Re-validation after decisions: verify every new or changed claim in {{state.feature.feature.featureDir}} (project {{input.project}}) against the codebase with file:line evidence. Read only.
+      Re-validation after decisions of grill batch {{state.grill-round.count}} in {{state.feature.feature.featureDir}} (project {{input.project}}): verify only these new or changed claims against the codebase with file:line evidence; do not re-check claims verified earlier. Read only.
+      {{#state.grill-apply.grill-apply.changes}}
+      - {{.}}
+      {{/state.grill-apply.grill-apply.changes}}
+      When the list above is empty, verify every new or changed claim since the last closed batch in tracker.md.
       End with one line: `findings | <none|found> | <count> | <unverified or false claims, semicolon separated>`.
   - id: fold-reval
     description: "Plan editor folds the re-validation findings into the plan."
@@ -142,7 +157,8 @@ edges:
   - { from: ask-grill, to: grill-collect }
   - { from: grill-collect, to: grill-next }
   - { from: grill-record, to: grill-apply }
-  - { from: grill-apply, to: revalidate }
+  - { from: grill-apply, to: reval-workers }
+  - { from: reval-workers, to: revalidate }
   - { from: revalidate, to: fold-reval, when: 'revalidate.flow.verdict == "found" || revalidate.runtime.verdict == "found" || revalidate.test.verdict == "found" || revalidate.readiness.verdict == "found"', description: "a worker found unverified claims" }
   - { from: revalidate, to: gate-grill, description: "no worker found an unverified claim: run the consistency gate" }
   - { from: fold-reval, to: gate-grill }

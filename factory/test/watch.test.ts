@@ -130,6 +130,12 @@ test("known projects come from projects.json and from every run's input.project"
   assert.deepEqual(knownProjects(dataDir), [path.resolve(other), project].sort());
 });
 
+test("known projects also come from the project registry format of projects.json", () => {
+  const { dataDir, project } = setup();
+  fs.writeFileSync(projectsFile(dataDir), JSON.stringify({ schemaVersion: 1, roots: [], projects: [{ id: "sample-app", path: project }, { id: "broken" }] }));
+  assert.deepEqual(knownProjects(dataDir), [path.resolve(project)]);
+});
+
 function call(api: ReturnType<typeof createDataApi>, method: string, url: string, headers: Record<string, string> = {}) {
   return new Promise<{ status: number; body: unknown }>((resolve) => {
     void apiMiddleware(api)({ method, url, headers }, { writeHead: (status) => ({ end: (body: string) => resolve({ status, body: JSON.parse(body) }) }) }, () => resolve({ status: 404, body: null }));

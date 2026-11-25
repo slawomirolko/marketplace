@@ -7,6 +7,7 @@ import { errorMessage } from "./engine.ts";
 import type { Factory } from "./engine.ts";
 import { viewerUrlFor } from "./viewer-routes.ts";
 import { HARNESSES, installGuide } from "./install-guide.ts";
+import { projectScopedInput, projectsAction } from "./projects.ts";
 
 function longPath(p: string): string {
   const resolved = path.resolve(p);
@@ -77,17 +78,18 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
     server.registerTool(
       "factory_start",
       {
-        description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name and pr number, plus fresh: true for a fresh review of your own PR; or plan, a plan file path in the workspace, and optional criteria; for olko-marketplace-skill-sync: project, the absolute path of the local project, optional marketplace, the absolute path of the marketplace checkout, and optional artifacts, the skill and agent names to sync; for olko-claude-sync: target and targetName, a Claude Code plugin marketplace checkout and a kebab-case name for it, olko, the Olko checkout, optional user, the user scope (default ~/.claude), optional stateDir (default ~/.olko-sync) and optional artifacts). The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
+        description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name and pr number, plus fresh: true for a fresh review of your own PR; or plan, a plan file path in the workspace, and optional criteria; for olko-marketplace-skill-sync: project, the absolute path of the local project, optional marketplace, the absolute path of the marketplace checkout, and optional artifacts, the skill and agent names to sync; for olko-claude-sync: target and targetName, a Claude Code plugin marketplace checkout and a kebab-case name for it, olko, the Olko checkout, optional user, the user scope (default ~/.claude), optional stateDir (default ~/.olko-sync) and optional artifacts). projectId names a registered project (see factory_projects): the factory sets input.project to its folder and keeps the id on the run. The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
         inputSchema: {
           goal: z.string().min(1),
           workflow: z.string().regex(/^[a-z][a-z0-9-]*$/).optional(),
           input: z.object({ repo: z.string().regex(/^[\w.-]+\/[\w.-]+$/).optional(), pr: z.number().int().positive().optional(), fresh: z.boolean().optional(), plan: z.string().regex(/^[\w./-]+$/).optional(), criteria: z.string().max(20000).optional(), project: z.string().min(1).optional(), marketplace: z.string().min(1).optional(), artifacts: z.array(z.string().regex(/^[a-z0-9-]+$/)).min(1).optional(), target: z.string().min(1).optional(), targetName: z.string().regex(/^[a-z0-9-]+$/).optional(), olko: z.string().min(1).optional(), user: z.string().min(1).optional(), stateDir: z.string().min(1).optional(), switches: z.record(z.string().regex(/^[a-z][a-z0-9-]*$/), z.boolean()).optional(), idea: z.string().max(20000).optional(), route: z.enum(["discovery", "planning", "both"]).optional(), featureId: z.string().regex(/^[a-z0-9-]+$/).optional(), base: z.string().regex(/^[\w./-]+$/).optional(), taskId: z.string().regex(/^[\w.-]+$/).optional(), adopt: z.boolean().optional(), workflowsDir: z.string().min(1).optional() }).strict().optional(),
+          projectId: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).optional(),
           idempotencyKey: z.string().optional(),
         },
       },
-      guarded(({ goal, workflow, input, idempotencyKey }) => {
+      guarded(({ goal, workflow, input, projectId, idempotencyKey }) => {
         const runInput = { ...(input?.repo ? { repo: input.repo } : {}), ...(input?.pr ? { pr: input.pr } : {}), ...(input?.fresh ? { fresh: true } : {}), ...(input?.plan ? { plan: input.plan } : {}), ...(input?.criteria ? { criteria: input.criteria } : {}), ...(input?.project ? { project: longPath(input.project) } : {}), ...(input?.marketplace ? { marketplace: longPath(input.marketplace) } : {}), ...(input?.artifacts ? { artifacts: input.artifacts } : {}), ...(input?.target ? { target: longPath(input.target) } : {}), ...(input?.targetName ? { targetName: input.targetName } : {}), ...(input?.olko ? { olko: longPath(input.olko) } : {}), ...(input?.user ? { user: longPath(input.user) } : {}), ...(input?.stateDir ? { stateDir: path.resolve(input.stateDir) } : {}), ...(input?.switches ? { switches: input.switches } : {}), ...(input?.idea ? { idea: input.idea } : {}), ...(input?.route ? { route: input.route } : {}), ...(input?.featureId ? { featureId: input.featureId } : {}), ...(input?.base ? { base: input.base } : {}), ...(input?.taskId ? { taskId: input.taskId } : {}), ...(input?.adopt ? { adopt: true } : {}), ...(input?.workflowsDir ? { workflowsDir: longPath(input.workflowsDir) } : {}) };
-        const { run, reused } = factory.start(goal, idempotencyKey, { ...(workflow ? { workflow } : {}), input: runInput });
+        const { run, reused } = factory.start(goal, idempotencyKey, { ...(workflow ? { workflow } : {}), input: projectScopedInput(projectId, runInput) });
         return { ...factory.status(run), reused, next: "Show the proposal to the user. After the user replies, call factory_confirm." };
       }),
     );
@@ -212,6 +214,20 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
         inputSchema: { harness: z.enum(HARNESSES).optional() },
       },
       guarded(({ harness }) => installGuide(harness, server.server.getClientVersion()?.name)),
+    );
+
+    server.registerTool(
+      "factory_projects",
+      {
+        description: "List, add or remove the local projects that use the marketplace, manage the root folders that discovery searches, or discover candidate projects under them. Discovery only proposes candidates; add one to register it. The list lives in the user's factory home, outside every repository.",
+        inputSchema: {
+          action: z.enum(["list", "add", "remove", "add_root", "remove_root", "discover"]),
+          path: z.string().min(1).optional(),
+          id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).optional(),
+          marketplace: z.string().min(1).optional(),
+        },
+      },
+      guarded(({ action, path: dir, id, marketplace }) => projectsAction({ action, ...(dir ? { path: dir } : {}), ...(id ? { id } : {}), ...(marketplace ? { marketplace } : {}) })),
     );
 
     server.registerTool(

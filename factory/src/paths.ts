@@ -12,7 +12,7 @@ export function defaultDataDir(): string {
 }
 
 export function homeDataDir(): string {
-  return path.join(os.homedir(), ".skill-factory");
+  return process.env.FACTORY_HOME_DIR ?? path.join(os.homedir(), ".skill-factory");
 }
 
 export function sourcesFile(): string {
