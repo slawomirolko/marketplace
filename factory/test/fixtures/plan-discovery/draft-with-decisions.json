@@ -1,0 +1,61 @@
+{
+  "questions": [
+    "Q-A: When an approval node in YAML has a `question` field, should the loader fail with an error that names the node id (recommended), or ignore the field?",
+    "Q-B: When the approval answer is `stop`, should the run end with status `stopped`, as the budget stop does (engine.ts:529-531) (recommended)? If not, name the status you want."
+  ],
+  "decisions": [
+    "Q1 approval answers: yes / no / stop (question 1, option 1, recommended; user: \"Use your recommended answer for every question.\"). Artifacts: factory/src/types.ts, factory/src/workflow-yaml.ts, factory/src/engine.ts (gate before the op at :573, stop path), engine unit tests.",
+    "Q1-no: outcome of answer no = option 1, skip the op and continue the run (recommended; user: \"Use your recommended answer for every question.\"). Artifacts: factory/src/engine.ts (no branch after the gate at :573), engine unit tests. The approval field in factory/src/types.ts is unchanged for this outcome.",
+    "Q2 approval question id and text: option 1, \"Engine sets id and text — RECOMMENDED\" (question 2, option 1; user: \"Use your recommended answer for every question.\"). Artifacts: factory/src/engine.ts, factory/src/workflow-yaml.ts.",
+    "Q3 second entry into the same approval node: option 1, \"Ask again on every entry — RECOMMENDED\" (question 3, option 1; user: \"Use your recommended answer for every question.\"). Artifacts: factory/src/engine.ts, engine unit tests.",
+    "Q4 scope of T1, schema and auto-answer code: option 1, \"Add the schema and both auto-answer files to T1 — RECOMMENDED\" (question 4, option 1; user: \"Use your recommended answer for every question.\"). Artifacts: factory/spec/workflow.schema.json, factory/host/cli-matrix.ts, factory/app/data.ts, tests for each.",
+    "Q5 approval on a node that is not kind: script: option 1, \"Load fails with an error naming the node id — RECOMMENDED\" (question 5, option 1; user: \"Use your recommended answer for every question.\"). Artifacts: factory/src/workflow-yaml.ts, loader unit test.",
+    "BATCH-Q1 scope of the blanket answer: option 1, \"Yes, Q2–Q5 take their recommended answers — RECOMMENDED\" (batch question 1, option 1; user: \"Use your recommended answer for every question.\"). Artifacts: none in code; the Feature and T1 text binds to the recommended answers of Q2–Q5.",
+    "AUTO-Q1 auto-answer helpers on approval questions: no (question 1, option 1, RECOMMENDED; user: \"Use your recommended answer for every question.\"). Artifacts: factory/host/cli-matrix.ts:21, factory/app/data.ts:96, unit tests for each file."
+  ],
+  "feature": {
+    "title": "Bramka zatwierdzenia przed operacją script (E7)",
+    "goal": "Operacja z efektem ubocznym nie uruchamia się bez odpowiedzi użytkownika. Odpowiedź zapisuje się w przebiegu. Feature realizuje E7 z factory/docs/yaml-migration-plan.md.",
+    "criteria": [
+      "FAC1: Węzeł kind: script z approval: required zadaje pytanie przed wywołaniem swojej op.",
+      "FAC2: Dozwolone odpowiedzi to yes, no, stop. Inna odpowiedź zostaje odrzucona.",
+      "FAC3: yes uruchamia operację. no pomija operację i przebieg idzie dalej. stop kończy przebieg bez operacji (status: pytanie Q-B).",
+      "FAC4: Każde wejście w węzeł zatwierdzenia zadaje pytanie od nowa.",
+      "FAC5: Id i tekst pytania ustawia silnik.",
+      "FAC6: approval na węźle innym niż script blokuje załadowanie workflow i nazywa id węzła.",
+      "FAC7: Odpowiedź zapisuje się w run.answers pod id pytania.",
+      "FAC8: Automaty odpowiedzi odpowiadają no na pytania zatwierdzenia. Pytania budżetu nie zmieniają się."
+    ]
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Schemat i automaty odpowiedzi (wykonać jako pierwszy)",
+      "criteria": [
+        "AC1: Schemat przyjmuje węzeł kind: script z approval: required. Walidacja nie zgłasza błędu.",
+        "AC2: Schemat odrzuca approval z wartością inną niż required. Walidacja zgłasza błąd.",
+        "AC3: Schemat przyjmuje approval: required na węźle kind: llm. Odrzucenie należy do T2 (AC15).",
+        "AC4: W factory/host/cli-matrix.ts:21 pytanie oczekujące, którego lista allowed zawiera yes, no i stop, dostaje odpowiedź no.",
+        "AC5: W factory/app/data.ts:96 pytanie oczekujące, którego lista allowed zawiera yes, no i stop, dostaje odpowiedź no.",
+        "AC6: Pytanie q-budget-pause dostaje continue. Inne pytania budżetu dostają extend, jak dotąd, w obu plikach."
+      ]
+    },
+    {
+      "id": "T2",
+      "title": "Loader, typy i bramka w silniku (po T1)",
+      "criteria": [
+        "AC7: Węzeł kind: script z op i approval: required: silnik ustawia oczekujące pytanie z allowed yes, no, stop, status waiting_for_user, a operacja nie zostaje wywołana.",
+        "AC8: Odpowiedź yes: operacja wywołana dokładnie raz, run.answers[id pytania] = yes, przebieg idzie do następnego węzła.",
+        "AC9: Odpowiedź no: operacja nie wywołana, run.answers[id pytania] = no, przebieg idzie do następnego węzła.",
+        "AC10: Odpowiedź stop: operacja nie wywołana, następny węzeł się nie uruchamia, run.status = stopped (pytanie Q-B).",
+        "AC11: Odpowiedź extend: błąd invalid answer 'extend', allowed: yes, no, stop (engine.ts:316); pytanie pozostaje oczekujące.",
+        "AC12: Węzeł kind: script bez approval: operacja wywołana bez pytania, jak dotąd.",
+        "AC13: Pytanie ma id i tekst ustawione przez silnik. Węzeł w YAML nie zawiera pól question (pytanie Q-A).",
+        "AC14: Dwa wejścia w ten sam węzeł zatwierdzenia: przy każdym wejściu pytanie pojawia się ponownie, a poprzednia odpowiedź nie zostaje użyta.",
+        "AC15: Loader: approval: required na węźle kind innym niż script (np. llm) powoduje błąd ładowania z id węzła; przebieg się nie uruchamia.",
+        "AC16: Loader: węzeł kind: script z approval: required ładuje się, a WorkflowNode w types.ts zawiera flagę zatwierdzenia."
+      ]
+    }
+  ],
+  "hierarchy": "- Epic: (ID nie podano; wymaga uzupełnienia)\n  - Feature: Bramka zatwierdzenia przed operacją script (E7)\n    - T1: Schemat i automaty odpowiedzi (pierwszy)\n    - T2: Loader, typy i bramka w silniku (po T1)"
+}

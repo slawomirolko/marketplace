@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p app/tsconfig.json",
     "test": "node --test test/*[!n].test.ts",
     "test:integration": "node --test test/*_integration.test.ts",
+    "test:contract": "node --test test/*-contract_integration.test.ts",
     "test:scenario": "node test/scenario.ts",
     "test:viewer": "pnpm --dir app run test:coverage",
     "viewer": "pnpm --dir app run dev",

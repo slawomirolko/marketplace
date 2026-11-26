@@ -16363,7 +16363,11 @@ var Factory = class {
 		run.steps += 1;
 		this.appendLedger(run, delegateEntry(work, output, usage));
 		const node = nodeAt(run);
-		this.storeParsed(run, node, work.agentId, output);
+		try {
+			this.storeParsed(run, node, work.agentId, output);
+		} catch (error) {
+			return this.rejectOutput(run, node, work, error);
+		}
 		this.event(run, "agent_completed", {
 			node: node.path,
 			agentId: work.agentId,
@@ -16382,6 +16386,36 @@ var Factory = class {
 		}
 		this.checkpoint(run);
 		this.schedule(run);
+		return {
+			run,
+			duplicate: false
+		};
+	}
+	/** Offers the work once more with the parse error in its prompt; a second unparsable reply fails the run. */
+	rejectOutput(run, node, work, error) {
+		const reason = errorMessage(error);
+		if (work.retried) {
+			run.status = "failed";
+			this.event(run, "node_failed", {
+				node: node.path,
+				agentId: work.agentId,
+				error: reason
+			});
+			this.checkpoint(run);
+			throw error;
+		}
+		work.retried = true;
+		work.prompt = `${work.prompt}
+
+Your previous reply was rejected: ${reason}. Reply again in full and follow the required output format exactly.`;
+		this.event(run, "work_offered", {
+			node: node.path,
+			agentId: work.agentId,
+			tier: work.tier,
+			retry: true,
+			reason
+		});
+		this.checkpoint(run);
 		return {
 			run,
 			duplicate: false

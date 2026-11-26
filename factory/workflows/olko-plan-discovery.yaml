@@ -1,5 +1,5 @@
 name: olko-plan-discovery
-version: 0.7.0
+version: 0.8.0
 description: "Discovery: the backlog writer drafts the Epic/Feature/Task hierarchy, the writer checks it against the locked answers (a contradiction, a repeated answered question or a decision not yet rewritten into every deliverable it touches returns it for a corrected draft, so no question is asked while a decision is open; two failures in a row put the findings to the user instead), every locked decision is kept even when a later draft leaves it out, grill-with-docs presents the open questions as one batch per round and the one draft review and the revise question; the approved draft is published to the tracker when the tracker switch is on."
 source: "agents/opencode/olko-plan-documentation-orchestrator.md (DISCOVERY: backlog writer draft with question batches, one draft review, approval-gated tracker publish); skills/workflow/olko-plan-backlog-discovery/SKILL.md (question ownership gate, reconciliation after each answer batch, decision closure, approval-gated publish)"
 roles:
@@ -44,6 +44,7 @@ nodes:
       Reconcile before returning: add each new answer to the locked decisions once; drop every question already answered; if the draft contradicts a locked decision, correct the draft to match it. Never turn a contradiction into a new choice for the user.
       Decision closure: an answer is not a preference. For every new answer, list every deliverable it touches (on this path the issue text of the draft; an implementation plan file, the tracker, an E2E manifest or code only when it already exists), rewrite all of them in this same draft, then re-read each one against the answer. Change no file and nothing in the tracker here: name such a deliverable in the draft as a pending change instead.
       A missing tool, tracker access, memory block or configuration file is a limitation, not a question: note it in the draft and continue. Never ask the user about a limitation, and never ask the user to restate or paste an earlier question, answer or decision.
+      An answer that speaks for the whole batch (for example the recommended answer for every question) answers each question of that batch: lock every one of them, and never ask the user how far that answer reaches.
       When decisions remain open, return all currently answerable questions together. When the draft is ready, return no questions.
       Record decisions per userDecisionRecordLanguage and userDecisionRecordStyle in .agents/skill-config.md in {{input.project}} (unset: the repository documentation language; concise translation): translate and compact faithfully, keep IDs and meaning-critical exact wording, add no new decision.
       End with one ```json block: {"questions": ["<question>"], "decisions": ["<every locked decision>"], "feature": {"title": "", "goal": "", "criteria": [""]}, "tasks": [{"id": "T1", "title": "", "criteria": [""]}], "hierarchy": "<the Epic/Feature/Task hierarchy as markdown>"}
@@ -92,6 +93,7 @@ nodes:
       {{/state.draft.draft.questions}}
 
       Check three things: (1) the draft contradicts no locked decision; (2) no question already answered in the locked decisions is still listed as open; (3) decision closure: every locked decision is rewritten into every deliverable of the draft it touches, so no decision is left only partly applied (a partly applied decision stays open, and no further question is asked while it is open).
+      A decision is applied when the Feature or Task text it changes states the behaviour it chose. The files, tests and other artifacts a decision names are implementation notes: a file or test that the Feature and Task text does not name is not a failure, and neither is a decision that changes no Feature or Task text.
       Fail only for these three. A question the draft still lists for the user and has not been answered is not a failure, and neither is a limitation (a missing tool, tracker access, memory block or configuration file).
       End with exactly one line: `consistency | <pass|fail> | <number of contradictions, repeated answered questions and partly applied decisions> | <items, semicolon separated, or none>`.
   - id: repair-streak
@@ -134,7 +136,7 @@ nodes:
         - {{.}}
       {{/criteria}}
       {{/state.draft.draft.tasks}}
-      Questions, all together:
+      Questions, all together. In this node you only compose the text and the workflow is the interviewer, so the one-question-per-turn rule of the skill does not apply here: put every listed question in this one reply, each with its options, and never hold one back for a later turn. Present each listed question as it is; do not drop, merge or replace one:
       {{#state.draft.draft.questions}}
       - {{.}}
       {{/state.draft.draft.questions}}
@@ -142,7 +144,7 @@ nodes:
       The draft failed the consistency check {{state.repair-streak.count}} times in a row and the writer could not fix it alone. Turn every finding below that only the user can settle into one question of this batch; leave out findings about a limitation (a missing tool, tracker access, memory block or configuration file):
       {{state.draft-consistency.draft-consistency.text}}
       {{/state.repair-streak.reached}}
-      Return the question text only; the workflow puts it to the user. Do not add other questions and do not change any file.
+      Return the question text only; the workflow puts it to the user. Do not add other questions, ask nothing about how far an earlier answer of the user reaches, and do not change any file.
       Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the questions in that language, concisely.
       If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
   - id: ask-questions

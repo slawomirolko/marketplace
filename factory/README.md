@@ -212,3 +212,9 @@ Findings:
 - Direct API backend (`api` kind in the config schema).
 - Live user questions in interactive harness UIs (tests answered through the prompt).
 - Installation from the published marketplace (tested with `claude --plugin-dir` and a local OpenCode config), long runs, desktop apps.
+
+## Tests
+
+- `pnpm test`: offline tests with scripted agent replies. No model call.
+- `pnpm test:contract`: node contract tests. Each test drives a workflow with scripted replies up to one node, runs that node once on the real model (`FACTORY_TEST_MODEL`, default Haiku) with a fixture from `test/fixtures/`, and checks the reply against the parser and the rules of the node. A few minutes, a few cents.
+- `pnpm test:integration`: full runs on the real model. Slow and paid.

@@ -90,3 +90,45 @@ test("two consistency failures in a row put the findings to the user instead of 
   assert.match(prompts["questions-grill"]![0]!, /failed the consistency check 2 times in a row[\s\S]*decline behaviour open/);
   assert.equal(asked.filter((id) => id.includes("questions")).length, 1);
 });
+
+test("the consistency check does not fail a decision for a file or test the Task text leaves out, and the grill puts the whole batch in one reply", async () => {
+  const { done, prompts } = await drive((step, visit) => {
+    if (step === "draft") return visit === 1 ? draft(["Q1", "Q2"], []) : draft([], ["L1: only script ops are gated. Artifacts: engine unit tests"]);
+    if (step === "draft-consistency") return "consistency | pass | 0 | none";
+    if (step === "questions-grill") return "Question 1\nQuestion 2";
+    return undefined;
+  });
+  assert.equal(done.status, "done", JSON.stringify(done.events.at(-1)));
+  assert.match(prompts["draft-consistency"]![0]!, /a file or test that the Feature and Task text does not name is not a failure/);
+  assert.match(prompts["questions-grill"]![0]!, /put every listed question in this one reply[\s\S]*- Q1\s+- Q2/);
+  assert.match(prompts["questions-grill"]![0]!, /ask nothing about how far an earlier answer of the user reaches/);
+  assert.match(prompts["draft"]![1]!, /answers each question of that batch/);
+});
+
+test("a reply the parser rejects is asked for once more with the error, and the run goes on", async () => {
+  const { done, prompts } = await drive((step, visit) => {
+    if (step === "draft") return visit === 1 ? "Draft without the block." : draft([], []);
+    if (step === "draft-consistency") return "consistency | pass | 0 | none";
+    return undefined;
+  });
+  assert.equal(done.status, "done", JSON.stringify(done.events.at(-1)));
+  assert.equal(prompts["draft"]!.length, 2);
+  assert.match(prompts["draft"]![1]!, /Your previous reply was rejected: the agent output has no ```json block/);
+  assert.equal(done.events.filter((e) => e.type === "node_started" && e.node?.endsWith("/draft")).length, 1, "the retry is the same visit of the node");
+});
+
+test("a second rejected reply in a row fails the run", async () => {
+  const factory = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-discovery-")), { backend: "delegate" });
+  const { run } = factory.start("plan discovery", undefined, { workflow: "olko-plan-discovery", input: { project: "/repo", idea: "approval gate", switches: { tracker: false } } });
+  factory.confirm(run.runId);
+  let work = factory.next(run.runId);
+  for (let i = 0; i < 200 && !work; i++) {
+    await new Promise((r) => setTimeout(r, 5));
+    work = factory.next(run.runId);
+  }
+  assert.ok(work, "the draft work is offered");
+  factory.submit(run.runId, work.nodePath, "no block", {}, work.agentId);
+  assert.equal(factory.get(run.runId).status, "waiting_for_client");
+  assert.throws(() => factory.submit(run.runId, work.nodePath, "still no block", {}, work.agentId), /no ```json block/);
+  assert.equal(factory.get(run.runId).status, "failed");
+});
