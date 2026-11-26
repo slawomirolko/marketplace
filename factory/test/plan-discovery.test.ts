@@ -6,10 +6,21 @@ import test from "node:test";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
 const { Factory } = await import("../src/engine.ts");
+const { missingEdges } = await import("./edge-coverage.ts");
 
 const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
 const FENCE = "`".repeat(3);
 const RECOMMENDED = "Use your recommended answer for every question.";
+const BLOCKER = "blocker | grill-with-docs cannot be loaded";
+const RUNS: ReturnType<InstanceType<typeof Factory>["get"]>[] = [];
+
+function stoppedBy(run: { status: string; events: { error?: unknown }[] }, reason: RegExp): boolean {
+  return run.status === "failed" && run.events.some((e) => reason.test(String(e.error ?? "")));
+}
+
+function defaultAnswer(id: string): string {
+  return id.includes("draft-review") ? "approve" : RECOMMENDED;
+}
 
 function draft(questions: string[], decisions: string[]): string {
   const body = {
@@ -22,9 +33,9 @@ function draft(questions: string[], decisions: string[]): string {
   return `Draft.\n${FENCE}json\n${JSON.stringify(body)}\n${FENCE}`;
 }
 
-async function drive(reply: (step: string, visit: number) => string | undefined) {
+async function drive(reply: (step: string, visit: number) => string | undefined, { tracker = false, answer = defaultAnswer }: { tracker?: boolean; answer?: (id: string) => string } = {}) {
   const factory = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-discovery-")), { backend: "delegate" });
-  const { run } = factory.start("plan discovery", undefined, { workflow: "olko-plan-discovery", input: { project: "/repo", idea: "approval gate", switches: { tracker: false } } });
+  const { run } = factory.start("plan discovery", undefined, { workflow: "olko-plan-discovery", input: { project: "/repo", idea: "approval gate", switches: { tracker } } });
   factory.confirm(run.runId);
   const prompts: Record<string, string[]> = {};
   const asked: string[] = [];
@@ -34,7 +45,7 @@ async function drive(reply: (step: string, visit: number) => string | undefined)
     if (view.status === "waiting_for_user") {
       const id = view.pendingQuestion!.id;
       asked.push(id);
-      factory.answer(run.runId, id, id.includes("draft-review") ? "approve" : RECOMMENDED);
+      factory.answer(run.runId, id, answer(id));
     } else if (view.status === "waiting_for_client") {
       for (const work of view.pendingWorkItems ?? []) {
         const step = work.nodePath.split("/").pop()!;
@@ -47,7 +58,9 @@ async function drive(reply: (step: string, visit: number) => string | undefined)
       await new Promise((r) => setTimeout(r, 5));
     }
   }
-  return { done: factory.get(run.runId), prompts, asked };
+  const done = factory.get(run.runId);
+  RUNS.push(done);
+  return { done, prompts, asked };
 }
 
 test("the consistency check and the grill see the Feature and Task criteria, and the writer sees the questions the answer refers to", async () => {
@@ -131,4 +144,71 @@ test("a second rejected reply in a row fails the run", async () => {
   assert.equal(factory.get(run.runId).status, "waiting_for_client");
   assert.throws(() => factory.submit(run.runId, work.nodePath, "still no block", {}, work.agentId), /no ```json block/);
   assert.equal(factory.get(run.runId).status, "failed");
+});
+
+test("a grill that cannot load its skill stops the run without asking the user", async () => {
+  for (const grill of ["questions-grill", "review-grill", "revise-grill"]) {
+    const { done, asked } = await drive((step) => {
+      if (step === "draft") return grill === "questions-grill" ? draft(["Q1"], []) : draft([], []);
+      if (step === "draft-consistency") return "consistency | pass | 0 | none";
+      if (step === grill) return BLOCKER;
+      return undefined;
+    }, { answer: (id) => (id.includes("draft-review") ? "revise" : RECOMMENDED) });
+    assert.ok(stoppedBy(done, /grill-with-docs cannot be loaded/), `${grill}: ${JSON.stringify(done.events.at(-1))}`);
+    assert.equal(asked.length, grill === "revise-grill" ? 1 : 0, `${grill} asks nothing after the blocker`);
+  }
+});
+
+test("a revise answer asks what should change and sends the change back to the writer", async () => {
+  let reviews = 0;
+  const { done, prompts } = await drive((step) => {
+    if (step === "draft") return draft([], ["L1: only script ops are gated"]);
+    if (step === "draft-consistency") return "consistency | pass | 0 | none";
+    if (step === "revise-grill") return "What should change?";
+    return undefined;
+  }, { answer: (id) => (id.includes("draft-review") ? (reviews++ === 0 ? "revise" : "approve") : "Split T1 into two Tasks.") });
+  assert.equal(done.status, "done", JSON.stringify(done.events.at(-1)));
+  assert.match(prompts["draft"]![1]!, /requested change to the draft[\s\S]*Split T1 into two Tasks\./);
+});
+
+test("with the tracker on, the approved draft is published only after the publish and the existing-issue approvals", async () => {
+  const { done, prompts } = await drive((step) => {
+    if (step === "draft") return draft([], []);
+    if (step === "draft-consistency") return "consistency | pass | 0 | none";
+    if (step === "publish-grill") return "Publish or skip?";
+    if (step === "existing-grill") return "Approve changes to existing issues?";
+    if (step === "publish") return "Published: T1";
+    return undefined;
+  }, { tracker: true, answer: (id) => (id.includes("draft-review") ? "approve" : id === "q-plan-publish" ? "publish" : "new-only") });
+  assert.equal(done.status, "done", JSON.stringify(done.events.at(-1)));
+  assert.equal(prompts["publish"]!.length, 1);
+});
+
+test("with the tracker on, skip publishes nothing", async () => {
+  const { done, prompts } = await drive((step) => {
+    if (step === "draft") return draft([], []);
+    if (step === "draft-consistency") return "consistency | pass | 0 | none";
+    if (step === "publish-grill") return "Publish or skip?";
+    return undefined;
+  }, { tracker: true, answer: (id) => (id.includes("draft-review") ? "approve" : "skip") });
+  assert.equal(done.status, "done", JSON.stringify(done.events.at(-1)));
+  assert.equal(prompts["publish"], undefined);
+});
+
+test("a publish grill that cannot load its skill stops the run before anything is published", async () => {
+  for (const grill of ["publish-grill", "existing-grill"]) {
+    const { done, prompts } = await drive((step) => {
+      if (step === "draft") return draft([], []);
+      if (step === "draft-consistency") return "consistency | pass | 0 | none";
+      if (step === "publish-grill") return grill === step ? BLOCKER : "Publish or skip?";
+      if (step === "existing-grill") return BLOCKER;
+      return undefined;
+    }, { tracker: true, answer: (id) => (id.includes("draft-review") ? "approve" : "publish") });
+    assert.ok(stoppedBy(done, /grill-with-docs cannot be loaded/), `${grill}: ${JSON.stringify(done.events.at(-1))}`);
+    assert.equal(prompts["publish"], undefined);
+  }
+});
+
+test("the scenarios above take every edge of the discovery workflow", () => {
+  assert.deepEqual(missingEdges("olko-plan-discovery", RUNS), []);
 });

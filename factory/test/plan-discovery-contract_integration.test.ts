@@ -51,7 +51,7 @@ async function contract(target: string, scripted: Scripted): Promise<{ parsed: a
         result = await runSubagent(again, { cwd: PROJECT });
         factory.submit(run.runId, again.nodePath, result.output, result.usage, again.agentId);
       }
-      const parsed = (factory.get(run.runId).state[target] as Record<string, unknown>)[work.agentId];
+      const parsed = (factory.get(run.runId).state?.[target] as Record<string, unknown> | undefined)?.[work.agentId];
       return { parsed, output: result.output, retried: Boolean(again) };
     }
     throw new Error(`the run never offered ${target}`);
