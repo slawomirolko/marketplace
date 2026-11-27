@@ -343,6 +343,11 @@ describe("Projects", () => {
     expect(versionText(artifact({ state: "unknown-base", nearestVersion: "0.9.0" }))).toBe("nearest 0.9.0");
     expect(versionText(artifact({ state: "removed", lastVersion: "0.8.0" }))).toBe("last 0.8.0");
     expect(versionText(artifact({ installed: null, current: null }))).toBe("–");
+    expect(versionText(artifact({ state: "outdated", installed: "1.0.0", installedCommit: "aaaaaaa", current: "1.1.0", currentCommit: "bbbbbbb" }))).toBe("1.0.0 → 1.1.0");
+    expect(versionText(artifact({ state: "outdated", installed: "1.0.0", installedCommit: "aaaaaaa", current: "1.0.0", currentCommit: "bbbbbbb" }))).toBe("1.0.0 (aaaaaaa) → 1.0.0 (bbbbbbb)");
+    expect(versionText(artifact({ state: "outdated", installed: null, installedCommit: "aaaaaaa", current: "1.0.0", currentCommit: "bbbbbbb" }))).toBe("commit aaaaaaa → 1.0.0 (bbbbbbb)");
+    expect(versionText(artifact({ state: "current", installed: null, installedCommit: "bbbbbbb", current: null, currentCommit: "bbbbbbb" }))).toBe("–");
+    expect(versionText(artifact({ state: "removed", lastVersion: null, lastCommit: "ccccccc" }))).toBe("last commit ccccccc");
     expect(countsText({ missing: 2, current: 1, removed: 0 })).toBe("1 current · 2 missing");
     expect(countsText(null)).toBe("");
   });

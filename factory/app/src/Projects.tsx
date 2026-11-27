@@ -38,8 +38,12 @@ export interface ProjectArtifact {
   state: string;
   installed: string | null;
   current: string | null;
-  nearestVersion?: string;
-  lastVersion?: string;
+  installedCommit?: string;
+  currentCommit?: string;
+  nearestVersion?: string | null;
+  nearestCommit?: string;
+  lastVersion?: string | null;
+  lastCommit?: string;
   upstreamMoved?: boolean;
   files: string[];
   requiredBy?: string[];
@@ -106,13 +110,21 @@ async function finishNote(projectId: string, runId: string, runStatus: string): 
   }
 }
 
-/** The version text of one artifact row: installed → current, or the nearest / last version. */
+function sideText(version: string | null | undefined, commit: string | undefined, withCommit: boolean): string {
+  if (!version) return commit ? `commit ${commit}` : "–";
+  return withCommit && commit ? `${version} (${commit})` : version;
+}
+
+/** The version text of one artifact row: front matter versions; a commit only where versions cannot tell two sides apart. */
 export function versionText(a: ProjectArtifact): string {
-  if (a.state === "unknown-base") return `nearest ${a.nearestVersion ?? "?"}`;
-  if (a.state === "removed") return `last ${a.lastVersion ?? "?"}`;
-  if (!a.installed && !a.current) return "–";
-  if (a.installed === a.current) return a.installed ?? "–";
-  return `${a.installed ?? "–"} → ${a.current ?? "–"}`;
+  if (a.state === "unknown-base") return `nearest ${sideText(a.nearestVersion, a.nearestCommit, false)}`;
+  if (a.state === "removed") return `last ${sideText(a.lastVersion, a.lastCommit, false)}`;
+  const installed = a.installedCommit ?? a.installed;
+  const current = a.currentCommit ?? a.current;
+  if (!installed && !current) return "–";
+  if (installed === current) return a.installed ?? "–";
+  const tied = !a.installed || !a.current || a.installed === a.current;
+  return `${sideText(a.installed, a.installedCommit, tied)} → ${sideText(a.current, a.currentCommit, tied)}`;
 }
 
 /** Counts as one line, in state order, without zeros. */

@@ -307,7 +307,7 @@ function readBlobs(marketplace, ids) {
   return blobs;
 }
 
-/** The last `depth` marketplace versions of a path: commit, date, version label and portable file hashes. */
+/** The last `depth` marketplace versions of a path: commit, date, front matter version (null without one) and portable file hashes. */
 export function marketplaceVersions(marketplace, kind, source, depth = DEFAULT_DEPTH, ref = "HEAD") {
   const log = git(marketplace, "log", ref, "-n", String(depth), "--format=%H %cs", "--", source);
   const commits = log ? log.split("\n").map((line) => ({ commit: line.split(" ")[0], date: line.split(" ")[1] })) : [];
@@ -333,7 +333,7 @@ export function marketplaceVersions(marketplace, kind, source, depth = DEFAULT_D
         if (e.rel === "SKILL.md" || kind === "agent") version = frontMatter(text).version;
         if (kind === "agent") model = modelLine(text);
       }
-      return { commit: t.commit, date: t.date, version: version ?? t.commit.slice(0, 7), files, model };
+      return { commit: t.commit, date: t.date, version, files, model };
     });
 }
 
@@ -341,22 +341,25 @@ function differingFiles(a, b) {
   return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((f) => a[f] !== b[f]).sort();
 }
 
-/** Compares one installed copy with the marketplace history of its source. */
+const short = (v) => v.commit.slice(0, 7);
+
+/** Compares one installed copy with the marketplace history of its source. Versions come from front matter; commits only tell versions apart. */
 export function classify(artifact, versions, present) {
   if (!versions.length) return { state: "local-only", installed: null, current: null, files: [] };
   const head = versions[0];
-  if (!present) return { state: "removed", installed: null, current: null, lastVersion: head.version, files: [] };
+  const atHead = { current: head.version, currentCommit: short(head) };
+  if (!present) return { state: "removed", installed: null, current: null, lastVersion: head.version, lastCommit: short(head), files: [] };
   const exact = versions.findIndex((v) => differingFiles(artifact.files, v.files).length === 0);
   if (exact === 0) {
     const adapted = artifact.adapter || (artifact.kind === "agent" && artifact.model !== head.model);
-    return { state: adapted ? "adapted" : "current", installed: head.version, current: head.version, files: [] };
+    return { state: adapted ? "adapted" : "current", installed: head.version, installedCommit: short(head), ...atHead, files: [] };
   }
-  if (exact > 0) return { state: "outdated", installed: versions[exact].version, current: head.version, base: versions[exact].commit, files: differingFiles(artifact.files, head.files) };
+  if (exact > 0) return { state: "outdated", installed: versions[exact].version, installedCommit: short(versions[exact]), ...atHead, base: versions[exact].commit, files: differingFiles(artifact.files, head.files) };
   const ranked = versions.map((v) => ({ v, diff: differingFiles(artifact.files, v.files) })).sort((a, b) => a.diff.length - b.diff.length);
   const nearest = ranked[0];
   const shared = Object.keys(artifact.files).some((f) => artifact.files[f] === nearest.v.files[f]);
-  if (!shared) return { state: "unknown-base", installed: null, current: head.version, nearestVersion: nearest.v.version, files: nearest.diff };
-  return { state: "modified", installed: nearest.v.version, current: head.version, base: nearest.v.commit, upstreamMoved: nearest.v.commit !== head.commit, files: nearest.diff };
+  if (!shared) return { state: "unknown-base", installed: null, ...atHead, nearestVersion: nearest.v.version, nearestCommit: short(nearest.v), files: nearest.diff };
+  return { state: "modified", installed: nearest.v.version, installedCommit: short(nearest.v), ...atHead, base: nearest.v.commit, upstreamMoved: nearest.v.commit !== head.commit, files: nearest.diff };
 }
 
 /** Factory workflows that run an artifact: as a node agent or skill, or as a named source. */

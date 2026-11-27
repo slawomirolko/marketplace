@@ -21,6 +21,8 @@ One deterministic command. Run it as `node <this skill>/scripts/project-scan.mjs
 - Marketplace sources: `skills/<category>/<name>/`, `plugins/<plugin>/skills/<name>/`, `agents/opencode/<name>.md`, `plugins/<plugin>/agents/<name>.md`, with their git history.
 
 ## States
+Versions (`installed`, `current`, `nearestVersion`, `lastVersion`) are the front matter `version`, or null without one. The matching short commits (`installedCommit`, `currentCommit`, `nearestCommit`, `lastCommit`) only tell versions apart; they are never shown as a version.
+
 Files are compared after line endings are made the same. The adapter layer never counts as a change: `project.md` in a skill folder and the `model:` line of an agent.
 
 | State | Meaning |

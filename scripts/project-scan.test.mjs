@@ -81,8 +81,19 @@ test("a copy of an older version is outdated with both versions", () => {
   assert.equal(entry.state, "outdated");
   assert.equal(entry.installed, "1.0.0");
   assert.equal(entry.current, "1.1.0");
+  assert.equal(entry.installedCommit, f.v1.slice(0, 7));
   assert.equal(entry.base, f.v1);
   assert.deepEqual(entry.files, ["SKILL.md"]);
+});
+
+test("an artifact without a front matter version has no version, only commits", () => {
+  const f = fixture();
+  write(f.project, ".opencode/agents/sample-helper.md", "---\ndescription: h\n---\nhelp\n");
+  const entry = byId(statusOf(f), "agent:sample-helper");
+  assert.equal(entry.state, "current");
+  assert.equal(entry.installed, null);
+  assert.equal(entry.current, null);
+  assert.equal(entry.currentCommit, f.v1.slice(0, 7));
 });
 
 test("a local edit is modified against the nearest version and lists its files", () => {
