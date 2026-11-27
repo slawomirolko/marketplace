@@ -10,7 +10,8 @@ process.env.FACTORY_HOME_DIR = home;
 
 const { addProject, addRoot, discoverProjects, listProjects, projectById, projectInput, projectScopedInput, projectsAction, projectsCli, projectsFile, readRegistry, removeProject, removeRoot, suggestId } = await import("../src/projects.ts");
 const { apiMiddleware, createDataApi, parseProjectsAction, statusFileOf } = await import("../app/data.ts");
-const { loadFactoryConfig, projectsOf, DEFAULT_PROJECTS } = await import("../src/config.ts");
+const { loadFactoryConfig, projectsOf, withStatusCli, DEFAULT_PROJECTS } = await import("../src/config.ts");
+const { loadHomeEnv } = await import("../src/paths.ts");
 const { validate } = await import("../src/spec.ts");
 const { Factory, loadedWorkflows } = await import("../src/engine.ts");
 
@@ -320,4 +321,25 @@ test("analyze refuses a missing status workflow and a delegate backend without a
     delete process.env.FACTORY_CONFIG;
   }
   assert.deepEqual(parseProjectsAction({ action: "analyze", id: "sample-app" }), { action: "analyze", id: "sample-app" });
+});
+
+test("FACTORY_STATUS_CLI from the factory home's .env picks the status backend on this device", () => {
+  const settings = projectsOf({ projects: { statusBackend: { kind: "cli", cli: "opencode" } } });
+  assert.deepEqual(withStatusCli(settings, undefined).statusBackend, { kind: "cli", cli: "opencode" }, "the config is the default");
+  assert.deepEqual(withStatusCli(settings, "claude").statusBackend, { kind: "cli", cli: "claude" });
+  assert.throws(() => withStatusCli(settings, "other"), /FACTORY_STATUS_CLI must be claude or opencode/);
+
+  const envFile = path.join(workspace(), ".env");
+  fs.writeFileSync(envFile, ["# device settings", "FACTORY_STATUS_CLI=claude", "FACTORY_SAMPLE_SET=from-file", ""].join("\n"));
+  process.env.FACTORY_SAMPLE_SET = "from-environment";
+  try {
+    assert.deepEqual(loadHomeEnv(envFile), ["FACTORY_STATUS_CLI"], "a variable already in the environment wins");
+    assert.equal(process.env.FACTORY_SAMPLE_SET, "from-environment");
+    assert.deepEqual(loadFactoryConfig().projects.statusBackend, { kind: "cli", cli: "claude" });
+  } finally {
+    delete process.env.FACTORY_STATUS_CLI;
+    delete process.env.FACTORY_SAMPLE_SET;
+  }
+  assert.deepEqual(loadHomeEnv(path.join(workspace(), "missing.env")), []);
+  assert.deepEqual(loadHomeEnv(), [], "the factory home has no .env in the tests");
 });

@@ -1,4 +1,4 @@
-import { C as __toESM, _ as defaultDataDir, a as projectsAction, b as require_dist, c as Factory, d as parseCli, h as FACTORY_DIR, i as projectScopedInput, l as errorMessage, o as cliExecutor, r as viewerUrlFor, s as hostExec, u as parseBackend, v as registerDataSource, x as require_ajv } from "./viewer-routes.mjs";
+import { S as require_ajv, _ as defaultDataDir, a as projectsAction, c as Factory, d as parseCli, h as FACTORY_DIR, i as projectScopedInput, l as errorMessage, o as cliExecutor, r as viewerUrlFor, s as hostExec, u as parseBackend, v as loadHomeEnv, w as __toESM, x as require_dist, y as registerDataSource } from "./viewer-routes.mjs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15312,6 +15312,7 @@ function createFactoryTools(factory, publicUrl) {
 	};
 }
 // src/stdio.ts
+loadHomeEnv();
 var firstPort = Number(process.env.FACTORY_VIEWER_PORT ?? 7340);
 var dataDir = defaultDataDir();
 var PORTS_TO_TRY = 10;

@@ -3,7 +3,7 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { FACTORY_DIR } from "./paths.ts";
 import { validate } from "./spec.ts";
-import type { ProjectsConfig, Tier } from "./types.ts";
+import type { CliName, ProjectsConfig, Tier } from "./types.ts";
 import type { WatchSpec } from "./watch.ts";
 
 export interface FactoryConfig {
@@ -26,6 +26,13 @@ export function projectsOf(raw: { projects?: ProjectsConfig } | null | undefined
   return { ...DEFAULT_PROJECTS, ...(raw?.projects ?? {}) };
 }
 
+/** FACTORY_STATUS_CLI names the CLI backend of the status workflow on this device; it replaces projects.statusBackend. */
+export function withStatusCli(projects: ProjectSettings, cli = process.env.FACTORY_STATUS_CLI): ProjectSettings {
+  if (!cli) return projects;
+  if (cli !== "claude" && cli !== "opencode") throw new Error("FACTORY_STATUS_CLI must be claude or opencode");
+  return { ...projects, statusBackend: { kind: "cli", cli: cli satisfies CliName } };
+}
+
 /** The marketplace skill that gives an agent persistent memory, from a parsed config file. */
 export function memoryLayerOf(raw: { memoryLayer?: string } | null | undefined): string {
   return raw?.memoryLayer ?? DEFAULT_MEMORY_LAYER;
@@ -44,7 +51,7 @@ export function loadFactoryConfig(file = configFile()): FactoryConfig {
     budget: { maxCostUsd: raw.budget.maxCostUsd, infoRatio: raw.budget.infoRatio ?? 0.5, pauseRatio: raw.budget.pauseRatio ?? 0.8 },
     switches: raw.switches ?? {},
     memoryLayer: memoryLayerOf(raw),
-    projects: projectsOf(raw),
+    projects: withStatusCli(projectsOf(raw)),
     watches: (raw.watches ?? []).map((watch) => ({ ...watch, stableChecks: watch.stableChecks ?? 2, skipWhen: watch.skipWhen ?? [] })),
   };
 }

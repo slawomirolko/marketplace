@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseEnv } from "node:util";
 
 export const FACTORY_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const VIEWER_HEALTH = "skill-factory-viewer";
@@ -13,6 +14,15 @@ export function defaultDataDir(): string {
 
 export function homeDataDir(): string {
   return process.env.FACTORY_HOME_DIR ?? path.join(os.homedir(), ".skill-factory");
+}
+
+/** Device settings: KEY=value lines in the factory home's .env, never in a repository. Variables already set in the environment win. Returns the names it set. */
+export function loadHomeEnv(file = path.join(homeDataDir(), ".env")): string[] {
+  if (!fs.existsSync(file)) return [];
+  const values = parseEnv(fs.readFileSync(file, "utf8"));
+  const loaded = Object.keys(values).filter((name) => process.env[name] === undefined);
+  for (const name of loaded) process.env[name] = values[name];
+  return loaded;
 }
 
 export function sourcesFile(): string {
