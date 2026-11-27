@@ -68,7 +68,7 @@ export interface ProjectView extends Project {
   runs: number;
   /** The status run that is in progress for this project, if any. */
   analyzing: string | null;
-  status: { runId: string; createdAt: string | null; summary: string | null; counts: Record<string, number> | null } | null;
+  status: { runId: string; createdAt: string | null; summary: string | null; counts: Record<string, number> | null; marketplaceSource: boolean } | null;
 }
 
 export interface RunDetail {
@@ -336,8 +336,8 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo, factory }
         projects: registry.projects.map((p) => {
           const own = runs.filter((r) => r.run.input?.projectId === p.id);
           const latest = latestStatus(own, statusWorkflow);
-          const data = latest ? (readStatusFile(latest.run) as { summary?: string; counts?: Record<string, number> } | null) : null;
-          return { ...p, exists: fs.existsSync(p.path), runs: own.length, analyzing: activeStatus(own, statusWorkflow)?.runId ?? null, status: latest ? { runId: latest.run.runId, createdAt: latest.createdAt, summary: data?.summary ?? null, counts: data?.counts ?? null } : null };
+          const data = latest ? (readStatusFile(latest.run) as { summary?: string; counts?: Record<string, number>; marketplaceSource?: boolean } | null) : null;
+          return { ...p, exists: fs.existsSync(p.path), runs: own.length, analyzing: activeStatus(own, statusWorkflow)?.runId ?? null, status: latest ? { runId: latest.run.runId, createdAt: latest.createdAt, summary: data?.summary ?? null, counts: data?.counts ?? null, marketplaceSource: data?.marketplaceSource === true } : null };
         }),
       };
     },

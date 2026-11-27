@@ -244,6 +244,19 @@ describe("Projects", () => {
     expect(within(screen.getByRole("region", { name: "Projects" })).getByText("nothing installed")).toBeInTheDocument();
   });
 
+  test("a marketplace source repository is named as such, not as a project with nothing installed", async () => {
+    const source: ProjectStatusView = { ...status, data: { head: "9f8e7d6c5b", harnesses: [], marketplaceSource: true, artifacts: [], counts: { current: 0 }, workflows: [], summary: "marketplace source repository, no installed copies" } };
+    const projects = { ...list, projects: [{ id: "sample-app", path: "/src/sample-app", exists: true, runs: 1, analyzing: null, status: { runId: "r-0000000a", createdAt: null, summary: "marketplace source repository, no installed copies", counts: { current: 0 }, marketplaceSource: true } }] };
+    serve([], { "sample-app": source }, projects);
+    render(<Projects onShowRuns={() => {}} />);
+    const verdict = await screen.findByRole("region", { name: "Verdict" });
+    expect(verdict).toHaveClass("verdict-source");
+    expect(within(verdict).getByText(/This is a marketplace source repository: its skills live in skills\/<category>\//)).toBeInTheDocument();
+    expect(within(verdict).queryByText(/looks for skills in/)).not.toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Projects" })).getByText("marketplace source")).toBeInTheDocument();
+    expect(screen.queryByText("nothing installed")).not.toBeInTheDocument();
+  });
+
   test("a project in sync gets a green verdict", async () => {
     const synced: ProjectStatusView = { ...status, data: { ...status.data!, artifacts: [artifact({}), artifact({ id: "skill:sample-local", name: "sample-local", state: "local-only" })], counts: { current: 1, "local-only": 1 }, workflows: [] } };
     serve([], { "sample-app": synced });
@@ -257,6 +270,8 @@ describe("Projects", () => {
   test("verdicts and actions by state", () => {
     expect(verdictOf(null)).toEqual({ level: "empty", title: "No marketplace skill or agent is installed in this project.", badge: "nothing installed" });
     expect(verdictOf({ current: 2, adapted: 1 })).toMatchObject({ level: "ok", badge: "in sync" });
+    expect(verdictOf({ current: 0 }, true)).toMatchObject({ level: "source", badge: "marketplace source" });
+    expect(verdictOf({ current: 1 }, true)).toMatchObject({ level: "ok", badge: "in sync" });
     expect(verdictOf({ current: 1, modified: 2, removed: 1 })).toEqual({ level: "change", title: "3 of 4 to change: 2 modified · 1 removed.", badge: "3 to change" });
     expect(actionOf(artifact({ state: "adapted" }))).toBe("Nothing to do.");
     expect(actionOf(artifact({ state: "outdated", current: null }))).toBe("Update to the marketplace version (olko-marketplace-skill-sync).");

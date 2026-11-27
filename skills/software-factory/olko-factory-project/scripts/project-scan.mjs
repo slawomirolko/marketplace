@@ -138,6 +138,11 @@ export function detectHarnesses(project) {
     .filter((h) => h.markers.length > 0);
 }
 
+/** True when the project is a marketplace source checkout: it keeps skills under skills/<category>/ and lists them in registry.json. */
+export function isMarketplaceSource(project) {
+  return fs.existsSync(path.join(project, "registry.json")) && fs.existsSync(path.join(project, "skills")) && fs.statSync(path.join(project, "skills")).isDirectory();
+}
+
 /** Every skill and agent copy installed in the project, with the portable file hashes. */
 export function installedArtifacts(project) {
   const artifacts = [];
@@ -317,8 +322,9 @@ export function projectStatus({ project, marketplace, factory, depth = DEFAULT_D
   artifacts.sort((a, b) => STATES.indexOf(a.state) - STATES.indexOf(b.state) || a.id.localeCompare(b.id));
   const counts = Object.fromEntries(STATES.map((s) => [s, artifacts.filter((a) => a.state === s).length]));
   const runnable = [...new Set(artifacts.filter((a) => a.state !== "missing").flatMap((a) => a.workflows))].sort();
-  const summary = STATES.filter((s) => counts[s]).map((s) => `${counts[s]} ${s}`).join(", ") || "no marketplace artifacts installed";
-  return { project, marketplace, head: headOf(marketplace), harnesses: detectHarnesses(project), artifacts, counts, workflows: runnable, summary };
+  const marketplaceSource = isMarketplaceSource(project);
+  const summary = STATES.filter((s) => counts[s]).map((s) => `${counts[s]} ${s}`).join(", ") || (marketplaceSource ? "marketplace source repository, no installed copies" : "no marketplace artifacts installed");
+  return { project, marketplace, head: headOf(marketplace), harnesses: detectHarnesses(project), marketplaceSource, artifacts, counts, workflows: runnable, summary };
 }
 
 export function defaultOutDir() {
@@ -331,7 +337,7 @@ export function writeStatus(status, { outDir = defaultOutDir(), id }) {
   const label = NAME.test(id ?? "") ? id : "project";
   const file = path.join(outDir, `${label}-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
   fs.writeFileSync(file, `${JSON.stringify({ ...status, createdAt: new Date().toISOString() }, null, 2)}\n`);
-  return { file, head: status.head, counts: status.counts, harnesses: status.harnesses.map((h) => h.id), workflows: status.workflows, summary: status.summary };
+  return { file, head: status.head, counts: status.counts, harnesses: status.harnesses.map((h) => h.id), marketplaceSource: status.marketplaceSource, workflows: status.workflows, summary: status.summary };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

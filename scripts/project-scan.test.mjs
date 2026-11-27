@@ -121,6 +121,22 @@ test("removed, local-only and missing artifacts are reported", () => {
   assert.match(status.summary, /1 current, 3 missing, 1 removed, 1 local-only/);
 });
 
+test("a marketplace source checkout is marked and says so when nothing is installed", () => {
+  const f = fixture();
+  assert.equal(statusOf(f).marketplaceSource, false);
+  assert.equal(statusOf(f).summary, "no marketplace artifacts installed");
+  write(f.project, "registry.json", "{}");
+  assert.equal(statusOf(f).marketplaceSource, false, "registry.json alone is not enough");
+  write(f.project, "skills/demo/sample-skill/SKILL.md", skill("1.1.0", "step one\nstep two"));
+  const status = statusOf(f);
+  assert.equal(status.marketplaceSource, true);
+  assert.equal(status.summary, "marketplace source repository, no installed copies");
+  assert.equal(status.artifacts.length, 0, "skills under skills/<category>/ are sources, not installed copies");
+  write(f.project, ".agents/skills/sample-skill/SKILL.md", skill("1.1.0", "step one\nstep two"));
+  write(f.project, ".agents/skills/sample-skill/workflow.md", "flow v1\n");
+  assert.match(statusOf(f).summary, /^1 current$/);
+});
+
 test("harness markers are detected", () => {
   const f = fixture();
   write(f.project, "CLAUDE.md", "x");

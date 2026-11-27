@@ -9,7 +9,7 @@ export interface ProjectSummary {
   exists: boolean;
   runs: number;
   analyzing: string | null;
-  status: { runId: string; createdAt: string | null; summary: string | null; counts: Record<string, number> | null } | null;
+  status: { runId: string; createdAt: string | null; summary: string | null; counts: Record<string, number> | null; marketplaceSource?: boolean } | null;
 }
 
 export interface ProjectList {
@@ -49,6 +49,7 @@ export interface ProjectArtifact {
 export interface ProjectStatusData {
   head: string | null;
   harnesses: { id: string; markers: string[] }[];
+  marketplaceSource?: boolean;
   artifacts: ProjectArtifact[];
   counts: Record<string, number>;
   workflows: string[];
@@ -97,7 +98,7 @@ async function finishNote(projectId: string, runId: string, runStatus: string): 
   if (runStatus !== "done") return `Status check of ${projectId} ${runStatus} (run ${runId}).`;
   try {
     const view = await getJson<ProjectStatusView>(`/projects/${encodeURIComponent(projectId)}/status`);
-    return `Status check of ${projectId} finished: ${verdictOf(view.data?.counts).title}`;
+    return `Status check of ${projectId} finished: ${verdictOf(view.data?.counts, view.data?.marketplaceSource).title}`;
   } catch {
     return `Status check of ${projectId} finished (run ${runId}).`;
   }
@@ -121,14 +122,15 @@ export function countsText(counts: Record<string, number> | null | undefined): s
 const TO_CHANGE = ["outdated", "modified", "unknown-base", "missing", "removed"] as const;
 
 export interface Verdict {
-  level: "ok" | "change" | "empty";
+  level: "ok" | "change" | "empty" | "source";
   title: string;
   badge: string;
 }
 
-/** The answer of one status: in sync, how much to change, or nothing installed. */
-export function verdictOf(counts: Record<string, number> | null | undefined): Verdict {
+/** The answer of one status: in sync, how much to change, nothing installed, or the marketplace source itself. */
+export function verdictOf(counts: Record<string, number> | null | undefined, marketplaceSource = false): Verdict {
   const total = STATES.reduce((sum, s) => sum + (counts?.[s] ?? 0), 0);
+  if (total === 0 && marketplaceSource) return { level: "source", title: "This is a marketplace source repository: its skills live in skills/<category>/, so there are no installed copies to check.", badge: "marketplace source" };
   if (total === 0) return { level: "empty", title: "No marketplace skill or agent is installed in this project.", badge: "nothing installed" };
   const change = TO_CHANGE.filter((s) => counts?.[s]);
   if (change.length === 0) return { level: "ok", title: `In sync with the marketplace: ${total} installed, nothing to change.`, badge: "in sync" };
@@ -299,7 +301,7 @@ export function Projects({ onShowRuns, pollMs = POLL_MS }: { onShowRuns: (projec
               <button type="button" className={p.id === selectedId ? "active" : ""} aria-current={p.id === selectedId} onClick={() => setSelectedId(p.id)}>
                 <strong>{p.id}</strong>
                 {!p.exists && <span className="warn"> · folder missing</span>}
-                {p.status ? <ListVerdict counts={p.status.counts} /> : <span className="muted small">not checked yet</span>}
+                {p.status ? <ListVerdict counts={p.status.counts} marketplaceSource={p.status.marketplaceSource} /> : <span className="muted small">not checked yet</span>}
               </button>
             </li>
           ))}
@@ -414,7 +416,7 @@ export function Projects({ onShowRuns, pollMs = POLL_MS }: { onShowRuns: (projec
 }
 
 function StatusView({ view, data, rows, stateFilter, onStateFilter }: { view: ProjectStatusView; data: ProjectStatusData; rows: ProjectArtifact[]; stateFilter: string; onStateFilter: (state: string) => void }) {
-  const verdict = verdictOf(data.counts);
+  const verdict = verdictOf(data.counts, data.marketplaceSource);
   return (
     <>
       <section className={`verdict verdict-${verdict.level}`} aria-label="Verdict">
@@ -434,8 +436,8 @@ function StatusView({ view, data, rows, stateFilter, onStateFilter }: { view: Pr
   );
 }
 
-function ListVerdict({ counts }: { counts: Record<string, number> | null }) {
-  const verdict = verdictOf(counts);
+function ListVerdict({ counts, marketplaceSource }: { counts: Record<string, number> | null; marketplaceSource?: boolean }) {
+  const verdict = verdictOf(counts, marketplaceSource);
   return (
     <span className="small">
       <span className={`verdict-badge verdict-${verdict.level}`}>{verdict.badge}</span> {countsText(counts)}
