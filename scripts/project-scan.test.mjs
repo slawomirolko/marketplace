@@ -121,20 +121,51 @@ test("removed, local-only and missing artifacts are reported", () => {
   assert.match(status.summary, /1 current, 3 missing, 1 removed, 1 local-only/);
 });
 
-test("a marketplace source checkout is marked and says so when nothing is installed", () => {
+test("a marketplace source checkout is compared with its remote: behind, local edits, new on either side", () => {
   const f = fixture();
-  assert.equal(statusOf(f).marketplaceSource, false);
-  assert.equal(statusOf(f).summary, "no marketplace artifacts installed");
-  write(f.project, "registry.json", "{}");
-  assert.equal(statusOf(f).marketplaceSource, false, "registry.json alone is not enough");
-  write(f.project, "skills/demo/sample-skill/SKILL.md", skill("1.1.0", "step one\nstep two"));
-  const status = statusOf(f);
+  write(f.market, "registry.json", "{}\n");
+  git(f.market, "add", ".");
+  git(f.market, "commit", "-q", "-m", "registry");
+  const clone = path.join(f.root, "clone");
+  git(f.root, "clone", "-q", f.market, clone);
+  write(f.market, "skills/demo/sample-needed/SKILL.md", "---\nname: sample-needed\n---\nneeded, v2\n");
+  write(f.market, "skills/demo/sample-fresh/SKILL.md", "---\nname: sample-fresh\n---\nfresh\n");
+  git(f.market, "add", ".");
+  git(f.market, "commit", "-q", "-m", "remote moves on");
+  write(clone, "skills/demo/sample-skill/workflow.md", "flow v1, edited here\n");
+  write(clone, "skills/demo/sample-local/SKILL.md", "---\nname: sample-local\n---\nlocal\n");
+  const status = projectStatus({ project: clone, marketplace: clone, factory: path.join(clone, "factory") });
   assert.equal(status.marketplaceSource, true);
-  assert.equal(status.summary, "marketplace source repository, no installed copies");
-  assert.equal(status.artifacts.length, 0, "skills under skills/<category>/ are sources, not installed copies");
-  write(f.project, ".agents/skills/sample-skill/SKILL.md", skill("1.1.0", "step one\nstep two"));
-  write(f.project, ".agents/skills/sample-skill/workflow.md", "flow v1\n");
-  assert.match(statusOf(f).summary, /^1 current$/);
+  assert.equal(status.ref, "origin/main");
+  assert.equal(status.fetched, true);
+  assert.equal(status.head, git(f.market, "rev-parse", "HEAD"), "compared with the fetched remote, not the local HEAD");
+  const source = (id) => status.artifacts.find((a) => a.id === id && a.harness === "source");
+  assert.equal(source("skill:sample-needed").state, "outdated", "the remote has a newer version");
+  assert.equal(source("skill:sample-skill").state, "modified");
+  assert.deepEqual(source("skill:sample-skill").files, ["workflow.md"]);
+  assert.equal(source("skill:sample-local").state, "local-only");
+  assert.equal(source("skill:sample-fresh").state, "missing", "new on the remote, not pulled");
+  assert.equal(source("agent:sample-agent").state, "current");
+  assert.equal(source("skill:sample-skill").location, "skills/demo/sample-skill");
+});
+
+test("without fetch, or without an origin remote, the comparison uses what is there", () => {
+  const f = fixture();
+  assert.equal(statusOf(f).ref, "HEAD");
+  assert.equal(statusOf(f).marketplaceSource, false);
+  const clone = path.join(f.root, "clone");
+  git(f.root, "clone", "-q", f.market, clone);
+  write(f.market, "skills/demo/sample-fresh/SKILL.md", "---\nname: sample-fresh\n---\nfresh\n");
+  git(f.market, "add", ".");
+  git(f.market, "commit", "-q", "-m", "remote moves on");
+  const stale = projectStatus({ project: f.project, marketplace: clone, factory: path.join(clone, "factory"), fetch: false });
+  assert.equal(stale.ref, "origin/main");
+  assert.equal(stale.fetched, false);
+  assert.notEqual(stale.head, git(f.market, "rev-parse", "HEAD"));
+  git(clone, "remote", "set-url", "origin", path.join(f.root, "nowhere"));
+  const failed = projectStatus({ project: f.project, marketplace: clone, factory: path.join(clone, "factory") });
+  assert.equal(failed.fetched, false);
+  assert.ok(failed.fetchError);
 });
 
 test("harness markers are detected", () => {

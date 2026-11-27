@@ -207,13 +207,9 @@ test("the viewer lists projects with their latest status, shows the status file 
   const data = createDataApi({ factoryDir, dataDir, configFile: path.join(factoryDir, "config", "factory.yaml"), demo: false });
   const call = apiCall(data);
 
-  const listed = (await call("GET", "/api/projects")).body as { projects: { id: string; exists: boolean; runs: number; status: { runId: string; summary: string; marketplaceSource: boolean } }[]; statusWorkflow: string };
+  const listed = (await call("GET", "/api/projects")).body as { projects: { id: string; exists: boolean; runs: number; status: { runId: string; summary: string } }[]; statusWorkflow: string };
   assert.equal(listed.statusWorkflow, "olko-project-status");
-  assert.deepEqual(listed.projects.map((p) => [p.id, p.exists, p.runs, p.status.runId, p.status.summary, p.status.marketplaceSource]), [["sample-app", true, 2, "r-0000000a", "1 current", false]]);
-  fs.writeFileSync(statusFile, JSON.stringify({ summary: "marketplace source repository, no installed copies", counts: {}, marketplaceSource: true, artifacts: [] }));
-  const source = (await call("GET", "/api/projects")).body as { projects: { status: { marketplaceSource: boolean } }[] };
-  assert.equal(source.projects[0]?.status.marketplaceSource, true);
-  fs.writeFileSync(statusFile, JSON.stringify({ summary: "1 current", counts: { current: 1 }, artifacts: [{ id: "skill:sample-skill", state: "current" }] }));
+  assert.deepEqual(listed.projects.map((p) => [p.id, p.exists, p.runs, p.status.runId, p.status.summary]), [["sample-app", true, 2, "r-0000000a", "1 current"]]);
   const status = await call("GET", "/api/projects/sample-app/status");
   assert.equal(status.status, 200);
   assert.equal((status.body as { data: { artifacts: unknown[] } }).data.artifacts.length, 1);

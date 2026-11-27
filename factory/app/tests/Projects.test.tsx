@@ -68,9 +68,9 @@ describe("Projects", () => {
 
     const table = await screen.findByRole("table");
     expect(within(table).getAllByRole("row")).toHaveLength(4);
-    expect(within(screen.getByRole("region", { name: "Verdict" })).getByText("2 of 3 to change: 1 outdated · 1 missing.")).toBeInTheDocument();
-    expect(screen.getByText(/run r-0000000a · marketplace 9f8e7d6 · harnesses: opencode/)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Installed skills and agents" })).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Verdict" })).getByText("2 of 3 differ from the marketplace: 1 outdated · 1 missing.")).toBeInTheDocument();
+    expect(screen.getByText(/run r-0000000a · compared with marketplace 9f8e7d6 · harnesses: opencode/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Skills and agents" })).toBeInTheDocument();
     expect(within(table).getByRole("columnheader", { name: "Skill / agent" })).toBeInTheDocument();
     expect(within(table).getByText("1.0.0 → 1.2.0")).toBeInTheDocument();
     expect(within(table).getByText("needed by agent:sample-agent")).toBeInTheDocument();
@@ -128,7 +128,7 @@ describe("Projects", () => {
     expect(await screen.findByText("Started the status check of sample-app (run r-0000000s).")).toBeInTheDocument();
     expect(posted).toEqual([{ action: "analyze", id: "sample-app" }]);
     expect(screen.getByRole("button", { name: /^Checking…/ })).toBeDisabled();
-    expect(await screen.findByText("Status check of sample-app finished: 2 of 3 to change: 1 outdated · 1 missing.")).toBeInTheDocument();
+    expect(await screen.findByText("Status check of sample-app finished: 2 of 3 differ from the marketplace: 1 outdated · 1 missing.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Re-check status" })).toBeEnabled();
     await waitFor(() => expect(statusCalls).toBe(3));
     expect(runCalls).toBe(2);
@@ -244,17 +244,47 @@ describe("Projects", () => {
     expect(within(screen.getByRole("region", { name: "Projects" })).getByText("nothing installed")).toBeInTheDocument();
   });
 
-  test("a marketplace source repository is named as such, not as a project with nothing installed", async () => {
-    const source: ProjectStatusView = { ...status, data: { head: "9f8e7d6c5b", harnesses: [], marketplaceSource: true, artifacts: [], counts: { current: 0 }, workflows: [], summary: "marketplace source repository, no installed copies" } };
-    const projects = { ...list, projects: [{ id: "sample-app", path: "/src/sample-app", exists: true, runs: 1, analyzing: null, status: { runId: "r-0000000a", createdAt: null, summary: "marketplace source repository, no installed copies", counts: { current: 0 }, marketplaceSource: true } }] };
-    serve([], { "sample-app": source }, projects);
+  test("a marketplace source checkout is compared with its remote like any project", async () => {
+    const source: ProjectStatusView = {
+      ...status,
+      data: {
+        head: "4034143aa",
+        ref: "origin/main",
+        fetched: true,
+        fetchError: null,
+        harnesses: [],
+        artifacts: [
+          artifact({ id: "skill:sample-old", name: "sample-old", harness: "source", location: "skills/demo/sample-old", state: "outdated", installed: "1.0.0", current: "1.1.0" }),
+          artifact({ id: "skill:sample-edit", name: "sample-edit", harness: "source", location: "skills/demo/sample-edit", state: "modified" }),
+          artifact({ id: "skill:sample-new", name: "sample-new", harness: "source", location: "skills/demo/sample-new", state: "local-only" }),
+          artifact({ harness: "source", location: "skills/demo/sample-skill" }),
+        ],
+        counts: { current: 1, outdated: 1, modified: 1, "local-only": 1 },
+        workflows: [],
+        summary: "1 current, 1 outdated, 1 modified, 1 local-only",
+      },
+    };
+    serve([], { "sample-app": source });
     render(<Projects onShowRuns={() => {}} />);
     const verdict = await screen.findByRole("region", { name: "Verdict" });
-    expect(verdict).toHaveClass("verdict-source");
-    expect(within(verdict).getByText(/This is a marketplace source repository: its skills live in skills\/<category>\//)).toBeInTheDocument();
-    expect(within(verdict).queryByText(/looks for skills in/)).not.toBeInTheDocument();
-    expect(within(screen.getByRole("region", { name: "Projects" })).getByText("marketplace source")).toBeInTheDocument();
-    expect(screen.queryByText("nothing installed")).not.toBeInTheDocument();
+    expect(verdict).toHaveClass("verdict-change");
+    expect(within(verdict).getByText("2 of 4 differ from origin/main: 1 outdated · 1 modified.")).toBeInTheDocument();
+    expect(screen.getByText(/compared with origin\/main 4034143 · harnesses: none found/)).toBeInTheDocument();
+    expect(screen.getByText("Pull the remote (git pull, or Update from marketplace).")).toBeInTheDocument();
+    expect(screen.getByText("Local change not on the remote: commit and push it in a PR, or discard it.")).toBeInTheDocument();
+    expect(screen.getByText("New here, not on the remote: commit and push it in a PR.")).toBeInTheDocument();
+  });
+
+  test("a failed fetch is shown next to the remote ref", async () => {
+    serve([], { "sample-app": { ...status, data: { ...status.data!, ref: "origin/main", fetched: false, fetchError: "could not resolve host" } } });
+    render(<Projects onShowRuns={() => {}} />);
+    expect(await screen.findByText(/compared with origin\/main 9f8e7d6 \(fetch failed: could not resolve host\)/)).toBeInTheDocument();
+  });
+
+  test("an unfetched remote ref says the comparison uses the last fetch", async () => {
+    serve([], { "sample-app": { ...status, data: { ...status.data!, ref: "origin/main", fetched: false, fetchError: null } } });
+    render(<Projects onShowRuns={() => {}} />);
+    expect(await screen.findByText(/compared with origin\/main 9f8e7d6 \(last fetch\)/)).toBeInTheDocument();
   });
 
   test("a project in sync gets a green verdict", async () => {
@@ -263,16 +293,19 @@ describe("Projects", () => {
     render(<Projects onShowRuns={() => {}} />);
     const verdict = await screen.findByRole("region", { name: "Verdict" });
     expect(verdict).toHaveClass("verdict-ok");
-    expect(within(verdict).getByText("In sync with the marketplace: 2 installed, nothing to change.")).toBeInTheDocument();
+    expect(within(verdict).getByText("In sync with the marketplace: 2 skills and agents, nothing to change.")).toBeInTheDocument();
     expect(screen.queryByText(/Factory workflows that run/)).not.toBeInTheDocument();
   });
 
   test("verdicts and actions by state", () => {
     expect(verdictOf(null)).toEqual({ level: "empty", title: "No marketplace skill or agent is installed in this project.", badge: "nothing installed" });
     expect(verdictOf({ current: 2, adapted: 1 })).toMatchObject({ level: "ok", badge: "in sync" });
-    expect(verdictOf({ current: 0 }, true)).toMatchObject({ level: "source", badge: "marketplace source" });
-    expect(verdictOf({ current: 1 }, true)).toMatchObject({ level: "ok", badge: "in sync" });
-    expect(verdictOf({ current: 1, modified: 2, removed: 1 })).toEqual({ level: "change", title: "3 of 4 to change: 2 modified · 1 removed.", badge: "3 to change" });
+    expect(verdictOf({ current: 1 }, "origin/main").title).toBe("In sync with origin/main: 1 skills and agents, nothing to change.");
+    expect(verdictOf({ current: 1, outdated: 1 }, "HEAD").title).toBe("1 of 2 differ from the marketplace: 1 outdated.");
+    expect(actionOf(artifact({ harness: "source", state: "current" }))).toBe("Nothing to do.");
+    expect(actionOf(artifact({ harness: "source", state: "missing" }))).toMatch(/^Pull the remote/);
+    expect(actionOf(artifact({ harness: "source", state: "unknown-base" }))).toMatch(/^Local change not on the remote/);
+    expect(verdictOf({ current: 1, modified: 2, removed: 1 })).toEqual({ level: "change", title: "3 of 4 differ from the marketplace: 2 modified · 1 removed.", badge: "3 to change" });
     expect(actionOf(artifact({ state: "adapted" }))).toBe("Nothing to do.");
     expect(actionOf(artifact({ state: "outdated", current: null }))).toBe("Update to the marketplace version (olko-marketplace-skill-sync).");
     expect(actionOf(artifact({ state: "modified" }))).toBe("Send the local change upstream (olko-marketplace-upstream) or reinstall the marketplace version.");

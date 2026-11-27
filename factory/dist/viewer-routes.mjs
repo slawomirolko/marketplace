@@ -18421,8 +18421,7 @@ function createDataApi({ factoryDir, dataDir, configFile, demo, factory }) {
 							runId: latest.run.runId,
 							createdAt: latest.createdAt,
 							summary: data?.summary ?? null,
-							counts: data?.counts ?? null,
-							marketplaceSource: data?.marketplaceSource === true
+							counts: data?.counts ?? null
 						} : null
 					};
 				})

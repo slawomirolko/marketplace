@@ -9,7 +9,7 @@ export interface ProjectSummary {
   exists: boolean;
   runs: number;
   analyzing: string | null;
-  status: { runId: string; createdAt: string | null; summary: string | null; counts: Record<string, number> | null; marketplaceSource?: boolean } | null;
+  status: { runId: string; createdAt: string | null; summary: string | null; counts: Record<string, number> | null } | null;
 }
 
 export interface ProjectList {
@@ -49,7 +49,9 @@ export interface ProjectArtifact {
 export interface ProjectStatusData {
   head: string | null;
   harnesses: { id: string; markers: string[] }[];
-  marketplaceSource?: boolean;
+  ref?: string;
+  fetched?: boolean;
+  fetchError?: string | null;
   artifacts: ProjectArtifact[];
   counts: Record<string, number>;
   workflows: string[];
@@ -98,7 +100,7 @@ async function finishNote(projectId: string, runId: string, runStatus: string): 
   if (runStatus !== "done") return `Status check of ${projectId} ${runStatus} (run ${runId}).`;
   try {
     const view = await getJson<ProjectStatusView>(`/projects/${encodeURIComponent(projectId)}/status`);
-    return `Status check of ${projectId} finished: ${verdictOf(view.data?.counts, view.data?.marketplaceSource).title}`;
+    return `Status check of ${projectId} finished: ${verdictOf(view.data?.counts, view.data?.ref).title}`;
   } catch {
     return `Status check of ${projectId} finished (run ${runId}).`;
   }
@@ -122,24 +124,42 @@ export function countsText(counts: Record<string, number> | null | undefined): s
 const TO_CHANGE = ["outdated", "modified", "unknown-base", "missing", "removed"] as const;
 
 export interface Verdict {
-  level: "ok" | "change" | "empty" | "source";
+  level: "ok" | "change" | "empty";
   title: string;
   badge: string;
 }
 
-/** The answer of one status: in sync, how much to change, nothing installed, or the marketplace source itself. */
-export function verdictOf(counts: Record<string, number> | null | undefined, marketplaceSource = false): Verdict {
+/** The answer of one status: in sync with the remote, how much to change, or nothing installed. */
+export function verdictOf(counts: Record<string, number> | null | undefined, ref?: string | null): Verdict {
   const total = STATES.reduce((sum, s) => sum + (counts?.[s] ?? 0), 0);
-  if (total === 0 && marketplaceSource) return { level: "source", title: "This is a marketplace source repository: its skills live in skills/<category>/, so there are no installed copies to check.", badge: "marketplace source" };
+  const remote = ref && ref !== "HEAD" ? ref : "the marketplace";
   if (total === 0) return { level: "empty", title: "No marketplace skill or agent is installed in this project.", badge: "nothing installed" };
   const change = TO_CHANGE.filter((s) => counts?.[s]);
-  if (change.length === 0) return { level: "ok", title: `In sync with the marketplace: ${total} installed, nothing to change.`, badge: "in sync" };
+  if (change.length === 0) return { level: "ok", title: `In sync with ${remote}: ${total} skills and agents, nothing to change.`, badge: "in sync" };
   const toChange = change.reduce((sum, s) => sum + (counts?.[s] ?? 0), 0);
-  return { level: "change", title: `${toChange} of ${total} to change: ${change.map((s) => `${counts?.[s]} ${s}`).join(" · ")}.`, badge: `${toChange} to change` };
+  return { level: "change", title: `${toChange} of ${total} differ from ${remote}: ${change.map((s) => `${counts?.[s]} ${s}`).join(" · ")}.`, badge: `${toChange} to change` };
+}
+
+/** What to do with a skill or agent of a marketplace source checkout, compared with its remote. */
+function sourceActionOf(a: ProjectArtifact): string {
+  switch (a.state) {
+    case "outdated":
+    case "missing":
+    case "removed":
+      return "Pull the remote (git pull, or Update from marketplace).";
+    case "modified":
+    case "unknown-base":
+      return "Local change not on the remote: commit and push it in a PR, or discard it.";
+    case "local-only":
+      return "New here, not on the remote: commit and push it in a PR.";
+    default:
+      return "Nothing to do.";
+  }
 }
 
 /** What to do with one skill or agent, by its state. */
 export function actionOf(a: ProjectArtifact): string {
+  if (a.harness === "source") return sourceActionOf(a);
   switch (a.state) {
     case "outdated":
       return `Update to ${a.current ?? "the marketplace version"} (olko-marketplace-skill-sync).`;
@@ -301,7 +321,7 @@ export function Projects({ onShowRuns, pollMs = POLL_MS }: { onShowRuns: (projec
               <button type="button" className={p.id === selectedId ? "active" : ""} aria-current={p.id === selectedId} onClick={() => setSelectedId(p.id)}>
                 <strong>{p.id}</strong>
                 {!p.exists && <span className="warn"> · folder missing</span>}
-                {p.status ? <ListVerdict counts={p.status.counts} marketplaceSource={p.status.marketplaceSource} /> : <span className="muted small">not checked yet</span>}
+                {p.status ? <ListVerdict counts={p.status.counts} /> : <span className="muted small">not checked yet</span>}
               </button>
             </li>
           ))}
@@ -416,7 +436,7 @@ export function Projects({ onShowRuns, pollMs = POLL_MS }: { onShowRuns: (projec
 }
 
 function StatusView({ view, data, rows, stateFilter, onStateFilter }: { view: ProjectStatusView; data: ProjectStatusData; rows: ProjectArtifact[]; stateFilter: string; onStateFilter: (state: string) => void }) {
-  const verdict = verdictOf(data.counts, data.marketplaceSource);
+  const verdict = verdictOf(data.counts, data.ref);
   return (
     <>
       <section className={`verdict verdict-${verdict.level}`} aria-label="Verdict">
@@ -424,7 +444,7 @@ function StatusView({ view, data, rows, stateFilter, onStateFilter }: { view: Pr
         {verdict.level === "empty" && <span className="small">The check looks for skills in .agents/skills, .claude/skills and .opencode/skills, and for agents in .claude/agents and .opencode/agents.</span>}
       </section>
       <p className="project-meta">
-        Checked {view.createdAt ? new Date(view.createdAt).toLocaleString() : "?"} · run {view.runId} · marketplace {data.head ? data.head.slice(0, 7) : "?"} · harnesses: {data.harnesses.length ? data.harnesses.map((h) => h.id).join(", ") : "none found"}
+        Checked {view.createdAt ? new Date(view.createdAt).toLocaleString() : "?"} · run {view.runId} · compared with {data.ref ?? "marketplace"} {data.head ? data.head.slice(0, 7) : "?"}{data.fetchError ? ` (fetch failed: ${data.fetchError})` : data.fetched === false && data.ref && data.ref !== "HEAD" ? " (last fetch)" : ""} · harnesses: {data.harnesses.length ? data.harnesses.map((h) => h.id).join(", ") : "none found"}
       </p>
       {data.artifacts.length > 0 && <ArtifactTable data={data} rows={rows} stateFilter={stateFilter} onStateFilter={onStateFilter} />}
       {data.workflows.length > 0 && (
@@ -436,8 +456,8 @@ function StatusView({ view, data, rows, stateFilter, onStateFilter }: { view: Pr
   );
 }
 
-function ListVerdict({ counts, marketplaceSource }: { counts: Record<string, number> | null; marketplaceSource?: boolean }) {
-  const verdict = verdictOf(counts, marketplaceSource);
+function ListVerdict({ counts }: { counts: Record<string, number> | null }) {
+  const verdict = verdictOf(counts);
   return (
     <span className="small">
       <span className={`verdict-badge verdict-${verdict.level}`}>{verdict.badge}</span> {countsText(counts)}
@@ -448,7 +468,7 @@ function ListVerdict({ counts, marketplaceSource }: { counts: Record<string, num
 function ArtifactTable({ data, rows, stateFilter, onStateFilter }: { data: ProjectStatusData; rows: ProjectArtifact[]; stateFilter: string; onStateFilter: (state: string) => void }) {
   return (
     <>
-      <h3>Installed skills and agents</h3>
+      <h3>Skills and agents</h3>
       <div className="state-chips" role="radiogroup" aria-label="Filter by state">
         <button type="button" role="radio" aria-checked={stateFilter === ""} className={stateFilter === "" ? "active" : ""} onClick={() => onStateFilter("")}>
           all {data.artifacts.length}
