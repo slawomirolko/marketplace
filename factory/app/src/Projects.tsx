@@ -93,6 +93,16 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+async function finishNote(projectId: string, runId: string, runStatus: string): Promise<string> {
+  if (runStatus !== "done") return `Status check of ${projectId} ${runStatus} (run ${runId}).`;
+  try {
+    const view = await getJson<ProjectStatusView>(`/projects/${encodeURIComponent(projectId)}/status`);
+    return `Status check of ${projectId} finished: ${verdictOf(view.data?.counts).title}`;
+  } catch {
+    return `Status check of ${projectId} finished (run ${runId}).`;
+  }
+}
+
 /** The version text of one artifact row: installed → current, or the nearest / last version. */
 export function versionText(a: ProjectArtifact): string {
   if (a.state === "unknown-base") return `nearest ${a.nearestVersion ?? "?"}`;
@@ -106,6 +116,44 @@ export function versionText(a: ProjectArtifact): string {
 export function countsText(counts: Record<string, number> | null | undefined): string {
   if (!counts) return "";
   return STATES.filter((s) => counts[s]).map((s) => `${counts[s]} ${s}`).join(" · ");
+}
+
+const TO_CHANGE = ["outdated", "modified", "unknown-base", "missing", "removed"] as const;
+
+export interface Verdict {
+  level: "ok" | "change" | "empty";
+  title: string;
+  badge: string;
+}
+
+/** The answer of one status: in sync, how much to change, or nothing installed. */
+export function verdictOf(counts: Record<string, number> | null | undefined): Verdict {
+  const total = STATES.reduce((sum, s) => sum + (counts?.[s] ?? 0), 0);
+  if (total === 0) return { level: "empty", title: "No marketplace skill or agent is installed in this project.", badge: "nothing installed" };
+  const change = TO_CHANGE.filter((s) => counts?.[s]);
+  if (change.length === 0) return { level: "ok", title: `In sync with the marketplace: ${total} installed, nothing to change.`, badge: "in sync" };
+  const toChange = change.reduce((sum, s) => sum + (counts?.[s] ?? 0), 0);
+  return { level: "change", title: `${toChange} of ${total} to change: ${change.map((s) => `${counts?.[s]} ${s}`).join(" · ")}.`, badge: `${toChange} to change` };
+}
+
+/** What to do with one skill or agent, by its state. */
+export function actionOf(a: ProjectArtifact): string {
+  switch (a.state) {
+    case "outdated":
+      return `Update to ${a.current ?? "the marketplace version"} (olko-marketplace-skill-sync).`;
+    case "modified":
+      return a.upstreamMoved ? "Take the newer marketplace version into the local change, then send the change upstream (olko-marketplace-upstream)." : "Send the local change upstream (olko-marketplace-upstream) or reinstall the marketplace version.";
+    case "unknown-base":
+      return "Compare by hand: it matches no marketplace version.";
+    case "missing":
+      return `Install it (olko-marketplace-skill-sync)${a.requiredBy?.length ? `; needed by ${a.requiredBy.join(", ")}` : ""}.`;
+    case "removed":
+      return "The marketplace dropped it: remove it from the project or keep it as a local copy.";
+    case "local-only":
+      return "Local only: publish it to the marketplace if other projects need it (olko-marketplace-skill-sync).";
+    default:
+      return "Nothing to do.";
+  }
 }
 
 export function Projects({ onShowRuns, pollMs = POLL_MS }: { onShowRuns: (projectId: string) => void; pollMs?: number }) {
@@ -160,7 +208,7 @@ export function Projects({ onShowRuns, pollMs = POLL_MS }: { onShowRuns: (projec
   }, [selectedId, statusVersion]);
 
   useEffect(() => {
-    const entries = Object.entries(analyzing);
+    const entries = Object.entries(analyzing).filter(([, runId]) => !finishedRuns.current.has(runId));
     if (entries.length === 0) return;
     let cancelled = false;
     const timer = setTimeout(() => {
@@ -173,7 +221,7 @@ export function Projects({ onShowRuns, pollMs = POLL_MS }: { onShowRuns: (projec
             return { projectId, runId, status: "unknown" };
           }
         }),
-      ).then((results) => {
+      ).then(async (results) => {
         if (cancelled) return;
         setAnalyzeState((current) => ({ ...current, ...Object.fromEntries(results.map((r) => [r.projectId, r.status])) }));
         const finished = results.filter((r) => FINISHED.has(r.status));
@@ -182,8 +230,9 @@ export function Projects({ onShowRuns, pollMs = POLL_MS }: { onShowRuns: (projec
           return;
         }
         for (const f of finished) finishedRuns.current.add(f.runId);
+        const notes = await Promise.all(finished.map((f) => finishNote(f.projectId, f.runId, f.status)));
         setAnalyzing((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !finished.some((f) => f.projectId === id))));
-        setNote(finished.map((f) => `Analysis of ${f.projectId} ${f.status === "done" ? "finished" : f.status} (run ${f.runId}).`).join(" "));
+        setNote(notes.join(" "));
         setStatusVersion((v) => v + 1);
         void load();
       });
@@ -224,7 +273,7 @@ export function Projects({ onShowRuns, pollMs = POLL_MS }: { onShowRuns: (projec
     act({ action: "analyze", id: projectId }, (r: { runId: string; status: string; reused: boolean }) => {
       setAnalyzing((current) => ({ ...current, [projectId]: r.runId }));
       setAnalyzeState((current) => ({ ...current, [projectId]: r.status }));
-      return r.reused ? `Analysis of ${projectId} is already running (run ${r.runId}).` : `Started the analysis of ${projectId} (run ${r.runId}).`;
+      return r.reused ? `Status check of ${projectId} is already running (run ${r.runId}).` : `Started the status check of ${projectId} (run ${r.runId}).`;
     });
 
   const discover = () =>
@@ -250,7 +299,7 @@ export function Projects({ onShowRuns, pollMs = POLL_MS }: { onShowRuns: (projec
               <button type="button" className={p.id === selectedId ? "active" : ""} aria-current={p.id === selectedId} onClick={() => setSelectedId(p.id)}>
                 <strong>{p.id}</strong>
                 {!p.exists && <span className="warn"> · folder missing</span>}
-                <span className="muted small">{p.status ? countsText(p.status.counts) || p.status.summary : "no status yet"}</span>
+                {p.status ? <ListVerdict counts={p.status.counts} /> : <span className="muted small">not checked yet</span>}
               </button>
             </li>
           ))}
@@ -326,8 +375,8 @@ export function Projects({ onShowRuns, pollMs = POLL_MS }: { onShowRuns: (projec
               <code>{selected.path}</code>
               <span className="project-actions">
                 {list.statusWorkflowInstalled && list.canAnalyze && (
-                  <button type="button" disabled={busy || Boolean(selectedRun) || !selected.exists} onClick={() => void analyze(selected.id)} title={`Start the ${list.statusWorkflow} workflow for this project.`}>
-                    {selectedRun ? `Analyzing… (${analyzeState[selected.id] ?? "running"})` : status || selected.status ? "Re-analyze" : "Analyze"}
+                  <button type="button" disabled={busy || Boolean(selectedRun) || !selected.exists} onClick={() => void analyze(selected.id)} title={`Check the installed skills and agents against the marketplace (${list.statusWorkflow} workflow).`}>
+                    {selectedRun ? `Checking… (${analyzeState[selected.id] ?? "running"})` : status || selected.status ? "Re-check status" : "Check status"}
                   </button>
                 )}
                 <button type="button" onClick={() => onShowRuns(selected.id)} disabled={selected.runs === 0}>
@@ -346,7 +395,7 @@ export function Projects({ onShowRuns, pollMs = POLL_MS }: { onShowRuns: (projec
             </header>
             {!list.statusWorkflowInstalled && (
               <p className="warn">
-                The <code>{list.statusWorkflow}</code> workflow is not installed, so the project cannot be analyzed.
+                The <code>{list.statusWorkflow}</code> workflow is not installed, so the project status cannot be checked.
               </p>
             )}
             {list.statusWorkflowInstalled && !list.canAnalyze && (
@@ -354,7 +403,7 @@ export function Projects({ onShowRuns, pollMs = POLL_MS }: { onShowRuns: (projec
                 This viewer cannot start runs. Start the <code>{list.statusWorkflow}</code> workflow with <code>projectId: {selected.id}</code> (factory_start).
               </p>
             )}
-            {statusMissing && !selectedRun && <p className="muted">No finished status yet.</p>}
+            {statusMissing && !selectedRun && <p className="muted">Not checked yet. Check status compares the installed skills and agents with the marketplace.</p>}
             {status?.data && <StatusView view={status} data={status.data} rows={rows} stateFilter={stateFilter} onStateFilter={setStateFilter} />}
             {status && !status.data && <p className="warn">The status file of run {status.runId} is missing.</p>}
           </>
@@ -365,12 +414,39 @@ export function Projects({ onShowRuns, pollMs = POLL_MS }: { onShowRuns: (projec
 }
 
 function StatusView({ view, data, rows, stateFilter, onStateFilter }: { view: ProjectStatusView; data: ProjectStatusData; rows: ProjectArtifact[]; stateFilter: string; onStateFilter: (state: string) => void }) {
+  const verdict = verdictOf(data.counts);
   return (
     <>
+      <section className={`verdict verdict-${verdict.level}`} aria-label="Verdict">
+        <strong>{verdict.title}</strong>
+        {verdict.level === "empty" && <span className="small">The check looks for skills in .agents/skills, .claude/skills and .opencode/skills, and for agents in .claude/agents and .opencode/agents.</span>}
+      </section>
       <p className="project-meta">
-        Harnesses: {data.harnesses.length ? data.harnesses.map((h) => h.id).join(", ") : "none found"} · Marketplace {data.head ? data.head.slice(0, 7) : "?"} · Status run {view.runId}
-        {view.createdAt ? `, ${new Date(view.createdAt).toLocaleString()}` : ""}
+        Checked {view.createdAt ? new Date(view.createdAt).toLocaleString() : "?"} · run {view.runId} · marketplace {data.head ? data.head.slice(0, 7) : "?"} · harnesses: {data.harnesses.length ? data.harnesses.map((h) => h.id).join(", ") : "none found"}
       </p>
+      {data.artifacts.length > 0 && <ArtifactTable data={data} rows={rows} stateFilter={stateFilter} onStateFilter={onStateFilter} />}
+      {data.workflows.length > 0 && (
+        <p className="muted small">
+          Factory workflows that run an installed skill or agent: {data.workflows.join(", ")}
+        </p>
+      )}
+    </>
+  );
+}
+
+function ListVerdict({ counts }: { counts: Record<string, number> | null }) {
+  const verdict = verdictOf(counts);
+  return (
+    <span className="small">
+      <span className={`verdict-badge verdict-${verdict.level}`}>{verdict.badge}</span> {countsText(counts)}
+    </span>
+  );
+}
+
+function ArtifactTable({ data, rows, stateFilter, onStateFilter }: { data: ProjectStatusData; rows: ProjectArtifact[]; stateFilter: string; onStateFilter: (state: string) => void }) {
+  return (
+    <>
+      <h3>Installed skills and agents</h3>
       <div className="state-chips" role="radiogroup" aria-label="Filter by state">
         <button type="button" role="radio" aria-checked={stateFilter === ""} className={stateFilter === "" ? "active" : ""} onClick={() => onStateFilter("")}>
           all {data.artifacts.length}
@@ -385,10 +461,11 @@ function StatusView({ view, data, rows, stateFilter, onStateFilter }: { view: Pr
       <table className="artifacts">
         <thead>
           <tr>
-            <th>Artifact</th>
+            <th>Skill / agent</th>
             <th>Harness</th>
             <th>Version</th>
             <th>State</th>
+            <th>What to do</th>
             <th>Details</th>
             <th>Workflows</th>
           </tr>
@@ -406,6 +483,7 @@ function StatusView({ view, data, rows, stateFilter, onStateFilter }: { view: Pr
                   {a.state}
                 </span>
               </td>
+              <td className="small">{actionOf(a)}</td>
               <td className="small">
                 {a.requiredBy?.length ? `needed by ${a.requiredBy.join(", ")}` : a.files.length ? `${a.files.join(", ")}${a.upstreamMoved ? " · marketplace moved on" : ""}` : ""}
               </td>
@@ -415,11 +493,6 @@ function StatusView({ view, data, rows, stateFilter, onStateFilter }: { view: Pr
         </tbody>
       </table>
       </div>
-      {data.workflows.length > 0 && (
-        <p className="muted small">
-          Factory workflows that run an installed artifact: {data.workflows.join(", ")}
-        </p>
-      )}
     </>
   );
 }

@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw";
 import { App } from "../src/App.tsx";
-import { Projects, countsText, versionText } from "../src/Projects.tsx";
+import { Projects, actionOf, countsText, verdictOf, versionText } from "../src/Projects.tsx";
 import type { ProjectArtifact, ProjectList, ProjectStatusView } from "../src/Projects.tsx";
 import { render, screen, server, userEvent, waitFor, within } from "./testUtils/index.ts";
 
@@ -68,11 +68,20 @@ describe("Projects", () => {
 
     const table = await screen.findByRole("table");
     expect(within(table).getAllByRole("row")).toHaveLength(4);
-    expect(screen.getByText(/Harnesses: opencode · Marketplace 9f8e7d6/)).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Verdict" })).getByText("2 of 3 to change: 1 outdated · 1 missing.")).toBeInTheDocument();
+    expect(screen.getByText(/run r-0000000a · marketplace 9f8e7d6 · harnesses: opencode/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Installed skills and agents" })).toBeInTheDocument();
+    expect(within(table).getByRole("columnheader", { name: "Skill / agent" })).toBeInTheDocument();
     expect(within(table).getByText("1.0.0 → 1.2.0")).toBeInTheDocument();
     expect(within(table).getByText("needed by agent:sample-agent")).toBeInTheDocument();
-    expect(screen.getByText(/Factory workflows that run an installed artifact: sample-flow/)).toBeInTheDocument();
+    expect(within(table).getByText("Nothing to do.")).toBeInTheDocument();
+    expect(within(table).getByText("Update to 1.2.0 (olko-marketplace-skill-sync).")).toBeInTheDocument();
+    expect(within(table).getByText("Install it (olko-marketplace-skill-sync); needed by agent:sample-agent.")).toBeInTheDocument();
+    expect(screen.getByText(/Factory workflows that run an installed skill or agent: sample-flow/)).toBeInTheDocument();
     expect(screen.getByText("folder missing", { exact: false })).toBeInTheDocument();
+    const projectList = screen.getByRole("region", { name: "Projects" });
+    expect(within(projectList).getByText("2 to change")).toBeInTheDocument();
+    expect(within(projectList).getByText("not checked yet")).toBeInTheDocument();
 
     await user.click(screen.getByRole("radio", { name: "1 missing" }));
     expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(2);
@@ -80,27 +89,28 @@ describe("Projects", () => {
     expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(4);
   });
 
-  test("a project without a finished status run offers Analyze, disabled while its folder is missing", async () => {
+  test("a project without a finished status run offers Check status, disabled while its folder is missing", async () => {
     serve();
     const user = userEvent.setup();
     render(<Projects onShowRuns={() => {}} />);
     await screen.findByRole("table");
-    expect(screen.getByRole("button", { name: "Re-analyze" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Re-check status" })).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: /sample-web/ }));
 
-    expect(await screen.findByText("No finished status yet.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Analyze" })).toBeDisabled();
+    expect(await screen.findByText("Not checked yet. Check status compares the installed skills and agents with the marketplace.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check status" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Runs (0)" })).toBeDisabled();
   });
 
-  test("Analyze starts the status workflow, shows its progress and reloads the status when the run finishes", async () => {
+  test("Check status starts the status workflow, shows its progress and reloads the status when the run finishes", async () => {
     const posted = serve();
     let statusCalls = 0;
     let runCalls = 0;
     server.use(
-      http.get("/api/projects/:id/status", () => {
+      http.get("/api/projects/:id/status", async () => {
         statusCalls += 1;
+        await new Promise((resolve) => setTimeout(resolve, 50));
         return HttpResponse.json(status);
       }),
       http.get("/api/runs/:runId", ({ params }) => {
@@ -113,55 +123,55 @@ describe("Projects", () => {
     await screen.findByRole("table");
     expect(statusCalls).toBe(1);
 
-    await user.click(screen.getByRole("button", { name: "Re-analyze" }));
+    await user.click(screen.getByRole("button", { name: "Re-check status" }));
 
-    expect(await screen.findByText("Started the analysis of sample-app (run r-0000000s).")).toBeInTheDocument();
+    expect(await screen.findByText("Started the status check of sample-app (run r-0000000s).")).toBeInTheDocument();
     expect(posted).toEqual([{ action: "analyze", id: "sample-app" }]);
-    expect(screen.getByRole("button", { name: /^Analyzing…/ })).toBeDisabled();
-    expect(await screen.findByText("Analysis of sample-app finished (run r-0000000s).")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Re-analyze" })).toBeEnabled();
-    await waitFor(() => expect(statusCalls).toBe(2));
+    expect(screen.getByRole("button", { name: /^Checking…/ })).toBeDisabled();
+    expect(await screen.findByText("Status check of sample-app finished: 2 of 3 to change: 1 outdated · 1 missing.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Re-check status" })).toBeEnabled();
+    await waitFor(() => expect(statusCalls).toBe(3));
     expect(runCalls).toBe(2);
   });
 
-  test("a status run already in progress keeps Analyze disabled, and a failed run is reported", async () => {
+  test("a status run already in progress keeps Check status disabled, and a failed run is reported", async () => {
     serve([], { "sample-busy": null }, { ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: "r-0000000t", status: null }] });
     server.use(http.get("/api/runs/:runId", () => HttpResponse.json({ error: "gone" }, { status: 404 })));
     render(<Projects onShowRuns={() => {}} pollMs={10} />);
-    expect(await screen.findByRole("button", { name: /^Analyzing…/ })).toBeDisabled();
-    expect(screen.queryByText("No finished status yet.")).not.toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Analyzing… (unknown)" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: /^Checking…/ })).toBeDisabled();
+    expect(screen.queryByText("Not checked yet. Check status compares the installed skills and agents with the marketplace.")).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Checking… (unknown)" })).toBeDisabled();
     server.use(http.get("/api/runs/:runId", () => HttpResponse.json({ run: { status: "failed" } })));
-    expect(await screen.findByText("Analysis of sample-busy failed (run r-0000000t).")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Analyze" })).toBeEnabled();
+    expect(await screen.findByText("Status check of sample-busy failed (run r-0000000t).")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check status" })).toBeEnabled();
   });
 
-  test("an already running analysis is reused, and an analyze error is shown", async () => {
+  test("an already running status check is reused, and a start error is shown", async () => {
     const projects = { ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: null, status: null }, { id: "sample-bad", path: "/x", exists: true, runs: 0, analyzing: null, status: null }] };
     serve([], { "sample-busy": null, "sample-bad": null }, projects);
     server.use(http.get("/api/runs/:runId", () => HttpResponse.json({ run: { status: "running" } })));
     const user = userEvent.setup();
     render(<Projects onShowRuns={() => {}} pollMs={10} />);
-    await user.click(await screen.findByRole("button", { name: "Analyze" }));
-    expect(await screen.findByText("Analysis of sample-busy is already running (run r-0000000s).")).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Check status" }));
+    expect(await screen.findByText("Status check of sample-busy is already running (run r-0000000s).")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /sample-bad/ }));
-    await user.click(await screen.findByRole("button", { name: "Analyze" }));
+    await user.click(await screen.findByRole("button", { name: "Check status" }));
     expect(await screen.findByText("project sample-bad: folder /x does not exist")).toBeInTheDocument();
   });
 
-  test("without the status workflow or a run-capable viewer, Analyze is replaced by a note", async () => {
+  test("without the status workflow or a run-capable viewer, Check status is replaced by a note", async () => {
     serve([], undefined, { ...list, statusWorkflowInstalled: false });
     const { unmount } = render(<Projects onShowRuns={() => {}} />);
-    expect(await screen.findByText(/workflow is not installed, so the project cannot be analyzed/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /analyze/i })).not.toBeInTheDocument();
+    expect(await screen.findByText(/workflow is not installed, so the project status cannot be checked/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /check status/i })).not.toBeInTheDocument();
     unmount();
 
     serve([], undefined, { ...list, canAnalyze: false });
     render(<Projects onShowRuns={() => {}} />);
     expect(await screen.findByText(/This viewer cannot start runs/)).toBeInTheDocument();
     expect(screen.getByText("projectId: sample-app")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /analyze/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /check status/i })).not.toBeInTheDocument();
   });
 
   test("adds a project, discovers candidates and adds one, manages roots, and shows errors", async () => {
@@ -218,6 +228,54 @@ describe("Projects", () => {
     expect(await screen.findByText(/No project yet/)).toBeInTheDocument();
     expect(screen.getByText("Select a project.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Discover" })).toBeDisabled();
+  });
+
+  test("a project with nothing installed says so instead of showing an empty table", async () => {
+    const empty: ProjectStatusView = { ...status, data: { head: "9f8e7d6c5b", harnesses: [{ id: "agents-md", markers: ["AGENTS.md"] }], artifacts: [], counts: { current: 0, outdated: 0 }, workflows: [], summary: "no marketplace artifacts installed" } };
+    const projects = { ...list, projects: [{ id: "sample-app", path: "/src/sample-app", exists: true, runs: 1, analyzing: null, status: { runId: "r-0000000a", createdAt: null, summary: "no marketplace artifacts installed", counts: { current: 0 } } }] };
+    serve([], { "sample-app": empty }, projects);
+    render(<Projects onShowRuns={() => {}} />);
+    const verdict = await screen.findByRole("region", { name: "Verdict" });
+    expect(verdict).toHaveClass("verdict-empty");
+    expect(within(verdict).getByText("No marketplace skill or agent is installed in this project.")).toBeInTheDocument();
+    expect(within(verdict).getByText(/looks for skills in \.agents\/skills, \.claude\/skills/)).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "Filter by state" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Projects" })).getByText("nothing installed")).toBeInTheDocument();
+  });
+
+  test("a project in sync gets a green verdict", async () => {
+    const synced: ProjectStatusView = { ...status, data: { ...status.data!, artifacts: [artifact({}), artifact({ id: "skill:sample-local", name: "sample-local", state: "local-only" })], counts: { current: 1, "local-only": 1 }, workflows: [] } };
+    serve([], { "sample-app": synced });
+    render(<Projects onShowRuns={() => {}} />);
+    const verdict = await screen.findByRole("region", { name: "Verdict" });
+    expect(verdict).toHaveClass("verdict-ok");
+    expect(within(verdict).getByText("In sync with the marketplace: 2 installed, nothing to change.")).toBeInTheDocument();
+    expect(screen.queryByText(/Factory workflows that run/)).not.toBeInTheDocument();
+  });
+
+  test("verdicts and actions by state", () => {
+    expect(verdictOf(null)).toEqual({ level: "empty", title: "No marketplace skill or agent is installed in this project.", badge: "nothing installed" });
+    expect(verdictOf({ current: 2, adapted: 1 })).toMatchObject({ level: "ok", badge: "in sync" });
+    expect(verdictOf({ current: 1, modified: 2, removed: 1 })).toEqual({ level: "change", title: "3 of 4 to change: 2 modified · 1 removed.", badge: "3 to change" });
+    expect(actionOf(artifact({ state: "adapted" }))).toBe("Nothing to do.");
+    expect(actionOf(artifact({ state: "outdated", current: null }))).toBe("Update to the marketplace version (olko-marketplace-skill-sync).");
+    expect(actionOf(artifact({ state: "modified" }))).toBe("Send the local change upstream (olko-marketplace-upstream) or reinstall the marketplace version.");
+    expect(actionOf(artifact({ state: "modified", upstreamMoved: true }))).toMatch(/^Take the newer marketplace version into the local change/);
+    expect(actionOf(artifact({ state: "unknown-base" }))).toBe("Compare by hand: it matches no marketplace version.");
+    expect(actionOf(artifact({ state: "missing" }))).toBe("Install it (olko-marketplace-skill-sync).");
+    expect(actionOf(artifact({ state: "removed" }))).toMatch(/^The marketplace dropped it/);
+    expect(actionOf(artifact({ state: "local-only" }))).toMatch(/^Local only: publish it/);
+  });
+
+  test("a finished check whose status cannot be read still reports the run", async () => {
+    serve([], { "sample-app": null }, { ...list, projects: [{ id: "sample-app", path: "/src/sample-app", exists: true, runs: 1, analyzing: "r-0000000u", status: null }] });
+    server.use(
+      http.get("/api/runs/:runId", () => HttpResponse.json({ run: { status: "done" } })),
+      http.get("/api/projects/:id/status", () => HttpResponse.json({ error: "broken" }, { status: 500 })),
+    );
+    render(<Projects onShowRuns={() => {}} pollMs={10} />);
+    expect(await screen.findByText("Status check of sample-app finished (run r-0000000u).")).toBeInTheDocument();
   });
 
   test("a missing status file is reported", async () => {

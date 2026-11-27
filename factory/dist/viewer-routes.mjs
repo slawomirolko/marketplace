@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import crypto, { randomBytes } from "node:crypto";
 import os from "node:os";
+import { parseEnv } from "node:util";
 import { DatabaseSync } from "node:sqlite";
 // \0rolldown/runtime.js
 var __create = Object.create;
@@ -15430,6 +15431,14 @@ function defaultDataDir() {
 function homeDataDir() {
 	return process.env.FACTORY_HOME_DIR ?? path.join(os.homedir(), ".skill-factory");
 }
+/** Device settings: KEY=value lines in the factory home's .env, never in a repository. Variables already set in the environment win. Returns the names it set. */
+function loadHomeEnv(file = path.join(homeDataDir(), ".env")) {
+	if (!fs.existsSync(file)) return [];
+	const values = parseEnv(fs.readFileSync(file, "utf8"));
+	const loaded = Object.keys(values).filter((name) => process.env[name] === void 0);
+	for (const name of loaded) process.env[name] = values[name];
+	return loaded;
+}
 function sourcesFile() {
 	return path.join(homeDataDir(), "sources.json");
 }
@@ -15477,6 +15486,18 @@ function projectsOf(raw) {
 		...raw?.projects ?? {}
 	};
 }
+/** FACTORY_STATUS_CLI names the CLI backend of the status workflow on this device; it replaces projects.statusBackend. */
+function withStatusCli(projects, cli = process.env.FACTORY_STATUS_CLI) {
+	if (!cli) return projects;
+	if (cli !== "claude" && cli !== "opencode") throw new Error("FACTORY_STATUS_CLI must be claude or opencode");
+	return {
+		...projects,
+		statusBackend: {
+			kind: "cli",
+			cli
+		}
+	};
+}
 /** The marketplace skill that gives an agent persistent memory, from a parsed config file. */
 function memoryLayerOf(raw) {
 	return raw?.memoryLayer ?? "olko-memory-layer";
@@ -15497,7 +15518,7 @@ function loadFactoryConfig(file = configFile()) {
 		},
 		switches: raw.switches ?? {},
 		memoryLayer: memoryLayerOf(raw),
-		projects: projectsOf(raw),
+		projects: withStatusCli(projectsOf(raw)),
 		watches: (raw.watches ?? []).map((watch) => ({
 			...watch,
 			stableChecks: watch.stableChecks ?? 2,
@@ -18171,13 +18192,20 @@ var PROJECT_ACTIONS = /* @__PURE__ */ new Set([
 	"remove",
 	"add_root",
 	"remove_root",
-	"discover"
+	"discover",
+	"analyze"
 ]);
-/** A project registry action from the viewer: only the known fields, only strings. */
+var IN_PROGRESS = /* @__PURE__ */ new Set([
+	"needs_confirmation",
+	"running",
+	"waiting_for_user",
+	"waiting_for_client"
+]);
+/** A project action from the viewer: only the known fields, only strings. */
 function parseProjectsAction(body) {
 	if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("the request body must be a JSON object");
 	const b = body;
-	if (typeof b.action !== "string" || !PROJECT_ACTIONS.has(b.action)) throw new Error("action must be add, remove, add_root, remove_root or discover");
+	if (typeof b.action !== "string" || !PROJECT_ACTIONS.has(b.action)) throw new Error("action must be add, remove, add_root, remove_root, discover or analyze");
 	const text = (name) => {
 		const value = b[name];
 		if (value === void 0 || value === "") return void 0;
@@ -18378,6 +18406,8 @@ function createDataApi({ factoryDir, dataDir, configFile, demo, factory }) {
 			return {
 				roots: registry.roots,
 				statusWorkflow,
+				statusWorkflowInstalled: loadedWorkflows().has(statusWorkflow),
+				canAnalyze: Boolean(factory),
 				projects: registry.projects.map((p) => {
 					const own = runs.filter((r) => r.run.input?.projectId === p.id);
 					const latest = latestStatus(own, statusWorkflow);
@@ -18386,6 +18416,7 @@ function createDataApi({ factoryDir, dataDir, configFile, demo, factory }) {
 						...p,
 						exists: fs.existsSync(p.path),
 						runs: own.length,
+						analyzing: activeStatus(own, statusWorkflow)?.runId ?? null,
 						status: latest ? {
 							runId: latest.run.runId,
 							createdAt: latest.createdAt,
@@ -18407,9 +18438,37 @@ function createDataApi({ factoryDir, dataDir, configFile, demo, factory }) {
 			};
 		},
 		projectsAction(request) {
-			return projectsAction(request);
+			if (request.action === "analyze") return analyze(request.id ?? "");
+			return projectsAction({
+				...request,
+				action: request.action
+			});
 		}
 	};
+	function analyze(id) {
+		if (!factory) throw new Error("this viewer cannot start runs; open the viewer of the factory server");
+		const statusWorkflow = projectsOf(readConfig()).statusWorkflow;
+		if (!loadedWorkflows().has(statusWorkflow)) throw new Error(`workflow ${statusWorkflow} is not installed`);
+		const input = projectScopedInput(id, {});
+		const active = activeStatus(projectRuns().filter((r) => r.run.input?.projectId === id), statusWorkflow);
+		if (active) return {
+			runId: active.runId,
+			status: active.status,
+			reused: true
+		};
+		const { statusBackend } = loadFactoryConfig().projects;
+		if (!statusBackend && factory.defaultConfig.backend.kind === "delegate") throw new Error("the status workflow needs a CLI backend: set projects.statusBackend in the factory config");
+		const { run } = factory.start(`Status of project ${id}`, void 0, {
+			workflow: statusWorkflow,
+			input
+		});
+		const started = factory.confirm(run.runId, statusBackend ? { backend: statusBackend } : {});
+		return {
+			runId: started.runId,
+			status: started.status,
+			reused: false
+		};
+	}
 	function projectRuns() {
 		return allRunFiles().flatMap(({ file }) => {
 			try {
@@ -18423,6 +18482,9 @@ function createDataApi({ factoryDir, dataDir, configFile, demo, factory }) {
 			}
 		});
 	}
+}
+function activeStatus(runs, workflow) {
+	return runs.find((r) => r.run.workflow === workflow && IN_PROGRESS.has(r.run.status))?.run ?? null;
 }
 function latestStatus(runs, workflow) {
 	return runs.filter((r) => r.run.workflow === workflow && r.run.status === "done").sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0] ?? null;
@@ -18544,7 +18606,11 @@ function staticFile(viewerDir, relativePath) {
 	if (!fs.existsSync(full) || !fs.statSync(full).isFile()) return null;
 	return full;
 }
-var POST_PATHS = [/^\/viewer\/api\/update$/, /^\/viewer\/api\/runs\/[^/]+\/answer$/];
+var POST_PATHS = [
+	/^\/viewer\/api\/update$/,
+	/^\/viewer\/api\/projects$/,
+	/^\/viewer\/api\/runs\/[^/]+\/answer$/
+];
 function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHosts, factory }) {
 	const api = apiMiddleware(createDataApi({
 		factoryDir,
@@ -18596,4 +18662,4 @@ function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHost
 		return true;
 	};
 }
-export { __toESM as C, mustache as S, defaultDataDir as _, projectsAction as a, require_dist as b, Factory as c, parseCli as d, marketplaceDir as f, VIEWER_HEALTH as g, FACTORY_DIR$1 as h, projectScopedInput as i, errorMessage as l, DEFAULT_VIEWER_PORT as m, viewerHandler as n, cliExecutor as o, loadFactoryConfig as p, viewerUrlFor as r, hostExec as s, allowedHostsFor as t, parseBackend as u, registerDataSource as v, require_ajv as x, viewerOptions as y };
+export { mustache as C, require_ajv as S, defaultDataDir as _, projectsAction as a, viewerOptions as b, Factory as c, parseCli as d, marketplaceDir as f, VIEWER_HEALTH as g, FACTORY_DIR$1 as h, projectScopedInput as i, errorMessage as l, DEFAULT_VIEWER_PORT as m, viewerHandler as n, cliExecutor as o, loadFactoryConfig as p, viewerUrlFor as r, hostExec as s, allowedHostsFor as t, parseBackend as u, loadHomeEnv as v, __toESM as w, require_dist as x, registerDataSource as y };
