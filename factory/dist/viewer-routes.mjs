@@ -7398,6 +7398,44 @@ var execCommand = async ({ args, state, input, answers, exec, cwd }) => {
 		output: stdout.split(/\r?\n/)[0]?.slice(0, 200) ?? ""
 	};
 };
+/** Adds the values of the `from` state list to this node's list once each; a value already kept is never removed, even when a later `from` list leaves it out. */
+var listMerge = async ({ state, args, nodeId }) => {
+	if (typeof args.from !== "string") throw new Error("with.from must be a state path");
+	const incoming = readState(state, args.from);
+	const previous = (nodeId ? state[nodeId]?.items : void 0) ?? [];
+	const items = [...previous];
+	for (const value of Array.isArray(incoming) ? incoming : []) if (!items.includes(value)) items.push(value);
+	const added = items.length - previous.length;
+	return {
+		state: {
+			items,
+			count: items.length,
+			added
+		},
+		metrics: {
+			count: items.length,
+			added
+		},
+		output: `${added} added, ${items.length} kept.`
+	};
+};
+/** Counts consecutive visits on which `when` holds; a visit where it does not hold resets the count, and the visit after the count reached `limit` starts again from zero. */
+var streak = async ({ state, args, nodeId }) => {
+	if (typeof args.when !== "string") throw new Error("with.when must be a condition");
+	if (typeof args.limit !== "number" || args.limit < 1) throw new Error("with.limit must be a positive number");
+	const previous = nodeId ? state[nodeId] : void 0;
+	const base = previous?.reached ? 0 : previous?.count ?? 0;
+	const count = evaluateWhen(args.when, state) ? base + 1 : 0;
+	const reached = count >= args.limit;
+	return {
+		state: {
+			count,
+			reached
+		},
+		metrics: { count },
+		output: reached ? `Streak ${count} reached the limit ${args.limit}.` : `Streak ${count}.`
+	};
+};
 var OPERATIONS = {
 	"builtin.exec": execCommand,
 	"builtin.pass": pass,
@@ -7448,7 +7486,9 @@ var OPERATIONS = {
 	"list.next": listNext,
 	"list.append": listAppend,
 	"list.count": listCount,
-	"list.pick": listPick
+	"list.pick": listPick,
+	"list.merge": listMerge,
+	"builtin.streak": streak
 };
 function operationNamed(name) {
 	return OPERATIONS[name];
@@ -16381,7 +16421,11 @@ var Factory = class {
 		run.steps += 1;
 		this.appendLedger(run, delegateEntry(work, output, usage));
 		const node = nodeAt(run);
-		this.storeParsed(run, node, work.agentId, output);
+		try {
+			this.storeParsed(run, node, work.agentId, output);
+		} catch (error) {
+			return this.rejectOutput(run, node, work, error);
+		}
 		this.event(run, "agent_completed", {
 			node: node.path,
 			agentId: work.agentId,
@@ -16400,6 +16444,36 @@ var Factory = class {
 		}
 		this.checkpoint(run);
 		this.schedule(run);
+		return {
+			run,
+			duplicate: false
+		};
+	}
+	/** Offers the work once more with the parse error in its prompt; a second unparsable reply fails the run. */
+	rejectOutput(run, node, work, error) {
+		const reason = errorMessage(error);
+		if (work.retried) {
+			run.status = "failed";
+			this.event(run, "node_failed", {
+				node: node.path,
+				agentId: work.agentId,
+				error: reason
+			});
+			this.checkpoint(run);
+			throw error;
+		}
+		work.retried = true;
+		work.prompt = `${work.prompt}
+
+Your previous reply was rejected: ${reason}. Reply again in full and follow the required output format exactly.`;
+		this.event(run, "work_offered", {
+			node: node.path,
+			agentId: work.agentId,
+			tier: work.tier,
+			retry: true,
+			reason
+		});
+		this.checkpoint(run);
 		return {
 			run,
 			duplicate: false

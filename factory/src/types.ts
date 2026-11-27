@@ -55,6 +55,7 @@ export interface PendingWork {
   tools: AgentTool[];
   dirs: string[];
   cwd?: string;
+  retried?: boolean;
 }
 
 export interface Agent {

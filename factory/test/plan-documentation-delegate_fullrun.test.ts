@@ -13,6 +13,7 @@ import { runSubagent, type SubagentResult } from "./delegate-subagent.ts";
 
 const factoryDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const MARKETPLACE = process.env.FACTORY_SYNC_MARKETPLACE ?? "slawomirolko/marketplace";
+const BRANCH = process.env.FACTORY_PLAN_BRANCH ?? "feat/skill-factory-poc";
 const IDEA = process.env.FACTORY_PLAN_IDEA ?? "Add approval gates to the skill factory: a script node can declare approval: required, and the engine asks the user before it runs the operation and records the answer in the run (item E7 of factory/docs/yaml-migration-plan.md).";
 const FEATURE = process.env.FACTORY_PLAN_FEATURE_ID ?? "e7-approval-gates";
 const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
@@ -54,7 +55,8 @@ function answerOf(question: Payload): string {
 test("a harness drives the YAML plan documentation over stdio in delegate mode with the tracker switched off and every plan file reviewed", async () => {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-doc-ts-")));
   const project = path.join(root, "project");
-  execFileSync("gh", ["repo", "clone", MARKETPLACE, project, "--", "--depth", "1"]);
+  execFileSync("gh", ["repo", "clone", MARKETPLACE, project, "--", "--depth", "1", "--branch", BRANCH]);
+  assert.ok(fs.existsSync(path.join(project, "factory", "docs", "yaml-migration-plan.md")), `the idea cites factory/docs/yaml-migration-plan.md, which branch ${BRANCH} must hold`);
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-delegate-"));
   const env = { ...process.env, FACTORY_DATA_DIR: dataDir, FACTORY_VIEWER_PORT: String(await freePort()) } as Record<string, string>;
   const client = new Client({ name: "claude-code", version: "0.0.0" });

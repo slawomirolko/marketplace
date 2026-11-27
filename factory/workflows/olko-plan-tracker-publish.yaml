@@ -1,5 +1,5 @@
 name: olko-plan-tracker-publish
-version: 0.3.0
+version: 0.3.1
 description: "Publishes the approved draft to the tracker after an explicit publish approval; changes to existing tracker issues need their own separate approval first; every issue is read back. A grill-with-docs blocker stops the run without asking the user."
 source: "skills/workflow/olko-plan-backlog-discovery/SKILL.md (approval-gated publish to the tracker and read-back); agents/opencode/olko-plan-documentation-orchestrator.md (DISCOVERY: approval-gated tracker publish, separate approval for existing-issue edits)"
 roles:
@@ -16,7 +16,7 @@ nodes:
     dirs: ["{{input.project}}"]
     parse: text
     prompt: |
-      Compose the approval question for publishing the approved Epic/Feature/Task draft to the tracker now (idea: {{input.idea}}; locked answers: {{#state.draft.draft.decisions}}{{.}}; {{/state.draft.draft.decisions}}), with the choices publish and skip. Draft:
+      Compose the approval question for publishing the approved Epic/Feature/Task draft to the tracker now (idea: {{input.idea}}; locked answers: {{#state.locked.items}}{{.}}; {{/state.locked.items}}), with the choices publish and skip. Draft:
       {{state.draft.draft.hierarchy}}
       Return the question text only; the workflow puts it to the user. Publish nothing and change no file.
       Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely.
@@ -43,7 +43,7 @@ nodes:
     dirs: ["{{input.project}}"]
     parse: text
     prompt: |
-      Compose the separate approval question for changes to EXISTING tracker issues in this approved draft (idea: {{input.idea}}; locked answers: {{#state.draft.draft.decisions}}{{.}}; {{/state.draft.draft.decisions}}): name each existing issue the draft would change and its exact field changes, with the choices approve-existing (approve those changes) and new-only (create new issues only and change no existing issue). Draft:
+      Compose the separate approval question for changes to EXISTING tracker issues in this approved draft (idea: {{input.idea}}; locked answers: {{#state.locked.items}}{{.}}; {{/state.locked.items}}): name each existing issue the draft would change and its exact field changes, with the choices approve-existing (approve those changes) and new-only (create new issues only and change no existing issue). Draft:
       {{state.draft.draft.hierarchy}}
       Return the question text only; the workflow puts it to the user. Publish nothing and change no file.
       Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely.
