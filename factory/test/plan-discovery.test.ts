@@ -209,6 +209,39 @@ test("a publish grill that cannot load its skill stops the run before anything i
   }
 });
 
+function emptyDraft(part: "feature" | "tasks"): string {
+  const body = JSON.parse(draft([], ["L1: only script ops are gated"]).split("\n")[2]!);
+  if (part === "feature") body.feature = { title: "", goal: "", criteria: [] };
+  else body.tasks = [];
+  return `Draft.\n${FENCE}json\n${JSON.stringify(body)}\n${FENCE}`;
+}
+
+test("a final draft without a Feature title or without a Task goes back to the writer before the review", async () => {
+  for (const part of ["feature", "tasks"] as const) {
+    const { done, prompts } = await drive((step, visit) => {
+      if (step === "draft") return visit === 1 ? emptyDraft(part) : draft([], ["L1: only script ops are gated"]);
+      if (step === "draft-consistency") return "consistency | pass | 0 | none";
+      return undefined;
+    });
+    assert.equal(done.status, "done", `${part}: ${JSON.stringify(done.events.at(-1))}`);
+    assert.equal(prompts["draft"]!.length, 2, `${part}: the writer returns the full draft once more`);
+    assert.match(prompts["draft"]![1]!, /Your last draft listed no open question and (no Task|the Feature had no title)\. [\s\S]*Return the full draft again\./, part);
+    assert.doesNotMatch(prompts["draft"]![0]!, /Your last draft/, "the first draft has no such note");
+    assert.equal(prompts["review-grill"]!.length, 1, `${part}: only the full draft is reviewed`);
+  }
+});
+
+test("a second final draft in a row without a Task stops discovery before the review", async () => {
+  const { done, prompts } = await drive((step) => {
+    if (step === "draft") return emptyDraft("tasks");
+    if (step === "draft-consistency") return "consistency | pass | 0 | none";
+    return undefined;
+  });
+  assert.ok(stoppedBy(done, /final draft without a Feature title or without a Task twice in a row/), JSON.stringify(done.events.at(-1)));
+  assert.equal(prompts["draft"]!.length, 2);
+  assert.equal(prompts["review-grill"], undefined);
+});
+
 test("the scenarios above take every edge of the discovery workflow", () => {
   assert.deepEqual(missingEdges("olko-plan-discovery", RUNS), []);
 });

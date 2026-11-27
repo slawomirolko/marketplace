@@ -1,5 +1,5 @@
 name: olko-plan-discovery
-version: 0.8.0
+version: 0.9.0
 description: "Discovery: the backlog writer drafts the Epic/Feature/Task hierarchy, the writer checks it against the locked answers (a contradiction, a repeated answered question or a decision not yet rewritten into every deliverable it touches returns it for a corrected draft, so no question is asked while a decision is open; two failures in a row put the findings to the user instead), every locked decision is kept even when a later draft leaves it out, grill-with-docs presents the open questions as one batch per round and the one draft review and the revise question; the approved draft is published to the tracker when the tracker switch is on."
 source: "agents/opencode/olko-plan-documentation-orchestrator.md (DISCOVERY: backlog writer draft with question batches, one draft review, approval-gated tracker publish); skills/workflow/olko-plan-backlog-discovery/SKILL.md (question ownership gate, reconciliation after each answer batch, decision closure, approval-gated publish)"
 roles:
@@ -40,6 +40,11 @@ nodes:
       The last consistency check of your draft (its full reply):
       {{state.draft-consistency.draft-consistency.text}}
       {{/state.draft-consistency.draft-consistency.text}}
+      {{#state.draft.draft}}{{^questions}}{{^tasks}}
+      Your last draft listed no open question and no Task. A draft with no open question is the final draft: it must have the Feature with its title, goal and criteria, and every Task with its criteria. Return the full draft again.
+      {{/tasks}}{{^feature.title}}
+      Your last draft listed no open question and the Feature had no title. A draft with no open question is the final draft: it must have the Feature with its title, goal and criteria, and every Task with its criteria. Return the full draft again.
+      {{/feature.title}}{{/questions}}{{/state.draft.draft}}
 
       Reconcile before returning: add each new answer to the locked decisions once; drop every question already answered; if the draft contradicts a locked decision, correct the draft to match it. Never turn a contradiction into a new choice for the user.
       Decision closure: an answer is not a preference. For every new answer, list every deliverable it touches (on this path the issue text of the draft; an implementation plan file, the tracker, an E2E manifest or code only when it already exists), rewrite all of them in this same draft, then re-read each one against the answer. Change no file and nothing in the tracker here: name such a deliverable in the draft as a pending change instead.
@@ -101,12 +106,17 @@ nodes:
     kind: script
     op: builtin.streak
     maxVisits: 20
-    with: { when: 'draft-consistency.draft-consistency.verdict == "fail"', limit: 2 }
+    with: { when: 'draft-consistency.draft-consistency.verdict == "fail" || draft.draft.questions == 0 && draft.draft.tasks == 0 || draft.draft.questions == 0 && draft.draft.feature.title == ""', limit: 2 }
   - id: blocked
     description: "Stops the discovery run when grill-with-docs cannot be loaded: the tooling blocker is reported and nothing is asked of the user."
     kind: script
     op: builtin.stop
     with: { reason: "grill-with-docs cannot be loaded: discovery stopped without asking the user." }
+  - id: empty-draft
+    description: "Stops discovery when the writer returns a final draft without a Feature title or without a Task twice in a row: planning cannot start from it."
+    kind: script
+    op: builtin.stop
+    with: { reason: "the backlog writer returned a final draft without a Feature title or without a Task twice in a row: discovery stopped." }
   - id: questions-grill
     description: "grill-with-docs presents the reconciled batch of open draft questions in the user's response language; it asks nothing itself."
     kind: llm
@@ -242,8 +252,9 @@ edges:
   - { from: locked, to: draft-round, description: "the locked decisions are kept: count the round" }
   - { from: draft-round, to: draft-consistency, description: "the round is counted: check the draft against the locked answers" }
   - { from: draft-consistency, to: repair-streak, description: "count the consistency failures in a row" }
+  - { from: repair-streak, to: empty-draft, when: 'repair-streak.reached == true && draft.draft.questions == 0 && draft.draft.tasks == 0 || repair-streak.reached == true && draft.draft.questions == 0 && draft.draft.feature.title == ""', description: "the second final draft in a row has no Feature title or no Task: stop" }
   - { from: repair-streak, to: questions-grill, when: 'repair-streak.reached == true || draft-consistency.draft-consistency.verdict != "fail" && draft.draft.questions != 0', description: "the check failed twice in a row (grill-with-docs puts the findings to the user), or it passed and the writer still has open questions (grill-with-docs presents the batch)" }
-  - { from: repair-streak, to: draft, when: 'draft-consistency.draft-consistency.verdict == "fail"', description: "the draft contradicts a locked decision, still lists an answered question or leaves a decision partly applied: the writer returns a corrected draft" }
+  - { from: repair-streak, to: draft, when: 'draft-consistency.draft-consistency.verdict == "fail" || draft.draft.questions == 0 && draft.draft.tasks == 0 || draft.draft.questions == 0 && draft.draft.feature.title == ""', description: "the draft contradicts a locked decision, still lists an answered question or leaves a decision partly applied, or the final draft (no open question) has no Feature title or no Task: the writer returns a corrected draft" }
   - { from: repair-streak, to: review-grill, description: "consistent and no open question left: grill-with-docs presents the draft review" }
   - { from: questions-grill, to: blocked, when: 'questions-grill.questions-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded: stop" }
   - { from: questions-grill, to: ask-questions, description: "grill-with-docs composed the batch: put it to the user" }
