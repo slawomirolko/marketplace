@@ -217,4 +217,8 @@ Findings:
 
 - `pnpm test`: offline tests with scripted agent replies. No model call.
 - `pnpm test:contract`: node contract tests. Each test drives a workflow with scripted replies up to one node, runs that node once on the real model (`FACTORY_TEST_MODEL`, default Haiku) with a fixture from `test/fixtures/`, and checks the reply against the parser and the rules of the node. A few minutes, a few cents.
-- `pnpm test:integration`: full runs on the real model. Slow and paid.
+- `pnpm test:smoke`: one end-to-end run of the plan documentation on a one-Task idea in a throwaway project, on the real model. It fails when the run is not `done` within `FACTORY_SMOKE_LIMIT_MIN` (default 40) and `FACTORY_SMOKE_BUDGET_USD` (default 2). About 35 minutes, about one dollar on Haiku.
+- `pnpm test:integration`: every `_integration` test, contract and smoke included: real-model runs of each workflow. Slow and paid.
+- `pnpm test:full`: the full plan documentation run on the marketplace repository (`*_fullrun.test.ts`). Several hours. Not part of `test:integration`; run it only to measure the whole workflow.
+
+Use `pnpm test` on every change, `pnpm test:contract` after a prompt change, `pnpm test:smoke` before a merge that changes a workflow, and `pnpm test:full` only for a measurement.
