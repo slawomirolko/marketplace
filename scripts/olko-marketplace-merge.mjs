@@ -28,6 +28,7 @@ import {
   git,
   installedArtifacts,
   marketplaceVersions,
+  normalizeText,
 } from "../skills/software-factory/olko-factory-project/scripts/installed-artifacts.mjs";
 import { projectStatus } from "../skills/software-factory/olko-factory-project/scripts/project-scan.mjs";
 import { readLock } from "./olko-marketplace-lock.mjs";
@@ -115,17 +116,32 @@ function mergeFile(tempDir, local, base, upstream) {
   return merged.conflict ? { result: "conflict", conflictKind: "both-edited", text: merged.text } : { result: "clean", text: merged.text };
 }
 
-/** The text with the project's `model:` line put back at the end of its front matter. */
-function withModelLine(text, model) {
+/** The index of the `model:` line among the front matter lines of a copy's file, or -1 without one. */
+function modelLineIndex(copyPath) {
+  const text = normalizeText(fs.readFileSync(copyPath, "utf8"));
+  if (!text.startsWith(FRONT_MATTER_FENCE)) {
+    return -1;
+  }
+  const end = text.indexOf("\n---", FRONT_MATTER_FENCE.length);
+  return text.slice(FRONT_MATTER_FENCE.length, end < 0 ? 0 : end).split("\n").findIndex((line) => /^model:/.test(line));
+}
+
+/** The text with the project's `model:` line put back at its line index in the front matter (the end when the front matter is shorter). */
+function withModelLine(text, model, index) {
   if (!model || !text.startsWith(FRONT_MATTER_FENCE)) {
     return text;
   }
   const end = text.indexOf("\n---", FRONT_MATTER_FENCE.length);
-  return end < 0 ? text : `${text.slice(0, end)}\n${model}${text.slice(end)}`;
+  if (end < 0) {
+    return text;
+  }
+  const front = text.slice(FRONT_MATTER_FENCE.length, end).split("\n");
+  front.splice(index < 0 ? front.length : Math.min(index, front.length), 0, model);
+  return `${FRONT_MATTER_FENCE}${front.join("\n")}${text.slice(end)}`;
 }
 
 /** Merges every file of a copy; returns the file records and the proposed copy (path to text). */
-function mergeCopy({ kind, local, base, upstream, model }) {
+function mergeCopy({ kind, local, base, upstream, model, modelIndex }) {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-merge-"));
   try {
     const files = [];
@@ -133,7 +149,7 @@ function mergeCopy({ kind, local, base, upstream, model }) {
     const names = [...new Set([...local.keys(), ...base.keys(), ...upstream.keys()])].sort();
     for (const name of names) {
       const merged = mergeFile(tempDir, local.get(name), base.get(name), upstream.get(name));
-      const text = kind === "agent" && merged.text !== undefined ? withModelLine(merged.text, model) : merged.text;
+      const text = kind === "agent" && merged.text !== undefined ? withModelLine(merged.text, model, modelIndex) : merged.text;
       if (text !== undefined) {
         proposed.set(name, text);
       }
@@ -196,7 +212,7 @@ function buildItem({ marketplace, ref, lock, out, id, group }) {
   const locations = group.map((entry) => entry.status.location);
   const base = baseOf(marketplace, lock, status, locations, status.source);
   const upstream = marketplaceVersions(marketplace, status.kind, status.source, 1, ref).versions[0];
-  const merged = mergeCopy({ kind: status.kind, local: copy.contents, base: base.version?.contents ?? new Map(), upstream: upstream.contents, model: copy.model });
+  const merged = mergeCopy({ kind: status.kind, local: copy.contents, base: base.version?.contents ?? new Map(), upstream: upstream.contents, model: copy.model, modelIndex: copy.model ? modelLineIndex(copy.path) : -1 });
   const dir = path.join(out, safeName(id));
   writeProposed(dir, merged.proposed);
   const conflicts = merged.files.filter((file) => file.result === "conflict").length;

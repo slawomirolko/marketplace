@@ -281,3 +281,17 @@ test("the CLI refuses a missing flag and an unknown command", () => {
   assert.notEqual(unknown.status, 0);
   assert.match(unknown.stderr, /Unknown command/);
 });
+
+test("agent model line stays at its line position in the front matter", () => {
+  const withMiddleModel = (model, body) => `---\ndescription: a\nmodel: ${model}\nmode: primary\n---\n${body}\n`;
+  const f = fixture({
+    changeV2: (dir) => write(dir, "agents/opencode/sample-agent.md", withMiddleModel("provider/a", "line one\nline two\nline three\nline four")),
+  });
+  write(f.project, AGENT_FILE, withMiddleModel("provider/project", "line one\nline two\nline three"));
+  const item = itemOf(run(f), "agent:sample-agent");
+  const lines = read(item.dir, "sample-agent.md").split("\n");
+  assert.equal(lines.indexOf("model: provider/project"), 2);
+  assert.equal(lines[1], "description: a");
+  assert.equal(lines[3], "mode: primary");
+  assert.ok(lines.includes("line four"));
+});
