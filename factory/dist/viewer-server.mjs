@@ -1,4 +1,4 @@
-import { O as viewerOptions, T as defaultDataDir, _ as loadFactoryConfig, a as listProjects, b as mustache, d as Factory, g as marketplaceDir, k as writeFileAtomic, l as cliExecutor, n as failRequest, r as viewerHandler, t as allowedHostsFor, u as hostExec, w as VIEWER_HEALTH, x as homeEnvNote } from "./viewer-routes.mjs";
+import { O as viewerOptions, T as defaultDataDir, _ as loadFactoryConfig, a as listProjects, b as mustache, d as Factory, h as marketplaceDir, k as writeFileAtomic, l as cliExecutor, n as failRequest, r as viewerHandler, t as allowedHostsFor, u as hostExec, w as VIEWER_HEALTH, x as homeEnvNote } from "./viewer-routes.mjs";
 import path from "node:path";
 import fs from "node:fs";
 import http from "node:http";

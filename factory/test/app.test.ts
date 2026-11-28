@@ -209,7 +209,7 @@ test("api passes non-GET requests and other paths on to the next handler", async
 });
 
 test("totals with unknown steps are shown as unknown or partial, never as an exact amount", async () => {
-  const { runReport } = await import("../src/engine.ts");
+  const { runReport } = await import("../src/run-report.ts");
   const { formatAmount, formatUsd } = await import("../app/src/tree.ts");
   const record = (nodePath: string, model: string, costUsd: number | null, costSource: string) => ({ nodePath, agentId: nodePath.split("/").at(-1), kind: "llm", tier: "medium", model, inputTokens: 10, outputTokens: 1, costUsd, costSource });
   const run = {

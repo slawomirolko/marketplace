@@ -3,30 +3,30 @@ import fs from "node:fs";
 import path from "node:path";
 import Mustache from "mustache";
 import { loadFactoryConfig } from "./config.ts";
+import { errorMessage } from "./errors.ts";
+import { OUTPUT_PREVIEW_CHARS, cliEntries, delegateEntry, fakeModelTurn } from "./ledger-entries.ts";
 import { readMarketplaceAgent } from "./marketplace-agents.ts";
 import { DEFAULT_TIER_MODELS, FAKE_TIER_MODELS } from "./models.ts";
-import { FACTORY_DIR, writeFileAtomic } from "./paths.ts";
+import { writeFileAtomic } from "./paths.ts";
 import { priceUsage } from "./prices.ts";
 import { recordAnswer, recordQuestion } from "./questions.ts";
-import { SUPERVISOR_PATH, parseSupervisorLine, summarizeRun } from "./run-summary.ts";
+import { configOf } from "./run-config.ts";
+import { costFooter, runReport, runTotals, runTrace } from "./run-report.ts";
+import { SUPERVISOR_PATH } from "./run-summary.ts";
+import { RunSupervisor } from "./supervisor.ts";
 import { evaluateWhen, readPath, withEach } from "./when.ts";
-import { loadWorkflowDir } from "./workflow-yaml.ts";
-import type { RunSummary } from "./run-summary.ts";
+import { loadedWorkflows, workflowLabel, workflowOf } from "./workflows.ts";
+export { loadedWorkflows, workflowOf, workflowsDir } from "./workflows.ts";
 import type {
-  WorkflowState,
   Agent,
   CliExecutor,
   CliName,
-  CliResult,
   ConfirmOverrides,
   CostFooter,
-  CostSource,
-  Coverage,
   Executors,
   LedgerEntry,
   LedgerRecord,
   ModelUsage,
-  NodeCost,
   PendingQuestion,
   PendingWork,
   Report,
@@ -36,28 +36,15 @@ import type {
   RunInput,
   RunStatusView,
   SubmitUsage,
-  SupervisorSettings,
   Tier,
-  TokenCounts,
-  VerdictLineFormat,
-  Workflow,
   WorkflowNode,
+  WorkflowState,
 } from "./types.ts";
-
-/** Prices per million tokens for the fake backend only: fixed test numbers that make fake runs cost something, not real model prices. */
-const FAKE_PRICE_PER_MTOK: Record<Tier, { input: number; output: number }> = {
-  low: { input: 0.8, output: 4 },
-  medium: { input: 3, output: 15 },
-  high: { input: 15, output: 75 },
-};
 
 const PARALLEL_AGENTS = 10;
 
-const SUPERVISOR_ID = "supervisor";
 /** The question a run asks when its cost reaches the pause ratio of its budget. */
 const BUDGET_PAUSE_QUESTION = "q-budget-pause";
-/** How much of an agent's or a script's output an event or a ledger preview keeps. */
-const OUTPUT_PREVIEW_CHARS = 200;
 const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
 
 function workspace(run: Run): string {
@@ -107,39 +94,7 @@ export interface FactoryOptions {
   cli?: CliName;
 }
 
-let workflows: Map<string, Workflow> | undefined;
-
-export function workflowsDir(): string {
-  return process.env.FACTORY_WORKFLOWS_DIR ?? path.join(FACTORY_DIR, "workflows");
-}
-
-export function loadedWorkflows(): Map<string, Workflow> {
-  workflows ??= loadWorkflowDir(workflowsDir());
-  return workflows;
-}
-
-export function workflowOf(run: Pick<Run, "workflow">): Workflow {
-  const workflow = loadedWorkflows().get(run.workflow ?? "hello");
-  if (!workflow) {
-    throw new Error(`unknown workflow ${run.workflow}`);
-  }
-  return workflow;
-}
-
-function workflowLabel(run: Pick<Run, "workflow">): string {
-  const workflow = workflowOf(run);
-  return `${workflow.name}@${workflow.version}`;
-}
-
 const TURN_DELAY_MS = Number(process.env.FACTORY_TURN_DELAY_MS ?? 40);
-
-function fakeModelTurn(tier: Tier, turn: number, agentIndex = 0) {
-  const inputTokens = 3000 + turn * 1500 + agentIndex * 700;
-  const outputTokens = 300 + turn * 50;
-  const price = FAKE_PRICE_PER_MTOK[tier];
-  const costUsd = (inputTokens * price.input + outputTokens * price.output) / 1_000_000;
-  return { inputTokens, outputTokens, costUsd };
-}
 
 interface WaitResult {
   run: Run;
@@ -161,7 +116,7 @@ export class Factory {
   timers = new Map<string, NodeJS.Timeout>();
   busy = new Set<string>();
   waiters = new Map<string, Set<(run: Run) => void>>();
-  supervising = new Map<string, Promise<void>>();
+  supervisor = new RunSupervisor(this);
 
   constructor(dataDir: string, { executors = {}, backend = "delegate", cli }: FactoryOptions = {}) {
     this.dataDir = dataDir;
@@ -172,6 +127,11 @@ export class Factory {
     this.defaultConfig = defaultConfig(backend, cli);
     fs.mkdirSync(path.join(dataDir, "runs"), { recursive: true });
     this.restore();
+  }
+
+  /** The CLI supervisor jobs still running, by run id. */
+  get supervising(): Map<string, Promise<void>> {
+    return this.supervisor.supervising;
   }
 
   restore(): void {
@@ -198,7 +158,7 @@ export class Factory {
 
   checkpoint(run: Run): void {
     if (ENDED.has(run.status) && run.supervisor?.status === "pending") {
-      this.supervise(run);
+      this.supervisor.start(run);
     }
     writeFileAtomic(path.join(this.dataDir, "runs", `${run.runId}.json`), JSON.stringify(run, null, 2));
     if (run.status !== "running") {
@@ -367,7 +327,7 @@ export class Factory {
   submit(runId: string, nodePath: string, output: string, usage: SubmitUsage = {}, agentId: string | undefined = undefined): { run: Run; duplicate: boolean } {
     const run = this.get(runId);
     if (nodePath === SUPERVISOR_PATH) {
-      return this.submitSupervisor(run, output, usage);
+      return this.supervisor.submit(run, output, usage);
     }
     const work = findPendingWork(run, nodePath, agentId);
     if (run.status !== "waiting_for_client" || !work) {
@@ -687,98 +647,6 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
     this.advance(run, node);
   }
 
-  supervise(run: Run): void {
-    const record = run.supervisor;
-    if (!record) {
-      return;
-    }
-    const config = configOf(run);
-    const tier: Tier = config.roles.supervisor ?? "low";
-    const model = config.tiers[tier];
-    const summary = summarizeRun(run);
-    Object.assign(record, { status: "running", tier, model, startedAt: new Date().toISOString(), summary, error: null });
-    this.event(run, "supervisor_started", { node: SUPERVISOR_PATH, tier, model });
-    try {
-      const settings = supervisorSettings();
-      if (config.backend.kind === "fake") {
-        run.steps += 1;
-        this.appendLedger(run, { nodePath: SUPERVISOR_PATH, agentId: SUPERVISOR_ID, kind: "llm", tier, model, backend: "fake", turn: 1, ...fakeModelTurn(tier, 1), costSource: "measured", agentName: record.agent });
-        this.finishSupervisor(run, fakeSupervisorText(summary, settings.verdictLine), settings.verdictLine);
-        return;
-      }
-      const definition = readMarketplaceAgent(record.agent);
-      const prompt = supervisorPrompt(settings, summary);
-      if (config.backend.kind === "delegate") {
-        record.status = "waiting_for_client";
-        record.work = { nodePath: SUPERVISOR_PATH, agentId: SUPERVISOR_ID, tier, model, prompt, agentName: definition.name, agentDescription: definition.description, agentInstructions: definition.prompt, tools: ["read"], dirs: definition.dirs };
-        this.event(run, "work_offered", { node: SUPERVISOR_PATH, agentId: SUPERVISOR_ID, tier });
-        return;
-      }
-      const job = this.runCliSupervisor(run, prompt, definition.dirs, settings.verdictLine).finally(() => this.supervising.delete(run.runId));
-      this.supervising.set(run.runId, job);
-    } catch (error) {
-      this.failSupervisor(run, error);
-    }
-  }
-
-  async runCliSupervisor(run: Run, prompt: string, dirs: string[], verdictLine: VerdictLineFormat): Promise<void> {
-    const record = run.supervisor as NonNullable<Run["supervisor"]>;
-    const cli = configOf(run).backend.cli;
-    try {
-      const executor = cli ? this.executors[cli] : undefined;
-      if (!cli || !executor) {
-        throw new Error(`no executor for cli backend '${cli}' in this factory process`);
-      }
-      const result = await executor({ model: record.model as string, prompt, agent: record.agent, tools: ["read"], dirs });
-      run.steps += 1;
-      if (!result.ok) {
-        throw new Error(result.error ?? "the supervisor agent failed");
-      }
-      for (const entry of cliEntries(result, { nodePath: SUPERVISOR_PATH, agentId: SUPERVISOR_ID, agentName: record.agent, tier: record.tier as Tier, requestedModel: record.model as string, cli, keepOutput: false })) {
-        this.appendLedger(run, entry);
-      }
-      this.finishSupervisor(run, result.text ?? "", verdictLine);
-    } catch (error) {
-      this.failSupervisor(run, error);
-    }
-    this.checkpoint(run);
-  }
-
-  submitSupervisor(run: Run, output: string, usage: SubmitUsage): { run: Run; duplicate: boolean } {
-    const record = run.supervisor;
-    const work = record?.work;
-    if (record?.status !== "waiting_for_client" || !work) {
-      if (record?.status === "done") {
-        return { run, duplicate: true };
-      }
-      throw new Error(`no pending work for node ${SUPERVISOR_PATH}`);
-    }
-    run.steps += 1;
-    this.appendLedger(run, { ...delegateEntry(work, output, usage), agentName: record.agent });
-    record.work = null;
-    this.finishSupervisor(run, output, loadFactoryConfig().supervisor?.verdictLine);
-    this.checkpoint(run);
-    return { run, duplicate: false };
-  }
-
-  supervisorCost(run: Run): number | null {
-    const records = run.ledger.filter((r) => r.nodePath === SUPERVISOR_PATH);
-    return records.length ? round(records.reduce((s, r) => s + (r.costUsd ?? 0), 0)) : null;
-  }
-
-  finishSupervisor(run: Run, output: string, verdictLine: VerdictLineFormat | undefined): void {
-    const record = run.supervisor as NonNullable<Run["supervisor"]>;
-    const parsed = verdictLine ? parseSupervisorLine(output, verdictLine) : null;
-    Object.assign(record, { status: "done", finishedAt: new Date().toISOString(), output, verdict: parsed?.verdict ?? null, bottleneck: parsed?.bottleneck ?? null, idea: parsed?.idea ?? null, costUsd: this.supervisorCost(run) });
-    this.event(run, "supervisor_completed", { node: SUPERVISOR_PATH, verdict: record.verdict, costUsd: record.costUsd });
-  }
-
-  failSupervisor(run: Run, error: unknown): void {
-    const record = run.supervisor as NonNullable<Run["supervisor"]>;
-    Object.assign(record, { status: "failed", finishedAt: new Date().toISOString(), error: errorMessage(error), work: null, costUsd: this.supervisorCost(run) });
-    this.event(run, "supervisor_failed", { node: SUPERVISOR_PATH, error: record.error });
-  }
-
   footer(run: Pick<Run, "config" | "proposal" | "ledger" | "steps" | "thresholdsHit"> & { events?: Run["events"] }): CostFooter {
     return costFooter(run);
   }
@@ -807,19 +675,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
   }
 
   trace(run: Run): string {
-    const lines = [`run ${run.runId} [${run.status}] ${workflowLabel(run)}  $${round(runTotals(run).costUsd)}`];
-    let lastNode: string | null = null;
-    for (const r of run.ledger) {
-      if (r.nodePath !== lastNode) {
-        lines.push(`  ${r.nodePath} (${r.tier ?? "script"})`);
-        lastNode = r.nodePath;
-      }
-      lines.push(`    turn ${r.turn}: in=${r.inputTokens} out=${r.outputTokens} $${r.costUsd == null ? "?" : round(r.costUsd)} ${r.costSource}`);
-    }
-    for (const e of run.events.filter((e) => ["needs_input", "run_resumed", "budget_threshold"].includes(e.type))) {
-      lines.push(`  event ${e.type} ${e.node ?? e.questionId ?? e.level ?? ""}`);
-    }
-    return lines.join("\n");
+    return runTrace(run);
   }
 
   /** An interrupt step asks its question once and, when the answer is in, stores it and moves on. */
@@ -994,116 +850,6 @@ function hitThreshold(run: Run, level: string, ratio: number, thresholdRatio: nu
   return true;
 }
 
-function supervisorView(record: NonNullable<Run["supervisor"]>): Omit<NonNullable<Run["supervisor"]>, "work"> {
-  const { work: _work, ...view } = record;
-  return view;
-}
-
-/** The post-run agent settings from config/factory.yaml; a run gets a supervisor only when they exist. */
-function supervisorSettings(): SupervisorSettings {
-  const settings = loadFactoryConfig().supervisor;
-  if (!settings) {
-    throw new Error("config/factory.yaml has no supervisor section");
-  }
-  return settings;
-}
-
-/** The configured prompt template rendered over the run summary. */
-function supervisorPrompt(settings: SupervisorSettings, summary: RunSummary): string {
-  return Mustache.render(settings.prompt, { summaryJson: JSON.stringify(summary, null, 2) }, {}, { escape: (value: unknown) => String(value) });
-}
-
-/** The fake model's supervisor output: fixed facts and a verdict line in the configured format with the first verdict. */
-function fakeSupervisorText(summary: RunSummary, verdictLine: VerdictLineFormat): string {
-  const bottleneck = summary.top.costNode ?? "none";
-  return [
-    `FACTS: ${summary.run.workflow} ${summary.run.status}, $${summary.totals.costUsd} of $${summary.run.budgetUsd ?? "?"}, ${summary.totals.llmSteps} llm steps, ${summary.loops.length} loops, ${summary.failures.length} failures.`,
-    `BOTTLENECK: ${bottleneck}.`,
-    "IDEAS: none (fake model).",
-    `${verdictLine.prefix} | ${verdictLine.verdicts[0]} | ${bottleneck} | none`,
-  ].join("\n");
-}
-
-function delegateEntry(work: PendingWork, output: string, usage: SubmitUsage): LedgerEntry {
-  const inputTokens = Number.isInteger(usage.inputTokens) ? usage.inputTokens : undefined;
-  const outputTokens = Number.isInteger(usage.outputTokens) ? usage.outputTokens : undefined;
-  const hasSplit = inputTokens !== undefined && outputTokens !== undefined;
-  const tokens: TokenCounts = {
-    input: hasSplit ? inputTokens : null,
-    output: hasSplit ? outputTokens : null,
-    cacheRead: usage.cacheReadTokens ?? 0,
-    cacheWrite5m: usage.cacheWriteTokens ?? 0,
-    cacheWrite1h: 0,
-  };
-  const priced = hasSplit ? priceUsage(usage.model ?? work.model, tokens, false) : { costUsd: null };
-  return {
-    nodePath: work.nodePath,
-    agentId: work.agentId,
-    kind: "llm",
-    tier: work.tier,
-    model: usage.model ?? work.model,
-    backend: "delegate",
-    turn: 1,
-    inputTokens: tokens.input,
-    outputTokens: tokens.output,
-    cacheReadTokens: tokens.cacheRead,
-    cacheWrite5mTokens: tokens.cacheWrite5m,
-    cacheWrite1hTokens: 0,
-    totalTokens: usage.totalTokens ?? null,
-    childSessionId: usage.childSessionId ?? null,
-    costUsd: priced.costUsd,
-    costSource: hasSplit ? "reported" : "unknown",
-    outputPreview: String(output ?? "").slice(0, OUTPUT_PREVIEW_CHARS),
-    agentName: work.agentName ?? null,
-  };
-}
-
-interface CliEntryContext {
-  nodePath: string;
-  agentId: string;
-  agentName: string | null;
-  tier: Tier;
-  requestedModel: string;
-  cli: CliName;
-  keepOutput: boolean;
-}
-
-function cliEntries(result: CliResult, context: CliEntryContext): LedgerEntry[] {
-  return (result.usageByModel ?? []).map((usage) => {
-    const priced = priceUsage(usage.model, usage.tokens, usage.cacheWriteTtlKnown);
-    return {
-      nodePath: context.nodePath,
-      agentId: context.agentId,
-      kind: "llm",
-      tier: context.tier,
-      model: usage.model,
-      requestedModel: context.requestedModel,
-      backend: `cli:${context.cli}`,
-      turn: 1,
-      harnessTurns: result.turns,
-      inputTokens: usage.tokens.input,
-      outputTokens: usage.tokens.output,
-      cacheReadTokens: usage.tokens.cacheRead,
-      cacheWrite5mTokens: usage.tokens.cacheWrite5m,
-      cacheWrite1hTokens: usage.tokens.cacheWrite1h,
-      costUsd: priced.costUsd,
-      costSource: priced.costSource,
-      harnessCostUsd: usage.harnessCostUsd,
-      durationMs: result.durationMs,
-      outputPreview: String(result.text ?? "").slice(0, OUTPUT_PREVIEW_CHARS),
-      output: context.keepOutput ? (result.text ?? null) : null,
-      agentName: context.agentName,
-    };
-  });
-}
-
-function configOf(run: Run): RunConfig {
-  if (!run.config) {
-    throw new Error(`run ${run.runId} is not confirmed`);
-  }
-  return run.config;
-}
-
 function nodeAt(run: Run): WorkflowNode {
   const node = run.cursor < 0 ? undefined : workflowOf(run).nodes[run.cursor];
   if (!node) {
@@ -1144,19 +890,6 @@ function currentAgent(run: Run, node: WorkflowNode): CurrentAgent {
   return { ...agent, role: agent.role ?? node.role, agentName: agent.agentName ?? node.agent };
 }
 
-function singleOrMixed(sources: Set<string>): string {
-  const [first] = sources;
-  return sources.size === 1 && first !== undefined ? first : "mixed";
-}
-
-function costSourceSummary(ledger: LedgerRecord[]): string {
-  const sources = new Set<CostSource>(ledger.filter((r) => r.kind === "llm").map((r) => r.costSource));
-  if (sources.size === 0) {
-    return "none";
-  }
-  return singleOrMixed(sources);
-}
-
 function nextHint(run: Run): string {
   switch (run.status) {
     case "needs_confirmation":
@@ -1170,134 +903,4 @@ function nextHint(run: Run): string {
     default:
       return "The run has ended (done, stopped, cancelled or failed). Call factory_report. Show the user viewerUrl: it shows the whole flow and the cost of each agent. Do not call factory_wait or factory_status again.";
   }
-}
-
-function round(v: number): number {
-  return Math.round(v * 1e6) / 1e6;
-}
-
-export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-/** The cost, tokens and steps of a run so far. */
-export function runTotals(run: Pick<Run, "ledger" | "steps">) {
-  const costUsd = run.ledger.reduce((s, r) => s + (r.costUsd ?? 0), 0);
-  const tokens = run.ledger.reduce((s, r) => s + (r.inputTokens ?? 0) + (r.outputTokens ?? 0) + (r.inputTokens == null ? (r.totalTokens ?? 0) : 0), 0);
-  return { costUsd, tokens, steps: run.steps };
-}
-
-/** The cost footer of a run: totals against the budget, cost per node and the warnings. */
-export function costFooter(run: Pick<Run, "config" | "proposal" | "ledger" | "steps" | "thresholdsHit"> & { events?: Run["events"] }): CostFooter {
-  const t = runTotals(run);
-  const max = run.config?.budget.maxCostUsd ?? run.proposal.budget.maxCostUsd;
-  const perNode: Record<string, number> = {};
-  for (const r of run.ledger) {
-    perNode[r.nodePath] = round((perNode[r.nodePath] ?? 0) + (r.costUsd ?? 0));
-  }
-  return {
-    costUsd: round(t.costUsd),
-    budgetUsd: max,
-    budgetRatio: round(t.costUsd / max),
-    tokens: t.tokens,
-    steps: t.steps,
-    perNode,
-    source: costSourceSummary(run.ledger),
-    warnings: footerWarnings(run),
-  };
-}
-
-/** The budget thresholds a run has hit and the required steps it ran with their switch off. */
-function footerWarnings(run: Pick<Run, "thresholdsHit"> & { events?: Run["events"] }): string[] {
-  const thresholds = run.thresholdsHit.map((level) => `budget threshold: ${level}`);
-  const switchedOff = (run.events ?? []).filter((event) => event.type === "node_completed" && String(event.result ?? "").includes("required step switched off")).map((event) => `required step switched off: ${String(event.node)}`);
-  return [...thresholds, ...switchedOff];
-}
-
-/** The cost report of a run by node, agent, tier and model. It only reads the run, so the viewer uses it without a factory. */
-export function runReport(run: Run): Report {
-  const byNode: Record<string, NodeCost> = {};
-  const byTier: Record<string, number> = {};
-  const byModel: Record<string, number> = {};
-  const byCostSource: Record<string, number> = {};
-  let harnessCostUsd = 0;
-  let cacheTokens = 0;
-  const coverage: Report["coverage"] = { run: { llmSteps: 0, unknownSteps: 0 }, byTier: {}, byModel: {} };
-  const count = (target: Coverage) => {
-    target.llmSteps += 1;
-  };
-  const countUnknown = (target: Coverage) => {
-    target.unknownSteps += 1;
-  };
-  for (const r of run.ledger) {
-    const cache = (r.cacheReadTokens ?? 0) + (r.cacheWrite5mTokens ?? 0) + (r.cacheWrite1hTokens ?? 0);
-    cacheTokens += cache;
-    const nodeEntry = (byNode[r.nodePath] ??= { steps: 0, llmSteps: 0, unknownSteps: 0, tokens: 0, cacheTokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null, byAgent: {}, costSource: "" });
-    nodeEntry.cacheTokens += cache;
-    const agentKey = r.agentId ?? r.nodePath.split("/").at(-1) ?? r.nodePath;
-    const agentEntry = (nodeEntry.byAgent[agentKey] ??= { steps: 0, llmSteps: 0, unknownSteps: 0, tokens: 0, cacheTokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null, agentName: r.agentName ?? null, costSource: "", sources: [] });
-    agentEntry.cacheTokens += cache;
-    agentEntry.steps += 1;
-    agentEntry.tokens += (r.inputTokens ?? 0) + (r.outputTokens ?? 0);
-    agentEntry.costUsd += r.costUsd ?? 0;
-    agentEntry.sources?.push(r.costSource);
-    nodeEntry.steps += 1;
-    nodeEntry.tokens += (r.inputTokens ?? 0) + (r.outputTokens ?? 0);
-    nodeEntry.costUsd += r.costUsd ?? 0;
-    const tierKey = r.tier ?? "script";
-    byTier[tierKey] = (byTier[tierKey] ?? 0) + (r.costUsd ?? 0);
-    if (r.kind === "llm") {
-      const modelKey = r.model ?? "unknown";
-      byModel[modelKey] = (byModel[modelKey] ?? 0) + (r.costUsd ?? 0);
-      byCostSource[r.costSource] = (byCostSource[r.costSource] ?? 0) + 1;
-      const targets = [
-        coverage.run,
-        (coverage.byTier[tierKey] ??= { llmSteps: 0, unknownSteps: 0 }),
-        (coverage.byModel[modelKey] ??= { llmSteps: 0, unknownSteps: 0 }),
-        nodeEntry,
-        agentEntry,
-      ];
-      targets.forEach(count);
-      if (r.costSource === "unknown") {
-        targets.forEach(countUnknown);
-      }
-    }
-    harnessCostUsd += r.harnessCostUsd ?? 0;
-  }
-  for (const [nodePath, entry] of Object.entries(byNode)) {
-    entry.costUsd = round(entry.costUsd);
-    const agentTiers = new Set(Object.values(entry.byAgent).map((x) => x.tier));
-    if (agentTiers.size > 1) {
-      Object.assign(entry, { tier: "mixed", model: "mixed" });
-    }
-    for (const agentEntry of Object.values(entry.byAgent)) {
-      agentEntry.costUsd = round(agentEntry.costUsd);
-      agentEntry.costSource = singleOrMixed(new Set(agentEntry.sources));
-      delete agentEntry.sources;
-    }
-    entry.costSource = singleOrMixed(new Set(run.ledger.filter((r) => r.nodePath === nodePath).map((r) => r.costSource)));
-  }
-  for (const totals of [byTier, byModel]) {
-    for (const [key, value] of Object.entries(totals)) {
-      totals[key] = round(value);
-    }
-  }
-  return {
-    runId: run.runId,
-    status: run.status,
-    workflow: workflowLabel(run),
-    backend: run.config?.backend,
-    tierModels: run.config?.tiers,
-    synthetic: (run.config ?? run.proposal).backend?.kind === "fake",
-    byNode,
-    byTier,
-    byModel,
-    byCostSource,
-    coverage,
-    cacheTokens,
-    harnessCostUsd: round(harnessCostUsd),
-    result: [...run.ledger].reverse().find((r) => typeof r.output === "string" && r.nodePath !== SUPERVISOR_PATH)?.output ?? null,
-    cost: costFooter(run),
-    ...(run.supervisor ? { supervisor: supervisorView(run.supervisor) } : {}),
-  };
 }
