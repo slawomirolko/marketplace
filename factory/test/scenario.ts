@@ -72,6 +72,21 @@ function statusReaches(client: Client, runId: string, statuses: string[]): Promi
   });
 }
 
+/** The states a fake run stops in before it ends: a question, the end, or a stop. */
+const STOPPING = ["waiting_for_user", "done", "stopped"];
+
+/**
+ * Answers the endpoint question when the run stopped at it and waits for the next stop; returns any other state as it
+ * is. A budget run reaches its pause either before or after that question, depending on how the fake costs add up.
+ */
+async function answerEndpointIfAsked(client: Client, runId: string, state: Payload): Promise<Payload> {
+  if (state.pendingQuestion?.id !== "q-endpoint") {
+    return state;
+  }
+  await call(client, "factory_answer", { runId, questionId: "q-endpoint", answer: "new" });
+  return statusReaches(client, runId, STOPPING);
+}
+
 const client = await connect();
 
 try {
@@ -153,11 +168,7 @@ try {
     const { payload } = await call(client, "factory_start", { goal: "budget test" });
     const id = payload.runId;
     await call(client, "factory_confirm", { runId: id, overrides: { budget: { maxCostUsd: 0.45 } } });
-    let state = await statusReaches(client, id, ["waiting_for_user", "done", "stopped"]);
-    if (state.pendingQuestion?.id === "q-endpoint") {
-      await call(client, "factory_answer", { runId: id, questionId: "q-endpoint", answer: "new" });
-      state = await statusReaches(client, id, ["waiting_for_user", "done", "stopped"]);
-    }
+    const state = await answerEndpointIfAsked(client, id, await statusReaches(client, id, STOPPING));
     assert.equal(state.pendingQuestion?.id, "q-budget-pause", `expected budget pause, got ${state.status}`);
     assert.ok(state.cost?.warnings.includes("budget threshold: info"));
     assert.ok((state.cost?.budgetRatio ?? 0) >= 0.8);
@@ -181,12 +192,12 @@ try {
     assert.equal(end.payload.retryAfterMs, null);
   });
 
-  await check("factory_wait times out on a running run and says so", async () => {
+  await check("factory_wait says it timed out exactly when the run is still running after the wait", async () => {
     const { payload } = await call(client, "factory_start", { goal: "timeout test" });
     await call(client, "factory_confirm", { runId: payload.runId, overrides: { budget: { maxCostUsd: 100 } } });
     const res = await call(client, "factory_wait", { runId: payload.runId, timeoutSec: 1 });
-    assert.ok(["running", "waiting_for_user"].includes(res.payload.status ?? ""));
-    if (res.payload.status === "running") assert.equal(res.payload.timedOut, true);
+    assert.ok(["running", "waiting_for_user"].includes(res.payload.status ?? ""), `status ${res.payload.status}`);
+    assert.equal(res.payload.timedOut, res.payload.status === "running");
     await call(client, "factory_cancel", { runId: payload.runId });
   });
 
@@ -225,27 +236,40 @@ try {
     });
   }
 
-  await check("viewer: the run page is served with a nonce CSP and without path traversal", async () => {
+  /** The built run page; a server image without the built viewer answers 503, which skips the page checks. */
+  async function viewerPage(): Promise<HttpResult> {
     const page = await get("/viewer/");
     if (page.status === 503) {
       skip("the viewer is not built in this image (503)");
     }
+    return page;
+  }
+
+  await check("viewer: the run page is served with a nonce CSP", async () => {
+    const page = await viewerPage();
     assert.equal(page.status, 200);
     assert.match(String(page.headers["content-security-policy"] ?? ""), /script-src 'self' 'nonce-/);
-    assert.doesNotMatch(page.body, /FACTORYCSPNONCEPLACEHOLD/);
-    assert.equal((await get("/viewer/..%2f..%2fsrc%2fserver.ts")).status, 404, "no path traversal out of the viewer folder");
+    assert.doesNotMatch(page.body, /FACTORYCSPNONCEPLACEHOLD/, "the nonce placeholder is replaced");
   });
 
-  await check("viewer: run responses link to a localhost page whose API shows the run without the MCP token", async () => {
+  await check("viewer: no path traversal out of the viewer folder", async () => {
+    await viewerPage();
+    assert.equal((await get("/viewer/..%2f..%2fsrc%2fserver.ts")).status, 404);
+  });
+
+  await check("viewer: run responses link to the run page and its API shows the run without the MCP token", async () => {
     const { payload } = await call(client, "factory_start", { goal: "viewer test" });
     assert.ok(payload.viewerUrl?.endsWith(`/viewer/?run=${payload.runId}`), payload.viewerUrl ?? "no viewerUrl");
     const detail = await get(`/viewer/api/runs/${payload.runId}`);
     assert.equal(detail.status, 200, "the viewer API does not need the MCP token");
     assert.equal((JSON.parse(detail.body) as { report: { runId: string } }).report.runId, payload.runId);
+    await call(client, "factory_cancel", { runId: payload.runId });
+  });
+
+  await check("viewer: the API refuses other Host headers and POST, and the MCP endpoint still needs the token", async () => {
     assert.equal((await get("/viewer/api/runs", { host: "evil.example:7340" })).status, 403, "other Host headers are refused");
     assert.equal((await get("/viewer/api/runs", { method: "POST" })).status, 405);
     assert.equal((await get("/mcp")).status, 401, "the MCP endpoint still needs the token");
-    await call(client, "factory_cancel", { runId: payload.runId });
   });
 } finally {
   await client.close();

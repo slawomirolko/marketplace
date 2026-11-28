@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { ALLOWED_HOSTS, callerFor } from "./helpers/data-api.ts";
+import { ALLOWED_HOSTS, ALLOWED_ORIGIN, callerFor } from "./helpers/data-api.ts";
 import { runReaches } from "./helpers/poll.ts";
 import { tempDir } from "./helpers/temp.ts";
 import { Factory } from "../src/engine.ts";
@@ -177,32 +177,54 @@ function call(api: ReturnType<typeof createDataApi>, method: string, url: string
   return callerFor(apiMiddleware(api, ALLOWED_HOSTS))(method, url, { headers });
 }
 
-test("the viewer lists and answers only runs of its own process, and only with its own request", async () => {
+/** The viewer data API over `dataDir` that answers for runs of `factory`, with the shipped factory config. */
+function viewerApi(dataDir: string, factory: Factory) {
+  const factoryDir = path.join(import.meta.dirname, "..");
+  return createDataApi({ factoryDir, dataDir, configFile: path.join(factoryDir, "config", "factory.yaml"), demo: false, factory });
+}
+
+/**
+ * A watched run waiting for its question, with the viewer API of its process. The first check only records what it
+ * saw; the second sees the same change again and starts the run.
+ */
+async function startWaitingRun() {
   const { dataDir, factory } = setup();
   const context = { factory, dataDir, marketplace: dataDir, exec: hostExec };
   await checkWatch(watch, context);
   const [runId] = await checkWatch(watch, context);
-  await runReaches(factory, runId!, ["waiting_for_user"]);
-  const api = createDataApi({ factoryDir: path.join(import.meta.dirname, ".."), dataDir, configFile: path.join(import.meta.dirname, "..", "config", "factory.yaml"), demo: false, factory });
+  assert.ok(runId, "the second check starts a run");
+  await runReaches(factory, runId, ["waiting_for_user"]);
+  return { dataDir, factory, runId, api: viewerApi(dataDir, factory), answerUrl: `/api/runs/${runId}/answer?question=q-watched&answer=ok` };
+}
 
+test("the viewer lists the waiting question of a run of its own process with its allowed answers", async () => {
+  const { api, runId } = await startWaitingRun();
   const pending = await call(api, "GET", "/api/pending");
   assert.equal(pending.status, 200);
-  assert.deepEqual((pending.body as { runId: string; allowed: string[] }[]).map((p) => [p.runId, p.allowed]), [[runId, ["ok", "no"]]]);
+  assert.deepEqual((pending.body as { runId: string; allowed: string[] }[]).map((entry) => [entry.runId, entry.allowed]), [[runId, ["ok", "no"]]]);
+});
 
-  const url = `/api/runs/${runId}/answer?question=q-watched&answer=ok`;
-  assert.equal((await call(api, "POST", url)).status, 403, "no action header: rejected");
-  assert.equal((await call(api, "POST", url, { "x-factory-action": "answer", origin: "https://evil.example" })).status, 403, "foreign origin: rejected");
+test("the viewer refuses an answer without its own request header, from a foreign origin, or outside the allowed answers", async () => {
+  const { api, runId, answerUrl } = await startWaitingRun();
+  assert.equal((await call(api, "POST", answerUrl)).status, 403, "no action header: rejected");
+  assert.equal((await call(api, "POST", answerUrl, { "x-factory-action": "answer", origin: "https://evil.example" })).status, 403, "foreign origin: rejected");
   assert.equal((await call(api, "POST", `/api/runs/${runId}/answer?question=q-watched&answer=maybe`, { "x-factory-action": "answer" })).status, 409, "an answer outside allowed is refused");
-  const answered = await call(api, "POST", url, { "x-factory-action": "answer", origin: "http://127.0.0.1:7340" });
+});
+
+test("an answer from the viewer resumes the run, and builtin.exec parses the command's JSON", async () => {
+  const { api, factory, runId, answerUrl } = await startWaitingRun();
+  const answered = await call(api, "POST", answerUrl, { "x-factory-action": "answer", origin: ALLOWED_ORIGIN });
   assert.equal(answered.status, 200);
-  assert.deepEqual(answered.body, []);
-  const done = await runReaches(factory, runId!, ["done", "failed"]);
+  assert.deepEqual(answered.body, [], "no question is left waiting");
+  const done = await runReaches(factory, runId, ["done", "failed"]);
   assert.equal(done.status, "done");
   assert.deepEqual((done.state?.["run-it"] as { json: unknown }).json, { artifact: "skill:sample" }, "builtin.exec parsed the command's JSON");
+});
 
-  const foreign = new Factory(tempDir("factory-watch-foreign-"), { backend: "delegate" });
-  const noFactory = createDataApi({ factoryDir: path.join(import.meta.dirname, ".."), dataDir, configFile: path.join(import.meta.dirname, "..", "config", "factory.yaml"), demo: false, factory: foreign });
-  assert.equal((await call(noFactory, "POST", url, { "x-factory-action": "answer" })).status, 409, "a run of another process cannot be answered here");
+test("a run of another process cannot be answered from this viewer", async () => {
+  const { dataDir, answerUrl } = await startWaitingRun();
+  const foreign = viewerApi(dataDir, new Factory(tempDir("factory-watch-foreign-"), { backend: "delegate" }));
+  assert.equal((await call(foreign, "POST", answerUrl, { "x-factory-action": "answer" })).status, 409);
 });
 
 test("builtin.exec fails the run on an exit code outside okCodes", async () => {

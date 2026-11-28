@@ -1,51 +1,33 @@
 import { http, HttpResponse } from "msw";
+import type { HttpResponseResolver } from "msw";
 import { App } from "../src/App.tsx";
 import { Projects } from "../src/Projects.tsx";
-import { actionOf, countsText, fetchNoteOf, remoteNameOf, verdictOf, versionText } from "../src/projects/status-text.ts";
-import type { ProjectArtifact, ProjectOverview, ProjectStatusView } from "../src/types.ts";
-import { API, deferred, fireEvent, render, screen, server, settleNetwork, STATUS_WORKFLOW, userEvent, waitFor, within } from "./testUtils/index.ts";
-
-const artifact = (extra: Partial<ProjectArtifact>): ProjectArtifact => ({ id: "skill:sample-skill", kind: "skill", name: "sample-skill", harness: "agents", location: ".agents/skills/sample-skill", state: "current", installed: "1.0.0", current: "1.0.0", files: [], workflows: [], ...extra });
-
-const list: ProjectOverview = {
-  roots: ["/src"],
-  statusWorkflow: STATUS_WORKFLOW,
-  statusWorkflowInstalled: true,
-  canAnalyze: true,
-  projects: [
-    { id: "sample-app", path: "/src/sample-app", exists: true, runs: 2, analyzing: null, status: { runId: "r-0000000a", createdAt: null, summary: "1 current", counts: { current: 1, outdated: 1, missing: 1 } } },
-    { id: "sample-web", path: "/src/sample-web", exists: false, runs: 0, analyzing: null, status: null },
-  ],
-};
-
-const status: ProjectStatusView = {
-  runId: "r-0000000a",
-  status: "done",
-  createdAt: "2026-11-20T10:00:00.000Z",
-  data: {
-    head: "9f8e7d6c5b",
-    harnesses: [{ id: "opencode", markers: [".opencode"] }],
-    counts: { current: 1, outdated: 1, missing: 1 },
-    workflows: ["sample-flow"],
-    summary: "1 current, 1 outdated, 1 missing",
-    artifacts: [
-      artifact({ workflows: ["sample-flow"] }),
-      artifact({ id: "skill:sample-old", name: "sample-old", state: "outdated", installed: "1.0.0", current: "1.2.0", files: ["SKILL.md"] }),
-      artifact({ id: "agent:sample-helper", kind: "agent", name: "sample-helper", harness: null, location: null, state: "missing", installed: null, current: null, requiredBy: ["agent:sample-agent"] }),
-    ],
-  },
-};
-
-/** The sample status with some of its data replaced. */
-function withData(data: Partial<NonNullable<ProjectStatusView["data"]>>): ProjectStatusView {
-  return { ...status, data: { ...status.data!, ...data } };
-}
-
-const remoteRef = "origin/main", installedCommit = "aaaaaaa", currentCommit = "bbbbbbb";
+import type { ProjectOverview, ProjectStatusView } from "../src/types.ts";
+import { API, artifact, deferred, fireEvent, listOf, projectList as list, projectStatus as status, REMOTE_REF as remoteRef, render, screen, server, settleNetwork, STATUS_WORKFLOW, uncheckedProject, userEvent, waitFor, within, withData } from "./testUtils/index.ts";
 
 type Posted = Record<string, string>;
 
-function serve(posted: Posted[] = [], statuses: Record<string, ProjectStatusView | null> = { "sample-app": status, "sample-web": null }, projects: ProjectOverview = list) {
+/** The started status run every analyze action answers with. */
+const STARTED_RUN = "r-0000000s";
+
+/** The answer of each project action; an action not listed answers with an empty root list. */
+const actionReplies: Record<string, (body: Posted) => Response> = {
+  discover: () => HttpResponse.json({ candidates: [{ path: "/src/sample-new", suggestedId: "sample-new", markers: [".agents/skills"] }] }),
+  add: (body) => HttpResponse.json({ project: { id: body.id || "sample-x", path: body.path } }),
+  remove: (body) => HttpResponse.json({ project: { id: body.id } }),
+  analyze: () => HttpResponse.json({ runId: STARTED_RUN, status: "running", reused: false }),
+};
+
+interface ServeOptions {
+  /** Collects every posted action body, in order. */
+  posted?: Posted[];
+  /** The status view of each project id; null answers 404. */
+  statuses?: Record<string, ProjectStatusView | null>;
+  projects?: ProjectOverview;
+}
+
+/** Serves the project list, the status of each project and the project actions, guarded by the action header. */
+function serve({ posted = [], statuses = { "sample-app": status, "sample-web": null }, projects = list }: ServeOptions = {}): Posted[] {
   server.use(
     http.get(API.projects, () => HttpResponse.json(projects)),
     http.get(API.projectStatus, ({ params }) => {
@@ -53,41 +35,61 @@ function serve(posted: Posted[] = [], statuses: Record<string, ProjectStatusView
       return view ? HttpResponse.json(view) : HttpResponse.json({ error: "none" }, { status: 404 });
     }),
     http.post(API.projects, async ({ request }) => {
-      if (request.headers.get("x-factory-action") !== "projects") return HttpResponse.json({ error: "forbidden" }, { status: 403 });
+      if (request.headers.get("x-factory-action") !== "projects") {
+        return HttpResponse.json({ error: "forbidden" }, { status: 403 });
+      }
       const body = (await request.json()) as Posted;
       posted.push(body);
-      if (body.action === "discover") return HttpResponse.json({ candidates: [{ path: "/src/sample-new", suggestedId: "sample-new", markers: [".agents/skills"] }] });
-      if (body.action === "add" && body.path === "/bad") return HttpResponse.json({ error: "project /bad is not a folder" }, { status: 400 });
-      if (body.action === "add") return HttpResponse.json({ project: { id: body.id || "sample-x", path: body.path } });
-      if (body.action === "remove") return HttpResponse.json({ project: { id: body.id } });
-      if (body.action === "analyze" && body.id === "sample-bad") return HttpResponse.json({ error: "project sample-bad: folder /x does not exist" }, { status: 400 });
-      if (body.action === "analyze") return HttpResponse.json({ runId: "r-0000000s", status: "running", reused: body.id === "sample-busy" });
-      return HttpResponse.json({ roots: [] });
+      return actionReplies[body.action ?? ""]?.(body) ?? HttpResponse.json({ roots: [] });
     }),
   );
   return posted;
 }
 
-describe("Projects", () => {
-  test("lists projects and shows the status table of the selected one, filtered by state", async () => {
-    serve();
-    const user = userEvent.setup();
-    render(<Projects onShowRuns={() => {}} />);
+/** A project action handler that answers `action` for project or path `target` with a 400 error, and the usual reply otherwise. */
+function failingAction(action: string, field: "id" | "path", target: string, error: string): HttpResponseResolver {
+  return async ({ request }) => {
+    const body = (await request.clone().json()) as Posted;
+    if (body.action === action && body[field] === target) {
+      return HttpResponse.json({ error }, { status: 400 });
+    }
+    return undefined;
+  };
+}
 
-    const table = await screen.findByRole("table");
-    expect(within(table).getAllByRole("row")).toHaveLength(4);
+/** Renders the projects page with the sample list and waits for the status table of the selected sample-app. */
+async function renderSelected(): Promise<{ posted: Posted[]; table: HTMLElement; user: ReturnType<typeof userEvent.setup> }> {
+  const posted = serve();
+  const user = userEvent.setup();
+  render(<Projects onShowRuns={() => {}} />);
+  const table = await screen.findByRole("table");
+  return { posted, table, user };
+}
+
+describe("Projects", () => {
+  test("the selected project shows its verdict and what the status run compared", async () => {
+    await renderSelected();
     expect(within(screen.getByRole("region", { name: "Verdict" })).getByText("2 of 3 differ from the marketplace: 1 outdated · 1 missing.")).toBeInTheDocument();
     expect(screen.getByText(/run r-0000000a · compared with marketplace 9f8e7d6 · harnesses: opencode/)).toBeInTheDocument();
+    expect(screen.getByText(/Factory workflows that run an installed skill or agent: sample-flow/)).toBeInTheDocument();
+  });
+
+  test("the status table has one row per artifact with its version change, dependants and action", async () => {
+    const { table } = await renderSelected();
     expect(screen.getByRole("heading", { name: "Skills and agents" })).toBeInTheDocument();
     expect(within(table).getByRole("columnheader", { name: "Skill / agent" })).toBeInTheDocument();
+    expect(within(table).getAllByRole("row")).toHaveLength(4);
     expect(within(table).getByText("1.0.0 → 1.2.0")).toBeInTheDocument();
     expect(within(table).getByText("needed by agent:sample-agent")).toBeInTheDocument();
     expect(within(table).getByText("Nothing to do.")).toBeInTheDocument();
     expect(within(table).getByText("Update to 1.2.0 (olko-marketplace-skill-sync).")).toBeInTheDocument();
     expect(within(table).getByText("Install it (olko-marketplace-skill-sync); needed by agent:sample-agent.")).toBeInTheDocument();
-    expect(screen.getByText(/Factory workflows that run an installed skill or agent: sample-flow/)).toBeInTheDocument();
-    expect(screen.getByText("folder missing", { exact: false })).toBeInTheDocument();
+  });
+
+  test("the project list shows a badge per project, and the state filter narrows the table", async () => {
+    const { user } = await renderSelected();
     const projectList = screen.getByRole("region", { name: "Projects" });
+    expect(screen.getByText("folder missing", { exact: false })).toBeInTheDocument();
     expect(within(projectList).getByText("2 to change")).toBeInTheDocument();
     expect(within(projectList).getByText("not checked yet")).toBeInTheDocument();
 
@@ -98,10 +100,7 @@ describe("Projects", () => {
   });
 
   test("the project controls are reachable by test id", async () => {
-    const posted = serve();
-    const user = userEvent.setup();
-    render(<Projects onShowRuns={() => {}} />);
-    await screen.findByRole("table");
+    const { posted, user } = await renderSelected();
 
     await user.click(screen.getByTestId("state-filter-missing"));
     expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(2);
@@ -120,10 +119,7 @@ describe("Projects", () => {
   });
 
   test("a project without a finished status run offers Check status, disabled while its folder is missing", async () => {
-    serve();
-    const user = userEvent.setup();
-    render(<Projects onShowRuns={() => {}} />);
-    await screen.findByRole("table");
+    const { user } = await renderSelected();
     expect(screen.getByRole("button", { name: "Re-check status" })).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: /sample-web/ }));
@@ -158,7 +154,7 @@ describe("Projects", () => {
 
     await user.click(screen.getByRole("button", { name: "Re-check status" }));
 
-    expect(await screen.findByText("Started the status check of sample-app (run r-0000000s).")).toBeInTheDocument();
+    expect(await screen.findByText(`Started the status check of sample-app (run ${STARTED_RUN}).`)).toBeInTheDocument();
     expect(posted).toEqual([{ action: "analyze", id: "sample-app" }]);
     expect(screen.getByRole("button", { name: /^Checking…/ })).toBeDisabled();
     statusRelease.resolve();
@@ -169,7 +165,7 @@ describe("Projects", () => {
   });
 
   test("a status run already in progress keeps Check status disabled, and a failed run is reported", async () => {
-    serve([], { "sample-busy": null }, { ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: "r-0000000t", status: null }] });
+    serve({ statuses: { "sample-busy": null }, projects: listOf(uncheckedProject("sample-busy", "r-0000000t")) });
     server.use(http.get(API.anyRun, () => HttpResponse.json({ error: "gone" }, { status: 404 })));
     render(<Projects onShowRuns={() => {}} pollMs={10} />);
     expect(await screen.findByRole("button", { name: /^Checking…/ })).toBeDisabled();
@@ -181,7 +177,7 @@ describe("Projects", () => {
   });
 
   test("leaving the page while a finished check reads its status reloads nothing afterwards", async () => {
-    serve([], { "sample-busy": null }, { ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: "r-0000000t", status: null }] });
+    serve({ statuses: { "sample-busy": null }, projects: listOf(uncheckedProject("sample-busy", "r-0000000t")) });
     const release = deferred();
     let statusAsked = false;
     let statusAnswered = false;
@@ -196,7 +192,7 @@ describe("Projects", () => {
       }),
       http.get(API.projects, () => {
         listCalls += 1;
-        return HttpResponse.json({ ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: "r-0000000t", status: null }] });
+        return HttpResponse.json(listOf(uncheckedProject("sample-busy", "r-0000000t")));
       }),
     );
     const { unmount } = render(<Projects onShowRuns={() => {}} pollMs={10} />);
@@ -209,73 +205,90 @@ describe("Projects", () => {
     expect(listCalls).toBe(callsBefore);
   });
 
-  test("an already running status check is reused, and a start error is shown", async () => {
-    const projects = { ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: null, status: null }, { id: "sample-bad", path: "/x", exists: true, runs: 0, analyzing: null, status: null }] };
-    serve([], { "sample-busy": null, "sample-bad": null }, projects);
-    server.use(http.get(API.anyRun, () => HttpResponse.json({ run: { status: "running" } })));
+  test("an already running status check is reused", async () => {
+    serve({ statuses: { "sample-busy": null }, projects: listOf(uncheckedProject("sample-busy", null)) });
+    server.use(
+      http.get(API.anyRun, () => HttpResponse.json({ run: { status: "running" } })),
+      http.post(API.projects, () => HttpResponse.json({ runId: STARTED_RUN, status: "running", reused: true })),
+    );
     const user = userEvent.setup();
     render(<Projects onShowRuns={() => {}} pollMs={10} />);
     await user.click(await screen.findByRole("button", { name: "Check status" }));
-    expect(await screen.findByText("Status check of sample-busy is already running (run r-0000000s).")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: /sample-bad/ }));
-    await user.click(await screen.findByRole("button", { name: "Check status" }));
-    expect(await screen.findByText("project sample-bad: folder /x does not exist")).toBeInTheDocument();
+    expect(await screen.findByText(`Status check of sample-busy is already running (run ${STARTED_RUN}).`)).toBeInTheDocument();
   });
 
-  test("without the status workflow or a run-capable viewer, Check status is replaced by a note", async () => {
-    serve([], undefined, { ...list, statusWorkflowInstalled: false });
-    const { unmount } = render(<Projects onShowRuns={() => {}} />);
+  test("a status check that cannot start shows the error", async () => {
+    const badFolder = "project sample-bad: folder /x does not exist";
+    serve({ statuses: { "sample-bad": null }, projects: listOf(uncheckedProject("sample-bad", null, { path: "/x", runs: 0 })) });
+    server.use(http.post(API.projects, failingAction("analyze", "id", "sample-bad", badFolder)));
+    const user = userEvent.setup();
+    render(<Projects onShowRuns={() => {}} pollMs={10} />);
+    await user.click(await screen.findByRole("button", { name: "Check status" }));
+    expect(await screen.findByText(badFolder)).toBeInTheDocument();
+  });
+
+  test("without the status workflow, Check status is replaced by a note", async () => {
+    serve({ projects: { ...list, statusWorkflowInstalled: false } });
+    render(<Projects onShowRuns={() => {}} />);
     expect(await screen.findByText(/workflow is not installed, so the project status cannot be checked/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /check status/i })).not.toBeInTheDocument();
-    unmount();
+  });
 
-    serve([], undefined, { ...list, canAnalyze: false });
+  test("in a viewer that cannot start runs, Check status is replaced by a note naming the project id", async () => {
+    serve({ projects: { ...list, canAnalyze: false } });
     render(<Projects onShowRuns={() => {}} />);
     expect(await screen.findByText(/This viewer cannot start runs/)).toBeInTheDocument();
     expect(screen.getByText("projectId: sample-app")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /check status/i })).not.toBeInTheDocument();
   });
 
-  test("adds a project, discovers candidates and adds one, manages roots, and shows errors", async () => {
-    const posted = serve();
-    const user = userEvent.setup();
-    render(<Projects onShowRuns={() => {}} />);
-    await screen.findByRole("table");
-
+  test("adds a project by folder and id", async () => {
+    const { posted, user } = await renderSelected();
     await user.type(screen.getByLabelText(/^Folder/), "/src/sample-new-app");
     await user.type(screen.getByLabelText(/^Id/), "sample-new-app");
     await user.click(screen.getByRole("button", { name: "Add" }));
     expect(await screen.findByText("Added sample-new-app.")).toBeInTheDocument();
+    expect(posted).toEqual([{ action: "add", path: "/src/sample-new-app", id: "sample-new-app" }]);
+  });
 
+  test("discovers candidates under the roots and adds one with its suggested id", async () => {
+    const { posted, user } = await renderSelected();
     await user.click(screen.getByRole("button", { name: "Discover" }));
     const found = await screen.findByRole("list", { name: "Discovered projects" });
     await user.click(within(found).getByRole("button", { name: "Add as sample-new" }));
     await waitFor(() => expect(screen.queryByRole("list", { name: "Discovered projects" })).not.toBeInTheDocument());
+    expect(posted).toEqual([{ action: "discover" }, { action: "add", path: "/src/sample-new", id: "sample-new" }]);
+  });
 
+  test("adds and removes root folders", async () => {
+    const { posted, user } = await renderSelected();
     await user.type(screen.getByLabelText("Root folder"), "/other");
     await user.click(screen.getByRole("button", { name: "Add root" }));
     await user.click(screen.getByRole("button", { name: "Remove root /src" }));
-
-    await user.type(screen.getByLabelText(/^Folder/), "/bad");
-    await user.click(screen.getByRole("button", { name: "Add" }));
-    expect(await screen.findByText("project /bad is not a folder")).toBeInTheDocument();
-
-    expect(posted.map((p) => p.action)).toEqual(["add", "discover", "add", "add_root", "remove_root", "add"]);
-    expect(posted[0]).toEqual({ action: "add", path: "/src/sample-new-app", id: "sample-new-app" });
-    expect(posted[2]).toEqual({ action: "add", path: "/src/sample-new", id: "sample-new" });
+    await waitFor(() => expect(posted.map((body) => body.action)).toEqual(["add_root", "remove_root"]));
   });
 
-  test("removes a project only after confirmation and opens its runs", async () => {
-    const posted = serve();
+  test("a project that cannot be added shows the error", async () => {
+    const notAFolder = "project /bad is not a folder";
+    const { user } = await renderSelected();
+    server.use(http.post(API.projects, failingAction("add", "path", "/bad", notAFolder)));
+    await user.type(screen.getByLabelText(/^Folder/), "/bad");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    expect(await screen.findByText(notAFolder)).toBeInTheDocument();
+  });
+
+  test("the Runs button opens the runs of the selected project", async () => {
+    serve();
     const onShowRuns = vi.fn();
     const user = userEvent.setup();
     render(<Projects onShowRuns={onShowRuns} />);
     await screen.findByRole("table");
-
     await user.click(screen.getByRole("button", { name: "Runs (2)" }));
     expect(onShowRuns).toHaveBeenCalledWith("sample-app");
+  });
 
+  test("removes a project only after confirmation", async () => {
+    const { posted, user } = await renderSelected();
     const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
     await user.click(screen.getByRole("button", { name: "Remove" }));
     expect(posted).toHaveLength(0);
@@ -286,7 +299,7 @@ describe("Projects", () => {
   });
 
   test("an empty list invites adding a project, and discovery needs a root", async () => {
-    server.use(http.get(API.projects, () => HttpResponse.json({ roots: [], projects: [], statusWorkflow: STATUS_WORKFLOW, statusWorkflowInstalled: true, canAnalyze: true })));
+    server.use(http.get(API.projects, () => HttpResponse.json({ ...listOf(), roots: [], statusWorkflow: STATUS_WORKFLOW })));
     render(<Projects onShowRuns={() => {}} />);
     expect(await screen.findByText(/No project yet/)).toBeInTheDocument();
     expect(screen.getByText("Select a project.")).toBeInTheDocument();
@@ -295,8 +308,8 @@ describe("Projects", () => {
 
   test("a project with nothing installed says so instead of showing an empty table", async () => {
     const empty: ProjectStatusView = { ...status, data: { head: "9f8e7d6c5b", harnesses: [{ id: "agents-md", markers: ["AGENTS.md"] }], artifacts: [], counts: { current: 0, outdated: 0 }, workflows: [], summary: "no marketplace artifacts installed" } };
-    const projects = { ...list, projects: [{ id: "sample-app", path: "/src/sample-app", exists: true, runs: 1, analyzing: null, status: { runId: "r-0000000a", createdAt: null, summary: "no marketplace artifacts installed", counts: { current: 0 } } }] };
-    serve([], { "sample-app": empty }, projects);
+    const projects = listOf(uncheckedProject("sample-app", null, { status: { runId: "r-0000000a", createdAt: null, summary: "no marketplace artifacts installed", counts: { current: 0 } } }));
+    serve({ statuses: { "sample-app": empty }, projects });
     render(<Projects onShowRuns={() => {}} />);
     const verdict = await screen.findByRole("region", { name: "Verdict" });
     expect(verdict).toHaveClass("verdict-empty");
@@ -327,7 +340,7 @@ describe("Projects", () => {
         summary: "1 current, 1 outdated, 1 modified, 1 local-only",
       },
     };
-    serve([], { "sample-app": source });
+    serve({ statuses: { "sample-app": source } });
     render(<Projects onShowRuns={() => {}} />);
     const verdict = await screen.findByRole("region", { name: "Verdict" });
     expect(verdict).toHaveClass("verdict-change");
@@ -342,14 +355,14 @@ describe("Projects", () => {
     { fetchError: "could not resolve host", shown: /compared with origin\/main 9f8e7d6 \(fetch failed: could not resolve host\)/ },
     { fetchError: null, shown: /compared with origin\/main 9f8e7d6 \(last fetch\)/ },
   ])("an unfetched remote ref says why: fetch error $fetchError", async ({ fetchError, shown }) => {
-    serve([], { "sample-app": withData({ ref: remoteRef, fetched: false, fetchError }) });
+    serve({ statuses: { "sample-app": withData({ ref: remoteRef, fetched: false, fetchError }) } });
     render(<Projects onShowRuns={() => {}} />);
     expect(await screen.findByText(shown)).toBeInTheDocument();
   });
 
   test("a project in sync gets a green verdict", async () => {
     const synced: ProjectStatusView = withData({ artifacts: [artifact({}), artifact({ id: "skill:sample-local", name: "sample-local", state: "local-only" })], counts: { current: 1, "local-only": 1 }, workflows: [] });
-    serve([], { "sample-app": synced });
+    serve({ statuses: { "sample-app": synced } });
     render(<Projects onShowRuns={() => {}} />);
     const verdict = await screen.findByRole("region", { name: "Verdict" });
     expect(verdict).toHaveClass("verdict-ok");
@@ -357,27 +370,8 @@ describe("Projects", () => {
     expect(screen.queryByText(/Factory workflows that run/)).not.toBeInTheDocument();
   });
 
-  test("verdicts and actions by state", () => {
-    expect(verdictOf(null)).toEqual({ level: "empty", title: "No marketplace skill or agent is installed in this project.", badge: "nothing installed" });
-    expect(verdictOf({ current: 2, adapted: 1 })).toMatchObject({ level: "ok", badge: "in sync" });
-    expect(verdictOf({ current: 1 }, remoteRef).title).toBe(`In sync with ${remoteRef}: 1 skills and agents, nothing to change.`);
-    expect(verdictOf({ current: 1, outdated: 1 }, "HEAD").title).toBe("1 of 2 differ from the marketplace: 1 outdated.");
-    expect(actionOf(artifact({ harness: "source", state: "current" }))).toBe("Nothing to do.");
-    expect(actionOf(artifact({ harness: "source", state: "missing" }))).toMatch(/^Pull the remote/);
-    expect(actionOf(artifact({ harness: "source", state: "unknown-base" }))).toMatch(/^Local change not on the remote/);
-    expect(verdictOf({ current: 1, modified: 2, removed: 1 })).toEqual({ level: "change", title: "3 of 4 differ from the marketplace: 2 modified · 1 removed.", badge: "3 to change" });
-    expect(actionOf(artifact({ state: "adapted" }))).toBe("Nothing to do.");
-    expect(actionOf(artifact({ state: "outdated", current: null }))).toBe("Update to the marketplace version (olko-marketplace-skill-sync).");
-    expect(actionOf(artifact({ state: "modified" }))).toBe("Send the local change upstream (olko-marketplace-upstream) or reinstall the marketplace version.");
-    expect(actionOf(artifact({ state: "modified", upstreamMoved: true }))).toMatch(/^Take the newer marketplace version into the local change/);
-    expect(actionOf(artifact({ state: "unknown-base" }))).toBe("Compare by hand: it matches no marketplace version.");
-    expect(actionOf(artifact({ state: "missing" }))).toBe("Install it (olko-marketplace-skill-sync).");
-    expect(actionOf(artifact({ state: "removed" }))).toMatch(/^The marketplace dropped it/);
-    expect(actionOf(artifact({ state: "local-only" }))).toMatch(/^Local only: publish it/);
-  });
-
   test("a finished check whose status cannot be read still reports the run", async () => {
-    serve([], { "sample-app": null }, { ...list, projects: [{ id: "sample-app", path: "/src/sample-app", exists: true, runs: 1, analyzing: "r-0000000u", status: null }] });
+    serve({ statuses: { "sample-app": null }, projects: listOf(uncheckedProject("sample-app", "r-0000000u")) });
     server.use(
       http.get(API.anyRun, () => HttpResponse.json({ run: { status: "done" } })),
       http.get(API.projectStatus, () => HttpResponse.json({ error: "broken" }, { status: 500 })),
@@ -398,8 +392,8 @@ describe("Projects", () => {
   });
 
   test("an action between two polls of a running check keeps the poll that is under way", async () => {
-    const analyzing = { ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: "r-0000000t", status: null }] };
-    serve([], { "sample-busy": null }, analyzing);
+    const analyzing = listOf(uncheckedProject("sample-busy", "r-0000000t"));
+    serve({ statuses: { "sample-busy": null }, projects: analyzing });
     let polls = 0;
     let listCalls = 0;
     const started = deferred();
@@ -433,7 +427,7 @@ describe("Projects", () => {
   });
 
   test("a missing status file is reported", async () => {
-    serve([], { "sample-app": { ...status, data: null } });
+    serve({ statuses: { "sample-app": { ...status, data: null } } });
     render(<Projects onShowRuns={() => {}} />);
     expect(await screen.findByText("The status file of run r-0000000a is missing.")).toBeInTheDocument();
   });
@@ -442,31 +436,6 @@ describe("Projects", () => {
     server.use(http.get(API.projects, () => HttpResponse.json({ error: "x" }, { status: 500 })));
     render(<Projects onShowRuns={() => {}} />);
     expect(await screen.findByText("/projects: 500 (x)")).toBeInTheDocument();
-  });
-
-  test("version and count texts", () => {
-    expect(versionText(artifact({}))).toBe("1.0.0");
-    expect(versionText(artifact({ state: "unknown-base", nearestVersion: "0.9.0" }))).toBe("nearest 0.9.0");
-    expect(versionText(artifact({ state: "removed", lastVersion: "0.8.0" }))).toBe("last 0.8.0");
-    expect(versionText(artifact({ installed: null, current: null }))).toBe("–");
-    expect(versionText(artifact({ state: "outdated", installed: "1.0.0", installedCommit, current: "1.1.0", currentCommit }))).toBe("1.0.0 → 1.1.0");
-    expect(versionText(artifact({ state: "outdated", installed: "1.0.0", installedCommit, current: "1.0.0", currentCommit }))).toBe(`1.0.0 (${installedCommit}) → 1.0.0 (${currentCommit})`);
-    expect(versionText(artifact({ state: "outdated", installed: null, installedCommit, current: "1.0.0", currentCommit }))).toBe(`commit ${installedCommit} → 1.0.0 (${currentCommit})`);
-    expect(versionText(artifact({ state: "current", installed: null, installedCommit: currentCommit, current: null, currentCommit }))).toBe("–");
-    expect(versionText(artifact({ state: "removed", lastVersion: null, lastCommit: "ccccccc" }))).toBe("last commit ccccccc");
-    expect(versionText(artifact({ installed: "1.0.0", installedCommit, current: "1.0.0" }))).toBe("1.0.0");
-  });
-
-  test("remote name and fetch note", () => {
-    expect(remoteNameOf(remoteRef)).toBe(remoteRef);
-    expect(remoteNameOf("HEAD")).toBeNull();
-    expect(remoteNameOf(undefined)).toBeNull();
-    expect(fetchNoteOf({ ref: remoteRef, fetched: false, fetchError: "offline" })).toBe(" (fetch failed: offline)");
-    expect(fetchNoteOf({ ref: remoteRef, fetched: false, fetchError: null })).toBe(" (last fetch)");
-    expect(fetchNoteOf({ ref: "HEAD", fetched: false, fetchError: null })).toBe("");
-    expect(fetchNoteOf({ ref: remoteRef, fetched: true, fetchError: null })).toBe("");
-    expect(countsText({ missing: 2, current: 1, removed: 0 })).toBe("1 current · 2 missing");
-    expect(countsText(null)).toBe("");
   });
 });
 

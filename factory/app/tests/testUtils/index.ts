@@ -7,5 +7,6 @@ export * from "./handlers.ts";
 export * from "./network.ts";
 export * from "./nodes.ts";
 export * from "./paths.ts";
+export * from "./projects.ts";
 export * from "./render.tsx";
 export * from "./server.ts";

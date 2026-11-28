@@ -79,10 +79,10 @@ function handRun(): Run {
   };
 }
 
-test("the run summary ranks steps by cost, counts loops, waits and failures, and leaves the supervisor out", () => {
+test("the run summary totals cost, tokens, steps and time, and leaves the supervisor out", () => {
   const summary = summarizeRun(handRun());
   assert.deepEqual(summary.run, { runId: "r-1", workflow: "w", goal: "g", status: "failed", backend: "cli:claude", tierModels: { low: "m-low", medium: "m-medium", high: "m-high" }, budgetUsd: 10 });
-  assert.equal(summary.totals.costUsd, 2.5);
+  assert.equal(summary.totals.costUsd, 2.5, "the supervisor's own $9 is not counted");
   assert.equal(summary.totals.budgetRatio, 0.25);
   assert.equal(summary.totals.tokens, 9900);
   assert.equal(summary.totals.llmSteps, 4);
@@ -90,27 +90,45 @@ test("the run summary ranks steps by cost, counts loops, waits and failures, and
   assert.equal(summary.totals.unknownCostSteps, 1);
   assert.equal(summary.totals.wallMs, 112000, "first event to the run end, not to the supervisor");
   assert.equal(summary.totals.agentMs, 51000);
-  assert.deepEqual(summary.nodes.map((n) => n.node), ["w/fix", "w/plan", "w/ask", "w/check", "w/judge", "w/docs"]);
+});
+
+test("the run summary ranks steps by cost with their visits, calls, agents and failures", () => {
+  const summary = summarizeRun(handRun());
+  assert.deepEqual(summary.nodes.map((node) => node.node), ["w/fix", "w/plan", "w/ask", "w/check", "w/judge", "w/docs"]);
   const fix = summary.nodes[0];
   assert.deepEqual({ visits: fix?.visits, calls: fix?.calls, agents: fix?.agents, costShare: fix?.costShare, wallMs: fix?.wallMs, inputTokens: fix?.inputTokens }, { visits: 2, calls: 2, agents: ["a"], costShare: 0.8, wallMs: 40000, inputTokens: 8000 });
-  assert.equal(summary.nodes.find((n) => n.node === "w/ask")?.kind, "none");
-  assert.equal(summary.nodes.find((n) => n.node === "w/judge")?.failures, 2);
+  assert.equal(summary.nodes.find((node) => node.node === "w/ask")?.kind, "none");
+  assert.equal(summary.nodes.find((node) => node.node === "w/judge")?.failures, 2);
+  assert.ok(!summary.nodes.some((node) => node.node === SUPERVISOR_PATH), "the supervisor is not a ranked step");
+});
+
+test("the run summary lists loops, question waits and skipped steps", () => {
+  const summary = summarizeRun(handRun());
   assert.deepEqual(summary.loops, [{ node: "w/fix", visits: 2 }]);
   assert.deepEqual(summary.questions, [{ questionId: "q-go", node: "w/ask", waitMs: 60000 }]);
   assert.deepEqual(summary.skipped, [{ node: "w/docs", reason: "no work" }]);
-  assert.deepEqual(summary.failures.map((f) => f.error), ["timeout", "judge: timeout", "boom"]);
-  assert.deepEqual(summary.top, { costNode: "w/fix", timeNode: "w/ask", longestQuestion: "q-go" });
-  assert.ok(!summary.nodes.some((n) => n.node === SUPERVISOR_PATH));
 });
 
-test("the supervisor line is read from the last matching line", () => {
-  assert.deepEqual(parseSupervisorLine("FACTS: x\nsupervise | improve | w/fix | lower fix to low tier | saves 40%\n", VERDICT_LINE), { verdict: "improve", bottleneck: "w/fix", idea: "lower fix to low tier | saves 40%" });
-  assert.deepEqual(parseSupervisorLine("`supervise | ok | none | none`", VERDICT_LINE), { verdict: "ok", bottleneck: "none", idea: "none" });
-  assert.equal(parseSupervisorLine("supervise | great | x | y", VERDICT_LINE), null);
-  assert.equal(parseSupervisorLine("no line", VERDICT_LINE), null);
-  assert.equal(parseSupervisorLine("supervisewise | ok | x | y", VERDICT_LINE), null);
-  assert.deepEqual(parseSupervisorLine("review | pass | w/a | none", { prefix: "review", verdicts: ["pass", "fail"] }), { verdict: "pass", bottleneck: "w/a", idea: "none" });
+test("the run summary lists the failures and names the top cost step, time step and question", () => {
+  const summary = summarizeRun(handRun());
+  assert.deepEqual(summary.failures.map((failure) => failure.error), ["timeout", "judge: timeout", "boom"]);
+  assert.deepEqual(summary.top, { costNode: "w/fix", timeNode: "w/ask", longestQuestion: "q-go" });
 });
+
+const supervisorLines: { name: string; output: string; format?: typeof VERDICT_LINE; parsed: ReturnType<typeof parseSupervisorLine> }[] = [
+  { name: "the last matching line wins and the idea keeps its pipes", output: "FACTS: x\nsupervise | improve | w/fix | lower fix to low tier | saves 40%\n", parsed: { verdict: "improve", bottleneck: "w/fix", idea: "lower fix to low tier | saves 40%" } },
+  { name: "a line in backticks is read", output: "`supervise | ok | none | none`", parsed: { verdict: "ok", bottleneck: "none", idea: "none" } },
+  { name: "an unknown verdict is no line", output: "supervise | great | x | y", parsed: null },
+  { name: "text without the prefix is no line", output: "no line", parsed: null },
+  { name: "a longer word starting with the prefix is no line", output: "supervisewise | ok | x | y", parsed: null },
+  { name: "another configured prefix and verdicts are read", output: "review | pass | w/a | none", format: { prefix: "review", verdicts: ["pass", "fail"] }, parsed: { verdict: "pass", bottleneck: "w/a", idea: "none" } },
+];
+
+for (const { name, output, format, parsed } of supervisorLines) {
+  test(`the supervisor line: ${name}`, () => {
+    assert.deepEqual(parseSupervisorLine(output, format ?? VERDICT_LINE), parsed);
+  });
+}
 
 test("the post-run agent, its prompt, host hint and verdict line come from config/factory.yaml", () => {
   const settings = loadFactoryConfig().supervisor;
@@ -120,13 +138,19 @@ test("the post-run agent, its prompt, host hint and verdict line come from confi
   assert.match(settings?.hostHint ?? "", /supervisorWork/);
 });
 
-test("without a supervisor section in the config no post-run agent runs", async () => {
-  const config = path.join(tempDir("factory-no-supervisor-"), "factory.yaml");
+/** A copy of config/factory.yaml without the top-level `section` and its indented lines. */
+function configWithout(section: string): string {
+  const config = path.join(tempDir("factory-config-without-"), "factory.yaml");
   const lines = fs.readFileSync(path.join(import.meta.dirname, "..", "config", "factory.yaml"), "utf8").split(/\r?\n/);
-  const start = lines.indexOf("supervisor:");
-  const end = lines.findIndex((line, index) => index > start && /^\S/.test(line));
-  fs.writeFileSync(config, [...lines.slice(0, start), ...lines.slice(end)].join("\n"));
-  await withEnv({ FACTORY_CONFIG: config }, async () => {
+  const start = lines.indexOf(`${section}:`);
+  assert.ok(start >= 0, `config/factory.yaml has a ${section} section`);
+  const next = lines.findIndex((line, index) => index > start && /^\S/.test(line));
+  fs.writeFileSync(config, [...lines.slice(0, start), ...(next < 0 ? [] : lines.slice(next))].join("\n"));
+  return config;
+}
+
+test("without a supervisor section in the config no post-run agent runs", async () => {
+  await withEnv({ FACTORY_CONFIG: configWithout("supervisor") }, async () => {
     assert.equal(loadFactoryConfig().supervisor, undefined);
     const factory = factoryWith({ backend: "fake" });
     const { run } = factory.start("unsupervised fake run");
@@ -153,19 +177,24 @@ async function finish(factory: FactoryType, runId: string): Promise<Run> {
   }
 }
 
-test("after a fake run ends the engine runs the supervisor once, adds its cost and keeps the run result", async () => {
+/** A confirmed fake run of the default workflow, waited until it ended. */
+async function supervisedFakeRun() {
   const factory = factoryWith({ backend: "fake" });
   const { run } = factory.start("supervised fake run");
   assert.equal(run.supervisor, undefined, "no supervisor before the run is confirmed");
   factory.confirm(run.runId);
-  const ended = await finish(factory, run.runId);
+  return { factory, ended: await finish(factory, run.runId) };
+}
+
+test("after a fake run ends the engine runs the supervisor once, adds its cost and keeps the run result", async () => {
+  const { factory, ended } = await supervisedFakeRun();
   assert.equal(ended.status, "done");
   const supervisor = ended.supervisor;
   assert.equal(supervisor?.status, "done");
   assert.equal(supervisor?.agent, SUPERVISOR_AGENT);
   assert.equal(supervisor?.verdict, "ok");
   assert.match(supervisor?.output ?? "", /supervise \| ok \| hello\//);
-  const records = ended.ledger.filter((r) => r.nodePath === SUPERVISOR_PATH);
+  const records = ended.ledger.filter((record) => record.nodePath === SUPERVISOR_PATH);
   assert.equal(records.length, 1);
   assert.ok((supervisor?.costUsd ?? 0) > 0);
   assert.equal(supervisor?.costUsd, records[0]?.costUsd);
@@ -175,9 +204,13 @@ test("after a fake run ends the engine runs the supervisor once, adds its cost a
   assert.equal(report.supervisor?.status, "done");
   assert.notEqual(report.result, supervisor?.output);
   assert.equal(factory.status(ended).supervisor?.verdict, "ok");
+});
+
+test("the supervisor output is stored with the run and a later checkpoint does not run it again", async () => {
+  const { factory, ended } = await supervisedFakeRun();
   factory.checkpoint(ended);
-  assert.equal(factory.get(run.runId).ledger.filter((r) => r.nodePath === SUPERVISOR_PATH).length, 1, "a later checkpoint does not run it again");
-  const saved = JSON.parse(fs.readFileSync(path.join(factory.dataDir, "runs", `${run.runId}.json`), "utf8")) as Run;
+  assert.equal(factory.get(ended.runId).ledger.filter((record) => record.nodePath === SUPERVISOR_PATH).length, 1, "a later checkpoint does not run it again");
+  const saved = JSON.parse(fs.readFileSync(path.join(factory.dataDir, "runs", `${ended.runId}.json`), "utf8")) as Run;
   assert.equal(saved.supervisor?.status, "done", "the supervisor output is stored with the run");
 });
 
