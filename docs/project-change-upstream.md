@@ -9,7 +9,7 @@ after a person says so. A person always merges or closes the PR.
 | Part | Role |
 |------|------|
 | `.agents/marketplace.lock.json` (in the project) | Provenance per installed artifact: marketplace version, source commit, content hash without the project adapter (`project.md`, `*.local.*`, the agent `model:` line). Commit it with the project. |
-| `scripts/olko-marketplace-lock.mjs` | `init` writes the lock (finds the base version in marketplace history), `status` lists changed artifacts, `record` stores a pending PR or a rejected content hash. |
+| `scripts/olko-marketplace-lock.mjs` | `init` writes the lock (finds the base version in marketplace history), `status` lists changed artifacts, `record` stores a pending PR or a rejected content hash. Reads installed copies through the shared model, see [Installed-artifact model](#installed-artifact-model). |
 | `scripts/olko-sanitize.mjs` | Blocking gate, see [Sanitize gate](#sanitize-gate). Exit 0 clean, 2 blocked, 1 failed. |
 | `scripts/olko-upstream-plan.mjs` | Deterministic PR plan: `open`, `append` (open draft PR on the same base) or `skip` (duplicate, rejected, adapter-only). |
 | `olko-marketplace-upstream` (agent and skill) | `stage`, `optimize` and `publish` steps. Draft PRs only; deny rules for merge, ready, reviewers and `gh api`. |
@@ -25,6 +25,54 @@ after a person says so. A person always merges or closes the PR.
 4. `no`: the content hash is recorded as rejected; the same content is never offered again.
 5. `ok`: the factory runs the steps in the background with the watch's CLI backend (set `FACTORY_WATCH_MODEL` in the factory's environment to pick the model for every tier, for example the model your OpenCode agents use): stage (adapter hunks stay out), optimize, sanitize gate, plan, publish (draft PR, label `upstream-candidate`). The PR is recorded as pending in the lock.
 6. Review the draft PR on GitHub. Merge or close it yourself.
+
+## Installed-artifact model
+
+The lock and the project status scan (`olko-factory-project`, `scripts/project-scan.mjs`)
+answer the same questions about an installed copy: what is installed, what its portable
+content is, what its version is, and what its marketplace history is. One module answers them
+for both: `skills/software-factory/olko-factory-project/scripts/installed-artifacts.mjs`.
+
+- **Owner.** The module lives in the skill. An installed skill copy must work on its own, so a
+  skill script cannot import the root `scripts/` folder; the lock always runs in a marketplace
+  checkout, so it can import the module from the checkout path. The module imports only Node
+  built-ins.
+- **Locations.** `LOCATIONS` lists every harness folder (`.agents/skills`, `.claude/skills`,
+  `.opencode/skills`, `.opencode/agents`, `.claude/agents`). The lock tracks the copies whose
+  source exists at the marketplace HEAD, one per id: the first copy in that order. Each entry
+  records its `location`; entries written before `location` existed fall back to
+  `.agents/skills/<name>` and `.opencode/agents/<file>`.
+- **Source paths.** `SOURCE_PATHS` is the one table of marketplace paths per kind and harness:
+  `skills/<category>/<name>/`, `plugins/<plugin>/skills/<name>/`, `agents/opencode/<name>.md`
+  (OpenCode agents), `plugins/<plugin>/agents/<name>.md` (Claude Code agents).
+- **Adapter and portable text.** `project.md`, `*.local.*` and the agent `model:` line stay out,
+  see [Skill Adaptation Contract](skill-adaptation-contract.md). CRLF and CR become LF.
+- **Versions.** `registry.json` `skills[].version` (skills under `skills/<category>/`) and
+  `agents/opencode/index.json` `agents[].version` at each commit; the front matter `version` when
+  the index has none.
+- **History.** The last `--depth` commits (default 40) of the source path, read with one
+  `git cat-file --batch` per artifact. A copy older than the compared history is
+  `unknown-base`; run again with a larger `--depth`.
+- **State.** Exact match with HEAD: `current` (or `adapted` with an adapter or a project model);
+  with an older commit: `outdated`; no exact match but a file equal to the nearest version:
+  `modified` on a guessed base; no file in common: `unknown-base`. The nearest version has the
+  fewest differing files, then the fewest differing lines, then is the newest.
+
+Lock entry fields: `state` (at `init`), `version` and `sourceCommit` (the base; for `modified`
+the nearest version, with `baseGuessed: true`), `base: "unknown"` with `nearestVersion` and
+`nearestCommit` for `unknown-base`, `hash` and `files`, `location`, `pending`, `rejected`.
+
+### Content hash
+
+There is one content-hash format: `sha256:` plus the SHA-256 of each portable file's path, a
+newline, its text and a newline, for every portable file in path order, plus the SHA-256 of each portable file (`hashFiles`). The lock
+`hash`, the scan `contentHash`, the `status` `contentHash` (without the prefix) and the plan's
+duplicate and rejected checks all use it. The lock `hash` is the hash of the base version (for
+`unknown-base`, of the local copy at `init`).
+
+The `olko-sync-state` hash (`sync-state.mjs hash`) is a different hash and is not comparable
+with it: it hashes every file of the folder, the adapter and the agent model line included,
+and has no prefix. It answers "did the folder change", not "did the marketplace content change".
 
 ## Security
 

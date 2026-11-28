@@ -32,7 +32,7 @@
 
 ---
 
-### Task 1: Versions from registry and agent manifest in the status scan
+### Task 1: Versions from registry and agent manifest in the status scan (done)
 
 **Files:**
 - Modify: `skills/software-factory/olko-factory-project/scripts/project-scan.mjs` (`marketplaceVersions`)
@@ -42,11 +42,12 @@
 **Interfaces:**
 - Produces: `marketplaceVersions(...)` entries `{ commit, date, version: string|null, files, model }`; `version` = `registry.json` `skills[].version` (skill) or `agents/opencode/index.json` `agents[].version` (agent) at that commit, front matter `version` when the registry has none.
 
-- [ ] **Step 1: Failing test** `"versions come from the registry and the agent manifest, front matter is the fallback"`: fixture writes `registry.json` `{ skills: [{ name: "sample-skill", version: "2.0.0" }] }` and `agents/opencode/index.json` `{ agents: [{ name: "sample-helper", version: "0.3.0" }] }` in the v2 commit; assert `current` of `skill:sample-skill` is `"2.0.0"`, of `agent:sample-helper` is `"0.3.0"`; an artifact absent from both keeps its front matter version.
-- [ ] **Step 2:** Run `node --test scripts/project-scan.test.mjs` → the new test fails.
-- [ ] **Step 3:** Read both JSON files once per commit with `git show <commit>:<file>` (batch through the existing `readBlobs` when practical); prefer them over front matter.
-- [ ] **Step 4:** Run `node --test scripts/project-scan.test.mjs` → all pass.
-- [ ] **Step 5:** Commit `fix(factory): read skill and agent versions from the registry and the agent manifest`.
+- [x] **Step 1: Failing test** `"versions come from the registry and the agent manifest, front matter is the fallback"`: fixture writes `registry.json` `{ skills: [{ name: "sample-skill", version: "2.0.0" }] }` and `agents/opencode/index.json` `{ agents: [{ name: "sample-helper", version: "0.3.0" }] }` in the v2 commit; assert `current` of `skill:sample-skill` is `"2.0.0"`, of `agent:sample-helper` is `"0.3.0"`; an artifact absent from both keeps its front matter version.
+- [x] **Step 2:** Run `node --test scripts/project-scan.test.mjs` → the new test fails.
+- [x] **Step 3:** Read both JSON files once per commit with `git show <commit>:<file>` (batch through the existing `readBlobs` when practical); prefer them over front matter.
+- [x] **Step 4:** Run `node --test scripts/project-scan.test.mjs` → all pass.
+- [x] **Step 5:** Commit `fix(factory): read skill and agent versions from the registry and the agent manifest`.
+- Done: `marketplaceVersions` now lives in `skills/software-factory/olko-factory-project/scripts/installed-artifacts.mjs`, shared by `project-scan.mjs` and `scripts/olko-marketplace-lock.mjs`; `scripts/installed-artifacts.test.mjs` checks that both tools agree.
 
 ### Task 2: Merge script, `prepare`
 
