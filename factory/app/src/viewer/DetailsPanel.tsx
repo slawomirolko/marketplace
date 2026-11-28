@@ -36,7 +36,7 @@ export function DetailsPanel({ tab, onTab, selected, teamNodes, onSelectKey }: D
     <aside>
       <div className="tabs" role="tablist" aria-label="Details">
         {TABS.map(({ id, label }) => (
-          <button key={id} type="button" role="tab" id={`tab-${id}`} aria-selected={tab === id} aria-controls={`panel-${id}`} className={tab === id ? "active" : ""} onClick={() => onTab(id)}>
+          <button key={id} type="button" role="tab" id={`tab-${id}`} data-testid={`details-tab-${id}`} aria-selected={tab === id} aria-controls={`panel-${id}`} className={tab === id ? "active" : ""} onClick={() => onTab(id)}>
             {label}
           </button>
         ))}

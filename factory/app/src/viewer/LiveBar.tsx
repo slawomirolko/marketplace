@@ -13,7 +13,7 @@ export function LiveBar({ live, refreshedAt, refreshError, onShowCurrent }: { li
       {live.agents.length ? ` · ${live.agents.length} agent${live.agents.length === 1 ? "" : "s"} working` : ""}
       {` · refreshes every ${LIVE_REFRESH_MS / MS_PER_SECOND} s${refreshedAt ? `, last ${refreshedAt.toLocaleTimeString()}` : ""}`}
       {refreshError && <span className="pending-error">{refreshError}</span>}
-      <button type="button" onClick={onShowCurrent}>Show current step</button>
+      <button type="button" data-testid="show-current-step" onClick={onShowCurrent}>Show current step</button>
     </span>
   );
 }

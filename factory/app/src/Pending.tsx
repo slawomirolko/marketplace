@@ -57,14 +57,14 @@ export function PendingDecisions({ onOpenRun }: { onOpenRun: (runId: string) => 
           <li key={`${item.runId}:${item.questionId}`} className="pending-item">
             <div className="pending-head">
               <strong>{item.goal}</strong>{" "}
-              <button type="button" className="link" onClick={() => onOpenRun(item.runId)}>
+              <button type="button" className="link" data-testid={`pending-run-${item.runId}`} onClick={() => onOpenRun(item.runId)}>
                 {item.runId}
               </button>
             </div>
             <pre className="question-text">{item.text}</pre>
             <div className="pending-actions">
               {item.allowed.map((choice) => (
-                <button key={choice} type="button" disabled={busy === item.runId} onClick={() => void answer(item, choice)}>
+                <button key={choice} type="button" data-testid={`pending-answer-${item.runId}-${choice}`} disabled={busy === item.runId} onClick={() => void answer(item, choice)}>
                   {choice}
                 </button>
               ))}

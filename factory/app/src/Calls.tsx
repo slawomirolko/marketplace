@@ -27,11 +27,12 @@ export function CallsList({ selectedKey, teamNodes, onSelect }: { selectedKey: s
             </tr>
           </thead>
           <tbody>
-            {calls.map((call, i) => {
+            {calls.map((call, index) => {
               const key = callKey(call, teamNodes);
               return (
                 <tr
-                  key={`${call.node}|${call.agent ?? ""}|${call.startedAt}|${i}`}
+                  key={`${call.node}|${call.agent ?? ""}|${call.startedAt}|${index}`}
+                  data-testid={`call-row-${index}`}
                   className={`${selectedKey === key ? "selected " : ""}status-${call.status.replace(/\s+/g, "-")}`}
                   tabIndex={0}
                   aria-selected={selectedKey === key}

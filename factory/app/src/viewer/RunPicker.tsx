@@ -16,7 +16,7 @@ export function RunPicker({ runId, onRunId, shownRuns, filters }: { runId: strin
   return (
     <label>
       Run{" "}
-      <select value={runId} onChange={(event) => onRunId(event.target.value)}>
+      <select data-testid="run-select" value={runId} onChange={(event) => onRunId(event.target.value)}>
         <option value="">no run (structure only)</option>
         {emptyNote && (
           <option value="" disabled>

@@ -34,14 +34,14 @@ export function ProjectHead({ project, overview, checkingRun, checkingState, has
       <code>{project.path}</code>
       <span className="project-actions">
         {overview.statusWorkflowInstalled && overview.canAnalyze && (
-          <button type="button" disabled={busy || Boolean(checkingRun) || !project.exists} onClick={() => onAnalyze(project.id)} title={`Check the installed skills and agents against the marketplace (${overview.statusWorkflow} workflow).`}>
+          <button type="button" data-testid="check-status" disabled={busy || Boolean(checkingRun) || !project.exists} onClick={() => onAnalyze(project.id)} title={`Check the installed skills and agents against the marketplace (${overview.statusWorkflow} workflow).`}>
             {checkButtonText(checkingRun, checkingState, hasStatus)}
           </button>
         )}
-        <button type="button" onClick={() => onShowRuns(project.id)} disabled={project.runs === 0}>
+        <button type="button" data-testid="project-runs" onClick={() => onShowRuns(project.id)} disabled={project.runs === 0}>
           Runs ({project.runs})
         </button>
-        <button type="button" disabled={busy} onClick={remove}>
+        <button type="button" data-testid="remove-project" disabled={busy} onClick={remove}>
           Remove
         </button>
       </span>

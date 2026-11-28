@@ -8,7 +8,7 @@ export function ProjectList({ projects, selectedId, onSelect }: { projects: Proj
       <ul>
         {projects.map((project) => (
           <li key={project.id}>
-            <button type="button" className={project.id === selectedId ? "active" : ""} aria-current={project.id === selectedId} onClick={() => onSelect(project.id)}>
+            <button type="button" data-testid={`project-select-${project.id}`} className={project.id === selectedId ? "active" : ""} aria-current={project.id === selectedId} onClick={() => onSelect(project.id)}>
               <strong>{project.id}</strong>
               {!project.exists && <span className="warn"> · folder missing</span>}
               {project.status ? <ListVerdict counts={project.status.counts} /> : <span className="muted small">not checked yet</span>}

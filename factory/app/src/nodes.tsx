@@ -58,6 +58,7 @@ function Toggle({ item, expanded }: { item: Item; expanded: boolean }) {
       ref={button}
       type="button"
       className="toggle nodrag"
+      data-testid={`group-toggle-${item.key}`}
       aria-expanded={expanded}
       onClick={(event) => {
         event.stopPropagation();
@@ -116,6 +117,7 @@ function HumanMark({ item }: { item: Item }) {
     <button
       type="button"
       className={`human-icon human-${icon.role} nodrag`}
+      data-testid={`human-icon-${item.key}`}
       title={label}
       aria-label={label}
       onClick={(event) => {

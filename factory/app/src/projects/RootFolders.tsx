@@ -18,10 +18,10 @@ export function RootFolders({ roots, candidates, busy, act, onDiscover, onAddCan
     <div className="project-roots">
       <h3>Root folders</h3>
       <ul>
-        {roots.map((root) => (
+        {roots.map((root, index) => (
           <li key={root}>
             <code>{root}</code>{" "}
-            <button type="button" disabled={busy} onClick={() => void act({ action: "remove_root", path: root }, () => null)} aria-label={`Remove root ${root}`}>
+            <button type="button" data-testid={`remove-root-${index}`} disabled={busy} onClick={() => void act({ action: "remove_root", path: root }, () => null)} aria-label={`Remove root ${root}`}>
               ✕
             </button>
           </li>
@@ -36,10 +36,10 @@ export function RootFolders({ roots, candidates, busy, act, onDiscover, onAddCan
           });
         }}
       >
-        <input value={newRoot} onChange={(event) => setNewRoot(event.target.value)} placeholder="C:\src" aria-label="Root folder" />
-        <button type="submit" disabled={busy || !newRoot.trim()}>Add root</button>
+        <input data-testid="root-folder-input" value={newRoot} onChange={(event) => setNewRoot(event.target.value)} placeholder="C:\src" aria-label="Root folder" />
+        <button type="submit" data-testid="add-root" disabled={busy || !newRoot.trim()}>Add root</button>
       </form>
-      <button type="button" onClick={onDiscover} disabled={busy || roots.length === 0} title="Search the root folders for projects with marketplace markers. Nothing is added until you add a candidate.">
+      <button type="button" data-testid="discover-projects" onClick={onDiscover} disabled={busy || roots.length === 0} title="Search the root folders for projects with marketplace markers. Nothing is added until you add a candidate.">
         Discover
       </button>
       {candidates && candidates.length > 0 && (
@@ -47,7 +47,7 @@ export function RootFolders({ roots, candidates, busy, act, onDiscover, onAddCan
           {candidates.map((candidate) => (
             <li key={candidate.path}>
               <code>{candidate.path}</code> <span className="muted small">{candidate.markers.join(", ")}</span>{" "}
-              <button type="button" disabled={busy} onClick={() => onAddCandidate(candidate.path, candidate.suggestedId)}>
+              <button type="button" data-testid={`add-candidate-${candidate.suggestedId}`} disabled={busy} onClick={() => onAddCandidate(candidate.path, candidate.suggestedId)}>
                 Add as {candidate.suggestedId}
               </button>
             </li>

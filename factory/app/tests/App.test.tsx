@@ -62,6 +62,26 @@ describe("App", () => {
     expect(await screen.findByText("No run selected. Roles and tiers come from the factory config.")).toBeInTheDocument();
   });
 
+  test("the header controls are reachable by test id", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await card("run");
+
+    expect(screen.getByTestId("view-mode-workflows")).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByTestId("workflow-select")).toHaveValue("main");
+    await user.click(screen.getByTestId("show-numbers"));
+    expect(window.localStorage.getItem("factory-viewer.show-numbers")).toBe("1");
+    await user.click(screen.getByTestId("details-tab-calls"));
+    expect(screen.getByTestId("details-tab-calls")).toHaveAttribute("aria-selected", "true");
+
+    await user.click(screen.getByTestId("view-mode-runs"));
+
+    expect(screen.getByTestId("view-mode-runs")).toHaveAttribute("aria-checked", "true");
+    expect(await screen.findByTestId("run-select")).toBeInTheDocument();
+    expect(screen.getByTestId("workflow-filter")).toHaveValue("");
+    expect(screen.queryByTestId("workflow-select")).not.toBeInTheDocument();
+  });
+
   describe("in runs mode", () => {
     beforeEach(() => window.history.replaceState(null, "", "/"));
 
@@ -98,6 +118,18 @@ describe("App", () => {
       await user.click(screen.getByRole("tab", { name: "Node" }));
       expect(screen.getByRole("heading", { name: "run" })).toBeInTheDocument();
       expect(screen.getByText("synced 3 sources")).toBeInTheDocument();
+    });
+
+    test("a call row selects its node through its test id", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await screen.findByRole("heading", { name: "Run r-0000aaaa" });
+      expect(screen.getByTestId("run-select")).toHaveValue("r-0000aaaa");
+
+      await user.click(screen.getByTestId("details-tab-calls"));
+      await user.click(await screen.findByTestId("call-row-0"));
+
+      expect(screen.getByTestId("call-row-0")).toHaveAttribute("aria-selected", "true");
     });
 
     test("the human icon of a step opens its questions and answers", async () => {

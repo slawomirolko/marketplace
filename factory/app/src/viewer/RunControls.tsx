@@ -44,7 +44,7 @@ export function RunControls({ workflows, stale, projectIds, filters, onProjectFi
       {(projectIds.length > 0 || projectFilter) && (
         <label>
           Project{" "}
-          <select value={projectFilter} onChange={(event) => onProjectFilter(event.target.value)}>
+          <select data-testid="project-filter" value={projectFilter} onChange={(event) => onProjectFilter(event.target.value)}>
             <option value="">all runs</option>
             {projectOptions.map((id) => (
               <option key={id} value={id}>
@@ -56,7 +56,7 @@ export function RunControls({ workflows, stale, projectIds, filters, onProjectFi
       )}
       <label>
         Workflow{" "}
-        <select value={runFilter} onChange={(event) => onRunFilter(event.target.value)}>
+        <select data-testid="workflow-filter" value={runFilter} onChange={(event) => onRunFilter(event.target.value)}>
           <option value="">all workflows</option>
           <hr />
           <WorkflowOptions workflows={workflows} stale={stale} />
@@ -64,7 +64,7 @@ export function RunControls({ workflows, stale, projectIds, filters, onProjectFi
       </label>
       {runFilter && (
         <label title="Off: every run whose workflow contains it. On: only runs in which at least one of its steps started.">
-          <input type="checkbox" checked={onlyRan} onChange={(event) => onOnlyRan(event.target.checked)} /> only where it ran
+          <input type="checkbox" data-testid="only-ran" checked={onlyRan} onChange={(event) => onOnlyRan(event.target.checked)} /> only where it ran
         </label>
       )}
       <RunPicker runId={runId} onRunId={onRunId} shownRuns={shownRuns} filters={filters} />

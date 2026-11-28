@@ -6,7 +6,7 @@ export function WorkflowControls({ workflows, stale, workflowName, onWorkflowNam
   return (
     <label>
       Workflow{" "}
-      <select value={workflowName} onChange={(event) => onWorkflowName(event.target.value)}>
+      <select data-testid="workflow-select" value={workflowName} onChange={(event) => onWorkflowName(event.target.value)}>
         <WorkflowOptions workflows={workflows} stale={stale} />
       </select>
     </label>

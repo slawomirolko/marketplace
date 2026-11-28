@@ -99,6 +99,28 @@ describe("Projects", () => {
     expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(4);
   });
 
+  test("the project controls are reachable by test id", async () => {
+    const posted = serve();
+    const user = userEvent.setup();
+    render(<Projects onShowRuns={() => {}} />);
+    await screen.findByRole("table");
+
+    await user.click(screen.getByTestId("state-filter-missing"));
+    expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(2);
+    expect(screen.getByTestId("check-status")).toHaveTextContent("Re-check status");
+
+    await user.click(screen.getByTestId("project-select-sample-web"));
+    expect(await screen.findByTestId("check-status")).toHaveTextContent("Check status");
+    expect(screen.getByTestId("check-status")).toBeDisabled();
+    expect(screen.getByTestId("project-runs")).toBeDisabled();
+
+    await user.type(screen.getByTestId("project-path-input"), "/src/sample-x");
+    await user.click(screen.getByTestId("add-project"));
+
+    expect(await screen.findByText("Added sample-x.")).toBeInTheDocument();
+    expect(posted).toEqual([{ action: "add", path: "/src/sample-x" }]);
+  });
+
   test("a project without a finished status run offers Check status, disabled while its folder is missing", async () => {
     serve();
     const user = userEvent.setup();

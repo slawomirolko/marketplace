@@ -12,7 +12,7 @@ export function UpdateControl({ marketplace, updating, updateNote, stale, onUpda
   const staleCount = Object.keys(stale).length;
   return (
     <span className="update">
-      <button type="button" onClick={onUpdate} disabled={updating} title={`git fetch and fast-forward of ${marketplace || "the marketplace checkout"} (only when it is clean and on main), then reload agents, skills and workflows`}>
+      <button type="button" data-testid="update-marketplace" onClick={onUpdate} disabled={updating} title={`git fetch and fast-forward of ${marketplace || "the marketplace checkout"} (only when it is clean and on main), then reload agents, skills and workflows`}>
         {updating ? "Updating…" : "Update from marketplace"}
       </button>
       {staleCount > 0 && <span className="stale-count">⚠ {staleCount} workflows: source changed</span>}

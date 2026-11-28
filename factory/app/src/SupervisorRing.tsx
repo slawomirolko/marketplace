@@ -14,7 +14,7 @@ export function SupervisorRing({ supervisor, bounds }: { supervisor: SupervisorD
     <>
       <ViewportPortal>
         <div className={`supervisor-ring tone-${view.tone}`} data-testid="supervisor-ring" style={box}>
-          <button type="button" className="supervisor-badge nopan" aria-expanded={open} disabled={!view.text} onClick={() => setOpen((current) => !current)} title={view.text ? "Show the full supervisor report" : view.headline}>
+          <button type="button" className="supervisor-badge nopan" data-testid="supervisor-badge" aria-expanded={open} disabled={!view.text} onClick={() => setOpen((current) => !current)} title={view.text ? "Show the full supervisor report" : view.headline}>
             <strong>Supervisor</strong>
             <span className="supervisor-agent">{view.agent}</span>
             <span className="supervisor-status">{view.status}</span>
@@ -32,7 +32,7 @@ export function SupervisorRing({ supervisor, bounds }: { supervisor: SupervisorD
                 {view.model ? ` · ${view.model}` : ""}
                 {view.cost ? ` · ${view.cost}` : ""}
               </span>
-              <button type="button" onClick={() => setOpen(false)}>Close</button>
+              <button type="button" data-testid="supervisor-close" onClick={() => setOpen(false)}>Close</button>
             </header>
             <pre>{view.text}</pre>
           </section>

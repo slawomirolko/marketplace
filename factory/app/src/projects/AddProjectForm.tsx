@@ -18,12 +18,12 @@ export function AddProjectForm({ path, onPath, id, onId, busy, onAdd }: AddProje
     >
       <h3>Add a project</h3>
       <label>
-        Folder <input value={path} onChange={(event) => onPath(event.target.value)} placeholder="C:\src\sample-app" required />
+        Folder <input data-testid="project-path-input" value={path} onChange={(event) => onPath(event.target.value)} placeholder="C:\src\sample-app" required />
       </label>
       <label>
-        Id (optional) <input value={id} onChange={(event) => onId(event.target.value)} placeholder="sample-app" pattern="[a-z0-9][a-z0-9-]*" />
+        Id (optional) <input data-testid="project-id-input" value={id} onChange={(event) => onId(event.target.value)} placeholder="sample-app" pattern="[a-z0-9][a-z0-9-]*" />
       </label>
-      <button type="submit" disabled={busy || !path.trim()}>Add</button>
+      <button type="submit" data-testid="add-project" disabled={busy || !path.trim()}>Add</button>
     </form>
   );
 }

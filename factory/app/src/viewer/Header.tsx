@@ -18,7 +18,7 @@ export function Header({ showCounts, onShowCounts, mode, onMode, updater, childr
   return (
     <header>
       <label className="show-numbers" title="Show on every node how many times it ran in the selected run">
-        <input type="checkbox" checked={showCounts} onChange={(event) => onShowCounts(event.target.checked)} /> Show numbers
+        <input type="checkbox" data-testid="show-numbers" checked={showCounts} onChange={(event) => onShowCounts(event.target.checked)} /> Show numbers
       </label>
       <h1>Factory viewer</h1>
       <ModeSwitch mode={mode} onMode={onMode} />

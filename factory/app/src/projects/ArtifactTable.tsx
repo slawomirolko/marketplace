@@ -6,11 +6,11 @@ export function ArtifactTable({ data, rows, stateFilter, onStateFilter }: { data
     <>
       <h3>Skills and agents</h3>
       <div className="state-chips" role="radiogroup" aria-label="Filter by state">
-        <button type="button" role="radio" aria-checked={stateFilter === ""} className={stateFilter === "" ? "active" : ""} onClick={() => onStateFilter("")}>
+        <button type="button" role="radio" data-testid="state-filter-all" aria-checked={stateFilter === ""} className={stateFilter === "" ? "active" : ""} onClick={() => onStateFilter("")}>
           all {data.artifacts.length}
         </button>
         {STATES.filter((state) => data.counts[state]).map((state) => (
-          <button key={state} type="button" role="radio" aria-checked={stateFilter === state} className={`state-${state}${stateFilter === state ? " active" : ""}`} title={STATE_HELP[state]} onClick={() => onStateFilter(state)}>
+          <button key={state} type="button" role="radio" data-testid={`state-filter-${state}`} aria-checked={stateFilter === state} className={`state-${state}${stateFilter === state ? " active" : ""}`} title={STATE_HELP[state]} onClick={() => onStateFilter(state)}>
             {data.counts[state]} {state}
           </button>
         ))}

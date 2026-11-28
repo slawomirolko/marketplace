@@ -50,7 +50,7 @@ export function FlowCanvas({ built, mode, runId, runError, nodes, edges, bounds,
     >
       <Panel position="top-left">
         <label className="agents-only" title="Show only agent steps. Solid line: always runs next. Dashed line: runs only under a condition or a switch.">
-          <input type="checkbox" checked={onlyAgents} onChange={(event) => onOnlyAgents(event.target.checked)} /> Agents only
+          <input type="checkbox" data-testid="agents-only" checked={onlyAgents} onChange={(event) => onOnlyAgents(event.target.checked)} /> Agents only
         </label>
       </Panel>
       <Background />
