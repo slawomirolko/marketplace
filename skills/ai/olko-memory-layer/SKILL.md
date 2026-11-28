@@ -44,3 +44,53 @@ unavailable, stop and ask the user. Name the exact fix: the permission rule to
 allow, or the skill or tool to install. Continue without memory only if the
 user says so, and report that learning was skipped. Do not create a fallback
 record in task artifacts.
+
+## AUDIT MODE
+
+Triggered by a request to review, clean, compact or promote memory, or by a
+block over its configured limit. Run it only when asked; never prune memory
+during an unrelated task.
+
+Age a lesson in two units: calendar days since its newest `added`/`verified`
+date, and runs of the owning agent since that date. Run counts alone mislead:
+one agent can log hundreds of sessions inside a week while another needs
+months. Require both units before removing anything.
+
+Read the runtime database read-only (`mode=ro`), table `session_v2`:
+
+    SELECT count(*) FROM session_v2
+    WHERE agent = :agent AND time_created >= :date_ms;
+
+`time_created` is epoch milliseconds; exclude the audit session itself. Fall
+back to table `session` only when `session_v2` is absent. Without shell access,
+ask the caller for the count and label it caller-supplied.
+
+Verdicts:
+
+- `DELETE-ELIGIBLE` — runs >= 30 AND age >= 30 days. Never removed on the
+  numbers alone; it must also pass the classification below.
+- `REVIEW` — runs >= 20 OR age >= 30 days.
+- `FORCED REVIEW` — age >= 60 days, whatever the run count.
+- `UNDATED` — no date on the line: age is unknown, so review it by value and
+  ask before adding a date.
+
+Classify each DELETE-ELIGIBLE lesson in this order and stop at the first hit:
+
+1. `DUPLICATE` — the owning agent definition or one of its skills already
+   carries the same rule. Grep the exact mechanism, not the topic. Remove the
+   memory line and cite the file and line that now carries it.
+2. `PROMOTE` — generic, no carrier anywhere, and verified on at least two
+   separate dates. Name the exact target: a skill (hand it to the
+   `olko-skill-optimizer` agent), or the owning agent definition when the rule
+   governs that agent's own steps (hand it to the `olko-agents-optimizer`
+   skill). Propose the section and the exact sentence to add. Remove the memory
+   copy only after the update is approved, applied and verified.
+3. `SUPERSEDED` — current code, docs or a newer lesson contradicts it. Remove
+   it and cite the evidence.
+4. `STILL VALID` — keep it, refresh its `verified` date and say which carrier
+   is missing.
+
+Report one row per lesson: `file | lesson (8 words) | added | verified |
+age_days | runs | verdict`, then the count per verdict, then every removed
+line verbatim. Delete nothing when the run count is caller-supplied and the
+user has not confirmed it.
