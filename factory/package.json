@@ -17,7 +17,7 @@
   "scripts": {
     "server": "node src/server.ts",
     "typecheck": "tsc -p tsconfig.json && tsc -p app/tsconfig.json",
-    "test": "node --import ./test/helpers/isolated-home.ts --test test/*[!n].test.ts",
+    "test": "node --import ./test/helpers/isolated-home.ts --test \"test/!(*_integration|*_fullrun).test.ts\"",
     "test:integration": "node --import ./test/helpers/isolated-home.ts --test test/*_integration.test.ts",
     "test:contract": "node --import ./test/helpers/isolated-home.ts --test test/*-contract_integration.test.ts",
     "test:smoke": "node --import ./test/helpers/isolated-home.ts --test test/*-smoke_integration.test.ts",
