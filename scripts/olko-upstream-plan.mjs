@@ -20,7 +20,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { hashFiles, isAdapterFile, isArtifactId, readLock } from "./olko-marketplace-lock.mjs";
+import { hashFiles, isAdapterFile, isArtifactId, normalizeText, readLock } from "./olko-marketplace-lock.mjs";
 
 export const LABEL = "upstream-candidate";
 export const PR_LIST_LIMIT = 1000;
@@ -35,7 +35,9 @@ function stagedFiles(stage) {
     if (!entry.isFile()) continue;
     const absolute = path.join(entry.parentPath ?? entry.path, entry.name);
     const relative = path.relative(stage, absolute).split(path.sep).join("/");
-    if (!isAdapterFile(relative)) files.set(relative, fs.readFileSync(absolute, "utf8").replace(/\r\n/g, "\n"));
+    if (!isAdapterFile(relative)) {
+      files.set(relative, normalizeText(fs.readFileSync(absolute, "utf8")));
+    }
   }
   return files;
 }

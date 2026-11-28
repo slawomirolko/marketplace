@@ -1,29 +1,42 @@
-import { execFileSync, spawnSync } from "node:child_process";
-import crypto from "node:crypto";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  DEFAULT_DEPTH,
+  LOCAL_REF,
+  NAME,
+  agentEntryOf,
+  compare,
+  differingFiles,
+  git,
+  installedArtifacts,
+  marketplacePath,
+  marketplaceVersions,
+  skillEntryOf,
+  sourceEntryOf,
+  treeFiles,
+} from "./installed-artifacts.mjs";
+
+export {
+  LOCATIONS,
+  SOURCE_PATHS,
+  frontMatter,
+  hashFiles,
+  installedArtifacts,
+  isAdapterFile,
+  marketplacePath,
+  marketplaceVersions,
+  normalizeText as normalize,
+  portableText,
+} from "./installed-artifacts.mjs";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const CHECKOUT = path.resolve(SCRIPT_DIR, "..", "..", "..", "..");
-const NAME = /^[a-z0-9][a-z0-9-]*$/;
-const DEFAULT_DEPTH = 40;
-/** Files a project may change without leaving the marketplace version: the adapter layer. */
-const ADAPTER_FILES = new Set(["project.md"]);
-/** The ref of a marketplace checkout without an origin remote: its own HEAD. */
-const LOCAL_REF = "HEAD";
 /** The harness of the skills and agents of a marketplace source checkout. */
 const SOURCE_HARNESS = "source";
-
-/** Where each harness keeps installed skills and agents, relative to the project root. */
-export const LOCATIONS = [
-  { kind: "skill", harness: "agents", dir: ".agents/skills" },
-  { kind: "skill", harness: "claude-code", dir: ".claude/skills" },
-  { kind: "skill", harness: "opencode", dir: ".opencode/skills" },
-  { kind: "agent", harness: "opencode", dir: ".opencode/agents" },
-  { kind: "agent", harness: "claude-code", dir: ".claude/agents" },
-];
+const FETCH_TIMEOUT_MS = 120000;
 
 /** Files or folders that show a harness is set up in the project. */
 export const HARNESS_MARKERS = {
@@ -52,89 +65,6 @@ export function parseArgs(argv) {
   return { command, flags };
 }
 
-function git(cwd, ...args) {
-  return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] }).trim();
-}
-
-export function normalize(text) {
-  return text.replace(/\r\n?/g, "\n");
-}
-
-/** Agent files keep their marketplace text except the model line, which belongs to the project. */
-export function portableText(kind, text) {
-  const body = normalize(text);
-  if (kind !== "agent" || !body.startsWith("---\n")) return body;
-  const end = body.indexOf("\n---", 4);
-  if (end < 0) return body;
-  const front = body.slice(4, end).split("\n").filter((line) => !/^model:/.test(line)).join("\n");
-  return `---\n${front}${body.slice(end)}`;
-}
-
-function modelLine(text) {
-  return normalize(text).match(/^model:.*$/m)?.[0] ?? null;
-}
-
-function hash(text) {
-  return crypto.createHash("sha256").update(text).digest("hex");
-}
-
-function listFiles(dir, base = dir) {
-  const out = [];
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...listFiles(full, base));
-    else if (entry.isFile()) out.push(path.relative(base, full).split(path.sep).join("/"));
-  }
-  return out.sort();
-}
-
-/** Front matter fields this script needs: version, uses, and the allowed names under permission.skill / permission.task. */
-export function frontMatter(text) {
-  const body = normalize(text);
-  const result = { version: null, uses: [], skills: [], tasks: [] };
-  if (!body.startsWith("---\n")) return result;
-  const end = body.indexOf("\n---", 4);
-  const lines = body.slice(4, end < 0 ? undefined : end).split("\n");
-  let block = null;
-  let section = null;
-  for (const line of lines) {
-    const top = line.match(/^([A-Za-z][\w-]*):\s*(.*)$/);
-    if (top) {
-      block = top[1];
-      section = null;
-      if (block === "version") result.version = top[2].replace(/^["']|["']$/g, "") || null;
-      if (block === "uses") result.uses = listValue(top[2]);
-      continue;
-    }
-    if (block === "uses") {
-      const item = line.match(/^\s+-\s*([a-z0-9-]+)/);
-      if (item) result.uses.push(item[1]);
-      continue;
-    }
-    if (block === "metadata") {
-      const version = line.match(/^\s+version:\s*["']?([^"'\s]+)/);
-      if (version && !result.version) result.version = version[1];
-      continue;
-    }
-    if (block !== "permission") continue;
-    const sub = line.match(/^ {2}([a-z]+):\s*$/);
-    if (sub) {
-      section = sub[1];
-      continue;
-    }
-    const grant = line.match(/^ {4}["']?([a-z0-9][a-z0-9-]*)["']?:\s*["']?(allow|ask)/);
-    if (grant && section === "skill") result.skills.push(grant[1]);
-    if (grant && section === "task") result.tasks.push(grant[1]);
-  }
-  return result;
-}
-
-function listValue(raw) {
-  const inline = raw.trim().match(/^\[(.*)\]$/);
-  if (!inline) return [];
-  return inline[1].split(",").map((s) => s.trim().replace(/^["']|["']$/g, "")).filter((s) => NAME.test(s));
-}
-
 /** The harnesses set up in the project, with the markers found. */
 export function detectHarnesses(project) {
   return Object.entries(HARNESS_MARKERS)
@@ -145,41 +75,6 @@ export function detectHarnesses(project) {
 /** True when the project is a marketplace source checkout: it keeps skills under skills/<category>/ and lists them in registry.json. */
 function isMarketplaceSource(project) {
   return fs.existsSync(path.join(project, "registry.json")) && fs.existsSync(path.join(project, "skills")) && fs.statSync(path.join(project, "skills")).isDirectory();
-}
-
-function skillArtifact(skillDir, name, harness, location) {
-  const files = {};
-  for (const relativePath of listFiles(skillDir)) {
-    if (!ADAPTER_FILES.has(relativePath)) {
-      files[relativePath] = hash(portableText("skill", fs.readFileSync(path.join(skillDir, relativePath), "utf8")));
-    }
-  }
-  const meta = frontMatter(fs.readFileSync(path.join(skillDir, "SKILL.md"), "utf8"));
-  return { kind: "skill", name, harness, location, files, adapter: fs.existsSync(path.join(skillDir, "project.md")), model: null, requires: meta.uses.map((skillName) => `skill:${skillName}`) };
-}
-
-function agentArtifact(file, name, harness, location) {
-  const text = fs.readFileSync(file, "utf8");
-  const meta = frontMatter(text);
-  return { kind: "agent", name, harness, location, files: { [`${name}.md`]: hash(portableText("agent", text)) }, adapter: false, model: modelLine(text), requires: [...meta.skills.map((skillName) => `skill:${skillName}`), ...meta.tasks.map((agentName) => `agent:${agentName}`)] };
-}
-
-/** The skill in a skill folder entry, or null when the entry is not a named skill folder. */
-function skillEntryOf(dir, entry, harness, location) {
-  const skillDir = path.join(dir, entry.name);
-  if (!entry.isDirectory() || !NAME.test(entry.name) || !fs.existsSync(path.join(skillDir, "SKILL.md"))) {
-    return null;
-  }
-  return skillArtifact(skillDir, entry.name, harness, location);
-}
-
-/** The agent in an agent folder entry, or null when the entry is not a named Markdown file. */
-function agentEntryOf(dir, entry, harness, location) {
-  const name = entry.name.replace(/\.md$/, "");
-  if (!entry.isFile() || !entry.name.endsWith(".md") || !NAME.test(name)) {
-    return null;
-  }
-  return agentArtifact(path.join(dir, entry.name), name, harness, location);
 }
 
 /** The skills under skills/<category>/ and the agents under agents/opencode/ of a marketplace source checkout. */
@@ -203,66 +98,12 @@ function sourceArtifacts(project) {
   return artifacts.filter(Boolean).sort((a, b) => a.location.localeCompare(b.location));
 }
 
-/** The source skill or agent a marketplace file defines, or null for any other file. */
-function sourceEntryOf(file) {
-  if (matches(file, ["skills", null, null, "SKILL.md"])) {
-    return { kind: "skill", name: file.split("/")[2], source: path.posix.dirname(file) };
-  }
-  if (matches(file, ["agents", "opencode", null]) && file.endsWith(".md")) {
-    return { kind: "agent", name: file.split("/")[2].replace(/\.md$/, ""), source: file };
-  }
-  return null;
-}
-
 /** Source skills and agents at `ref` that the project checkout does not have: new on the remote. */
 function sourceOnlyOnRemote(marketplace, ref, have) {
   return treeFiles(marketplace, ref)
     .map(sourceEntryOf)
-    .filter((entry) => entry && NAME.test(entry.name) && !have.has(entry.source));
+    .filter((entry) => entry && !have.has(entry.source));
 }
-
-/** The skill or agent of one entry in a harness folder, or null when the entry is neither. */
-function installedEntryOf(location, dir, entry) {
-  const where = `${location.dir}/${entry.name}`;
-  if (location.kind === "skill") {
-    return skillEntryOf(dir, entry, location.harness, where);
-  }
-  return agentEntryOf(dir, entry, location.harness, where);
-}
-
-/** Every skill and agent copy installed in the project, with the portable file hashes. */
-export function installedArtifacts(project) {
-  const artifacts = [];
-  for (const location of LOCATIONS) {
-    const dir = path.join(project, location.dir);
-    if (!fs.existsSync(dir)) {
-      continue;
-    }
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      artifacts.push(installedEntryOf(location, dir, entry));
-    }
-  }
-  return artifacts.filter(Boolean);
-}
-
-const trees = new Map();
-
-/** Every file path in the marketplace tree at `ref`. */
-function treeFiles(marketplace, ref) {
-  const key = `${marketplace}\0${ref}`;
-  if (!trees.has(key)) {
-    let listing = "";
-    try {
-      listing = git(marketplace, "ls-tree", "-r", "-z", "--name-only", "--full-tree", ref);
-    } catch {
-      listing = "";
-    }
-    trees.set(key, listing.split("\0").filter(Boolean));
-  }
-  return trees.get(key);
-}
-
-const FETCH_TIMEOUT_MS = 120000;
 
 /** Fetches origin; returns the first line of the error when the fetch fails, else null. */
 function fetchOrigin(marketplace) {
@@ -308,152 +149,35 @@ function marketplaceRef(marketplace, { fetch = true } = {}) {
   return { ref: originDefaultRef(marketplace) ?? LOCAL_REF, fetched: fetch && fetchError === null, fetchError };
 }
 
-/** The paths at `ref` that hold an artifact: plain marketplace paths first, then plugin paths. */
-function candidatePaths(files, artifact) {
-  let found;
-  if (artifact.kind === "skill") {
-    found = files.filter((file) => matches(file, ["skills", null, artifact.name, "SKILL.md"]) || matches(file, ["plugins", null, "skills", artifact.name, "SKILL.md"])).map((file) => path.posix.dirname(file));
-  } else if (artifact.harness === "claude-code") {
-    found = files.filter((file) => matches(file, ["plugins", null, "agents", `${artifact.name}.md`]));
-  } else {
-    found = files.filter((file) => file === `agents/opencode/${artifact.name}.md`);
-  }
-  return found.sort((a, b) => Number(a.startsWith("plugins/")) - Number(b.startsWith("plugins/")) || a.localeCompare(b));
-}
-
-/** The git pathspec that finds an artifact in the marketplace history. */
-function historyPattern(artifact) {
-  if (artifact.kind === "skill") {
-    return `:(glob)**/skills/**/${artifact.name}/SKILL.md`;
-  }
-  if (artifact.harness === "claude-code") {
-    return `:(glob)plugins/*/agents/${artifact.name}.md`;
-  }
-  return `agents/opencode/${artifact.name}.md`;
-}
-
-/** The marketplace path of an artifact (a skill folder or an agent file), at `ref` or in its history. */
-export function marketplacePath(marketplace, artifact, ref = LOCAL_REF) {
-  const candidates = candidatePaths(treeFiles(marketplace, ref), artifact);
-  if (candidates.length) {
-    return { path: candidates[0], present: true };
-  }
-  let last = "";
-  try {
-    last = git(marketplace, "log", ref, "-n", "1", "--format=%H", "--name-only", "--", historyPattern(artifact));
-  } catch {
-    last = "";
-  }
-  const file = last.split("\n").slice(1).find(Boolean);
-  if (!file) {
-    return null;
-  }
-  return { path: artifact.kind === "skill" ? path.posix.dirname(file) : file, present: false };
-}
-
-/** True when `file` has exactly these path parts; a null part matches any one folder. */
-function matches(file, parts) {
-  const segments = file.split("/");
-  return segments.length === parts.length && parts.every((p, i) => p === null || p === segments[i]);
-}
-
-/** Reads many blobs with one git process. */
-function readBlobs(marketplace, ids) {
-  const unique = [...new Set(ids)];
-  if (!unique.length) return new Map();
-  const out = spawnSync("git", ["-C", marketplace, "cat-file", "--batch"], { input: `${unique.join("\n")}\n`, maxBuffer: 256 * 1024 * 1024 });
-  if (out.status !== 0) throw new Error(`git cat-file failed: ${String(out.stderr)}`);
-  const buffer = out.stdout;
-  const blobs = new Map();
-  let offset = 0;
-  while (offset < buffer.length) {
-    const newline = buffer.indexOf(10, offset);
-    const [id, type, size] = buffer.subarray(offset, newline).toString("utf8").split(" ");
-    if (type === "missing") {
-      offset = newline + 1;
-      continue;
-    }
-    const length = Number(size);
-    blobs.set(id, buffer.subarray(newline + 1, newline + 1 + length).toString("utf8"));
-    offset = newline + 1 + length + 1;
-  }
-  return blobs;
-}
+const short = (version) => version.commit.slice(0, 7);
 
 /**
- * The last `depth` marketplace versions of a path: commit, date, front matter version (null without one) and portable file hashes.
- * `truncated` is true when the path has older commits than the ones compared.
- */
-export function marketplaceVersions(marketplace, kind, source, depth = DEFAULT_DEPTH, ref = LOCAL_REF) {
-  const log = git(marketplace, "log", ref, "-n", String(depth + 1), "--format=%H %cs", "--", source);
-  const allCommits = log ? log.split("\n").map((line) => ({ commit: line.split(" ")[0], date: line.split(" ")[1] })) : [];
-  const truncated = allCommits.length > depth;
-  const commits = allCommits.slice(0, depth);
-  const trees = commits.map((c) => {
-    const listing = git(marketplace, "ls-tree", "-r", "-z", "--full-tree", c.commit, "--", source);
-    const entries = listing.split("\0").filter(Boolean).map((line) => {
-      const [meta, file] = line.split("\t");
-      return { blob: meta.split(" ")[2], rel: kind === "skill" ? path.posix.relative(source, file) : path.posix.basename(file) };
-    });
-    return { ...c, entries };
-  });
-  const blobs = readBlobs(marketplace, trees.flatMap((t) => t.entries.map((e) => e.blob)));
-  const versions = trees
-    .filter((t) => t.entries.length > 0)
-    .map((t) => {
-      const files = {};
-      let version = null;
-      let model = null;
-      for (const e of t.entries) {
-        if (ADAPTER_FILES.has(e.rel)) continue;
-        const text = blobs.get(e.blob) ?? "";
-        files[e.rel] = hash(portableText(kind, text));
-        if (e.rel === "SKILL.md" || kind === "agent") version = frontMatter(text).version;
-        if (kind === "agent") model = modelLine(text);
-      }
-      return { commit: t.commit, date: t.date, version, files, model };
-    });
-  return { versions, truncated };
-}
-
-function differingFiles(a, b) {
-  return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((f) => a[f] !== b[f]).sort();
-}
-
-const short = (v) => v.commit.slice(0, 7);
-
-/**
- * Compares one installed copy with the marketplace history of its source. Versions come from front matter; commits only tell versions apart.
- * When the compared history is `truncated` and no version matches exactly, the base may be older than the history: it is reported as such.
+ * Compares one installed copy with the marketplace history of its source. Versions come from the registry
+ * or the agent manifest, else front matter; commits only tell versions apart. `base` is the full commit the
+ * copy is (or, for `modified`, is guessed to be) a copy of. When the compared history is `truncated` and no
+ * version matches exactly, the base may be older than the history: it is reported as such.
  */
 export function classify(artifact, versions, present, { truncated = false } = {}) {
-  if (!versions.length) {
+  const result = compare(artifact, versions, present, { truncated });
+  const { head, base, nearest } = result;
+  if (result.state === "local-only") {
     return { state: "local-only", installed: null, current: null, files: [] };
   }
-  const head = versions[0];
-  const atHead = { current: head.version, currentCommit: short(head) };
-  if (!present) {
+  if (result.state === "removed") {
     return { state: "removed", installed: null, current: null, lastVersion: head.version, lastCommit: short(head), files: [] };
   }
-  const exact = versions.findIndex((v) => differingFiles(artifact.files, v.files).length === 0);
-  if (exact === 0) {
-    const adapted = artifact.adapter || (artifact.kind === "agent" && artifact.model !== head.model);
-    return { state: adapted ? "adapted" : "current", installed: head.version, installedCommit: short(head), ...atHead, files: [] };
+  const atHead = { current: head.version, currentCommit: short(head) };
+  if (result.state === "current" || result.state === "adapted") {
+    return { state: result.state, installed: head.version, installedCommit: short(head), ...atHead, base: head.commit, files: [] };
   }
-  if (exact > 0) {
-    return { state: "outdated", installed: versions[exact].version, installedCommit: short(versions[exact]), ...atHead, base: versions[exact].commit, files: differingFiles(artifact.files, head.files) };
+  if (result.state === "outdated") {
+    return { state: "outdated", installed: base.version, installedCommit: short(base), ...atHead, base: base.commit, files: differingFiles(artifact.files, head.files) };
   }
-  const ranked = versions.map((v) => ({ v, diff: differingFiles(artifact.files, v.files) })).sort((a, b) => a.diff.length - b.diff.length);
-  const nearest = ranked[0];
-  const unknownBase = { state: "unknown-base", installed: null, ...atHead, nearestVersion: nearest.v.version, nearestCommit: short(nearest.v), files: nearest.diff };
-  if (truncated) {
-    return { ...unknownBase, baseOlderThanDepth: true };
+  if (result.state === "unknown-base") {
+    const unknownBase = { state: "unknown-base", installed: null, ...atHead, nearestVersion: nearest.version.version, nearestCommit: short(nearest.version), files: nearest.diff };
+    return result.baseOlderThanDepth ? { ...unknownBase, baseOlderThanDepth: true } : unknownBase;
   }
-  const shared = Object.keys(artifact.files).some((f) => artifact.files[f] === nearest.v.files[f]);
-  if (!shared) {
-    return unknownBase;
-  }
-  return { state: "modified", installed: nearest.v.version, installedCommit: short(nearest.v), ...atHead, base: nearest.v.commit, upstreamMoved: nearest.v.commit !== head.commit, files: nearest.diff };
+  return { state: "modified", installed: base.version, installedCommit: short(base), ...atHead, base: base.commit, upstreamMoved: base.commit !== head.commit, files: nearest.diff };
 }
 
 /** Factory workflows that run an artifact: as a node agent or skill, or as a named source. */
@@ -496,7 +220,7 @@ export function projectStatus({ project, marketplace, factory, depth = DEFAULT_D
     const source = marketplacePath(marketplace, artifact, ref);
     const { versions, truncated } = source ? marketplaceVersions(marketplace, artifact.kind, source.path, depth, ref) : { versions: [], truncated: false };
     const result = classify(artifact, versions, source?.present ?? false, { truncated });
-    return { id: `${artifact.kind}:${artifact.name}`, kind: artifact.kind, name: artifact.name, harness: artifact.harness, location: artifact.location, source: source?.path ?? null, ...result, workflows: workflows.get(artifact.name) ?? [] };
+    return { id: `${artifact.kind}:${artifact.name}`, kind: artifact.kind, name: artifact.name, harness: artifact.harness, location: artifact.location, source: source?.path ?? null, contentHash: artifact.contentHash, ...result, workflows: workflows.get(artifact.name) ?? [] };
   });
   const have = new Set(installed.map((a) => `${a.kind}:${a.name}`));
   const required = new Map();
@@ -507,7 +231,7 @@ export function projectStatus({ project, marketplace, factory, depth = DEFAULT_D
   }
   for (const [id, requiredBy] of [...required].sort(([a], [b]) => a.localeCompare(b))) {
     const [kind, name] = id.split(":");
-    const source = marketplacePath(marketplace, { kind, name, harness: "opencode" }, ref);
+    const source = marketplacePath(marketplace, { kind, name, harness: null }, ref);
     if (!source?.present) {
       continue;
     }

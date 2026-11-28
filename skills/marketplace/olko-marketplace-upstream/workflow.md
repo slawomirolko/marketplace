@@ -3,11 +3,11 @@
 ## Workflow
 
 ### Step stage
-1. Read the artifact's entry in `<project>/.agents/marketplace.lock.json`. Use `sourceCommit` as the base commit. When `base` is `unknown`, use `nearestCommit` and set `"baseUnknown": true` in `classification.json`.
+1. Read the artifact's entry in `<project>/.agents/marketplace.lock.json`. Use `sourceCommit` as the base commit. When `base` is `unknown`, use `nearestCommit` and set `"baseUnknown": true` in `classification.json`. When `baseGuessed` is true, `sourceCommit` is the nearest version, not a recorded one: also set `"baseUnknown": true`.
 2. Create a stage root: `node -e "console.log(require('fs').mkdtempSync(require('path').join(require('os').tmpdir(),'olko-upstream-')))"`. The stage directory is `<stage root>/<name>`.
 3. Copy the local artifact into the stage directory:
-   - skill: every file of `<project>/.agents/skills/<name>/` except `project.md` and `*.local.*`;
-   - agent: `<project>/.opencode/agents/<file>`, with its `model:` frontmatter line set back to the line of the base commit's file.
+   - skill: every file of `<project>/<location>/` except `project.md` and `*.local.*` (`location` from the entry; `.agents/skills/<name>` when the entry has none);
+   - agent: `<project>/<location>` (`.opencode/agents/<file>` when the entry has none), with its `model:` frontmatter line set back to the line of the base commit's file.
 4. For each changed file, compare the staged file with `git -C <marketplace> show <base commit>:<source>/<file>` (agent: `<source>`). Split the difference into hunks.
 5. Classify each hunk:
    - `adapter`: it holds a project value: a project command, path, service, module, host, stack choice, team or product name, credential, or a local convention. It belongs in `.agents/skills/<name>/project.md`, not upstream.

@@ -1,6 +1,6 @@
 ---
 name: olko-factory-project
-version: 0.1.0
+version: 0.2.0
 description: "Script command that reports the Olko marketplace status of one local project for the Software Factory: the harnesses set up in it, every installed skill and agent with its state (current, adapted, outdated, modified, unknown-base, missing, removed, local-only) against the marketplace history, and the factory workflows that run them. Read only for the project. Use when you check a project's marketplace sync or run the project status workflow. Triggers: 'project status', 'project marketplace sync', 'which marketplace skills are installed', 'olko-factory-project'."
 ---
 
@@ -21,9 +21,11 @@ One deterministic command. Run it as `node <this skill>/scripts/project-scan.mjs
 - Marketplace sources: `skills/<category>/<name>/`, `plugins/<plugin>/skills/<name>/`, `agents/opencode/<name>.md`, `plugins/<plugin>/agents/<name>.md`, with their git history.
 
 ## States
-Versions (`installed`, `current`, `nearestVersion`, `lastVersion`) are the front matter `version`, or null without one. The matching short commits (`installedCommit`, `currentCommit`, `nearestCommit`, `lastCommit`) only tell versions apart; they are never shown as a version.
+Versions (`installed`, `current`, `nearestVersion`, `lastVersion`) come from the marketplace indexes at that commit: `registry.json` `skills[].version` for a skill under `skills/<category>/`, `agents/opencode/index.json` `agents[].version` for an OpenCode agent. Without an index entry they are the front matter `version`, or null without one. The matching short commits (`installedCommit`, `currentCommit`, `nearestCommit`, `lastCommit`) only tell versions apart; they are never shown as a version. `base` is the full commit the copy is a copy of (for `modified`, the nearest version it is guessed to come from). `contentHash` is the content hash of the portable files, in the format of the marketplace lock.
 
-Files are compared after line endings are made the same. The adapter layer never counts as a change: `project.md` in a skill folder and the `model:` line of an agent.
+Files are compared after line endings (CRLF, CR) are made the same. The adapter layer never counts as a change: `project.md` at the root of a skill folder, every `*.local.*` file in it, and the `model:` line in the front matter of an agent. The nearest version has the fewest differing files, then the fewest differing lines, then is the newest.
+
+The marketplace lock (`scripts/olko-marketplace-lock.mjs` in a marketplace checkout) reads installed copies through `scripts/installed-artifacts.mjs` of this skill, so both give the same state, version and base for the same copy.
 
 | State | Meaning |
 |---|---|

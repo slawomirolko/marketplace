@@ -202,10 +202,25 @@ test("AC1: lock init finds the installed base version in marketplace history", (
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, ".agents", "marketplace.lock.json"), "utf8")), lockFile);
 });
 
-test("AC1: a copy that matches no marketplace version is flagged with an unknown base", () => {
+test("AC1: a copy that matches no version but shares files with one is modified on a guessed base", () => {
   const market = fixtureMarketplace();
   const { root } = fixtureProject({ ...skillV1, "workflow.md": "# Workflow\n\nEdited before any lock existed.\n" });
   const entry = json(lock(root, market.root, "init"))["skill:sample-skill"];
+  assert.equal(entry.state, "modified");
+  assert.equal(entry.version, "1.0.0");
+  assert.equal(entry.sourceCommit, market.v1);
+  assert.equal(entry.baseGuessed, true);
+  assert.equal(entry.base, undefined);
+  const [changed] = json(lock(root, market.root, "status")).changed;
+  assert.equal(changed.base, "1.0.0");
+  assert.deepEqual(changed.files, ["workflow.md"], "the edit made before init is still reported");
+});
+
+test("AC1: a copy that shares no file with any marketplace version is flagged with an unknown base", () => {
+  const market = fixtureMarketplace();
+  const { root } = fixtureProject({ "SKILL.md": "---\nname: sample-skill\n---\n\nRewritten.\n", "workflow.md": "# Workflow\n\nRewritten.\n" });
+  const entry = json(lock(root, market.root, "init"))["skill:sample-skill"];
+  assert.equal(entry.state, "unknown-base");
   assert.equal(entry.base, "unknown");
   assert.equal(entry.nearestVersion, "1.0.0");
 });

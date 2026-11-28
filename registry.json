@@ -1047,7 +1047,7 @@
     {
       "name": "olko-marketplace-upstream",
       "category": "marketplace",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "description": "Send one local change to an installed marketplace skill or agent back to the marketplace as a draft PR. Stage the change without the project adapter, keep project-specific hunks out, optimize the staged copy, and publish a draft PR that only a person merges or closes. Use when the factory marketplace-upstream watch or the person asks to upstream a changed artifact. Triggers: 'upstream this skill change', 'send local change to marketplace', 'olko-marketplace-upstream'.",
       "tags": [
         "marketplace",
@@ -1615,7 +1615,7 @@
     {
       "name": "olko-factory-project",
       "category": "software-factory",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "description": "Script command that reports the Olko marketplace status of one local project for the Software Factory: the harnesses set up in it, every installed skill and agent with its state (current, adapted, outdated, modified, unknown-base, missing, removed, local-only) against the marketplace history, and the factory workflows that run them. Read only for the project. Use when you check a project's marketplace sync or run the project status workflow. Triggers: 'project status', 'project marketplace sync', 'which marketplace skills are installed', 'olko-factory-project'.",
       "tags": [
         "software-factory",
@@ -1630,6 +1630,7 @@
       "cost": 1,
       "files": [
         "SKILL.md",
+        "scripts/installed-artifacts.mjs",
         "scripts/project-scan.mjs"
       ]
     },

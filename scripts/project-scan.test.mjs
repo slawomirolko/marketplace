@@ -23,7 +23,7 @@ const skill = (version, step) => `---\nname: sample-skill\nversion: ${version}\n
 const agent = (model, extra = "") => `---\ndescription: a\nmode: primary\nmodel: ${model}\npermission:\n  skill:\n    "*": deny\n    sample-skill: allow\n    sample-needed: allow\n  task:\n    sample-helper: allow\n---\nBody${extra}\n`;
 
 /** A marketplace with two versions of sample-skill, an agent, a removed skill and one workflow. */
-function fixture() {
+function fixture({ beforeV2 = () => {} } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "project-scan-test-"));
   const market = path.join(root, "market");
   write(market, "skills/demo/sample-skill/SKILL.md", skill("1.0.0", "step one"));
@@ -39,6 +39,7 @@ function fixture() {
   const v1 = git(market, "rev-parse", "HEAD");
   write(market, "skills/demo/sample-skill/SKILL.md", skill("1.1.0", "step one\nstep two"));
   fs.rmSync(path.join(market, "skills/demo/sample-old"), { recursive: true });
+  beforeV2(market);
   git(market, "add", "-A");
   git(market, "commit", "-q", "-m", "v2");
   const project = path.join(root, "sample-app");
@@ -86,6 +87,27 @@ test("a copy of an older version is outdated with both versions", () => {
   assert.deepEqual(entry.files, ["SKILL.md"]);
 });
 
+test("versions come from the registry and the agent manifest, front matter is the fallback", () => {
+  const helperV2 = "---\ndescription: h\n---\nhelp, v2\n";
+  const extra = "---\nname: sample-extra\nversion: 4.0.0\n---\nextra\n";
+  const f = fixture({
+    beforeV2: (market) => {
+      write(market, "registry.json", JSON.stringify({ skills: [{ name: "sample-skill", version: "2.0.0" }] }));
+      write(market, "agents/opencode/index.json", JSON.stringify({ agents: [{ name: "sample-helper", version: "0.3.0" }] }));
+      write(market, "agents/opencode/sample-helper.md", helperV2);
+      write(market, "skills/demo/sample-extra/SKILL.md", extra);
+    },
+  });
+  write(f.project, ".agents/skills/sample-skill/SKILL.md", skill("1.1.0", "step one\nstep two"));
+  write(f.project, ".agents/skills/sample-skill/workflow.md", "flow v1\n");
+  write(f.project, ".opencode/agents/sample-helper.md", helperV2);
+  write(f.project, ".agents/skills/sample-extra/SKILL.md", extra);
+  const status = statusOf(f);
+  assert.equal(byId(status, "skill:sample-skill").current, "2.0.0", "the registry wins over the front matter 1.1.0");
+  assert.equal(byId(status, "agent:sample-helper").current, "0.3.0");
+  assert.equal(byId(status, "skill:sample-extra").current, "4.0.0", "not in the registry: front matter");
+});
+
 test("an artifact without a front matter version has no version, only commits", () => {
   const f = fixture();
   write(f.project, ".opencode/agents/sample-helper.md", "---\ndescription: h\n---\nhelp\n");
@@ -112,7 +134,7 @@ test("a copy that shares no file with any version has an unknown base", () => {
   write(f.project, ".agents/skills/sample-skill/SKILL.md", "rewritten\n");
   const entry = byId(statusOf(f), "skill:sample-skill");
   assert.equal(entry.state, "unknown-base");
-  assert.equal(entry.nearestVersion, "1.1.0");
+  assert.equal(entry.nearestVersion, "1.0.0", "both versions differ in every file; 1.0.0 differs in fewer lines");
 });
 
 test("removed, local-only and missing artifacts are reported", () => {
