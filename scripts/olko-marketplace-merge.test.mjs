@@ -380,7 +380,7 @@ test("apply accepts an item whose conflict was resolved, and ignores resolution.
   const plan = run(f);
   const item = itemOf(plan, CONFLICT_ID);
   write(item.dir, "workflow.md", "flow RESOLVED\nflow two\nflow three\n");
-  write(item.dir, "resolution.json", "{}\n");
+  write(item.dir, "resolution.json", JSON.stringify({ hunks: [{ file: "workflow.md", reason: "merged", sure: true }] }));
   const result = applyRun(f, [CONFLICT_ID]);
   assert.deepEqual(result.applied, [CONFLICT_ID]);
   assert.equal(read(f.project, `${SKILL_DIR}/workflow.md`), "flow RESOLVED\nflow two\nflow three\n");
@@ -474,4 +474,35 @@ test("the CLI applies the selected ids and none", () => {
   assert.equal(some.status, 0, some.stderr);
   assert.deepEqual(JSON.parse(some.stdout).applied, [CONFLICT_ID]);
   assert.equal(cli("").status, 1);
+});
+
+function deletedUpstreamFixture() {
+  const f = fixture({ changeV2: (dir) => fs.rmSync(path.join(dir, "skills/demo/sample-skill/workflow.md")) });
+  installV1Skill(f, SKILL_DIR, { workflow: "flow LOCAL\nflow two\nflow three\n" });
+  return f;
+}
+
+test("apply refuses a deleted-upstream conflict without resolution.json", () => {
+  const f = deletedUpstreamFixture();
+  run(f);
+  const before = snapshot(f.project);
+  assert.throws(() => applyRun(f, [CONFLICT_ID]), /resolution/);
+  assert.deepEqual(snapshot(f.project), before);
+});
+
+test("apply takes a deleted-upstream conflict that resolution.json covers", () => {
+  const f = deletedUpstreamFixture();
+  const item = itemOf(run(f), CONFLICT_ID);
+  write(item.dir, "resolution.json", JSON.stringify({ hunks: [{ file: "workflow.md", reason: "keep the local flow", sure: true }] }));
+  assert.deepEqual(applyRun(f, [CONFLICT_ID]).applied, [CONFLICT_ID]);
+  assert.equal(read(f.project, `${SKILL_DIR}/workflow.md`), "flow LOCAL\nflow two\nflow three\n");
+});
+
+test("apply refuses when resolution.json misses a conflicted file", () => {
+  const f = deletedUpstreamFixture();
+  const item = itemOf(run(f), CONFLICT_ID);
+  write(item.dir, "resolution.json", JSON.stringify({ hunks: [{ file: "other.md", reason: "x", sure: true }] }));
+  const before = snapshot(f.project);
+  assert.throws(() => applyRun(f, [CONFLICT_ID]), /resolution/);
+  assert.deepEqual(snapshot(f.project), before);
 });

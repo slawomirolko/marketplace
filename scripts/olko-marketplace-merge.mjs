@@ -342,6 +342,20 @@ function unresolvedFiles(loaded) {
   return loaded.item.files.filter((file) => file.result === "conflict" && CONFLICT_MARKER.test(loaded.files.get(file.path) ?? "")).map((file) => file.path);
 }
 
+/** The conflicted files of an item that `<item.dir>/resolution.json` does not name in `hunks[].file`; all of them without a readable resolution. */
+function unexplainedFiles(item) {
+  const conflicts = item.files.filter((file) => file.result === "conflict").map((file) => file.path);
+  const resolutionPath = path.join(item.dir, RESOLUTION_FILE);
+  let named = [];
+  try {
+    const hunks = JSON.parse(fs.readFileSync(resolutionPath, "utf8")).hunks;
+    named = Array.isArray(hunks) ? hunks.map((hunk) => hunk?.file) : [];
+  } catch {
+    named = [];
+  }
+  return conflicts.filter((file) => !named.includes(file));
+}
+
 /** True when the project and the lock already hold the proposed result of an item. */
 function isApplied(lock, loaded) {
   const { item, lockId, hash } = loaded;
@@ -396,7 +410,8 @@ function recordApplied(plan, loaded) {
 
 /**
  * Applies the selected items of the plan in `out` to the project and records their new base in the lock.
- * Refuses, before writing anything, an unknown id and an item that still holds conflict markers.
+ * Refuses, before writing anything, an unknown id, an item that still holds conflict markers and an item
+ * with a conflicted file that its `resolution.json` does not name.
  * `applied` lists the items written or recorded, `skipped` every other item of the plan (not selected, or
  * already applied), and `upstream` the applied items whose result still differs from the marketplace.
  */
@@ -410,6 +425,10 @@ export function apply({ out, selected }) {
   const unresolved = loadedItems.map((loaded) => ({ id: loaded.item.id, files: unresolvedFiles(loaded) })).filter((entry) => entry.files.length > 0);
   if (unresolved.length > 0) {
     throw new Error(`Conflict markers remain: ${unresolved.map((entry) => `${entry.id} (${entry.files.join(", ")})`).join("; ")}`);
+  }
+  const unexplained = loadedItems.map((loaded) => ({ id: loaded.item.id, files: unexplainedFiles(loaded.item) })).filter((entry) => entry.files.length > 0);
+  if (unexplained.length > 0) {
+    throw new Error(`No resolution covers: ${unexplained.map((entry) => `${entry.id} (${entry.files.join(", ")})`).join("; ")}`);
   }
   const lock = readLock(plan.project);
   const applied = [];
