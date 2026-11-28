@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Report, RunStatusView } from "../src/types.ts";
+import { fakeNodeTurns, fakeRunSteps } from "./helpers/fake-steps.ts";
 import { pollUntil } from "./helpers/poll.ts";
 
 type Payload = RunStatusView & Partial<Omit<Report, keyof RunStatusView>>;
@@ -34,8 +35,8 @@ try {
     await call("factory_answer", { runId: runIdArg, questionId: "q-endpoint", answer: "extend" });
     const done = await statusReaches(runIdArg, ["done"]);
     const report = await call("factory_report", { runId: runIdArg });
-    assert.equal(done.cost.steps, 13);
-    assert.equal(report.byNode?.["hello/plan"]?.steps, 3);
+    assert.equal(done.cost.steps, fakeRunSteps("hello") + (done.supervisor ? 1 : 0), "no turn is repeated after the restart");
+    assert.equal(report.byNode?.["hello/plan"]?.steps, fakeNodeTurns("hello", "plan"));
     console.log("PASS  run survives server kill + restart, no duplicated turns");
   }
 } catch (error) {

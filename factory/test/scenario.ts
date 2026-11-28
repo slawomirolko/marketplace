@@ -5,6 +5,7 @@ import http from "node:http";
 import type { IncomingHttpHeaders } from "node:http";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { Report, RunStatusView } from "../src/types.ts";
+import { fakeRunSteps } from "./helpers/fake-steps.ts";
 import { pollUntil } from "./helpers/poll.ts";
 
 type Payload = Partial<RunStatusView> & Partial<Omit<Report, keyof RunStatusView>> & {
@@ -149,7 +150,7 @@ try {
     const sumSteps = Object.values(byNode).reduce((s, n) => s + n.steps, 0);
     assert.ok(Math.abs(sumNodes - cost.costUsd) < 0.001, `nodes ${sumNodes} vs total ${cost.costUsd}`);
     assert.equal(sumSteps, cost.steps);
-    assert.equal(cost.steps, 3 + 4 + 1 + 4 + 1);
+    assert.equal(cost.steps, fakeRunSteps("hello") + (payload.supervisor ? 1 : 0), "every hello step once, plus the post-run supervisor when it ran");
     assert.deepEqual(Object.keys(payload.byTier ?? {}).sort(), ["high", "low", "medium", "script"]);
     assert.equal(byNode["hello/build/verify"]?.costUsd, 0);
     assert.equal(payload.synthetic, true, "a fake model run is marked synthetic");
