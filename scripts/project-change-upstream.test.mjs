@@ -570,3 +570,23 @@ test("record --base-commit creates or moves the base", () => {
   json(record("--approved", copy.contentHash));
   assert.equal(json(lock(root, market.root, "status")).changed[0].approved, true);
 });
+
+test("lock approved confirms only a recorded approval of the current copy", () => {
+  const market = fixtureMarketplace();
+  const { root, skillDir } = fixtureProject();
+  const approved = (artifact, contentHash) => json(node(lockScript, ["approved", "--project", root, "--artifact", artifact, "--content-hash", contentHash, "--json"]));
+  const someHash = "a".repeat(64);
+  assert.deepEqual(approved("skill:sample-skill", someHash), { approved: false, reason: "no-lock" });
+  json(lock(root, market.root, "init"));
+  fs.appendFileSync(path.join(skillDir, "workflow.md"), "3. Validate the input first.\n");
+  const [changed] = json(lock(root, market.root, "status")).changed;
+  assert.deepEqual(approved("skill:sample-skill", changed.contentHash), { approved: false, reason: "not-approved" });
+  assert.deepEqual(approved("agent:sample-agent", changed.contentHash), { approved: false, reason: "not-approved" });
+  json(node(lockScript, ["record", "--project", root, "--artifact", "skill:sample-skill", "--approved", changed.contentHash, "--json"]));
+  assert.deepEqual(approved("skill:sample-skill", changed.contentHash), { approved: true, reason: "approved" });
+  assert.deepEqual(approved("skill:sample-skill", someHash), { approved: false, reason: "not-approved" }, "another content hash than the recorded one");
+  fs.appendFileSync(path.join(skillDir, "workflow.md"), "4. Edited after the approval.\n");
+  assert.deepEqual(approved("skill:sample-skill", changed.contentHash), { approved: false, reason: "copy-changed" }, "the copy no longer holds the approved content");
+  assert.deepEqual(approved("skill:missing-skill", changed.contentHash), { approved: false, reason: "not-locked" });
+  assert.equal(node(lockScript, ["approved", "--project", root, "--artifact", "skill:sample-skill", "--content-hash", "nope", "--json"]).status, 1, "a malformed hash is refused");
+});

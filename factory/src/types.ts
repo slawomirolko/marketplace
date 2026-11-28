@@ -113,7 +113,7 @@ export interface RunInput {
   workflowsDir?: string;
   /** The registered project this run belongs to; the factory fills `project` from it. */
   projectId?: string;
-  /** "true" when the person already approved this exact change, for example by applying a marketplace merge. */
+  /** "true" when the lock status reported this exact change as approved; shown only: olko-marketplace-upstream skips its question only after its own lock check. */
   approved?: string;
 }
 

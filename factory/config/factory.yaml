@@ -67,8 +67,9 @@ projects:
 # the `dirs` list of projects.json in the data dir and every run's input.project), and starts one run of its workflow per item
 # that stayed the same for stableChecks checks. The run stops at its first question,
 # so nothing happens until you answer it in the viewer. The viewer process runs them.
-# A change you already approved (lock status approved, for example applied by a marketplace
-# merge) skips the question of olko-marketplace-upstream; the sanitize gate still runs.
+# A change you already approved (for example applied by a marketplace merge) skips the question
+# of olko-marketplace-upstream only when its own lock check (olko-marketplace-lock.mjs approved)
+# confirms the recorded approval and the unchanged copy; the sanitize gate still runs.
 watches:
   - id: marketplace-upstream
     everyMinutes: 10

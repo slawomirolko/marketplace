@@ -18,6 +18,7 @@
  *   node scripts/olko-marketplace-lock.mjs record --project <dir> --artifact <skill:x|agent:x>
  *        (--pending-pr <n> --content-hash <sha256> | --clear-pending | --rejected <sha256>
  *        | --marketplace <dir> --base-commit <sha> [--approved <sha256>] | --approved <sha256>) [--json]
+ *   node scripts/olko-marketplace-lock.mjs approved --project <dir> --artifact <skill:x|agent:x> --content-hash <sha256> [--json]
  */
 
 import fs from "node:fs";
@@ -50,7 +51,9 @@ const SCHEMA_KEY = "schemaVersion";
 /** A content hash as `status` reports it and `record` takes it: bare SHA-256 hex, without HASH_PREFIX. */
 const BARE_HASH = /^[0-9a-f]{64}$/;
 const POSITIVE_INTEGER = /^[1-9][0-9]*$/;
-const COMMANDS = ["init", "status", "record"];
+const COMMANDS = ["init", "status", "record", "approved"];
+/** Commands that read or write only the project lock and need no marketplace checkout. */
+const LOCK_ONLY_COMMANDS = ["record", "approved"];
 /** A commit given by hex, short or full. */
 const COMMIT_ID = /^[0-9a-f]{7,64}$/;
 /** Lock entry fields that only describe a copy whose base was guessed or unknown. */
@@ -371,6 +374,37 @@ export function record(project, artifact, options) {
   return entry;
 }
 
+/**
+ * Whether the person approved this exact content of `artifact`: the lock entry's `approved` equals `contentHash` and
+ * the installed copy still holds that content. `reason` is `approved`, `no-lock`, `not-locked`, `not-approved` or
+ * `copy-changed`. Reads only; never throws for a missing lock or entry, so a workflow can route on the answer.
+ */
+export function approved(project, artifact, contentHash) {
+  if (!isArtifactId(artifact)) {
+    throw new Error("--artifact needs skill:<name> or agent:<name>");
+  }
+  if (!BARE_HASH.test(contentHash ?? "")) {
+    throw new Error("--content-hash needs a sha256 content hash");
+  }
+  const lock = readLock(project);
+  if (!lock) {
+    return { approved: false, reason: "no-lock" };
+  }
+  if (!Object.hasOwn(lock, artifact)) {
+    return { approved: false, reason: "not-locked" };
+  }
+  const entry = lock[artifact];
+  if (entry.approved !== contentHash) {
+    return { approved: false, reason: "not-approved" };
+  }
+  const local = artifactFromEntry(project, artifact, entry);
+  const current = fs.existsSync(local.local) ? copyAt(local.kind, local.name, null, local.location ?? null, local.local).contentHash : null;
+  if (current !== `${HASH_PREFIX}${contentHash}`) {
+    return { approved: false, reason: "copy-changed" };
+  }
+  return { approved: true, reason: "approved" };
+}
+
 const FLAGS = {
   values: { "--project": "project", "--marketplace": "marketplace", "--artifact": "artifact", "--pending-pr": "pendingPr", "--content-hash": "contentHash", "--rejected": "rejected", "--base-commit": "baseCommit", "--approved": "approved", "--depth": "depth" },
   switches: { "--json": "json", "--clear-pending": "clearPending" },
@@ -382,7 +416,7 @@ function parseArgs(argv) {
   if (!options.project) {
     throw new Error("Missing --project <dir>");
   }
-  if ((command !== "record" || options.baseCommit) && !options.marketplace) {
+  if ((!LOCK_ONLY_COMMANDS.includes(command) || options.baseCommit) && !options.marketplace) {
     throw new Error("Missing --marketplace <dir>");
   }
   if (options.depth !== undefined && !POSITIVE_INTEGER.test(options.depth)) {
@@ -400,12 +434,13 @@ function main() {
   const project = path.resolve(options.project);
   const marketplace = options.marketplace ? path.resolve(options.marketplace) : null;
   if (!COMMANDS.includes(options.command)) {
-    throw new Error(`Unknown command: ${options.command}. Use init, status or record.`);
+    throw new Error(`Unknown command: ${options.command}. Use init, status, record or approved.`);
   }
   const run = {
     init: () => init(project, marketplace, { depth: options.depth ? Number(options.depth) : DEFAULT_DEPTH }),
     status: () => status(project, marketplace),
     record: () => record(project, options.artifact, { ...options, marketplace }),
+    approved: () => approved(project, options.artifact, options.contentHash),
   };
   print(run[options.command](), options.json);
 }

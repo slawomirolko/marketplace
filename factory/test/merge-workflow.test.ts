@@ -149,15 +149,32 @@ test("merge run: selected ids reach apply", async () => {
 
 const UPSTREAM_INPUT = { project: PROJECT, marketplace: MARKETPLACE, artifact: "skill:sample-skill", contentHash: "abc", base: "1.0.0", files: "workflow.md" };
 
-test("upstream run with approved input skips the question", async () => {
-  const { done, asked, order } = await startRun("olko-marketplace-upstream", { ...UPSTREAM_INPUT, approved: "true" }, {}, { reply: (work) => (work.step === "stage" ? fencedJson({ stage: null, classification: null }) : undefined) });
+test("upstream run skips the question when the lock confirms the approval of this content", async () => {
+  const replies = { approved: { approved: true, reason: "approved" } };
+  const { done, asked, order, calls } = await startRun("olko-marketplace-upstream", { ...UPSTREAM_INPUT, approved: "true" }, replies, { reply: (work) => (work.step === "stage" ? fencedJson({ stage: null, classification: null }) : undefined) });
   assert.deepEqual(asked, []);
   assert.deepEqual(order, ["stage"]);
   assert.ok(stoppedBy(done, /no stage directory/));
+  const check = callOf(calls, "approved");
+  assert.equal(check?.args[0], `${MARKETPLACE}/scripts/olko-marketplace-lock.mjs`);
+  assert.equal(flag(check, "--project"), PROJECT);
+  assert.equal(flag(check, "--artifact"), "skill:sample-skill");
+  assert.equal(flag(check, "--content-hash"), "abc");
+  const note = done.events.find((event) => event.type === "node_completed" && String(event.node).endsWith("/route"));
+  assert.doesNotMatch(String(note?.result), /verify passed/);
+});
+
+test("upstream run with approved input but no matching lock approval still asks first", async () => {
+  const replies = { approved: { approved: false, reason: "not-approved" } };
+  const { done, asked, order, calls } = await startRun("olko-marketplace-upstream", { ...UPSTREAM_INPUT, approved: "true" }, replies, { reply: () => undefined, answer: () => "no" });
+  assert.deepEqual(asked, ["q-upstream-decision"], "the input alone never skips the question");
+  assert.deepEqual(order, []);
+  assert.equal(done.status, "done");
+  assert.ok(calls.some((call) => call.args.includes("--rejected")));
 });
 
 test("upstream run without approval still asks first", async () => {
-  const { done, asked, order, calls } = await startRun("olko-marketplace-upstream", { ...UPSTREAM_INPUT, approved: "false" }, {}, { reply: () => undefined, answer: () => "no" });
+  const { done, asked, order, calls } = await startRun("olko-marketplace-upstream", { ...UPSTREAM_INPUT, approved: "false" }, { approved: { approved: false, reason: "no-lock" } }, { reply: () => undefined, answer: () => "no" });
   assert.deepEqual(asked, ["q-upstream-decision"]);
   assert.deepEqual(order, []);
   assert.equal(done.status, "done");
@@ -212,14 +229,14 @@ test("only the resolve step of the merge workflow is isolated", () => {
 
 test("a step that lists its own dirs but is not isolated keeps the agent's own permissions on a CLI backend", async () => {
   const { Factory } = await import("../src/engine.ts");
-  const fake = fakeExec({ approved: { approved: true } });
+  const fake = fakeExec({ approved: { approved: true, reason: "approved" } });
   const requests: CliRequest[] = [];
   const opencode = async (request: CliRequest): Promise<CliResult> => {
     requests.push(request);
     return { ok: true, text: fencedJson({ stage: null, classification: null }), turns: 1, usageByModel: [] };
   };
   const factory = new Factory(tempDir("upstream-workflow-"), { backend: "cli", cli: "opencode", executors: { exec: fake.exec, opencode } });
-  const { run } = factory.start("upstream", undefined, { workflow: "olko-marketplace-upstream", input: { ...UPSTREAM_INPUT, approved: "true" } });
+  const { run } = factory.start("upstream", undefined, { workflow: "olko-marketplace-upstream", input: UPSTREAM_INPUT });
   factory.confirm(run.runId, { backend: { kind: "cli", cli: "opencode" } });
   await driveRun(factory, run.runId, { reply: () => undefined });
   const stage = requests.find((request) => request.prompt.includes("stage step"));
