@@ -1,6 +1,7 @@
 // Interval watches, the builtin.exec operation and answering a run from the viewer.
 // Hermetic: temp data dirs, a temp workflow, `node -e` as the watched command, and a
 // stub cli executor. No network, no real model, no real GitHub.
+import "./helpers/isolated-home.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";

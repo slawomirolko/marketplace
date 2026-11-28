@@ -1,16 +1,16 @@
+import "./helpers/isolated-home.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
-import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { runSubagent, type SubagentResult } from "./delegate-subagent.ts";
+import { callTool, startStdio, type Payload } from "./helpers/mcp.ts";
+import { git } from "./helpers/processes.ts";
+import { removeDir, tempDir } from "./helpers/temp.ts";
 
 const factoryDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoDir = path.join(factoryDir, "..");
@@ -19,29 +19,9 @@ const TASK = "t1-slugify";
 const TEST_COMMAND = ["-m", "unittest", "discover", "-s", "tests", "-t", ".", "-v"];
 const PYTHON = process.env.FACTORY_TEST_PYTHON ?? (process.platform === "win32" ? "python" : "python3");
 const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
+const TOOL_TIMEOUT = { timeoutMs: 120000 };
 const REAL_CLAUDE = path.join(os.homedir(), ".claude");
 const REAL_SYNC_HOME = process.env.OLKO_SYNC_HOME ?? path.join(os.homedir(), ".olko-sync");
-
-type Payload = Record<string, any>;
-
-async function call(client: Client, name: string, args: Record<string, unknown>): Promise<Payload> {
-  const res = (await client.callTool({ name, arguments: args }, undefined, { timeout: 120000 })) as CallToolResult;
-  assert.ok(!res.isError, JSON.stringify(res.content));
-  return res.structuredContent as Payload;
-}
-
-function freePort(): Promise<number> {
-  return new Promise((resolve) => {
-    const server = net.createServer().listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as net.AddressInfo;
-      server.close(() => resolve(port));
-    });
-  });
-}
-
-function git(cwd: string, ...args: string[]): string {
-  return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" }).trim();
-}
 
 function filesOf(entry: string): string[] {
   if (!fs.existsSync(entry)) return [];
@@ -118,15 +98,6 @@ function throwawayProject(root: string): { project: string; origin: string } {
   return { project, origin };
 }
 
-function claudeConfigDir(root: string): string | undefined {
-  const credentials = path.join(REAL_CLAUDE, ".credentials.json");
-  if (!fs.existsSync(credentials)) return undefined;
-  const dir = path.join(root, "claude-config");
-  fs.mkdirSync(dir, { recursive: true });
-  fs.copyFileSync(credentials, path.join(dir, ".credentials.json"));
-  return dir;
-}
-
 const ANSWERS: [RegExp, string][] = [
   [/^q-impl-commit$/, "no"],
   [/^q-impl-scope$/, "extend"],
@@ -153,41 +124,38 @@ function worktreeOf(project: string): string {
 }
 
 test("a harness drives the YAML implementation over stdio in delegate mode on a throwaway Python repo: the Task test passes in the worktree and nothing is published", async () => {
-  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "factory-impl-ts-")));
+  const root = tempDir("factory-impl-ts-", { real: true });
   const { project, origin } = throwawayProject(root);
-  const configDir = claudeConfigDir(root);
   const before = outsideTmp();
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-delegate-"));
-  const env = { ...process.env, FACTORY_DATA_DIR: dataDir, FACTORY_VIEWER_PORT: String(await freePort()) } as Record<string, string>;
-  const agentEnv = { ...process.env, GH_HOST: "github.invalid", GIT_TERMINAL_PROMPT: "0", OLKO_SYNC_HOME: path.join(root, "olko-sync"), ...(configDir ? { CLAUDE_CONFIG_DIR: configDir } : {}) } as Record<string, string>;
-  const client = new Client({ name: "claude-code", version: "0.0.0" });
-  await client.connect(new StdioClientTransport({ command: process.execPath, args: [path.join(factoryDir, "src", "stdio.ts")], env, stderr: "pipe" }));
+  const session = await startStdio({ entry: path.join(factoryDir, "src", "stdio.ts") });
+  const { client } = session;
+  const call = (name: string, args: Record<string, unknown>) => callTool(client, name, args, TOOL_TIMEOUT);
   const batches: Payload[][] = [];
   const asked: Payload[] = [];
   try {
     const switches = { tracker: false, editor: false, docker: false, obsidian: false, adopt: false };
-    const started = await call(client, "factory_start", { goal: "Implement Task t1-slugify of Feature slugify", workflow: "olko-implementation", input: { project, featureId: FEATURE, taskId: TASK, switches } });
+    const started = await call("factory_start", { goal: "Implement Task t1-slugify of Feature slugify", workflow: "olko-implementation", input: { project, featureId: FEATURE, taskId: TASK, switches } });
     const runId = started.runId as string;
     const testModel = process.env.FACTORY_TEST_MODEL ?? "claude-haiku-5-5";
-    let status = await call(client, "factory_confirm", { runId, overrides: { tierModels: { low: testModel, medium: testModel, high: testModel } } });
+    let status = await call("factory_confirm", { runId, overrides: { tierModels: { low: testModel, medium: testModel, high: testModel } } });
     while (!ENDED.has(status.status)) {
-      status = await call(client, "factory_wait", { runId, timeoutSec: 50 });
+      status = await call("factory_wait", { runId, timeoutSec: 50 });
       if (status.status === "waiting_for_client") {
         const items = status.pendingWorkItems as Payload[];
         for (const work of items) assert.ok(work.agentName && work.agentInstructions && Array.isArray(work.tools) && Array.isArray(work.dirs), `pendingWork for ${work.nodePath} carries agent, tools and dirs`);
         batches.push(items);
-        const results = await Promise.all(items.map((w) => runSubagent(w, { cwd: (w.cwd as string | undefined) ?? project, env: agentEnv })));
+        const results = await Promise.all(items.map((w) => runSubagent(w, { cwd: (w.cwd as string | undefined) ?? project })));
         for (const [i, work] of items.entries()) {
           const result = results[i]!;
-          status = await call(client, "factory_submit", { runId, nodePath: work.nodePath, agentId: work.agentId, output: result.output, usage: result.usage });
+          status = await call("factory_submit", { runId, nodePath: work.nodePath, agentId: work.agentId, output: result.output, usage: result.usage });
         }
       } else if (status.status === "waiting_for_user") {
         const question = status.pendingQuestion as Payload;
         asked.push(question);
-        status = await call(client, "factory_answer", { runId, questionId: question.id, answer: answerOf(question) });
+        status = await call("factory_answer", { runId, questionId: question.id, answer: answerOf(question) });
       }
     }
-    const report = await call(client, "factory_report", { runId });
+    const report = await call("factory_report", { runId });
 
     assert.equal(report.status, "done", JSON.stringify(report));
     const work = batches.flat();
@@ -221,9 +189,7 @@ test("a harness drives the YAML implementation over stdio in delegate mode on a 
     for (const item of work) assert.ok(pricedNodes.has(item.nodePath), `${item.nodePath} is priced`);
     console.log(JSON.stringify({ runId, steps: work.length, asked: asked.map((q) => q.id), costUsd: report.cost.costUsd, viewerUrl: report.viewerUrl }));
   } finally {
-    await client.close();
-    const pidFile = path.join(dataDir, "viewer.pid");
-    if (fs.existsSync(pidFile)) process.kill(Number(fs.readFileSync(pidFile, "utf8")));
-    if (configDir) fs.rmSync(configDir, { recursive: true, force: true });
+    await session.close();
+    removeDir(root);
   }
 });

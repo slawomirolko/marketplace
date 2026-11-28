@@ -1,42 +1,20 @@
+import "./helpers/isolated-home.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import fs from "node:fs";
-import net from "node:net";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { runSubagent, type SubagentResult } from "./delegate-subagent.ts";
+import { callTool, startStdio, type Payload } from "./helpers/mcp.ts";
+import { git } from "./helpers/processes.ts";
+import { removeDir, tempDir } from "./helpers/temp.ts";
 
 const factoryDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PROJECT = process.env.FACTORY_SYNC_PROJECT;
 const ARTIFACTS = (process.env.FACTORY_SYNC_ARTIFACTS ?? "olko-design-rules,olko-review-verifier,olko-e2e-acceptance-runner").split(",");
 const MARKETPLACE = process.env.FACTORY_SYNC_MARKETPLACE ?? "slawomirolko/marketplace";
 const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
-
-type Payload = Record<string, any>;
-
-async function call(client: Client, name: string, args: Record<string, unknown>): Promise<Payload> {
-  const res = (await client.callTool({ name, arguments: args }, undefined, { timeout: 120000 })) as CallToolResult;
-  assert.ok(!res.isError, JSON.stringify(res.content));
-  return res.structuredContent as Payload;
-}
-
-function freePort(): Promise<number> {
-  return new Promise((resolve) => {
-    const server = net.createServer().listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as net.AddressInfo;
-      server.close(() => resolve(port));
-    });
-  });
-}
-
-function git(cwd: string, ...args: string[]): string {
-  return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" }).trim();
-}
+const TOOL_TIMEOUT = { timeoutMs: 120000 };
 
 function snapshot(dir: string): Record<string, string> {
   return { branch: git(dir, "branch", "--show-current"), head: git(dir, "rev-parse", "HEAD"), status: git(dir, "status", "--porcelain"), branches: git(dir, "branch", "--list", "--format=%(refname:short)") };
@@ -44,26 +22,25 @@ function snapshot(dir: string): Record<string, string> {
 
 test("a harness drives the YAML marketplace skill sync over stdio in delegate mode, honours per-node tools, and leave on every decision changes nothing", async () => {
   assert.ok(PROJECT, "set FACTORY_SYNC_PROJECT to the owner/name of a real project with .agents/skills and .opencode/agents");
-  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "factory-sync-ts-")));
+  const root = tempDir("factory-sync-ts-", { real: true });
   const project = path.join(root, "project");
   const marketplace = path.join(root, "marketplace");
   execFileSync("gh", ["repo", "clone", PROJECT, project, "--", "--depth", "1"]);
   execFileSync("gh", ["repo", "clone", MARKETPLACE, marketplace, "--", "--depth", "50"]);
   const before = snapshot(marketplace);
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-delegate-"));
-  const env = { ...process.env, FACTORY_DATA_DIR: dataDir, FACTORY_VIEWER_PORT: String(await freePort()) } as Record<string, string>;
-  const client = new Client({ name: "claude-code", version: "0.0.0" });
-  await client.connect(new StdioClientTransport({ command: process.execPath, args: [path.join(factoryDir, "src", "stdio.ts")], env, stderr: "pipe" }));
+  const session = await startStdio({ entry: path.join(factoryDir, "src", "stdio.ts") });
+  const { client } = session;
+  const call = (name: string, args: Record<string, unknown>) => callTool(client, name, args, TOOL_TIMEOUT);
   const submitted: { agentName: string; usage: SubagentResult["usage"] }[] = [];
   const offered: Payload[] = [];
   const asked: Payload[] = [];
   try {
-    const started = await call(client, "factory_start", { goal: "Sync project-local skills and agents to the marketplace", workflow: "olko-marketplace-skill-sync", input: { project, marketplace, artifacts: ARTIFACTS } });
+    const started = await call("factory_start", { goal: "Sync project-local skills and agents to the marketplace", workflow: "olko-marketplace-skill-sync", input: { project, marketplace, artifacts: ARTIFACTS } });
     const runId = started.runId as string;
     const testModel = process.env.FACTORY_TEST_MODEL ?? "claude-haiku-5-5";
-    let status = await call(client, "factory_confirm", { runId, overrides: { tierModels: { low: testModel, medium: testModel, high: testModel } } });
+    let status = await call("factory_confirm", { runId, overrides: { tierModels: { low: testModel, medium: testModel, high: testModel } } });
     while (!ENDED.has(status.status)) {
-      status = await call(client, "factory_wait", { runId, timeoutSec: 50 });
+      status = await call("factory_wait", { runId, timeoutSec: 50 });
       if (status.status === "waiting_for_client") {
         const items = status.pendingWorkItems as Payload[];
         for (const work of items) assert.ok(work.agentName && work.agentInstructions && Array.isArray(work.tools) && Array.isArray(work.dirs), `pendingWork for ${work.nodePath} carries agent, tools and dirs`);
@@ -72,15 +49,15 @@ test("a harness drives the YAML marketplace skill sync over stdio in delegate mo
         for (const [i, work] of items.entries()) {
           const result = results[i]!;
           submitted.push({ agentName: work.agentName, usage: result.usage });
-          status = await call(client, "factory_submit", { runId, nodePath: work.nodePath, agentId: work.agentId, output: result.output, usage: result.usage });
+          status = await call("factory_submit", { runId, nodePath: work.nodePath, agentId: work.agentId, output: result.output, usage: result.usage });
         }
       } else if (status.status === "waiting_for_user") {
         const question = status.pendingQuestion as Payload;
         asked.push(question);
-        status = await call(client, "factory_answer", { runId, questionId: question.id, answer: question.allowed?.includes("leave") ? "leave" : "stop" });
+        status = await call("factory_answer", { runId, questionId: question.id, answer: question.allowed?.includes("leave") ? "leave" : "stop" });
       }
     }
-    const report = await call(client, "factory_report", { runId });
+    const report = await call("factory_report", { runId });
 
     assert.equal(report.status, "done", JSON.stringify(report));
     assert.ok(report.workflow.startsWith("olko-marketplace-skill-sync@"));
@@ -103,8 +80,7 @@ test("a harness drives the YAML marketplace skill sync over stdio in delegate mo
     assert.equal(report.coverage.run.unknownSteps, 0);
     console.log(JSON.stringify({ runId, offered: offered.map((w) => w.agentId), asked: asked.map((q) => q.id), costUsd: report.cost.costUsd, viewerUrl: report.viewerUrl }));
   } finally {
-    await client.close();
-    const pidFile = path.join(dataDir, "viewer.pid");
-    if (fs.existsSync(pidFile)) process.kill(Number(fs.readFileSync(pidFile, "utf8")));
+    await session.close();
+    removeDir(root);
   }
 });

@@ -1,9 +1,10 @@
+import "./helpers/isolated-home.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { removeDir, tempDir } from "./helpers/temp.ts";
 import { runSubagent } from "./delegate-subagent.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
@@ -28,7 +29,7 @@ const PROJECT_FILES: Record<string, string> = {
 };
 
 function tinyProject(): string {
-  const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-smoke-")));
+  const dir = tempDir("factory-plan-smoke-", { real: true });
   for (const [file, body] of Object.entries(PROJECT_FILES)) {
     fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
     fs.writeFileSync(path.join(dir, file), body);
@@ -55,7 +56,7 @@ function overLimit(startedAt: number, where: string): never {
 
 test(`the plan documentation of a one-Task idea ends done within ${LIMIT_MIN} min and $${BUDGET_USD}`, { timeout: (LIMIT_MIN + 1) * 60000 }, async () => {
   const project = tinyProject();
-  const factory = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-smoke-data-")), { backend: "delegate" });
+  const factory = new Factory(tempDir("factory-plan-smoke-data-"), { backend: "delegate" });
   const { run } = factory.start("Draft the Feature and plan it with an implementation plan for every Task", undefined, { workflow: "olko-plan-documentation", input: { project, idea: IDEA, route: "both", featureId: FEATURE, switches: { tracker: false, editor: false } } });
   factory.confirm(run.runId, { tierModels: { low: MODEL, medium: MODEL, high: MODEL }, budget: { maxCostUsd: BUDGET_USD } });
   const startedAt = Date.now();
@@ -99,5 +100,6 @@ test(`the plan documentation of a one-Task idea ends done within ${LIMIT_MIN} mi
   } finally {
     clearTimeout(timer);
     if (!ENDED.has(factory.get(run.runId).status)) factory.cancel(run.runId);
+    removeDir(project);
   }
 });

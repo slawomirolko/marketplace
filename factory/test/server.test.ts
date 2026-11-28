@@ -1,6 +1,7 @@
 // The HTTP server (src/server.ts) and the viewer routes: a malformed path cannot crash the process,
 // the viewer API cannot change anything without the token when the server listens beyond loopback,
 // and the bearer token is compared in constant time.
+import "./helpers/isolated-home.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import http from "node:http";

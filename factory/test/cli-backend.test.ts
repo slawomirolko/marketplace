@@ -1,5 +1,6 @@
 // The agent CLIs start without a shell: a fake `claude`/`opencode` on PATH records the arguments
 // and the environment it receives, so quoting, validation and the child environment are checked hermetically.
+import "./helpers/isolated-home.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";

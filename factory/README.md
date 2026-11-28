@@ -228,3 +228,9 @@ Findings:
 - `pnpm test:full`: the full plan documentation run on the marketplace repository (`*_fullrun.test.ts`). Several hours. Not part of `test:integration`; run it only to measure the whole workflow.
 
 Use `pnpm test` on every change, `pnpm test:contract` after a prompt change, `pnpm test:smoke` before a merge that changes a workflow, and `pnpm test:full` only for a measurement.
+
+Test runs stay out of real folders and accounts:
+
+- Every test uses a temp `FACTORY_HOME_DIR` (`test/helpers/isolated-home.ts`, preloaded by the scripts and imported first by the files that need it), so the real `~/.skill-factory` `.env`, `sources.json` and `projects.json` are never read or written. Temp folders, clones and copied stores are removed after each test file.
+- Test subagents run in a sandboxed environment by default (`sandboxEnv` in `test/delegate-subagent.ts`): `GH_HOST=github.invalid`, no GitHub token, an empty gh config, `GIT_TERMINAL_PROMPT=0`, and `OLKO_SYNC_HOME` and `CLAUDE_CONFIG_DIR` (with only the login file) under a temp folder. A test that must read GitHub opts in with `network: "github-read"` and a read-only token in `FACTORY_TEST_GH_READ_TOKEN`.
+- The real-model suites send repository content to the model provider. The review test needs `FACTORY_REVIEW_REPO`, `FACTORY_REVIEW_PR` and `FACTORY_TEST_GH_READ_TOKEN` and reviews a throwaway clone. The contract test reads a shallow clone of this repository unless `FACTORY_CONTRACT_PROJECT` is set. The claude sync test uses the fixture store in `test/fixtures/user-store`; `FACTORY_CLAUDE_SYNC_REAL_STORE=1` copies the real `~/.claude` skills and agents instead and then needs leak terms.

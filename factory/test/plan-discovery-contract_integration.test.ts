@@ -1,22 +1,40 @@
+import "./helpers/isolated-home.ts";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { runSubagent } from "./delegate-subagent.ts";
+import { FENCE } from "./helpers/plan-driver.ts";
+import { tempDir } from "./helpers/temp.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
 const { Factory } = await import("../src/engine.ts");
 
 const factoryDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const PROJECT = process.env.FACTORY_CONTRACT_PROJECT ?? path.join(factoryDir, "..");
 const MODEL = process.env.FACTORY_TEST_MODEL ?? "claude-haiku-5-5";
 const IDEA = "Add approval gates to the skill factory: a script node can declare approval: required, and the engine asks the user before it runs the operation and records the answer in the run.";
-const FENCE = "`".repeat(3);
 const LIMIT_MS = 5 * 60 * 1000;
 
 type Scripted = Record<string, string>;
+
+let projectCopy: string | undefined;
+
+/**
+ * The project the agents read: FACTORY_CONTRACT_PROJECT when set, otherwise a shallow clone of this repository's
+ * committed tree in the temp folder (made once, removed after the file), so agents never run in the developer checkout.
+ */
+function contractProject(): string {
+  if (process.env.FACTORY_CONTRACT_PROJECT) {
+    return process.env.FACTORY_CONTRACT_PROJECT;
+  }
+  if (!projectCopy) {
+    projectCopy = path.join(tempDir("factory-plan-contract-project-", { real: true }), "project");
+    execFileSync("git", ["clone", "-q", "--depth", "1", pathToFileURL(path.join(factoryDir, "..")).href, projectCopy]);
+  }
+  return projectCopy;
+}
 
 function fixture(name: string): string {
   const body = fs.readFileSync(path.join(factoryDir, "test", "fixtures", "plan-discovery", `${name}.json`), "utf8");
@@ -25,8 +43,9 @@ function fixture(name: string): string {
 
 /** Drives the discovery workflow with scripted replies up to `target`, runs that one node on the real model, and returns its parsed state and raw reply. */
 async function contract(target: string, scripted: Scripted): Promise<{ parsed: any; output: string; retried: boolean }> {
-  const factory = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-contract-")), { backend: "delegate" });
-  const { run } = factory.start("plan discovery contract", undefined, { workflow: "olko-plan-discovery", input: { project: PROJECT, idea: IDEA, switches: { tracker: false } } });
+  const project = contractProject();
+  const factory = new Factory(tempDir("factory-plan-contract-"), { backend: "delegate" });
+  const { run } = factory.start("plan discovery contract", undefined, { workflow: "olko-plan-discovery", input: { project, idea: IDEA, switches: { tracker: false } } });
   factory.confirm(run.runId, { tierModels: { low: MODEL, medium: MODEL, high: MODEL } });
   try {
     for (let i = 0; i < 2000; i++) {
@@ -44,11 +63,11 @@ async function contract(target: string, scripted: Scripted): Promise<{ parsed: a
         factory.submit(run.runId, work.nodePath, scripted[step]!, { model: MODEL, inputTokens: 1, outputTokens: 1 }, work.agentId);
         continue;
       }
-      let result = await runSubagent(work, { cwd: PROJECT });
+      let result = await runSubagent(work, { cwd: project });
       factory.submit(run.runId, work.nodePath, result.output, result.usage, work.agentId);
       const again = factory.status(factory.get(run.runId)).pendingWorkItems?.find((w) => w.nodePath === work.nodePath && w.retried);
       if (again) {
-        result = await runSubagent(again, { cwd: PROJECT });
+        result = await runSubagent(again, { cwd: project });
         factory.submit(run.runId, again.nodePath, result.output, result.usage, again.agentId);
       }
       const parsed = (factory.get(run.runId).state?.[target] as Record<string, unknown> | undefined)?.[work.agentId];

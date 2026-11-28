@@ -1,72 +1,68 @@
+import "./helpers/isolated-home.ts";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import net from "node:net";
-import os from "node:os";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { runSubagent, type SubagentResult } from "./delegate-subagent.ts";
+import { GH_READ_TOKEN_VARIABLE, runSubagent, type SubagentResult } from "./delegate-subagent.ts";
+import { callTool, startStdio, type Payload } from "./helpers/mcp.ts";
+import { removeDir, tempDir } from "./helpers/temp.ts";
 
 const factoryDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const repoRoot = path.join(factoryDir, "..");
-const REPO = process.env.FACTORY_REVIEW_REPO ?? "slawomirolko/marketplace";
-const PR = Number(process.env.FACTORY_REVIEW_PR ?? 69);
 const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
+const TOOL_TIMEOUT = { timeoutMs: 120000 };
 
-type Payload = Record<string, any>;
-
-async function call(client: Client, name: string, args: Record<string, unknown>): Promise<Payload> {
-  const res = (await client.callTool({ name, arguments: args }, undefined, { timeout: 120000 })) as CallToolResult;
-  assert.ok(!res.isError, JSON.stringify(res.content));
-  return res.structuredContent as Payload;
-}
-
-function freePort(): Promise<number> {
-  return new Promise((resolve) => {
-    const server = net.createServer().listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as net.AddressInfo;
-      server.close(() => resolve(port));
-    });
-  });
+/**
+ * Reviews a real pull request with real agents. FACTORY_REVIEW_REPO (owner/name) and FACTORY_REVIEW_PR name it; there is
+ * no default. The agents run in a throwaway clone under the temp folder, never in this checkout, and read GitHub only
+ * with the read-only token in FACTORY_TEST_GH_READ_TOKEN, so an unexpected "post" answer cannot write a comment.
+ */
+function reviewTarget(): { repo: string; pr: number } {
+  const repo = process.env.FACTORY_REVIEW_REPO;
+  const pr = Number(process.env.FACTORY_REVIEW_PR);
+  assert.ok(repo && /^[\w.-]+\/[\w.-]+$/.test(repo), "set FACTORY_REVIEW_REPO to the owner/name of the repository to review");
+  assert.ok(Number.isInteger(pr) && pr > 0, "set FACTORY_REVIEW_PR to the number of the pull request to review");
+  assert.ok(process.env[GH_READ_TOKEN_VARIABLE], `set ${GH_READ_TOKEN_VARIABLE} to a read-only GitHub token for the review agents`);
+  return { repo, pr };
 }
 
 test("a harness drives the YAML olko-review workflow over stdio in delegate mode, runs offered agents in parallel and every agent step is priced", async () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-delegate-"));
-  const env = { ...process.env, FACTORY_DATA_DIR: dataDir, FACTORY_VIEWER_PORT: String(await freePort()) } as Record<string, string>;
-  const client = new Client({ name: "claude-code", version: "0.0.0" });
-  await client.connect(new StdioClientTransport({ command: process.execPath, args: [path.join(factoryDir, "src", "stdio.ts")], env, stderr: "pipe" }));
+  const { repo: REPO, pr: PR } = reviewTarget();
+  const root = tempDir("factory-review-ts-", { real: true });
+  const clone = path.join(root, "repo");
+  execFileSync("gh", ["repo", "clone", REPO, clone, "--", "--depth", "50"]);
+  const session = await startStdio({ entry: path.join(factoryDir, "src", "stdio.ts") });
+  const { client } = session;
+  const call = (name: string, args: Record<string, unknown>) => callTool(client, name, args, TOOL_TIMEOUT);
   const submitted: { agentName: string; usage: SubagentResult["usage"] }[] = [];
   const asked: string[] = [];
   const batches: string[][] = [];
   const bashNodes = new Set<string>();
   try {
-    const started = await call(client, "factory_start", { goal: `Review PR #${PR} in ${REPO}`, workflow: "olko-review", input: { repo: REPO, pr: PR, fresh: true } });
+    const started = await call("factory_start", { goal: `Review PR #${PR} in ${REPO}`, workflow: "olko-review", input: { repo: REPO, pr: PR, fresh: true } });
     const runId = started.runId as string;
     const testModel = process.env.FACTORY_TEST_MODEL ?? "claude-haiku-5-5";
-    let status = await call(client, "factory_confirm", { runId, overrides: { tierModels: { low: testModel, medium: testModel, high: testModel } } });
+    let status = await call("factory_confirm", { runId, overrides: { tierModels: { low: testModel, medium: testModel, high: testModel } } });
     while (!ENDED.has(status.status)) {
-      status = await call(client, "factory_wait", { runId, timeoutSec: 50 });
+      status = await call("factory_wait", { runId, timeoutSec: 50 });
       if (status.status === "waiting_for_client") {
         const items = status.pendingWorkItems as Payload[];
         for (const work of items) assert.ok(work.agentName && work.agentInstructions, `pendingWork for ${work.nodePath} carries the marketplace agent to run`);
         batches.push(items.map((w) => w.agentName));
         for (const work of items) if ((work.tools as string[]).includes("bash")) bashNodes.add(work.nodePath.split("/").at(-1));
-        const results = await Promise.all(items.map((w) => runSubagent(w, { cwd: repoRoot })));
+        const results = await Promise.all(items.map((w) => runSubagent(w, { cwd: clone, network: "github-read" })));
         for (const [i, work] of items.entries()) {
           const result = results[i]!;
           submitted.push({ agentName: work.agentName, usage: result.usage });
-          status = await call(client, "factory_submit", { runId, nodePath: work.nodePath, agentId: work.agentId, output: result.output, usage: result.usage });
+          status = await call("factory_submit", { runId, nodePath: work.nodePath, agentId: work.agentId, output: result.output, usage: result.usage });
         }
       } else if (status.status === "waiting_for_user") {
         const id = status.pendingQuestion.id as string;
         asked.push(id);
-        status = await call(client, "factory_answer", { runId, questionId: id, answer: id === "q-memory-missing" ? "continue" : "skip" });
+        status = await call("factory_answer", { runId, questionId: id, answer: id === "q-memory-missing" ? "continue" : "skip" });
       }
     }
-    const report = await call(client, "factory_report", { runId });
+    const report = await call("factory_report", { runId });
 
     assert.equal(report.status, "done", JSON.stringify(report));
     assert.ok(report.workflow.startsWith("olko-review@"));
@@ -88,8 +84,7 @@ test("a harness drives the YAML olko-review workflow over stdio in delegate mode
     assert.equal(report.cacheTokens, submitted.reduce((sum, s) => sum + s.usage.cacheReadTokens + s.usage.cacheWriteTokens, 0));
     console.log(JSON.stringify({ runId, batches, asked, costUsd: report.cost.costUsd, viewerUrl: report.viewerUrl }));
   } finally {
-    await client.close();
-    const pidFile = path.join(dataDir, "viewer.pid");
-    if (fs.existsSync(pidFile)) process.kill(Number(fs.readFileSync(pidFile, "utf8")));
+    await session.close();
+    removeDir(root);
   }
 });

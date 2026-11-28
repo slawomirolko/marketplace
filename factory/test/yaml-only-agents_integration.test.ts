@@ -1,8 +1,9 @@
+import "./helpers/isolated-home.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { tempDir } from "./helpers/temp.ts";
 
 const AGENTS = ["olko-review-bugs-lens", "olko-review-dotnet-lens", "olko-review-python-lens", "olko-review-react-lens", "olko-review-verifier"];
 const IDS = ["first", "second", "third", "fourth", "optional"];
@@ -35,7 +36,7 @@ const YAML = [
   "",
 ].join("\n");
 
-const workflowsDir = fs.mkdtempSync(path.join(os.tmpdir(), "yaml-only-workflows-"));
+const workflowsDir = tempDir("yaml-only-workflows-");
 fs.writeFileSync(path.join(workflowsDir, "yaml-only-agents.yaml"), YAML);
 process.env.FACTORY_WORKFLOWS_DIR = workflowsDir;
 process.env.FACTORY_TURN_DELAY_MS = "0";
@@ -45,7 +46,7 @@ const { cliExecutor } = await import("../src/cli-backend.ts");
 
 test("a YAML of five marketplace agents runs its four mandatory agents and skips the switched-off one, with no workflow code", { timeout: 900_000 }, async () => {
   const model = process.env.FACTORY_TEST_MODEL ?? "claude-haiku-5-5";
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "yaml-only-data-"));
+  const dataDir = tempDir("yaml-only-data-");
   fs.mkdirSync(path.join(dataDir, "runs"), { recursive: true });
   const factory = new Factory(dataDir, { executors: { claude: cliExecutor("claude") }, backend: "cli", cli: "claude" });
 

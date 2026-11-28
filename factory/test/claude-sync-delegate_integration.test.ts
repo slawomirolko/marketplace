@@ -1,44 +1,29 @@
+// Sends repository content and the user store below to the model provider. The user store comes from
+// test/fixtures/user-store; FACTORY_CLAUDE_SYNC_REAL_STORE=1 copies the real ~/.claude skills and agents instead,
+// and then needs leak terms (targets.json leakTerms or FACTORY_LEAK_TERMS) or the test fails before it copies anything.
+import "./helpers/isolated-home.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
-import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { runSubagent, type SubagentResult } from "./delegate-subagent.ts";
+import { callTool, startStdio, type Payload, type StdioSession } from "./helpers/mcp.ts";
+import { git } from "./helpers/processes.ts";
+import { removeDir, tempDir } from "./helpers/temp.ts";
 
 const factoryDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TARGET = process.env.FACTORY_CLAUDE_SYNC_TARGET ?? "anthropics/claude-plugins-official";
 const ARTIFACTS = (process.env.FACTORY_CLAUDE_SYNC_ARTIFACTS ?? "olko-design-rules,olko-review-verifier,frontend-design").split(",");
 const MARKETPLACE = process.env.FACTORY_SYNC_MARKETPLACE ?? "slawomirolko/marketplace";
 const REAL_SYNC_HOME = process.env.OLKO_SYNC_HOME ?? path.join(os.homedir(), ".olko-sync");
+const FIXTURE_STORE = path.join(factoryDir, "test", "fixtures", "user-store");
+const REAL_STORE = process.env.FACTORY_CLAUDE_SYNC_REAL_STORE === "1";
 const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
-
-type Payload = Record<string, any>;
-
-async function call(client: Client, name: string, args: Record<string, unknown>): Promise<Payload> {
-  const res = (await client.callTool({ name, arguments: args }, undefined, { timeout: 120000 })) as CallToolResult;
-  assert.ok(!res.isError, JSON.stringify(res.content));
-  return res.structuredContent as Payload;
-}
-
-function freePort(): Promise<number> {
-  return new Promise((resolve) => {
-    const server = net.createServer().listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as net.AddressInfo;
-      server.close(() => resolve(port));
-    });
-  });
-}
-
-function git(cwd: string, ...args: string[]): string {
-  return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" }).trim();
-}
+const TOOL_TIMEOUT = { timeoutMs: 120000 };
 
 function leakTerms(): string[] {
   const file = path.join(REAL_SYNC_HOME, "targets.json");
@@ -50,7 +35,9 @@ function filesOf(entry: string): string[] {
   return fs.statSync(entry).isFile() ? [entry] : (fs.readdirSync(entry, { recursive: true }) as string[]).map((f) => path.join(entry, f)).filter((f) => fs.statSync(f).isFile());
 }
 
-function copyUserStore(destination: string, terms: string[]): void {
+/** Copies the real ~/.claude skills and agents without any entry that mentions a leak term. Refuses to run without leak terms. */
+function copyRealUserStore(destination: string, terms: string[]): void {
+  assert.ok(terms.length > 0, "FACTORY_CLAUDE_SYNC_REAL_STORE=1 needs leak terms in targets.json leakTerms or FACTORY_LEAK_TERMS");
   for (const kind of ["skills", "agents"]) {
     const source = path.join(os.homedir(), ".claude", kind);
     fs.mkdirSync(path.join(destination, kind), { recursive: true });
@@ -61,6 +48,15 @@ function copyUserStore(destination: string, terms: string[]): void {
       fs.cpSync(entry, path.join(destination, kind, name), { recursive: true, dereference: true });
     }
   }
+}
+
+/** The user store the sync reads: the checked-in fixture, or the filtered real store when FACTORY_CLAUDE_SYNC_REAL_STORE=1. */
+function userStore(destination: string): void {
+  if (REAL_STORE) {
+    copyRealUserStore(destination, leakTerms());
+    return;
+  }
+  fs.cpSync(FIXTURE_STORE, destination, { recursive: true });
 }
 
 function treeHash(root: string): string {
@@ -74,27 +70,27 @@ function snapshot(dir: string): Record<string, string> {
 }
 
 test("a harness drives the YAML claude sync over stdio in delegate mode on marketplace agents only: three inventories at once, only requested capabilities compared, leave changes no store and no real sync state", async () => {
-  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "factory-claude-sync-ts-")));
+  const root = tempDir("factory-claude-sync-ts-", { real: true });
   const [target, olko, user, state] = ["target", "olko", "user", "state"].map((d) => path.join(root, d)) as [string, string, string, string];
-  execFileSync("gh", ["repo", "clone", TARGET, target, "--", "--depth", "50"]);
-  execFileSync("gh", ["repo", "clone", MARKETPLACE, olko, "--", "--depth", "50"]);
-  copyUserStore(user, leakTerms());
-  const realState = () => (fs.existsSync(REAL_SYNC_HOME) ? treeHash(REAL_SYNC_HOME) : "absent");
-  const before = { target: snapshot(target), olko: snapshot(olko), user: treeHash(user), realState: realState() };
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-delegate-"));
-  const env = { ...process.env, FACTORY_DATA_DIR: dataDir, FACTORY_VIEWER_PORT: String(await freePort()) } as Record<string, string>;
-  const client = new Client({ name: "claude-code", version: "0.0.0" });
-  await client.connect(new StdioClientTransport({ command: process.execPath, args: [path.join(factoryDir, "src", "stdio.ts")], env, stderr: "pipe" }));
+  let session: StdioSession | undefined;
   const submitted: { agentName: string; usage: SubagentResult["usage"] }[] = [];
   const batches: Payload[][] = [];
   const asked: Payload[] = [];
   try {
-    const started = await call(client, "factory_start", { goal: "Sync skills and agents between a Claude marketplace, Olko and the user scope", workflow: "olko-claude-sync", input: { target, targetName: "public-plugins", olko, user, stateDir: state, artifacts: ARTIFACTS } });
+    execFileSync("gh", ["repo", "clone", TARGET, target, "--", "--depth", "50"]);
+    execFileSync("gh", ["repo", "clone", MARKETPLACE, olko, "--", "--depth", "50"]);
+    userStore(user);
+    const realState = () => (fs.existsSync(REAL_SYNC_HOME) ? treeHash(REAL_SYNC_HOME) : "absent");
+    const before = { target: snapshot(target), olko: snapshot(olko), user: treeHash(user), realState: realState() };
+    session = await startStdio({ entry: path.join(factoryDir, "src", "stdio.ts") });
+    const { client } = session;
+    const call = (name: string, args: Record<string, unknown>) => callTool(client, name, args, TOOL_TIMEOUT);
+    const started = await call("factory_start", { goal: "Sync skills and agents between a Claude marketplace, Olko and the user scope", workflow: "olko-claude-sync", input: { target, targetName: "public-plugins", olko, user, stateDir: state, artifacts: ARTIFACTS } });
     const runId = started.runId as string;
     const testModel = process.env.FACTORY_TEST_MODEL ?? "claude-haiku-5-5";
-    let status = await call(client, "factory_confirm", { runId, overrides: { tierModels: { low: testModel, medium: testModel, high: testModel } } });
+    let status = await call("factory_confirm", { runId, overrides: { tierModels: { low: testModel, medium: testModel, high: testModel } } });
     while (!ENDED.has(status.status)) {
-      status = await call(client, "factory_wait", { runId, timeoutSec: 50 });
+      status = await call("factory_wait", { runId, timeoutSec: 50 });
       if (status.status === "waiting_for_client") {
         const items = status.pendingWorkItems as Payload[];
         for (const work of items) assert.ok(work.agentName && work.agentInstructions && Array.isArray(work.tools) && Array.isArray(work.dirs), `pendingWork for ${work.nodePath} carries agent, tools and dirs`);
@@ -103,16 +99,16 @@ test("a harness drives the YAML claude sync over stdio in delegate mode on marke
         for (const [i, work] of items.entries()) {
           const result = results[i]!;
           submitted.push({ agentName: work.agentName, usage: result.usage });
-          status = await call(client, "factory_submit", { runId, nodePath: work.nodePath, agentId: work.agentId, output: result.output, usage: result.usage });
+          status = await call("factory_submit", { runId, nodePath: work.nodePath, agentId: work.agentId, output: result.output, usage: result.usage });
         }
       } else if (status.status === "waiting_for_user") {
         const question = status.pendingQuestion as Payload;
         asked.push(question);
         const answer = question.id === "q-claude-sync-leak" ? "none" : question.id === "q-claude-sync-consolidate" ? "skip" : question.id.startsWith("q-claude-sync-probable-") ? "confirm" : question.allowed?.includes("leave") ? "leave" : "stop";
-        status = await call(client, "factory_answer", { runId, questionId: question.id, answer });
+        status = await call("factory_answer", { runId, questionId: question.id, answer });
       }
     }
-    const report = await call(client, "factory_report", { runId });
+    const report = await call("factory_report", { runId });
 
     assert.equal(report.status, "done", JSON.stringify(report));
     const inventory = batches.find((b) => b.some((w) => w.agentName === "olko-claude-sync-inventory"));
@@ -131,8 +127,7 @@ test("a harness drives the YAML claude sync over stdio in delegate mode on marke
     for (const agent of agents) assert.equal(agent.costSource, "reported", JSON.stringify(agent));
     console.log(JSON.stringify({ runId, batches: batches.map((b) => b.map((w) => w.agentId)), asked: asked.map((q) => q.id), costUsd: report.cost.costUsd, viewerUrl: report.viewerUrl }));
   } finally {
-    await client.close();
-    const pidFile = path.join(dataDir, "viewer.pid");
-    if (fs.existsSync(pidFile)) process.kill(Number(fs.readFileSync(pidFile, "utf8")));
+    await session?.close();
+    removeDir(root);
   }
 });
