@@ -8,11 +8,11 @@ roles:
 entry: prepare
 nodes:
   - id: prepare
-    description: "Runs the merge script's prepare command: per outdated artifact the upstream copy, per modified artifact whose marketplace source moved a git merge-file of base, local copy (adapter excluded) and upstream. Writes only into a fresh work folder named after the run under the factory home, which becomes the workspace of the later steps, so the resolve agent works there and not in the project."
+    description: "Runs the merge script's prepare command: per outdated artifact the upstream copy, per modified artifact whose marketplace source moved a git merge-file of base, local copy (adapter excluded) and upstream. Writes only into a fresh work folder named after the run under the factory home, which becomes the workspace of the later steps, so the resolve agent works there and not in the project, and the plan next to that folder, out of the agent's reach, with the hash of every project copy and proposed file."
     kind: script
     op: builtin.exec
     with:
-      command: ["{{node}}", "{{input.marketplace}}/scripts/olko-marketplace-merge.mjs", prepare, --project, "{{input.project}}", --marketplace, "{{input.marketplace}}", --out, "{{home}}/merges/{{runId}}", --json]
+      command: ["{{node}}", "{{input.marketplace}}/scripts/olko-marketplace-merge.mjs", prepare, --project, "{{input.project}}", --marketplace, "{{input.marketplace}}", --out, "{{home}}/merges/{{runId}}", --plan, "{{home}}/merges/{{runId}}.plan.json", --json]
       parse: json
     workspace: "{{state.prepare.json.out}}"
   - id: nothing
@@ -32,33 +32,33 @@ nodes:
     prompt: |
       Do the resolve step of olko-marketplace-upstream.
       Work directory: {{state.prepare.json.out}}
-      Plan: {{state.prepare.json.out}}/plan.json
+      Plan (a copy for you; the factory reads its own): {{state.prepare.json.out}}/plan.json
       Follow the resolve step of the olko-marketplace-upstream skill exactly. Use only the read and edit tools: the base, local and upstream copy of each item are in the work directory, so no shell and no other folder is needed. Edit and write files only inside the work directory.
 
       End with one ```json block:
       {"resolved": <conflicted files resolved>, "unsure": <hunks marked sure: false>, "classified": <modified items classified>}
   - id: summary
-    description: "Builds one row per artifact for the question: kind, name, state and versions; files merged cleanly; conflicts with the agent's reason per hunk and the resolution diff; what would go upstream. A row is checked by default only when its base is known and every hunk is marked sure."
+    description: "Builds one row per artifact for the question from the plan prepare wrote: kind, name, state and versions; files merged cleanly; conflicts with the agent's reason per hunk and the resolution diff; what would go upstream; any proposed file that changed outside the conflicts. A row is checked by default only when its base is known, every conflict is resolved and explained, every hunk is marked sure, no proposed file changed outside the conflicts and a modified artifact is classified."
     kind: script
     op: builtin.exec
     with:
-      command: ["{{node}}", "{{input.marketplace}}/scripts/olko-marketplace-merge.mjs", summary, --out, "{{state.prepare.json.out}}", --json]
+      command: ["{{node}}", "{{input.marketplace}}/scripts/olko-marketplace-merge.mjs", summary, --plan, "{{home}}/merges/{{runId}}.plan.json", --json]
       parse: json
   - id: ask-merge
     description: "Asks once which artifacts to apply. Applying an artifact also approves the draft PR of its portable local change. none applies nothing."
     kind: interrupt
     question:
       id: q-merge
-      text: "Merge marketplace updates into {{input.project}}.\nCheck the artifacts to apply. Applying one writes the merged copy into the project (its adapter stays) and also approves a draft marketplace PR for the portable part of its local change; the sanitize gate still runs and the PR stays a draft.\nnone: apply nothing."
+      text: "Merge marketplace updates into {{input.project}}.\nCheck the artifacts to apply. Applying one writes the merged copy into the project (its adapter stays) and records it in .agents/marketplace.lock.json; in a project without that file, applying creates .agents/marketplace.lock.json, so the marketplace-upstream watch can open the approved draft PRs. Applying also approves a draft marketplace PR for the portable part of its local change; the sanitize gate still runs and the PR stays a draft.\nnone: apply nothing."
       multiple: true
       allowedFrom: state.summary.json.ids
       itemsFrom: state.summary.json.items
   - id: apply
-    description: "Writes the selected artifacts into every project location that holds them, adapter untouched, and records the new base and the approved content hash in the project's marketplace lock. Refuses an artifact that still holds conflict markers or whose conflicts have no resolution. The marketplace-upstream watch then opens the draft PRs of the approved local changes without asking again."
+    description: "Writes the selected artifacts into every project location that holds them, adapter untouched, and records the new base and the approved content hash in the project's marketplace lock (created when the project has none). Takes the project and the marketplace from the run input and the plan from next to the work folder. Checks every selected artifact first and writes nothing when one still holds conflict markers, has a conflict without a resolution, has a proposed file that changed outside the conflicts or a file not in the plan, or changed in the project after prepare. The marketplace-upstream watch then opens the draft PRs of the approved local changes without asking again."
     kind: script
     op: builtin.exec
     with:
-      command: ["{{node}}", "{{input.marketplace}}/scripts/olko-marketplace-merge.mjs", apply, --out, "{{state.prepare.json.out}}", --selected, "{{state.ask-merge.answer}}", --json]
+      command: ["{{node}}", "{{input.marketplace}}/scripts/olko-marketplace-merge.mjs", apply, --plan, "{{home}}/merges/{{runId}}.plan.json", --project, "{{input.project}}", --marketplace, "{{input.marketplace}}", --selected, "{{state.ask-merge.answer}}", --json]
       parse: json
 edges:
   - { from: prepare, to: nothing, when: "prepare.json.ids == 0", description: "no artifact to merge" }

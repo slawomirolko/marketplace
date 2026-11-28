@@ -87,16 +87,19 @@ test("merge run: no items ends done with a note", async () => {
   assert.equal(flag(prepare, "--project"), PROJECT);
   assert.equal(flag(prepare, "--marketplace"), MARKETPLACE);
   assert.equal(path.resolve(flag(prepare, "--out") ?? ""), path.join(testHomeDir!, "merges", runId), "the work directory is a fresh folder in the factory home, named after the run");
+  assert.equal(path.resolve(flag(prepare, "--plan") ?? ""), path.join(testHomeDir!, "merges", `${runId}.plan.json`), "the plan lies next to the work directory, out of the resolve agent's reach");
 });
 
 test("merge run: answer none applies nothing", async () => {
   const out = tempDir("merge-work-");
   const replies = { prepare: plan([{ id: "skill:sample-skill", state: "modified", conflicts: 0 }], out), summary: rows(["skill:sample-skill"]) };
   let questionItems: unknown;
+  let questionText = "";
   const result = await startRun("olko-marketplace-merge", MERGE_INPUT, replies, {
     reply: (work) => (work.step === "resolve" ? fencedJson({ resolved: 0, unsure: 0, classified: 1 }) : undefined),
     answer: (questionId, question) => {
       questionItems = question;
+      questionText = question.text;
       assert.equal(questionId, "q-merge");
       return "none";
     },
@@ -109,9 +112,16 @@ test("merge run: answer none applies nothing", async () => {
   assert.deepEqual(pending.items, [{ id: "skill:sample-skill", label: "skill:sample-skill label", detail: "skill:sample-skill detail", checked: true }]);
   assert.equal(result.done.status, "done");
   assert.deepEqual(result.calls.map((call) => call.args[1]), ["prepare", "summary", "apply"]);
-  assert.equal(flag(callOf(result.calls, "summary"), "--out"), out, "summary reads the work directory the plan names");
-  assert.equal(flag(callOf(result.calls, "apply"), "--out"), out);
-  assert.equal(flag(callOf(result.calls, "apply"), "--selected"), "none");
+  const planFile = path.join(testHomeDir!, "merges", `${result.runId}.plan.json`);
+  assert.equal(path.resolve(flag(callOf(result.calls, "summary"), "--plan") ?? ""), planFile, "summary reads the plan prepare wrote, not a file in the work directory");
+  assert.equal(flag(callOf(result.calls, "summary"), "--out"), undefined);
+  const apply = callOf(result.calls, "apply");
+  assert.equal(path.resolve(flag(apply, "--plan") ?? ""), planFile);
+  assert.equal(flag(apply, "--project"), PROJECT, "apply takes the project from the run input");
+  assert.equal(flag(apply, "--marketplace"), MARKETPLACE, "apply takes the marketplace from the run input");
+  assert.equal(flag(apply, "--out"), undefined);
+  assert.equal(flag(apply, "--selected"), "none");
+  assert.match(questionText, /creates \.agents\/marketplace\.lock\.json/, "the question says applying creates the lock in a project without one");
 });
 
 test("merge run: the resolve step works only in the work directory with the upstream agent", async () => {
@@ -144,7 +154,7 @@ test("merge run: selected ids reach apply", async () => {
   assert.deepEqual(order, [], "nothing to resolve or classify: outdated items without conflicts skip the agent");
   assert.deepEqual(asked, ["q-merge"]);
   assert.equal(flag(callOf(calls, "apply"), "--selected"), "skill:sample-skill,agent:sample-agent");
-  assert.equal(flag(callOf(calls, "apply"), "--out"), out);
+  assert.equal(flag(callOf(calls, "apply"), "--project"), PROJECT);
 });
 
 const UPSTREAM_INPUT = { project: PROJECT, marketplace: MARKETPLACE, artifact: "skill:sample-skill", contentHash: "abc", base: "1.0.0", files: "workflow.md" };

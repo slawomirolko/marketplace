@@ -55,7 +55,7 @@ function fixture({ changeV2 } = {}) {
   const project = path.join(root, "sample-app");
   fs.mkdirSync(project);
   const out = path.join(root, "out");
-  return { root, market, project, v1, v2: git(market, "rev-parse", "HEAD"), out };
+  return { root, market, project, v1, v2: git(market, "rev-parse", "HEAD"), out, plan: path.join(root, "out.plan.json") };
 }
 
 function installV1Skill(f, dir = SKILL_DIR, { workflow = WORKFLOW_V1, crlf = false } = {}) {
@@ -65,7 +65,7 @@ function installV1Skill(f, dir = SKILL_DIR, { workflow = WORKFLOW_V1, crlf = fal
 }
 
 function run(f, options = {}) {
-  return prepare({ project: f.project, marketplace: f.market, out: f.out, fetch: false, ...options });
+  return prepare({ project: f.project, marketplace: f.market, out: f.out, plan: f.plan, fetch: false, ...options });
 }
 
 function itemOf(plan, id) {
@@ -89,7 +89,11 @@ test("outdated takes the upstream copy and keeps the adapter", () => {
   assert.equal(plan.head, f.v2);
   assert.equal(plan.ref, "HEAD");
   assert.deepEqual(plan.ids, ["skill:sample-skill"]);
-  assert.deepEqual(JSON.parse(read(f.out, "plan.json")), plan);
+  assert.deepEqual(JSON.parse(fs.readFileSync(f.plan, "utf8")), plan, "the authoritative plan sits outside the work directory");
+  assert.deepEqual(JSON.parse(read(f.out, "plan.json")), plan, "the work directory holds a copy for the resolve agent");
+  assert.equal(Object.hasOwn(item, "checked"), false, "summary owns the checked state");
+  assert.deepEqual(Object.keys(item.proposedHashes).sort(), ["SKILL.md", "workflow.md"]);
+  assert.match(item.projectHashes[SKILL_DIR], /^[0-9a-f]{64}$/);
 });
 
 test("modified with upstream moved merges both sides cleanly", () => {
@@ -267,11 +271,11 @@ test("prepare writes nothing in the project or the marketplace", () => {
 test("the CLI prints the plan as JSON and writes plan.json", () => {
   const f = fixture();
   installV1Skill(f);
-  const result = spawnSync(process.execPath, [scriptPath, "prepare", "--project", f.project, "--marketplace", f.market, "--out", f.out, "--no-fetch", "--json"], { encoding: "utf8" });
+  const result = spawnSync(process.execPath, [scriptPath, "prepare", "--project", f.project, "--marketplace", f.market, "--out", f.out, "--plan", f.plan, "--no-fetch", "--json"], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   const plan = JSON.parse(result.stdout);
   assert.deepEqual(plan.ids, ["skill:sample-skill"]);
-  assert.deepEqual(JSON.parse(read(f.out, "plan.json")), plan);
+  assert.deepEqual(JSON.parse(fs.readFileSync(f.plan, "utf8")), plan);
 });
 
 test("the CLI refuses a missing flag and an unknown command", () => {
@@ -312,7 +316,12 @@ function conflictFixture() {
 }
 
 function applyRun(f, selected) {
-  return apply({ out: f.out, selected });
+  return apply({ plan: f.plan, project: f.project, marketplace: f.market, selected });
+}
+
+/** The applied, skipped and upstream lists of an apply result, without its per-item report. */
+function brief(result) {
+  return { applied: result.applied, skipped: result.skipped, upstream: result.upstream };
 }
 
 function lockEntry(f, id = "skill:sample-skill") {
@@ -336,7 +345,11 @@ test("apply writes only selected items, to every location, adapter untouched", (
   const plan = run(f);
   const agentBefore = read(f.project, AGENT_FILE);
   const result = applyRun(f, ["skill:sample-skill"]);
-  assert.deepEqual(result, { applied: ["skill:sample-skill"], skipped: ["agent:sample-agent"], upstream: [] });
+  assert.deepEqual(brief(result), { applied: ["skill:sample-skill"], skipped: ["agent:sample-agent"], upstream: [] });
+  assert.deepEqual(result.items, [
+    { id: "agent:sample-agent", result: "not selected", upstream: false },
+    { id: "skill:sample-skill", result: "written", upstream: false },
+  ]);
   for (const dir of [SKILL_DIR, ".claude/skills/sample-skill"]) {
     assert.equal(read(f.project, `${dir}/SKILL.md`), skillFile("1.1.0", "step one\nstep two"));
   }
@@ -413,7 +426,7 @@ test("apply of an outdated copy leaves nothing to send upstream", () => {
   installV1Skill(f);
   run(f);
   const result = applyRun(f, [CONFLICT_ID]);
-  assert.deepEqual(result, { applied: [CONFLICT_ID], skipped: [], upstream: [] });
+  assert.deepEqual(brief(result), { applied: [CONFLICT_ID], skipped: [], upstream: [] });
   assert.equal(lockEntry(f).sourceCommit, f.v2);
   assert.deepEqual(lockStatus(f.project, f.market).changed, []);
 });
@@ -423,7 +436,7 @@ test("apply with none writes nothing", () => {
   installV1Skill(f);
   run(f);
   const before = snapshot(f.project);
-  assert.deepEqual(applyRun(f, []), { applied: [], skipped: [CONFLICT_ID], upstream: [] });
+  assert.deepEqual(brief(applyRun(f, [])), { applied: [], skipped: [CONFLICT_ID], upstream: [] });
   assert.deepEqual(snapshot(f.project), before);
 });
 
@@ -434,7 +447,8 @@ test("apply twice with the same answer writes and records nothing new", () => {
   assert.deepEqual(applyRun(f, [CONFLICT_ID]).applied, [CONFLICT_ID]);
   const before = snapshot(f.project);
   const again = applyRun(f, [CONFLICT_ID]);
-  assert.deepEqual(again, { applied: [], skipped: [CONFLICT_ID], upstream: [] });
+  assert.deepEqual(brief(again), { applied: [], skipped: [CONFLICT_ID], upstream: [] });
+  assert.deepEqual(again.items, [{ id: CONFLICT_ID, result: "already applied", upstream: false }]);
   assert.deepEqual(snapshot(f.project), before);
 });
 
@@ -451,7 +465,7 @@ test("apply refuses a plan whose item leaves the project or the work directory",
   const f = fixture();
   installV1Skill(f);
   const plan = run(f);
-  const planPath = path.join(f.out, "plan.json");
+  const planPath = f.plan;
   const tampered = structuredClone(plan);
   tampered.items[0].locations = ["../outside/sample-skill"];
   fs.writeFileSync(planPath, JSON.stringify(tampered));
@@ -460,16 +474,21 @@ test("apply refuses a plan whose item leaves the project or the work directory",
   moved.items[0].dir = path.join(f.root, "elsewhere");
   fs.writeFileSync(planPath, JSON.stringify(moved));
   assert.throws(() => applyRun(f, [CONFLICT_ID]), /work directory/);
+  const renamed = structuredClone(plan);
+  renamed.items[0].id = `${CONFLICT_ID}-other`;
+  renamed.ids = [renamed.items[0].id];
+  fs.writeFileSync(planPath, JSON.stringify(renamed));
+  assert.throws(() => applyRun(f, [renamed.items[0].id]), /invalid item/, "the id must be exactly kind:name, or kind:name@location");
 });
 
 test("the CLI applies the selected ids and none", () => {
   const f = fixture();
   installV1Skill(f);
   run(f);
-  const cli = (selected) => spawnSync(process.execPath, [scriptPath, "apply", "--out", f.out, "--selected", selected, "--json"], { encoding: "utf8" });
+  const cli = (selected) => spawnSync(process.execPath, [scriptPath, "apply", "--plan", f.plan, "--project", f.project, "--marketplace", f.market, "--selected", selected, "--json"], { encoding: "utf8" });
   const none = cli("none");
   assert.equal(none.status, 0, none.stderr);
-  assert.deepEqual(JSON.parse(none.stdout), { applied: [], skipped: [CONFLICT_ID], upstream: [] });
+  assert.deepEqual(brief(JSON.parse(none.stdout)), { applied: [], skipped: [CONFLICT_ID], upstream: [] });
   const some = cli(CONFLICT_ID);
   assert.equal(some.status, 0, some.stderr);
   assert.deepEqual(JSON.parse(some.stdout).applied, [CONFLICT_ID]);
@@ -512,7 +531,7 @@ function lockAtV1(f) {
 }
 
 function summaryItem(f, id = CONFLICT_ID) {
-  return summary({ out: f.out }).items.find((item) => item.id === id);
+  return summary({ plan: f.plan }).items.find((item) => item.id === id);
 }
 
 test("prepare records the work directory and the count of modified items", () => {
@@ -527,7 +546,7 @@ test("summary of an outdated item: versions, clean files, nothing upstream, chec
   const f = fixture();
   installV1Skill(f);
   run(f);
-  const result = summary({ out: f.out });
+  const result = summary({ plan: f.plan });
   assert.deepEqual(result.ids, [CONFLICT_ID]);
   const [item] = result.items;
   assert.deepEqual(Object.keys(item).sort(), ["checked", "detail", "id", "label"]);
@@ -584,9 +603,9 @@ test("the CLI prints the summary", () => {
   const f = fixture();
   installV1Skill(f);
   run(f);
-  const result = spawnSync(process.execPath, [scriptPath, "summary", "--out", f.out, "--json"], { encoding: "utf8" });
+  const result = spawnSync(process.execPath, [scriptPath, "summary", "--plan", f.plan, "--json"], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(JSON.parse(result.stdout), summary({ out: f.out }));
+  assert.deepEqual(JSON.parse(result.stdout), summary({ plan: f.plan }));
 });
 
 test("summary unchecks a modified item whose local change is not classified for upstream", () => {
@@ -611,4 +630,116 @@ test("prepare writes the base, local and upstream side of each item into the wor
   assert.equal(read(item.sides, "upstream/workflow.md"), "flow UPSTREAM\nflow two\nflow three\n");
   assert.equal(fs.existsSync(path.join(item.dir, "base")), false, "the sides stay out of the proposed copy");
   assert.deepEqual(applyRun(f, []).applied, []);
+});
+
+test("apply refuses, writing nothing, when a selected copy changed in the project after prepare", () => {
+  const f = fixture();
+  installV1Skill(f);
+  write(f.project, AGENT_FILE, agentFile("provider/project", "line one\nline two\nline three"));
+  run(f);
+  write(f.project, `${SKILL_DIR}/workflow.md`, "flow one\nflow two\nflow three\nan edit after prepare\n");
+  const before = snapshot(f.project);
+  assert.throws(() => applyRun(f, ["agent:sample-agent", CONFLICT_ID]), (error) => /changed in the project after prepare/.test(error.message) && error.message.includes(CONFLICT_ID) && !error.message.includes("agent:sample-agent"));
+  assert.deepEqual(snapshot(f.project), before, "nothing is written, not even the unchanged agent");
+  assert.equal(fs.existsSync(path.join(f.project, ".agents/marketplace.lock.json")), false);
+});
+
+test("an adapter edit after prepare does not stop apply", () => {
+  const f = fixture();
+  installV1Skill(f);
+  run(f);
+  write(f.project, `${SKILL_DIR}/project.md`, "lintCommand: make lint\n");
+  assert.deepEqual(applyRun(f, [CONFLICT_ID]).applied, [CONFLICT_ID]);
+});
+
+test("apply and summary read the plan outside the work directory; the copy in the work directory changes nothing", () => {
+  const f = fixture();
+  installV1Skill(f);
+  const plan = run(f);
+  const copy = structuredClone(plan);
+  copy.project = path.join(f.root, "elsewhere");
+  copy.items[0].locations = ["../outside/sample-skill"];
+  fs.writeFileSync(path.join(f.out, "plan.json"), JSON.stringify(copy));
+  assert.equal(summaryItem(f).checked, true);
+  assert.deepEqual(applyRun(f, [CONFLICT_ID]).applied, [CONFLICT_ID]);
+  assert.equal(read(f.project, `${SKILL_DIR}/SKILL.md`), skillFile("1.1.0", "step one\nstep two"));
+});
+
+test("prepare refuses a plan file inside the work directory", () => {
+  const f = fixture();
+  installV1Skill(f);
+  assert.throws(() => run(f, { plan: path.join(f.out, "plan.json") }), /outside the work directory/);
+});
+
+test("apply takes the project from its own input and refuses a plan prepared for another project", () => {
+  const f = fixture();
+  installV1Skill(f);
+  run(f);
+  const other = path.join(f.root, "other-app");
+  fs.mkdirSync(other);
+  assert.throws(() => apply({ plan: f.plan, project: other, marketplace: f.market, selected: [CONFLICT_ID] }), /another project/);
+  assert.throws(() => apply({ plan: f.plan, project: f.project, marketplace: other, selected: [CONFLICT_ID] }), /another marketplace/);
+});
+
+test("a changed non-conflicted proposed file is refused by apply and shown unchecked by summary", () => {
+  const f = conflictFixture();
+  lockAtV1(f);
+  const item = itemOf(run(f), CONFLICT_ID);
+  write(item.dir, "workflow.md", "flow RESOLVED\nflow two\nflow three\n");
+  write(item.dir, "resolution.json", JSON.stringify({ hunks: [{ file: "workflow.md", reason: "merged", sure: true }], upstream: { portable: [], adapter: [] } }));
+  assert.equal(summaryItem(f).checked, true, "the conflicted file may change: that is the agent's job");
+  write(item.dir, "SKILL.md", skillFile("1.1.0", "step one\nstep two\nslipped in"));
+  const row = summaryItem(f);
+  assert.equal(row.checked, false);
+  assert.match(row.detail, /Changed outside the conflicts: SKILL\.md/);
+  const before = snapshot(f.project);
+  assert.throws(() => applyRun(f, [CONFLICT_ID]), /changed outside the conflicts: SKILL\.md/);
+  assert.deepEqual(snapshot(f.project), before);
+});
+
+test("a file not in the plan is refused by apply and shown unchecked by summary", () => {
+  const f = fixture();
+  installV1Skill(f);
+  const item = itemOf(run(f), CONFLICT_ID);
+  write(item.dir, "extra.md", "added by someone\n");
+  const row = summaryItem(f);
+  assert.equal(row.checked, false);
+  assert.match(row.detail, /Not in the plan: extra\.md/);
+  assert.throws(() => applyRun(f, [CONFLICT_ID]), /not in the plan: extra\.md/);
+  fs.rmSync(path.join(item.dir, "extra.md"));
+  fs.rmSync(path.join(item.dir, "workflow.md"));
+  assert.match(summaryItem(f).detail, /Changed outside the conflicts: workflow\.md/, "a removed proposed file counts as changed");
+});
+
+test("the conflict markers of a diff3 merge are found too", () => {
+  const f = conflictFixture();
+  const item = itemOf(run(f), CONFLICT_ID);
+  write(item.dir, "resolution.json", JSON.stringify({ hunks: [{ file: "workflow.md", reason: "x", sure: true }] }));
+  for (const marker of ["||||||| base", "=======", "<<<<<<< local", ">>>>>>> upstream"]) {
+    write(item.dir, "workflow.md", `flow RESOLVED\n${marker}\nflow three\n`);
+    assert.throws(() => applyRun(f, [CONFLICT_ID]), /Conflict markers remain/, marker);
+  }
+});
+
+test("apply writes only changed files, keeps CRLF line endings and the executable bit; new files get LF", () => {
+  const f = fixture({
+    changeV2: (dir) => {
+      write(dir, "skills/demo/sample-skill/SKILL.md", skillFile("1.1.0", "step one\nstep two"));
+      write(dir, "skills/demo/sample-skill/new.md", "new file\n");
+    },
+  });
+  installV1Skill(f, SKILL_DIR, { crlf: true });
+  const workflowFile = path.join(f.project, SKILL_DIR, "workflow.md");
+  const skillPath = path.join(f.project, SKILL_DIR, "SKILL.md");
+  fs.chmodSync(skillPath, 0o755);
+  const old = new Date(2020, 0, 1);
+  fs.utimesSync(workflowFile, old, old);
+  run(f);
+  assert.deepEqual(applyRun(f, [CONFLICT_ID]).applied, [CONFLICT_ID]);
+  assert.equal(read(f.project, `${SKILL_DIR}/SKILL.md`), skillFile("1.1.0", "step one\nstep two").replace(/\n/g, "\r\n"));
+  assert.equal(read(f.project, `${SKILL_DIR}/new.md`), "new file\n");
+  assert.equal(fs.statSync(workflowFile).mtime.getTime(), old.getTime(), "an unchanged file is not written");
+  if (process.platform !== "win32") {
+    assert.equal(fs.statSync(skillPath).mode & 0o777, 0o755);
+  }
 });
