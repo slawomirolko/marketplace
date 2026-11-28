@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readJson } from "./lib/cli.mjs";
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 const marketplaceRoot = path.resolve(scriptsDir, "..");
@@ -36,10 +37,6 @@ function parseArgs(args) {
   }
 
   return result;
-}
-
-function readJson(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
 function validateManifest(manifest, registry) {

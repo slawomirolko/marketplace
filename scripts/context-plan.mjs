@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { readJson } from "./lib/cli.mjs";
 
 const root = process.cwd();
 const registryPath = path.join(root, "registry.json");
@@ -73,10 +74,6 @@ function parseArgs(argv) {
   }
 
   return args;
-}
-
-function readJson(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
 function parseScalar(value) {

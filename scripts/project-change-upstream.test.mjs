@@ -1,15 +1,15 @@
-// Project change -> marketplace upstream flow.
-//
-// Part 1 ("current flow") pins down how installed artifacts behave today when a
-// project edits them. These tests pass on main and must keep passing: the new
-// flow adds detection next to the installers, it does not change them.
-//
-// Part 2 ("stage 1 flow") is the executable specification of stage 1: the
-// lock, sanitize and plan scripts and the upstream agent. Change the test first
-// when a contract changes.
-//
-// All fixture values are fictional. Never put a real company, product, or
-// project name in this file.
+/**
+ * Project change -> marketplace upstream flow.
+ *
+ * Part 1 ("current flow") pins down how the installers behave when a project edits an installed
+ * artifact: they record no provenance and overwrite local changes. The upstream flow adds detection
+ * next to the installers; it does not change them, so these tests must keep passing.
+ *
+ * Part 2 ("upstream flow") is the executable specification of the upstream flow: the lock, sanitize
+ * and plan scripts and the upstream agent. Change the test first when a contract changes.
+ *
+ * All fixture values are fictional. Never put a real company, product, or project name in this file.
+ */
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -74,13 +74,15 @@ const skillV11 = {
 };
 const agentV1 = "---\ndescription: Sample agent for tests.\nmode: primary\nmodel: provider/model-a\n---\n\nDo the sample work.\n";
 
-// Fictional marketplace: a git repo with sample-skill at 1.0.0, then 1.1.0, and one agent.
+/** Fictional marketplace: a git repo with sample-skill at 1.0.0, then 1.1.0, and one agent. */
 function fixtureMarketplace() {
   const root = tmp("marketplace");
   git(root, "init", "-q", "-b", "main");
   const skillDir = path.join(root, "skills", "marketplace", "sample-skill");
   const registry = (version) => JSON.stringify({ skills: [{ name: "sample-skill", category: "marketplace", version }] }, null, 2);
-  for (const [file, content] of Object.entries(skillV1)) write(path.join(skillDir, file), content);
+  for (const [file, content] of Object.entries(skillV1)) {
+    write(path.join(skillDir, file), content);
+  }
   write(path.join(root, "registry.json"), registry("1.0.0"));
   write(path.join(root, "agents", "opencode", "sample-agent.md"), agentV1);
   write(
@@ -90,29 +92,31 @@ function fixtureMarketplace() {
   git(root, "add", "-A");
   git(root, "commit", "-q", "-m", "sample-skill 1.0.0");
   const v1 = git(root, "rev-parse", "HEAD");
-  for (const [file, content] of Object.entries(skillV11)) write(path.join(skillDir, file), content);
+  for (const [file, content] of Object.entries(skillV11)) {
+    write(path.join(skillDir, file), content);
+  }
   write(path.join(root, "registry.json"), registry("1.1.0"));
   git(root, "commit", "-q", "-am", "sample-skill 1.1.0");
   return { root, v1, v11: git(root, "rev-parse", "HEAD") };
 }
 
-// Fictional consuming project with sample-skill 1.0.0 installed and adapted.
+/** Fictional consuming project with sample-skill 1.0.0 installed and adapted. */
 function fixtureProject(files = skillV1) {
   const root = tmp("project");
   git(root, "init", "-q", "-b", "main");
   git(root, "remote", "add", "origin", `https://git.example.invalid/${FICTIONAL_ORG}/${FICTIONAL_PROJECT}.git`);
   write(path.join(root, "package.json"), JSON.stringify({ name: `@${FICTIONAL_ORG}/${FICTIONAL_PROJECT}` }));
   const skillDir = path.join(root, ".agents", "skills", "sample-skill");
-  for (const [file, content] of Object.entries(files)) write(path.join(skillDir, file), content);
+  for (const [file, content] of Object.entries(files)) {
+    write(path.join(skillDir, file), content);
+  }
   write(path.join(skillDir, "project.md"), "# Project adapter\n\ntestCommand: make test\n");
   write(path.join(root, ".agents", "skill-config.md"), "projectAdapter: true\n");
   write(path.join(root, ".opencode", "agents", "sample-agent.md"), agentV1);
   return { root, skillDir };
 }
 
-// ---------------------------------------------------------------------------
-// Part 1: current flow (passes on main)
-// ---------------------------------------------------------------------------
+/** Part 1: current flow of the installers. */
 
 test("current: installing an agent writes no provenance (no source commit, no installed hash)", () => {
   const project = tmp("install");
@@ -181,9 +185,7 @@ test("current: the sync-state content hash ignores line endings", () => {
   assert.equal(skillHash(skillDir), before);
 });
 
-// ---------------------------------------------------------------------------
-// Part 2: stage 1 flow (acceptance criteria)
-// ---------------------------------------------------------------------------
+/** Part 2: upstream flow (acceptance criteria). */
 
 function lock(project, marketplace, command, ...extra) {
   return node(lockScript, [command, "--project", project, "--marketplace", marketplace, "--json", ...extra]);
@@ -249,7 +251,7 @@ test("AC2: an edit to a portable skill file is reported with its base and files"
   assert.equal(changed[0].upstreamMoved, true, "1.1.0 exists upstream, so the PR must be rebased on it");
 });
 
-// Sanitize exit codes: 0 clean, 2 blocked by a leak, 1 the script itself failed.
+/** Sanitize exit codes: 0 clean, 2 blocked by a leak, 1 the script itself failed. */
 const SANITIZE_BLOCKED = 2;
 
 /** Environment of a sanitize run: no leak terms from the caller's shell unless the test sets them. */
@@ -320,7 +322,9 @@ test("sanitize blocks terms from FACTORY_LEAK_TERMS", () => {
 function plan({ stage, classification, openPrs = [], lockEntry = { version: "1.0.0", pending: null } }) {
   const dir = tmp("plan");
   const files = { classification, openPrs, lockEntry };
-  for (const [name, value] of Object.entries(files)) fs.writeFileSync(path.join(dir, `${name}.json`), JSON.stringify(value));
+  for (const [name, value] of Object.entries(files)) {
+    fs.writeFileSync(path.join(dir, `${name}.json`), JSON.stringify(value));
+  }
   return node(planScript, [
     "--artifact", "skill:sample-skill",
     "--stage", stage,
@@ -333,7 +337,9 @@ function plan({ stage, classification, openPrs = [], lockEntry = { version: "1.0
 
 function stagedChange() {
   const stage = tmp("stage");
-  for (const [file, content] of Object.entries(skillV1)) write(path.join(stage, file), content);
+  for (const [file, content] of Object.entries(skillV1)) {
+    write(path.join(stage, file), content);
+  }
   fs.appendFileSync(path.join(stage, "workflow.md"), "3. Validate the input first.\n");
   const classification = {
     hunks: [
@@ -508,7 +514,9 @@ test("lock init reads skill files with non-ASCII names from marketplace history"
   const files = { ...skillV1, "notes-\u00fc.md": "Notes.\n" };
   const root = tmp("marketplace");
   git(root, "init", "-q", "-b", "main");
-  for (const [file, content] of Object.entries(files)) write(path.join(root, "skills", "marketplace", "sample-skill", file), content);
+  for (const [file, content] of Object.entries(files)) {
+    write(path.join(root, "skills", "marketplace", "sample-skill", file), content);
+  }
   write(path.join(root, "registry.json"), JSON.stringify({ skills: [{ name: "sample-skill", category: "marketplace", version: "1.0.0" }] }));
   write(path.join(root, "agents", "opencode", "sample-agent.md"), agentV1);
   write(path.join(root, "agents", "opencode", "index.json"), JSON.stringify({ agents: [{ name: "sample-agent", file: "sample-agent.md", version: "1.0.0" }] }));

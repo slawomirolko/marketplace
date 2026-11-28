@@ -1,32 +1,39 @@
-// Sanitize gate for content that leaves a project for the public marketplace.
-//
-// Blocks a staged directory when any file name or line contains a name derived
-// from the source project (every non-generic git remote URL segment and host,
-// the repository and worktree names, package names, the project folder name and
-// the split parts of each), a term from private configuration (`leakTerms` and
-// `forbiddenTerms` in ~/.olko-sync/targets.json or --terms-file, and the
-// comma-separated FACTORY_LEAK_TERMS environment variable), a secret pattern,
-// a binary file or a non-regular entry such as a symlink. Forbidden terms never
-// live in this public repository.
-//
-// Matching folds Unicode (NFKC), drops zero-width characters, ignores case and
-// the separators - _ . and whitespace, so "BillingPortal", "billing_portal" and
-// "billing portal" all match the term "billing-portal", also inside longer words.
-//
-// The gate fails closed: without a remote term or a configured term it exits 1,
-// unless --allow-no-config is given. Output never holds a value: a term is
-// reported by its number (#n), a secret by its label, an error by a fixed code,
-// and a file whose name holds a hit by its index (#file<n>).
-//
-// It scans everything that is published: a stage directory (--path), the staged
-// commit of a git worktree (--staged: every added or changed path and its added
-// lines, regenerated registry and index files included) and text files such as
-// the PR title, body and commit message (--text, repeatable, reported as text#n).
-//
-// Usage:
-//   node scripts/olko-sanitize.mjs --project <dir> (--path <stage-dir> | --staged <worktree> | --text <file>)...
-//        [--terms-file <json>] [--allow-no-config] [--json]
-// Exit codes: 0 clean, 2 blocked by a leak, 1 the script failed.
+/**
+ * Sanitize gate for content that leaves a project for the public marketplace.
+ *
+ * Blocks a staged directory when any file name or line contains a name derived from the source
+ * project (every non-generic git remote URL segment and host, the repository and worktree names,
+ * package names, the project folder name and the split parts of each), a term from private
+ * configuration (`leakTerms` and `forbiddenTerms` in ~/.olko-sync/targets.json or --terms-file, and
+ * the comma-separated FACTORY_LEAK_TERMS environment variable), a secret pattern, a binary file or a
+ * non-regular entry such as a symlink. Forbidden terms never live in this public repository.
+ *
+ * Matching folds Unicode (NFKC), drops zero-width characters, ignores case and the separators
+ * - _ . and whitespace, so "BillingPortal", "billing_portal" and "billing portal" all match the term
+ * "billing-portal", also inside longer words.
+ *
+ * The gate fails closed: without a remote term or a configured term it exits 1, unless
+ * --allow-no-config is given. Output never holds a value. Every hit is one of these labels:
+ *   #<n>              term n of the sorted term list (derived and configured terms alike)
+ *   #secret:<label>   a secret pattern, for example #secret:github-token or #secret:email
+ *   #binary           a file that is not text (UTF-16 with a byte order mark is decoded, not blocked)
+ *   #non-regular      a symlink, submodule or other entry that is not a regular file
+ * A file whose name holds a hit is reported as #file<n> (its index), a --text file as text#<n>,
+ * and an error as a fixed code such as E_NO_TERMS.
+ *
+ * It scans everything that is published: a stage directory (--path), the staged commit of a git
+ * worktree (--staged: every added or changed path and its added lines, regenerated registry and
+ * index files included) and text files such as the PR title, body and commit message (--text,
+ * repeatable).
+ *
+ * This is a marketplace gate: it runs from a marketplace checkout (`<marketplace>/scripts/`), never
+ * from an installed skill. See "Script ownership" in docs/project-change-upstream.md.
+ *
+ * Usage:
+ *   node scripts/olko-sanitize.mjs --project <dir> (--path <stage-dir> | --staged <worktree> | --text <file>)...
+ *        [--terms-file <json>] [--allow-no-config] [--json]
+ * Exit codes: 0 clean, 2 blocked by a leak, 1 the script failed.
+ */
 
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -35,6 +42,9 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 export const BLOCKED = 2;
+const FAILED = 1;
+/** The largest git output read at once (a staged blob or diff). */
+const GIT_MAX_BUFFER = 256 * 1024 * 1024;
 const MIN_TERM_LENGTH = 4;
 /** Generic path, host and tooling words that name no project (compared after folding). */
 const GENERIC = new Set([
@@ -389,7 +399,7 @@ function stageItems(stage) {
 }
 
 function gitOutput(cwd, args) {
-  const result = spawnSync("git", ["--literal-pathspecs", "-c", "core.quotepath=false", ...args], { cwd, maxBuffer: 256 * 1024 * 1024 });
+  const result = spawnSync("git", ["--literal-pathspecs", "-c", "core.quotepath=false", ...args], { cwd, maxBuffer: GIT_MAX_BUFFER });
   if (result.status !== 0) {
     throw new GateError("E_GIT");
   }
@@ -521,6 +531,6 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     const known = error instanceof GateError;
     const detail = known && error.detail ? ` (${error.detail})` : "";
     console.error(`sanitize failed: ${known ? error.code : "E_INTERNAL"}${detail}`);
-    process.exitCode = 1;
+    process.exitCode = FAILED;
   }
 }
