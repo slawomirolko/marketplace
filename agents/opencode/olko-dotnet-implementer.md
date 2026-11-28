@@ -61,14 +61,33 @@ HARD RULE — BUILD WARNING HYGIENE (owner directive):
 - ✅ `var` is correct where the initializer makes the type obvious. NEVER convert `var` to an explicit type for `IDE0008`, and never treat `IDE0007`/`IDE0008` as violations.
 - ❌ NEVER silence a warning with a pragma or `NoWarn`; fix the code, or report why the warning is structural.
 
-HARD RULE — NO CODE COMMENTS (AAA markers excepted):
-- ❌ NEVER add inline comments in C#, with ONE exception: every test body must be split by `// Arrange`, `// Act`, `// Assert` block comments. No other test-body narration, no rationale notes.
-- ❌ NEVER reference an acceptance criterion, a plan/deviation id (`AC*`/`D*`/`MAIN-*`), another stack, or a PR inside code (comments, names, strings, or test helpers).
-- ✅ Make code self-documenting through naming. If a comment is truly unavoidable it sits ABOVE the method/type. XML docs only where the file type requires them.
+HARD RULE — ONE TYPE PER FILE, NO NESTED TYPES (owner directive):
+- ❌ NEVER declare a second type in a file — not a top-level type, not a nested `private sealed` helper, not a nested record, not an interface member type. One file holds exactly ONE type declaration.
+- ✅ Extract every helper, accumulator, result record, key, or DTO into its own `internal`/`public` type in its own file, with the narrowest visibility that still compiles.
+- ✅ A result record returned by an interface (`<Name>RunResult`, `<Name>TickResult`) lives in its own file; an interface file declares ONLY the interface.
+
+HARD RULE — ZERO COMMENTS, INCLUDING XML DOCS (owner directive, strict):
+- ❌ NEVER write a comment in C#: no `//` line, no inline trailing comment, no `///` XML doc, no `<summary>`/`<remarks>`/`<param>`, no `#region`. Not on a new file, not on a changed file, not on a public API. The ONLY exception is the three test-body markers `// Arrange`, `// Act`, `// Assert`, and each must be on its own line.
+- ✅ Delete every existing comment in a file you touch; a plan/deviation id, acceptance criterion, PR number, or "why" note in a comment is a defect.
+- ✅ Express intent through type and member names, validation messages, and tests. Never silence a missing-parameter-doc compiler warning by adding docs — the project disables that warning instead.
+
+HARD RULE — NO UNBOUNDED LOOPS (owner directive):
+- ❌ NEVER write `while (true)` or any loop whose termination is not provable from its own update clause. A cursor loop that "usually advances" is a defect.
+- ✅ Use `for (var page = 0; page < MaxPageCount; page++)` with a named constant, or `while (condition)` whose condition changes in the body; log when the safety bound is hit.
+
+HARD RULE — MAPPING VIA EXTENSION METHODS (owner directive):
+- ✅ Convert an accumulator/domain/read-model object into another type with an EXTENSION METHOD on a dedicated `<Thing>Extensions` type (e.g. `aggregate.ToWeatherMemoryFeedback(evaluatedAtUtc)`). NEVER keep a private static/instance `Build…`/`Create…` mapper inside a service that only forwards arguments to a factory.
+- ✅ The extension returns the production factory's result (`ErrorOr<T>`); the service only logs the errors and filters.
+
+HARD RULE — RUN THE SOURCE-RULE EVALUATOR BEFORE REPORTING (owner directive):
+- ✅ Run the project's source-rule checker on EVERY changed or new `.cs` file before reporting, when the project ships one (`node scripts/evals/dotnet-implementation-rules/check.ts <file>`, adding `--test` under a test project). A non-zero exit is a failed gate: fix the source, never re-run with an exemption.
+- ✅ Report the checker's `PASS <file>` lines in the handoff; a report without them is incomplete.
 
 HARD RULE — TESTS USE PRODUCTION TYPES AND SHARED BUILDERS:
 - ✅ Assert on the real response DTO / contract record the host emits, including internal production types reachable through `InternalsVisibleTo`. NEVER re-declare a local record, class, or constant that mirrors a production wire type or contract value.
-- ✅ Build input with one shared test-data builder per slice, every parameter with a named default.
+- ✅ Build every entity/DTO input ONLY with a shared `<Type>TestBuilder`, every parameter a named default, e.g. `WeatherMemoryFeedbackTestBuilder.Create(regionId, ruleId, MarketReactionHorizon.OneHour)`.
+- ❌ NEVER declare a `private static` factory/helper that constructs an entity or DTO (`BuildFeedback`, `BuildEvent`, `Snapshot`, `Computed`) inside a test class — not even when only one test class uses it.
+- ✅ Do not wrap a production factory that already exists (`MarketReactionResult.Unavailable`) — call it directly.
 - ✅ Name tests `MethodUnderTest__scenario_expectedResult` (two underscores) and, when you touch a test file, convert every test name in it to that shape.
 
 Load the `olko-dotnet-architecture` and `olko-dotnet-style` skills in that

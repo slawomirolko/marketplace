@@ -1,6 +1,6 @@
 ---
 name: olko-dotnet-style
-version: 1.6.0
+version: 1.7.0
 description: "Check .NET/C# style compliance for changed C# projects with marketplace defaults. Maps .cs/.csproj files to source projects, reads project docs/adapters, runs dotnet format by default when no project command is configured, checks common C# style expectations that docs enable (partial-type ban, unit-of-work and repository boundaries, unique-index idempotency through the unit of work, mappers, thin endpoints, instrumentation setup), and reports violations with rule sources. Use when validating .NET style, linting C# changes, before commit/test gates, or when olko-commit-style delegates .NET style checks."
 ---
 

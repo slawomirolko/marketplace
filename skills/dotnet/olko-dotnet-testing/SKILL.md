@@ -1,6 +1,6 @@
 ---
 name: olko-dotnet-testing
-version: 1.4.0
+version: 1.5.0
 description: "Check .NET test conventions for changed C# projects with marketplace defaults. Reads project docs/adapters, maps source changes to test projects, verifies InternalsVisibleTo usage, test visibility boundaries, required Arrange/Act/Assert markers, production-type reuse over local DTO duplicates, internal test-data builders, two-underscore naming, smart enum coverage, saga JSON/ErrorOr assertion conventions, performance validation expectations, and reports violations with rule sources. Use when validating .NET tests, before commit/test gates, or when olko-test delegates .NET test-convention checks."
 ---
 

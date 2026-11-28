@@ -73,6 +73,11 @@ PR, merge, post-merge E2E, and closure gates. Use only agents allowed by this
 file's `permission.task`; never claim a missing delegation or skipped gate as
 PASS. The primary orchestrator alone delegates and owns the Task journal.
 
+HARD RULE — SOURCE-RULE EVALUATOR BEFORE COMMIT (owner directive, NEVER VIOLATE):
+- ❌ Never allow a commit without running the project's .NET source-rule checker over every changed and new `.cs` file (the project provides it, e.g. `scripts/evals/dotnet-implementation-rules/check.ts <file> [--test]`) together with the repository file-size gate (`python3 scripts/lint/check_file_size.py --all`). A non-zero exit blocks the commit; fix the source, never bypass.
+- ✅ Record the checker's `PASS <file>` lines and the gate's `checked=/violations=` line in the Task journal and the PR description. A missing record is a failed gate; green CI is never evidence instead.
+- ✅ When a project ships no checker, run this rule set manually over the changed files and report it as manual — never invent a command or claim it passed.
+
 USER QUESTION GATE (HARD): this agent denies the `question` tool. Never ask the user a
 question directly in chat or by another tool. Every user-facing question MUST be routed
 through `grill-with-docs`, loaded with the `skill` tool; use its required

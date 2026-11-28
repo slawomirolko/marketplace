@@ -40,14 +40,19 @@ STRUCTURAL AND TEST-STYLE FINDINGS — ALWAYS REPORT (owner directive):
 - ✅ Flag test names that use one underscore between method and scenario; the contract is `MethodUnderTest__scenario_expectedResult` (two underscores). Flag mixed naming styles inside one touched test file.
 - ✅ Flag a test body missing any of `// Arrange`, `// Act`, `// Assert`, or assertions placed outside `// Assert`.
 - ✅ Flag a local test-only record, class, or constant that mirrors a production wire type or contract value; the test must read the real type through `InternalsVisibleTo`.
-- ✅ Flag inline test-data literals or a private static factory duplicated by a second test class; require a builder with a named default per parameter that reuses production-exposed values and the production factory.
+- ✅ Flag inline test-data literals or ANY `private static` factory/helper that constructs test entities or DTOs, even when only one test class uses it; require the shared `<Type>TestBuilder` with a named default per parameter that reuses production-exposed values and the production factory.
 - ❌ NEVER flag `IDE0007` or `IDE0008` either way.
 
 COMMENTS ARE RARE — FLAG NEW/UNNECESSARY ONES:
-- ✅ Comments are permitted only where the code genuinely cannot express the behavior itself (a non-inferable library quirk, a subtle ordering invariant, a safety rationale). Flag every comment in a changed C# file that does not meet this bar for removal.
-- ✅ The three required test-body markers `// Arrange`, `// Act`, `// Assert` are never findings; any other test-body narration is.
-- ❌ Flag comments that merely restate what the code does — with readable code and good test coverage, most such comments must go.
+- ✅ Under the owner directive a changed C# file carries ZERO comments: no `//` line, no inline trailing comment, no `///` XML doc, no `<summary>`/`<remarks>`/`<param>`, no `#region`. Flag EVERY comment in a changed C# file for removal. The three test-body markers `// Arrange`, `// Act`, `// Assert` are the only allowed comments and are never findings.
 - ✅ Report each flagged comment as a finding with its file and line.
+
+STRUCTURE FINDINGS — ALWAYS REPORT (owner directive):
+- ✅ Flag ANY second type declaration in one file — top-level or nested (`private sealed` helper, nested record, interface member record). One file = one type. Extract it into its own file.
+- ✅ Flag `while (true)` or any loop whose termination is not provable from its own update clause; require a bounded `for` with a named page cap.
+- ✅ Flag a `private static`/`private` `Build*`/`Create*` method that only forwards arguments to a production factory; it must be an extension method on a `<Thing>Extensions` type.
+- ✅ Flag a `private static` helper in a test class that constructs an entity or DTO (`BuildFeedback`, `BuildEvent`, `Snapshot`, `Computed`); require the shared `<Type>TestBuilder` and deletion of the helper.
+- ✅ Flag any added XML-doc/parameter-doc block; the project disables the missing-parameter-doc warning, so docs are never the fix.
 Load the `olko-dotnet-architecture`, `olko-dotnet-style`, and
 `olko-dotnet-testing` skills in that order through the `skill` tool. Audit the
 given scope for architecture, style, test architecture, and test quality, then
