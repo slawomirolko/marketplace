@@ -15,7 +15,7 @@ const decision: PendingDecision = {
 
 describe("PendingDecisions", () => {
   test("renders nothing when no run waits for a decision", async () => {
-    const { container } = render(<PendingDecisions api="/api" onOpenRun={() => undefined} />);
+    const { container } = render(<PendingDecisions onOpenRun={() => undefined} />);
 
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(container).toBeEmptyDOMElement();
@@ -31,7 +31,7 @@ describe("PendingDecisions", () => {
       }),
     );
     const user = userEvent.setup();
-    render(<PendingDecisions api="/api" onOpenRun={() => undefined} />);
+    render(<PendingDecisions onOpenRun={() => undefined} />);
 
     expect(await screen.findByText("Waiting for your decision (1)")).toBeInTheDocument();
     expect(screen.getByText(/never ask again/)).toBeInTheDocument();
@@ -51,7 +51,7 @@ describe("PendingDecisions", () => {
       http.post(`/api/runs/${decision.runId}/answer`, () => HttpResponse.json({ error: "answer it in the session that owns it" }, { status: 409 })),
     );
     const user = userEvent.setup();
-    render(<PendingDecisions api="/api" onOpenRun={() => undefined} />);
+    render(<PendingDecisions onOpenRun={() => undefined} />);
 
     await user.click(await screen.findByRole("button", { name: "ok" }));
 
@@ -65,7 +65,7 @@ describe("PendingDecisions", () => {
       http.post(`/api/runs/${decision.runId}/answer`, () => new HttpResponse("<html>bad gateway</html>", { status: 502 })),
     );
     const user = userEvent.setup();
-    render(<PendingDecisions api="/api" onOpenRun={() => undefined} />);
+    render(<PendingDecisions onOpenRun={() => undefined} />);
 
     await user.click(await screen.findByRole("button", { name: "ok" }));
 
@@ -78,7 +78,7 @@ describe("PendingDecisions", () => {
       http.post(`/api/runs/${decision.runId}/answer`, () => HttpResponse.json({ error: "unauthorized" }, { status: 401 })),
     );
     const user = userEvent.setup();
-    render(<PendingDecisions api="/api" onOpenRun={() => undefined} />);
+    render(<PendingDecisions onOpenRun={() => undefined} />);
 
     await user.click(await screen.findByRole("button", { name: "ok" }));
 
@@ -87,7 +87,7 @@ describe("PendingDecisions", () => {
 
   test("a failing pending list is named instead of looking like no question", async () => {
     server.use(http.get("/api/pending", () => HttpResponse.json({ error: "runs folder unreadable" }, { status: 500 })));
-    render(<PendingDecisions api="/api" onOpenRun={() => undefined} />);
+    render(<PendingDecisions onOpenRun={() => undefined} />);
 
     expect(await screen.findByText("Could not load the pending decisions: /pending: 500 (runs folder unreadable)")).toBeInTheDocument();
   });
@@ -96,7 +96,7 @@ describe("PendingDecisions", () => {
     server.use(http.get("/api/pending", () => HttpResponse.json([decision])));
     const opened: string[] = [];
     const user = userEvent.setup();
-    render(<PendingDecisions api="/api" onOpenRun={(id) => opened.push(id)} />);
+    render(<PendingDecisions onOpenRun={(id) => opened.push(id)} />);
 
     await user.click(await screen.findByRole("button", { name: decision.runId }));
 

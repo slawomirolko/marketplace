@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { messageOf, postAction, requestJson } from "./api.ts";
+import { API, messageOf, postAction, requestJson } from "./api.ts";
 
 export interface PendingDecision {
   runId: string;
@@ -13,20 +13,20 @@ export interface PendingDecision {
 const REFRESH_MS = 15_000;
 
 /** Questions of runs the viewer process owns (for example runs started by a watch), with one button per allowed answer. */
-export function PendingDecisions({ api, onOpenRun }: { api: string; onOpenRun: (runId: string) => void }) {
+export function PendingDecisions({ onOpenRun }: { onOpenRun: (runId: string) => void }) {
   const [pending, setPending] = useState<PendingDecision[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    requestJson<PendingDecision[]>(`${api}/pending`, "/pending")
+    requestJson<PendingDecision[]>(`${API}/pending`, "/pending")
       .then((decisions) => {
         setPending(decisions);
         setLoadError(null);
       })
       .catch((failure: unknown) => setLoadError(`Could not load the pending decisions: ${messageOf(failure)}`));
-  }, [api]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -40,7 +40,7 @@ export function PendingDecisions({ api, onOpenRun }: { api: string; onOpenRun: (
       setError(null);
       try {
         const query = new URLSearchParams({ question: item.questionId, answer: choice });
-        const body = await postAction<unknown>(`${api}/runs/${encodeURIComponent(item.runId)}/answer?${query.toString()}`, "answer");
+        const body = await postAction<unknown>(`${API}/runs/${encodeURIComponent(item.runId)}/answer?${query.toString()}`, "answer");
         if (!Array.isArray(body)) {
           throw new Error("answer failed: the server did not return the pending list");
         }
@@ -51,7 +51,7 @@ export function PendingDecisions({ api, onOpenRun }: { api: string; onOpenRun: (
         setBusy(null);
       }
     },
-    [api],
+    [],
   );
 
   if (pending.length === 0 && !error && !loadError) {

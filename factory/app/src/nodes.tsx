@@ -3,7 +3,8 @@ import { Handle, Position } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import { useViewer } from "./context.ts";
 import { agentScripts, formatDuration, formatTokens, formatUsd, hasMemoryLayer, humanLabel, isDisabled, isGroup, isLive, ranIn } from "./tree.ts";
-import type { CardFlowNode, ClusterFlowNode, Item, RunIndexEntry, RunReport, TerminalFlowNode } from "./types.ts";
+import type { CardFlowNode, ClusterFlowNode, TerminalFlowNode } from "./layout.ts";
+import type { Item, RunIndexEntry, RunReport } from "./types.ts";
 
 const EMPTY_ENTRY: RunIndexEntry = { cost: null, tier: null, model: null, failure: null, runs: null, timeMs: null };
 

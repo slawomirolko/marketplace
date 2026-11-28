@@ -1,6 +1,6 @@
 import { SUPERVISOR_PATH } from "./run-summary.ts";
 import { workflowLabel } from "./workflows.ts";
-import type { AgentCost, CostFooter, CostSource, LedgerRecord, NodeCost, Report, Run } from "./types.ts";
+import type { AgentCost, CostFooter, CostSource, Coverage, LedgerRecord, NodeCost, Report, Run, WorkflowSpec } from "./types.ts";
 
 /** The sums a report builds up while it reads the ledger record by record. */
 interface ReportSums {
@@ -11,6 +11,15 @@ interface ReportSums {
   coverage: Report["coverage"];
   harnessCostUsd: number;
   cacheTokens: number;
+}
+
+/** The summed cost of every node inside a subgraph, call, map or group. */
+export interface SubgraphCost extends Coverage {
+  costUsd: number;
+  tokens: number;
+  cacheTokens: number;
+  steps: number;
+  costSource: string;
 }
 
 type FooterRun = Pick<Run, "config" | "proposal" | "ledger" | "steps" | "thresholdsHit"> & { events?: Run["events"] };
@@ -103,11 +112,64 @@ export function supervisorCost(run: Run): number | null {
   return records.length ? round(records.reduce((sum, record) => sum + (record.costUsd ?? 0), 0)) : null;
 }
 
+/**
+ * The cost of every subgraph, call, map and group the viewer draws for a run of `root`, keyed by its graph key.
+ * A subgraph, call or map sums every node under its own path. A group draws its workflow in its parent's path,
+ * so it sums the nodes it draws. Workflows already open higher up are not walked again, as in the viewer graph.
+ */
+export function subgraphCosts(specs: WorkflowSpec[], root: string, byNode: Record<string, NodeCost>): Record<string, SubgraphCost> {
+  const byName = new Map(specs.map((spec) => [spec.name, spec]));
+  const costs: Record<string, SubgraphCost> = {};
+  const walk = (name: string, prefix: string, stack: string[]): string[] => {
+    const drawnKeys: string[] = [];
+    for (const node of byName.get(name)?.nodes ?? []) {
+      const key = `${prefix}/${node.id}`;
+      const inner = node.workflow;
+      if (!NESTING_KINDS.has(node.kind) || inner === undefined || !byName.has(inner) || stack.includes(inner)) {
+        drawnKeys.push(key);
+        continue;
+      }
+      const isGroup = node.kind === "group";
+      const innerKeys = walk(inner, isGroup ? prefix : key, [...stack, inner]);
+      const inside = isGroup ? innerKeys : [key];
+      const cost = costInside(byNode, inside);
+      if (cost) {
+        costs[key] = cost;
+      }
+      drawnKeys.push(...inside);
+    }
+    return drawnKeys;
+  };
+  if (byName.has(root)) {
+    walk(root, root, [root]);
+  }
+  return costs;
+}
+
 /** The budget thresholds a run has hit and the required steps it ran with their switch off. */
 function footerWarnings(run: Pick<Run, "thresholdsHit"> & { events?: Run["events"] }): string[] {
   const thresholds = run.thresholdsHit.map((level) => `budget threshold: ${level}`);
   const switchedOff = (run.events ?? []).filter((event) => event.type === "node_completed" && String(event.result ?? "").includes("required step switched off")).map((event) => `required step switched off: ${String(event.node)}`);
   return [...thresholds, ...switchedOff];
+}
+
+const NESTING_KINDS = new Set(["subgraph", "map", "call", "group"]);
+
+/** The summed cost of the nodes at or below any of `keys`, or null when none of them has a cost. */
+function costInside(byNode: Record<string, NodeCost>, keys: string[]): SubgraphCost | null {
+  const parts = Object.entries(byNode).filter(([nodePath]) => keys.some((key) => nodePath === key || nodePath.startsWith(`${key}/`))).map(([, cost]) => cost);
+  if (parts.length === 0) {
+    return null;
+  }
+  return {
+    costUsd: round(parts.reduce((sum, cost) => sum + cost.costUsd, 0)),
+    tokens: parts.reduce((sum, cost) => sum + cost.tokens, 0),
+    cacheTokens: parts.reduce((sum, cost) => sum + (cost.cacheTokens ?? 0), 0),
+    steps: parts.reduce((sum, cost) => sum + cost.steps, 0),
+    llmSteps: parts.reduce((sum, cost) => sum + (cost.llmSteps ?? 0), 0),
+    unknownSteps: parts.reduce((sum, cost) => sum + (cost.unknownSteps ?? 0), 0),
+    costSource: singleOrMixed(new Set(parts.map((cost) => cost.costSource))),
+  };
 }
 
 function addLedgerRecord(sums: ReportSums, record: LedgerRecord): void {

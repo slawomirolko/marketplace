@@ -1,17 +1,4 @@
-export interface SupervisorData {
-  status: "pending" | "running" | "waiting_for_client" | "done" | "failed";
-  agent: string;
-  tier?: string;
-  model?: string;
-  startedAt?: string;
-  finishedAt?: string;
-  costUsd?: number | null;
-  output?: string | null;
-  verdict?: string | null;
-  bottleneck?: string | null;
-  idea?: string | null;
-  error?: string | null;
-}
+import type { SupervisorData } from "./types.ts";
 
 export type SupervisorTone = "idle" | "busy" | "ok" | "improve" | "fix" | "failed";
 

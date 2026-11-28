@@ -1,7 +1,15 @@
 import { MarkerType } from "@xyflow/react";
+import type { Edge, Node } from "@xyflow/react";
 import dagre from "@dagrejs/dagre";
 import { isGroup } from "./tree.ts";
-import type { Bounds, FlowEdge, FlowNode, Item, Level, LevelEdge } from "./types.ts";
+import type { Bounds, Item, Level, LevelEdge } from "./types.ts";
+
+export type NodeData = { item: Item; expanded: boolean };
+export type CardFlowNode = Node<NodeData, "card">;
+export type ClusterFlowNode = Node<NodeData, "cluster">;
+export type TerminalFlowNode = Node<NodeData, "terminal">;
+export type FlowNode = CardFlowNode | ClusterFlowNode | TerminalFlowNode;
+export type FlowEdge = Edge;
 
 const STEP = { width: 270, height: 112 };
 const TERMINAL = { width: 90, height: 40 };

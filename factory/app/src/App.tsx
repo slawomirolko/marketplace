@@ -18,7 +18,8 @@ import { agentsOnly } from "./agents-only.ts";
 import { nodeAriaLabel, nodeTypes } from "./nodes.tsx";
 import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost, disabledKeys, configDisabledKeys, liveAncestors, liveState, LIVE_STATUSES, agentScripts, containedWorkflows, findItem, ancestorKeys, allItems, humanIcons } from "./tree.ts";
 import type { StaleWorkflow } from "./types.ts";
-import type { AgentInfo, Bounds, FactoryConfig, FlowEdge, FlowNode, Item, Level, RunDetail, RunIndex, RunListItem, Workflow } from "./types.ts";
+import type { FlowEdge, FlowNode } from "./layout.ts";
+import type { AgentInfo, Bounds, FactoryConfig, Item, Level, RunDetail, RunIndex, RunListItem, Workflow } from "./types.ts";
 
 const LIVE_REFRESH_MS = 15_000;
 const SHOW_COUNTS_KEY = "factory-viewer.show-numbers";
@@ -476,7 +477,7 @@ function Viewer() {
             ))}
           </div>
         )}
-        <PendingDecisions api={API} onOpenRun={openRun} />
+        <PendingDecisions onOpenRun={openRun} />
         {mode === "projects" ? (
           <Projects onShowRuns={showProjectRuns} />
         ) : (

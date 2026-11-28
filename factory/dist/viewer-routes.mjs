@@ -16359,11 +16359,60 @@ function supervisorCost(run) {
 	const records = run.ledger.filter((record) => record.nodePath === SUPERVISOR_PATH);
 	return records.length ? round(records.reduce((sum, record) => sum + (record.costUsd ?? 0), 0)) : null;
 }
+/**
+* The cost of every subgraph, call, map and group the viewer draws for a run of `root`, keyed by its graph key.
+* A subgraph, call or map sums every node under its own path. A group draws its workflow in its parent's path,
+* so it sums the nodes it draws. Workflows already open higher up are not walked again, as in the viewer graph.
+*/
+function subgraphCosts(specs, root, byNode) {
+	const byName = new Map(specs.map((spec) => [spec.name, spec]));
+	const costs = {};
+	const walk = (name, prefix, stack) => {
+		const drawnKeys = [];
+		for (const node of byName.get(name)?.nodes ?? []) {
+			const key = `${prefix}/${node.id}`;
+			const inner = node.workflow;
+			if (!NESTING_KINDS.has(node.kind) || inner === void 0 || !byName.has(inner) || stack.includes(inner)) {
+				drawnKeys.push(key);
+				continue;
+			}
+			const isGroup = node.kind === "group";
+			const innerKeys = walk(inner, isGroup ? prefix : key, [...stack, inner]);
+			const inside = isGroup ? innerKeys : [key];
+			const cost = costInside(byNode, inside);
+			if (cost) costs[key] = cost;
+			drawnKeys.push(...inside);
+		}
+		return drawnKeys;
+	};
+	if (byName.has(root)) walk(root, root, [root]);
+	return costs;
+}
 /** The budget thresholds a run has hit and the required steps it ran with their switch off. */
 function footerWarnings(run) {
 	const thresholds = run.thresholdsHit.map((level) => `budget threshold: ${level}`);
 	const switchedOff = (run.events ?? []).filter((event) => event.type === "node_completed" && String(event.result ?? "").includes("required step switched off")).map((event) => `required step switched off: ${String(event.node)}`);
 	return [...thresholds, ...switchedOff];
+}
+var NESTING_KINDS = /* @__PURE__ */ new Set([
+	"subgraph",
+	"map",
+	"call",
+	"group"
+]);
+/** The summed cost of the nodes at or below any of `keys`, or null when none of them has a cost. */
+function costInside(byNode, keys) {
+	const parts = Object.entries(byNode).filter(([nodePath]) => keys.some((key) => nodePath === key || nodePath.startsWith(`${key}/`))).map(([, cost]) => cost);
+	if (parts.length === 0) return null;
+	return {
+		costUsd: round(parts.reduce((sum, cost) => sum + cost.costUsd, 0)),
+		tokens: parts.reduce((sum, cost) => sum + cost.tokens, 0),
+		cacheTokens: parts.reduce((sum, cost) => sum + (cost.cacheTokens ?? 0), 0),
+		steps: parts.reduce((sum, cost) => sum + cost.steps, 0),
+		llmSteps: parts.reduce((sum, cost) => sum + (cost.llmSteps ?? 0), 0),
+		unknownSteps: parts.reduce((sum, cost) => sum + (cost.unknownSteps ?? 0), 0),
+		costSource: singleOrMixed(new Set(parts.map((cost) => cost.costSource)))
+	};
 }
 function addLedgerRecord(sums, record) {
 	const cache = (record.cacheReadTokens ?? 0) + (record.cacheWrite5mTokens ?? 0) + (record.cacheWrite1hTokens ?? 0);
@@ -18131,6 +18180,193 @@ function cspMiddleware({ nonceFactory = createNonce } = {}) {
 		next();
 	};
 }
+// src/run-timing.ts
+var LIVE_STATUSES = /* @__PURE__ */ new Set([
+	"running",
+	"waiting_for_user",
+	"waiting_for_client"
+]);
+var PASS_END = /* @__PURE__ */ new Set([
+	"node_completed",
+	"node_failed",
+	"node_skipped",
+	"supervisor_completed",
+	"supervisor_failed"
+]);
+/** The passes and calls of a run with their active time, user-wait time and ledger cost. */
+function runTimeline(run) {
+	const passes = computePasses(run);
+	return {
+		passes: passes.map((pass) => ({
+			...pass,
+			records: pass.records.length
+		})),
+		calls: computeCalls(run, passes)
+	};
+}
+function computePasses(run) {
+	const passes = [];
+	const open = /* @__PURE__ */ new Map();
+	for (const event of run.events) {
+		if (typeof event.node !== "string") continue;
+		if (event.type === "node_started" || event.type === "supervisor_started") {
+			const pass = {
+				node: event.node,
+				visit: typeof event.visit === "number" ? event.visit : null,
+				startedAt: event.at,
+				endedAt: null,
+				status: "running",
+				agents: [],
+				records: [],
+				durationMs: null,
+				waitMs: 0
+			};
+			passes.push(pass);
+			open.set(event.node, pass);
+			continue;
+		}
+		const pass = open.get(event.node);
+		if (!pass) continue;
+		applyPassEvent(pass, event, open);
+	}
+	for (const record of run.ledger) (passes.findLast((candidate) => candidate.node === record.nodePath && candidate.startedAt <= record.at) ?? passes.find((candidate) => candidate.node === record.nodePath))?.records.push(record);
+	const waits = userWaits(run.events);
+	for (const pass of passes) {
+		const time = activeTime(pass.startedAt, pass.endedAt, waits);
+		pass.durationMs = time.durationMs ?? summed(pass.records).durationMs;
+		pass.waitMs = time.waitMs;
+		for (const agent of pass.agents) Object.assign(agent, activeTime(agent.startedAt, agent.endedAt, waits));
+	}
+	return passes;
+}
+function applyPassEvent(pass, event, open) {
+	const agentId = typeof event.agentId === "string" ? event.agentId : void 0;
+	if ((event.type === "agent_started" || event.type === "work_offered") && agentId) {
+		if (!pass.agents.some((agent) => agent.id === agentId && agent.endedAt === null)) pass.agents.push({
+			id: agentId,
+			startedAt: event.at,
+			endedAt: null,
+			status: "running",
+			durationMs: null,
+			waitMs: 0
+		});
+	} else if (event.type === "agent_completed" || event.type === "agent_failed") {
+		const agent = pass.agents.findLast((candidate) => candidate.id === agentId && candidate.endedAt === null);
+		if (agent) Object.assign(agent, {
+			endedAt: event.at,
+			status: endStatus(event.type, null)
+		});
+	} else if (PASS_END.has(event.type)) {
+		Object.assign(pass, {
+			endedAt: event.at,
+			status: endStatus(event.type, event.result)
+		});
+		open.delete(pass.node);
+	}
+}
+function computeCalls(run, passes) {
+	const unfinished = LIVE_STATUSES.has(run.status) ? "running" : "unfinished";
+	const shownStatus = (status) => status === "running" ? unfinished : status;
+	return passes.flatMap((pass) => {
+		const recorded = [...new Set(pass.records.map((record) => record.agentId).filter((id) => Boolean(id)))];
+		if (pass.agents.length === 0 && recorded.length > 1) return recorded.map((id) => {
+			const records = pass.records.filter((record) => record.agentId === id);
+			const total = summed(records);
+			return {
+				node: pass.node,
+				agent: id,
+				agentName: agentNameIn(records),
+				visit: pass.visit,
+				status: shownStatus(pass.status),
+				startedAt: pass.startedAt,
+				costUsd: total.costUsd,
+				records: records.length,
+				durationMs: total.durationMs,
+				waitMs: 0
+			};
+		});
+		if (new Set(pass.agents.map((agent) => agent.id)).size > 1) return pass.agents.map((agent) => {
+			const records = pass.records.filter((record) => record.agentId === agent.id);
+			const total = summed(records);
+			return {
+				node: pass.node,
+				agent: agent.id,
+				agentName: agentNameIn(records),
+				visit: pass.visit,
+				status: shownStatus(agent.status),
+				startedAt: agent.startedAt,
+				costUsd: total.costUsd,
+				records: records.length,
+				durationMs: agent.durationMs ?? total.durationMs,
+				waitMs: agent.waitMs
+			};
+		});
+		const total = summed(pass.records);
+		const agent = pass.agents[0]?.id ?? pass.records.find((record) => record.agentId)?.agentId ?? null;
+		return [{
+			node: pass.node,
+			agent,
+			agentName: agentNameIn(pass.records),
+			visit: pass.visit,
+			status: shownStatus(pass.status),
+			startedAt: pass.startedAt,
+			costUsd: total.costUsd,
+			records: pass.records.length,
+			durationMs: pass.durationMs,
+			waitMs: pass.waitMs
+		}];
+	});
+}
+function agentNameIn(records) {
+	return records.find((record) => record.agentName)?.agentName ?? null;
+}
+function endStatus(type, result) {
+	if (type === "node_failed" || type === "agent_failed" || type === "supervisor_failed") return "failed";
+	if (type === "node_skipped") return "skipped";
+	if (typeof result === "string" && result.includes("skipped: switch off")) return "switched off";
+	return "done";
+}
+function elapsed(from, to) {
+	if (!to) return null;
+	const milliseconds = Date.parse(to) - Date.parse(from);
+	return Number.isFinite(milliseconds) && milliseconds >= 0 ? milliseconds : null;
+}
+/** Spans in which the run stood still for the user: a question (needs_input) or a budget pause, each up to its run_resumed. */
+function userWaits(events) {
+	const spans = [];
+	let from = null;
+	for (const event of events) if (event.type === "needs_input" || event.type === "budget_threshold" && event.level === "pause") from ??= Date.parse(event.at);
+	else if (event.type === "run_resumed" && from !== null) {
+		spans.push({
+			from,
+			to: Date.parse(event.at)
+		});
+		from = null;
+	}
+	return spans;
+}
+function activeTime(from, to, waits) {
+	const total = elapsed(from, to);
+	if (total === null) return {
+		durationMs: null,
+		waitMs: 0
+	};
+	const start = Date.parse(from);
+	const end = start + total;
+	const waitMs = waits.reduce((sum, wait) => sum + Math.max(0, Math.min(end, wait.to) - Math.max(start, wait.from)), 0);
+	return {
+		durationMs: total - waitMs,
+		waitMs
+	};
+}
+function summed(records) {
+	const costUsd = records.some((record) => record.costUsd == null) ? null : round(records.reduce((sum, record) => sum + (record.costUsd ?? 0), 0));
+	const timed = records.filter((record) => typeof record.durationMs === "number");
+	return {
+		costUsd,
+		durationMs: timed.length ? timed.reduce((sum, record) => sum + (record.durationMs ?? 0), 0) : null
+	};
+}
 // src/fields.ts
 /** The given fields without the empty ones (undefined, null, false, 0 or ""), for optional fields that are left out instead of set to nothing. */
 function definedFields(fields) {
@@ -18602,6 +18838,16 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 }
 // src/viewer-data.ts
 var RUN_ID = /^r-[a-f0-9]{8}$/;
+/** The report of one run as the viewer shows it, with subgraph costs for the graph of the run's own workflow. */
+function viewerReport(run, specs) {
+	const report = runReport(run);
+	const root = report.workflow.split("@")[0] ?? report.workflow;
+	return {
+		...report,
+		...runTimeline(run),
+		bySubgraph: subgraphCosts(specs, root, report.byNode)
+	};
+}
 var MAX_BODY = 16384;
 function readBody(req) {
 	return new Promise((resolve, reject) => {
@@ -18806,7 +19052,7 @@ function createDataApi({ factoryDir, dataDir, configFile, demo, factory }) {
 					pendingQuestion,
 					pendingWorkItems
 				},
-				report: runReport(run),
+				report: viewerReport(run, loadWorkflowSpecs(path.join(factoryDir, "workflows"))),
 				questions: readQuestions(path.dirname(path.dirname(file)), id)
 			};
 		},

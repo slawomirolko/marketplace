@@ -1,6 +1,3 @@
-import type { Edge, Node } from "@xyflow/react";
-import type { SupervisorData } from "./supervisor.ts";
-
 export interface WorkflowQuestion {
   id: string;
   text: string;
@@ -146,6 +143,21 @@ export interface RunCost {
   warnings: string[];
 }
 
+export interface SupervisorData {
+  status: "pending" | "running" | "waiting_for_client" | "done" | "failed";
+  agent: string;
+  tier?: string;
+  model?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  costUsd?: number | null;
+  output?: string | null;
+  verdict?: string | null;
+  bottleneck?: string | null;
+  idea?: string | null;
+  error?: string | null;
+}
+
 export interface RunReport {
   runId: string;
   status: string;
@@ -166,6 +178,49 @@ export interface RunReport {
   cost: RunCost;
   synthetic: boolean;
   supervisor?: SupervisorData;
+  /** The cost of each subgraph, call, map and group drawn for the run's workflow, keyed by its graph key. */
+  bySubgraph: Record<string, Cost>;
+  passes: RunPass[];
+  calls: RunCall[];
+}
+
+export interface PassAgent {
+  id: string;
+  startedAt: string;
+  endedAt: string | null;
+  status: string;
+  durationMs: number | null;
+  waitMs: number;
+}
+
+/** One visit of one node: from its node_started to its completed, failed or skipped event. */
+export interface RunPass {
+  node: string;
+  visit: number | null;
+  startedAt: string;
+  endedAt: string | null;
+  status: string;
+  agents: PassAgent[];
+  /** Number of ledger records written while the pass was open. */
+  records: number;
+  /** Active time: start to end minus the time spent waiting for a user answer; the ledger durationMs sum when the pass has no end. */
+  durationMs: number | null;
+  /** Time inside the pass spent waiting for a user answer (a question or a budget pause). */
+  waitMs: number;
+}
+
+/** One call in the calls list: a pass, or one agent of a pass when several agents ran in it. */
+export interface RunCall {
+  node: string;
+  agent: string | null;
+  agentName: string | null;
+  visit: number | null;
+  status: string;
+  startedAt: string;
+  costUsd: number | null;
+  records: number;
+  durationMs: number | null;
+  waitMs: number;
 }
 
 export interface LedgerRecord {
@@ -331,13 +386,6 @@ export interface RunIndexEntry {
 }
 
 export type RunIndex = Map<string, RunIndexEntry>;
-
-export type NodeData = { item: Item; expanded: boolean };
-export type CardFlowNode = Node<NodeData, "card">;
-export type ClusterFlowNode = Node<NodeData, "cluster">;
-export type TerminalFlowNode = Node<NodeData, "terminal">;
-export type FlowNode = CardFlowNode | ClusterFlowNode | TerminalFlowNode;
-export type FlowEdge = Edge;
 
 export interface Bounds {
   x: number;

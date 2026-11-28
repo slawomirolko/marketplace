@@ -1,7 +1,7 @@
 import { ReactFlow } from "@xyflow/react";
 import { render, screen, userEvent } from "./testUtils/index.ts";
 import { RING_GAP, SupervisorRing } from "../src/SupervisorRing.tsx";
-import type { SupervisorData } from "../src/supervisor.ts";
+import type { SupervisorData } from "../src/types.ts";
 import type { Bounds } from "../src/types.ts";
 
 const BOUNDS: Bounds = { x: 10, y: 20, width: 300, height: 500 };

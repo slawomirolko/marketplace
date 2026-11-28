@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useViewer } from "./context.ts";
 import { formatDuration, runCalls } from "./tree.ts";
-import type { RunCall } from "./tree.ts";
+import type { RunCall } from "./types.ts";
 
 export function callKey(call: RunCall, teamNodes: Set<string>): string {
   return call.agent && teamNodes.has(call.node) ? `${call.node}#${call.agent}` : call.node;
@@ -16,8 +16,8 @@ function cost(value: number | null): string {
 }
 
 export function CallsList({ selectedKey, teamNodes, onSelect }: { selectedKey: string | null; teamNodes: Set<string>; onSelect: (key: string) => void }) {
-  const { run, mode } = useViewer();
-  const calls = useMemo(() => runCalls(run), [run]);
+  const { run, report, mode } = useViewer();
+  const calls = useMemo(() => runCalls(report), [report]);
   if (mode !== "runs" || !run) return <p className="muted">Pick a run to see its calls.</p>;
   if (calls.length === 0) return <p className="muted">No step has started in this run yet.</p>;
   return (

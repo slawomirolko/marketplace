@@ -66,10 +66,10 @@ function LedgerTable({ records }: { records: LedgerRecord[] }) {
 }
 
 function PassTimes({ item }: { item: WorkflowItem }) {
-  const { run } = useViewer();
-  const passes = itemPasses(item, run);
+  const { run, report } = useViewer();
+  const passes = itemPasses(item, report);
   if (!run || passes.length === 0) return null;
-  const total = timeSpent(item, run);
+  const total = timeSpent(item, report);
   const waited = passes.reduce((s, p) => s + p.waitMs, 0);
   if (item.kind === "subgraph") {
     return (

@@ -4,7 +4,10 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { Factory, loadedWorkflows } from "./engine.ts";
 import { errorMessage } from "./errors.ts";
-import { runReport } from "./run-report.ts";
+import { runReport, subgraphCosts } from "./run-report.ts";
+import type { SubgraphCost } from "./run-report.ts";
+import { runTimeline } from "./run-timing.ts";
+import type { RunTimeline } from "./run-timing.ts";
 import { homeDataDir, readSources } from "./paths.ts";
 import { describeAgent, marketplaceDir } from "./marketplace-agents.ts";
 import { readQuestions } from "./questions.ts";
@@ -30,6 +33,13 @@ export interface DataApiOptions {
   demo: boolean;
   /** The factory of this process. Only its own runs can be answered from the viewer. */
   factory?: Factory;
+}
+
+/** The report of one run as the viewer shows it, with subgraph costs for the graph of the run's own workflow. */
+export function viewerReport(run: Run, specs: WorkflowSpec[]): ViewerReport {
+  const report = runReport(run);
+  const root = report.workflow.split("@")[0] ?? report.workflow;
+  return { ...report, ...runTimeline(run), bySubgraph: subgraphCosts(specs, root, report.byNode) };
 }
 
 export interface PendingDecision {
@@ -74,9 +84,14 @@ export interface ProjectView extends Project {
   status: { runId: string; createdAt: string | null; summary: string | null; counts: Record<string, number> | null } | null;
 }
 
+/** The run report with what the viewer draws on top of it: the cost of each subgraph and the timed passes and calls. */
+export interface ViewerReport extends Report, RunTimeline {
+  bySubgraph: Record<string, SubgraphCost>;
+}
+
 export interface RunDetail {
   run: Pick<Run, "runId" | "goal" | "status" | "config" | "answers" | "ledger" | "events" | "pendingQuestion" | "pendingWorkItems">;
-  report: Report;
+  report: ViewerReport;
   questions: AskedQuestion[];
 }
 
@@ -297,7 +312,7 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo, factory }
       if (!file || !fs.existsSync(file)) return null;
       const run = readJson(file) as Run;
       const { runId: id, goal, status, config, answers, ledger, events, pendingQuestion, pendingWorkItems } = run;
-      return { run: { runId: id, goal, status, config, answers, ledger, events, pendingQuestion, pendingWorkItems }, report: runReport(run), questions: readQuestions(path.dirname(path.dirname(file)), id) };
+      return { run: { runId: id, goal, status, config, answers, ledger, events, pendingQuestion, pendingWorkItems }, report: viewerReport(run, loadWorkflowSpecs(path.join(factoryDir, "workflows"))), questions: readQuestions(path.dirname(path.dirname(file)), id) };
     },
 
     stale() {

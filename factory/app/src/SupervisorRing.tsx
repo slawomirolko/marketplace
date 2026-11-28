@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Panel, ViewportPortal } from "@xyflow/react";
 import "./supervisor.css";
 import { supervisorRing } from "./supervisor.ts";
-import type { SupervisorData } from "./supervisor.ts";
+import type { SupervisorData } from "./types.ts";
 import type { Bounds } from "./types.ts";
 
 export const RING_GAP = 40;

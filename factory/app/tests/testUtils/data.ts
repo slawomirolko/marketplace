@@ -113,6 +113,33 @@ export const report: RunReport = {
   harnessCostUsd: 0.35,
   cost: { costUsd: 0.35, budgetUsd: 1, budgetRatio: 0.35, tokens: 2400, steps: 4, perNode: {}, source: "harness", warnings: [] },
   synthetic: true,
+  bySubgraph: {},
+  passes: [
+    { node: "main/run", visit: 1, startedAt: at(0), endedAt: at(30), status: "done", agents: [], records: 1, durationMs: 30000, waitMs: 0 },
+    {
+      node: "main/team",
+      visit: 1,
+      startedAt: at(31),
+      endedAt: at(60),
+      status: "done",
+      agents: [
+        { id: "one", startedAt: at(31), endedAt: at(50), status: "done", durationMs: 19000, waitMs: 0 },
+        { id: "two", startedAt: at(31), endedAt: at(60), status: "done", durationMs: 29000, waitMs: 0 },
+      ],
+      records: 2,
+      durationMs: 29000,
+      waitMs: 0,
+    },
+    { node: "main/ask", visit: 1, startedAt: at(61), endedAt: at(122), status: "done", agents: [], records: 0, durationMs: 1000, waitMs: 60000 },
+    { node: "main/stop", visit: 1, startedAt: at(123), endedAt: at(123), status: "done", agents: [], records: 0, durationMs: 0, waitMs: 0 },
+  ],
+  calls: [
+    { node: "main/run", agent: null, agentName: "syncer", visit: 1, status: "done", startedAt: at(0), costUsd: 0.25, records: 1, durationMs: 30000, waitMs: 0 },
+    { node: "main/team", agent: "one", agentName: "syncer", visit: 1, status: "done", startedAt: at(31), costUsd: 0.1, records: 1, durationMs: 19000, waitMs: 0 },
+    { node: "main/team", agent: "two", agentName: "reviewer", visit: 1, status: "done", startedAt: at(31), costUsd: null, records: 1, durationMs: 29000, waitMs: 0 },
+    { node: "main/ask", agent: null, agentName: null, visit: 1, status: "done", startedAt: at(61), costUsd: 0, records: 0, durationMs: 1000, waitMs: 60000 },
+    { node: "main/stop", agent: null, agentName: null, visit: 1, status: "done", startedAt: at(123), costUsd: 0, records: 0, durationMs: 0, waitMs: 0 },
+  ],
 };
 
 export const questions: AskedQuestion[] = [

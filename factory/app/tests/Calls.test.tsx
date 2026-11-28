@@ -1,5 +1,5 @@
 import { CallsList } from "../src/Calls.tsx";
-import { fireEvent, renderWithViewer, run, screen, within } from "./testUtils/index.ts";
+import { fireEvent, renderWithViewer, report, run, screen, within } from "./testUtils/index.ts";
 
 const teamNodes = new Set(["main/team"]);
 
@@ -11,13 +11,13 @@ describe("CallsList", () => {
   });
 
   test("says when no step has started yet", () => {
-    renderWithViewer(<CallsList selectedKey={null} teamNodes={teamNodes} onSelect={() => {}} />, { mode: "runs", run: { ...run, events: [], ledger: [] } });
+    renderWithViewer(<CallsList selectedKey={null} teamNodes={teamNodes} onSelect={() => {}} />, { mode: "runs", run: { ...run, events: [], ledger: [] }, report: { ...report, passes: [], calls: [] } });
 
     expect(screen.getByText("No step has started in this run yet.")).toBeInTheDocument();
   });
 
   test("lists one row per call, a team call per agent, with cost, status and active time", () => {
-    renderWithViewer(<CallsList selectedKey="main/team#one" teamNodes={teamNodes} onSelect={() => {}} />, { mode: "runs", run });
+    renderWithViewer(<CallsList selectedKey="main/team#one" teamNodes={teamNodes} onSelect={() => {}} />, { mode: "runs", run, report });
 
     const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);
     expect(rows.map((row) => within(row).getAllByRole("cell")[1]!.textContent)).toEqual(["run", "team", "team", "ask", "stop"]);
@@ -29,7 +29,7 @@ describe("CallsList", () => {
 
   test("selects the node of a row by click or keyboard", () => {
     const onSelect = vi.fn();
-    renderWithViewer(<CallsList selectedKey={null} teamNodes={teamNodes} onSelect={onSelect} />, { mode: "runs", run });
+    renderWithViewer(<CallsList selectedKey={null} teamNodes={teamNodes} onSelect={onSelect} />, { mode: "runs", run, report });
     const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);
 
     fireEvent.click(rows[0]!);

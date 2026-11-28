@@ -7,7 +7,9 @@ import { fileURLToPath } from "node:url";
 import { createDataApi, apiMiddleware } from "../src/viewer-data.ts";
 import type { DataApi } from "../src/viewer-data.ts";
 import type { Run } from "../src/types.ts";
-import type { Cost, Item, Level, RunData } from "../app/src/types.ts";
+import type { Cost, Item, Level, RunData, RunReport } from "../app/src/types.ts";
+import { runTimeline } from "../src/run-timing.ts";
+import { subgraphCosts } from "../src/run-report.ts";
 import { supervisorRing } from "../app/src/supervisor.ts";
 import { agentScripts, allItems, buildLevel, costOf, failureOf, rawFailureOf, runCalls, runPasses, formatTokens, hasMemoryLayer, humanIcons, humanLabel, isEngineScript, questionsFor, ledgerOf, formatUsd, END_KEY, START_KEY } from "../app/src/tree.ts";
 import { agentsOnly } from "../app/src/agents-only.ts";
@@ -29,6 +31,11 @@ function docsAgent(data: DataApi): Item {
 
 function runWithEvents(events: RunData["events"]): RunData {
   return { runId: "r-00000000", goal: "", status: "failed", ledger: [], events };
+}
+
+/** The part of the run report that carries the timed passes and calls, as the backend serves it. */
+function timelineReport(run: RunData): RunReport {
+  return runTimeline(run as unknown as Run) as unknown as RunReport;
 }
 
 const factoryDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -120,6 +127,17 @@ test("a group's cost is the sum of its child nodes", async () => {
   assert.equal(buildCost?.costUsd, Math.round(((report.byNode["hello/build/implement"]?.costUsd ?? 0) + (report.byNode["hello/build/verify"]?.costUsd ?? 0)) * 1e6) / 1e6);
 });
 
+test("the run detail carries the subgraph costs, passes and calls the viewer shows", async () => {
+  const { data, detail } = await demoRun();
+  const report = detail.report;
+  assert.deepEqual(Object.keys(report.bySubgraph), ["hello/build"]);
+  assert.equal(report.bySubgraph["hello/build"]?.steps, (report.byNode["hello/build/implement"]?.steps ?? 0) + (report.byNode["hello/build/verify"]?.steps ?? 0));
+  assert.deepEqual(report.passes.map((pass) => pass.node), detail.run.events.filter((e) => e.type === "node_started" || e.type === "supervisor_started").map((e) => e.node));
+  assert.equal(report.calls.reduce((sum, call) => sum + call.records, 0), detail.run.ledger.length);
+  const served = (await apiCall(data)("GET", `/api/runs/${detail.run.runId}`)).body as { report: Record<string, unknown> };
+  assert.deepEqual(["bySubgraph", "passes", "calls"].filter((key) => key in served.report), ["bySubgraph", "passes", "calls"], "the API serves them with the report");
+});
+
 test("an agent's cost comes from its own entry in the node report", async () => {
   const { data, detail } = await demoRun();
   const docs = docsAgent(data);
@@ -172,10 +190,12 @@ test("an error text that parses to no type, status or message is shown as it is"
   assert.equal(rawFailureOf(item, run('{"type":"http","status":429,"message":"rate limited","retry":3}')), '{"type":"http","status":429,"message":"rate limited","retry":3}', "the raw text stays available");
 });
 
-test("passes and calls of a run are worked out once per run", () => {
-  const run = runWithEvents([{ at: "2026-11-17T10:00:00.000Z", type: "node_started", node: "hello/a", visit: 1 }, { at: "2026-11-17T10:00:05.000Z", type: "node_completed", node: "hello/a" }]);
-  assert.equal(runPasses(run), runPasses(run));
-  assert.equal(runCalls(run), runCalls(run));
+test("the viewer reads passes and calls from the run report instead of working them out", () => {
+  const report = timelineReport(runWithEvents([{ at: "2026-11-17T10:00:00.000Z", type: "node_started", node: "hello/a", visit: 1 }, { at: "2026-11-17T10:00:05.000Z", type: "node_completed", node: "hello/a" }]));
+  assert.equal(runPasses(report), report.passes);
+  assert.equal(runCalls(report), report.calls);
+  assert.deepEqual(report.passes.map((pass) => [pass.node, pass.status, pass.durationMs, pass.records]), [["hello/a", "done", 5000, 0]]);
+  assert.deepEqual([runPasses(null), runCalls(null)], [[], []]);
 });
 
 test("two edges between the same pair of nodes are drawn once with both labels", () => {
@@ -274,9 +294,10 @@ test("totals with unknown steps are shown as unknown or partial, never as an exa
   assert.equal(formatAmount(report.byModel.known, report.coverage.byModel.known), "≥ $0.250000 (partial, 1 of 2 LLM steps unknown)");
   assert.equal(formatAmount(report.byTier.medium, report.coverage.byTier.medium), "≥ $0.250000 (partial, 2 of 3 LLM steps unknown)");
   assert.equal(formatAmount(0.25, { llmSteps: 1, unknownSteps: 0 }), "$0.250000");
-  const level = buildLevel(api(false).workflows(), "hello");
-  const build = itemAt(level, "hello/build");
-  assert.equal(formatUsd(costOf(build, report)), "unknown", "a subgraph whose LLM steps are all unknown is not $0");
+  const workflows = api(false).workflows();
+  const build = itemAt(buildLevel(workflows, "hello"), "hello/build");
+  const withSubgraphs = { ...report, bySubgraph: subgraphCosts(workflows, "hello", report.byNode) } as unknown as RunReport;
+  assert.equal(formatUsd(costOf(build, withSubgraphs)), "unknown", "a subgraph whose LLM steps are all unknown is not $0");
 });
 
 test("run index gives the same cost, tier and failure as the per-node lookups", async () => {
@@ -325,19 +346,19 @@ test("run count: a step in a retry loop counts every visit, a group sums the ste
   const reviewNode = { id: "review", kind: "llm" };
   const agent = (id: string): Item => ({ key: `w/review#${id}`, kind: "agent", node: reviewNode, agent: { id, role: undefined }, nodePath: "w/review" });
   const team: Item = { key: "w/review", kind: "team", node: reviewNode, inner: { items: [], edges: [] } };
-  assert.equal(runCount(step("w/fix"), run), 3, "three visits of the retry loop");
-  assert.equal(runCount(step("w/plan"), run), 0, "a step that never started shows 0");
-  assert.equal(runCount(step("w/build"), run), 0, "a plain step does not count paths below its key");
-  assert.equal(runCount(group, run), 3, "a group sums the step runs inside it");
-  assert.equal(runCount(team, run), 2, "a team counts its own visits");
-  assert.equal(runCount(agent("docs"), run), 2, "an agent counts its own starts");
-  assert.equal(runCount(agent("code"), run), 1);
-  assert.equal(runCount({ key: START_KEY, kind: "terminal", label: "start" }, run), null, "terminals have no count");
-  assert.equal(runCount(step("w/fix"), null), null, "no run, no count");
+  const report = timelineReport(run);
+  assert.equal(runCount(step("w/fix"), run, report), 3, "three visits of the retry loop");
+  assert.equal(runCount(step("w/plan"), run, report), 0, "a step that never started shows 0");
+  assert.equal(runCount(step("w/build"), run, report), 0, "a plain step does not count paths below its key");
+  assert.equal(runCount(group, run, report), 3, "a group sums the step runs inside it");
+  assert.equal(runCount(team, run, report), 2, "a team counts its own visits");
+  assert.equal(runCount(agent("docs"), run, report), 2, "an agent counts its own starts");
+  assert.equal(runCount(agent("code"), run, report), 1);
+  assert.equal(runCount({ key: START_KEY, kind: "terminal", label: "start" }, run, report), null, "terminals have no count");
+  assert.equal(runCount(step("w/fix"), null, null), null, "no run, no count");
 });
 
 test("run calls: every visit in time order with status, ledger cost and duration", async () => {
-  const { runCalls } = await import("../app/src/tree.ts");
   const run: RunData = {
     ...runWithEvents([
       { at: "2026-01-01T00:00:00.000Z", type: "node_started", node: "w/fix", visit: 1 },
@@ -360,7 +381,7 @@ test("run calls: every visit in time order with status, ledger cost and duration
       ledgerRecord("w/review", "2026-01-01T00:00:15.000Z", 0.2, { agentId: "code", durationMs: 5000 }),
     ],
   };
-  const calls = runCalls(run);
+  const { calls } = runTimeline(run as unknown as Run);
   assert.deepEqual(
     calls.map((c) => [c.node, c.agent, c.visit, c.status, c.costUsd, c.durationMs]),
     [
@@ -374,8 +395,7 @@ test("run calls: every visit in time order with status, ledger cost and duration
   );
   assert.equal(calls[1]?.records, 2, "ledger records go to the visit that was open when they were written");
   assert.equal(calls[3]?.agentName, "docs-writer");
-  assert.equal(runCalls({ ...run, status: "running" }).at(-1)?.status, "running", "a live run shows open calls as running");
-  assert.deepEqual(runCalls(null), []);
+  assert.equal(runTimeline({ ...run, status: "running" } as unknown as Run).calls.at(-1)?.status, "running", "a live run shows open calls as running");
 });
 
 test("time spent: passes add up, user waits are left out, a team counts wall time and a group sums its steps", async () => {
@@ -412,19 +432,20 @@ test("time spent: passes add up, user waits are left out, a team counts wall tim
   const agent = (id: string): Item => ({ key: `w/review#${id}`, kind: "agent", node: reviewNode, agent: { id, role: undefined }, nodePath: "w/review" });
   const team: Item = { key: "w/review", kind: "team", node: reviewNode, inner: { items: [], edges: [] } };
   const group: Item = { key: "w/build", kind: "subgraph", node: { id: "build", kind: "subgraph", workflow: "b" }, inner: { items: [step("w/build/compile")], edges: [] } };
-  assert.equal(timeSpent(step("w/fix"), run), 50_000, "two passes of 30 s and 20 s add up");
-  assert.deepEqual(itemPasses(step("w/fix"), run).map((p) => [p.visit, p.durationMs]), [[1, 30_000], [2, 20_000]], "each pass keeps its own duration");
-  assert.equal(timeSpent(step("w/ask"), run), 1000, "the 10 minutes waiting for the answer are not step time");
-  assert.equal(itemPasses(step("w/ask"), run)[0]?.waitMs, 600_000, "the wait is kept apart");
-  assert.equal(timeSpent(team, run), 50_000, "parallel agents: the team shows wall time, not the sum of its agents");
-  assert.equal(timeSpent(agent("docs"), run), 40_000, "an agent runs from work_offered to agent_completed");
-  assert.equal(timeSpent(agent("code"), run), 50_000);
-  assert.equal(timeSpent(group, run), 10_000, "a group sums the steps inside it");
-  assert.equal(timeSpent(step("w/script"), run), 840, "an open pass falls back to the ledger durationMs");
-  assert.equal(timeSpent(step("w/plan"), run), null, "a step that never ran has no time");
-  assert.equal(timeSpent({ key: START_KEY, kind: "terminal", label: "start" }, run), null);
+  const report = timelineReport(run);
+  assert.equal(timeSpent(step("w/fix"), report), 50_000, "two passes of 30 s and 20 s add up");
+  assert.deepEqual(itemPasses(step("w/fix"), report).map((p) => [p.visit, p.durationMs]), [[1, 30_000], [2, 20_000]], "each pass keeps its own duration");
+  assert.equal(timeSpent(step("w/ask"), report), 1000, "the 10 minutes waiting for the answer are not step time");
+  assert.equal(itemPasses(step("w/ask"), report)[0]?.waitMs, 600_000, "the wait is kept apart");
+  assert.equal(timeSpent(team, report), 50_000, "parallel agents: the team shows wall time, not the sum of its agents");
+  assert.equal(timeSpent(agent("docs"), report), 40_000, "an agent runs from work_offered to agent_completed");
+  assert.equal(timeSpent(agent("code"), report), 50_000);
+  assert.equal(timeSpent(group, report), 10_000, "a group sums the steps inside it");
+  assert.equal(timeSpent(step("w/script"), report), 840, "an open pass falls back to the ledger durationMs");
+  assert.equal(timeSpent(step("w/plan"), report), null, "a step that never ran has no time");
+  assert.equal(timeSpent({ key: START_KEY, kind: "terminal", label: "start" }, report), null);
   assert.equal(timeSpent(step("w/fix"), null), null);
-  assert.deepEqual(runCalls(run).filter((c) => c.node === "w/review").map((c) => [c.agent, c.durationMs]), [["docs", 40_000], ["code", 50_000]], "the calls tab gets the same per-agent times");
+  assert.deepEqual(runCalls(report).filter((c) => c.node === "w/review").map((c) => [c.agent, c.durationMs]), [["docs", 40_000], ["code", 50_000]], "the calls tab gets the same per-agent times");
 });
 
 test("durations read as 840ms, 3m 12s or 1h 05m", async () => {
@@ -438,13 +459,13 @@ test("durations read as 840ms, 3m 12s or 1h 05m", async () => {
 test("demo run: every ledger record lands in one call and the index carries the run counts", async () => {
   const { allItems, ancestorKeys, buildRunIndex, findItem, runCalls, runCount, timeSpent } = await import("../app/src/tree.ts");
   const { data, detail } = await demoRun();
-  const calls = runCalls(detail.run);
+  const calls = runCalls(detail.report);
   assert.equal(calls.reduce((s, c) => s + c.records, 0), detail.run.ledger.length, "no ledger record is lost or counted twice");
   assert.deepEqual(calls.map((c) => c.startedAt), [...calls.map((c) => c.startedAt)].sort(), "calls are in time order");
   const level = buildLevel(data.workflows(), "hello", "hello", ["hello"], detail.report);
   const index = buildRunIndex(level, data.config(), detail.report, detail.run);
-  for (const item of allItems(level)) assert.equal(index.get(item.key)?.runs, runCount(item, detail.run), `run count of ${item.key}`);
-  for (const item of allItems(level)) assert.equal(index.get(item.key)?.timeMs, timeSpent(item, detail.run), `time of ${item.key}`);
+  for (const item of allItems(level)) assert.equal(index.get(item.key)?.runs, runCount(item, detail.run, detail.report), `run count of ${item.key}`);
+  for (const item of allItems(level)) assert.equal(index.get(item.key)?.timeMs, timeSpent(item, detail.report), `time of ${item.key}`);
   assert.equal(index.get("hello/plan")?.runs, 1);
   assert.equal(index.get("hello/review#docs")?.runs, 1, "an agent with ledger records but no agent_started event still counts its visit");
   assert.deepEqual(calls.filter((c) => c.node === "hello/review").map((c) => c.agent).sort(), ["docs", "security", "style", "tests"], "a team visit lists one call per agent");
@@ -466,7 +487,7 @@ test("the run detail carries the supervisor and the ring shows its verdict, cost
   assert.match(ring.text, /^FACTS: /);
   assert.ok(detail.run.ledger.some((r) => r.nodePath === "@supervisor"), "the supervisor cost is in the run ledger");
   const { runCalls } = await import("../app/src/tree.ts");
-  const call = runCalls(detail.run).find((c) => c.node === "@supervisor");
+  const call = runCalls(detail.report).find((c) => c.node === "@supervisor");
   assert.equal(call?.status, "done", "the supervisor is one call in the calls list");
   assert.equal(call?.records, 1);
 });

@@ -59,7 +59,9 @@ test("a group's cost includes its multi-agent nodes", async () => {
     { name: "root", version: "1", entry: "phase", nodes: [{ id: "phase", kind: "group", workflow: "inner" }], edges: [{ from: "phase", to: "END" }] },
     { name: "inner", version: "1", entry: "workers", nodes: [{ id: "workers", kind: "llm", agents: [{ id: "flow" }, { id: "test" }] }, { id: "gate", kind: "script" }], edges: [{ from: "workers", to: "gate" }, { from: "gate", to: "END" }] },
   ];
-  const report = { byNode: { "root/workers": cost(0.25), "root/gate": cost(0) } };
+  const { subgraphCosts } = await import("../src/run-report.ts");
+  const byNode = { "root/workers": cost(0.25), "root/gate": cost(0) };
+  const report = { byNode, bySubgraph: subgraphCosts(workflows as never, "root", byNode as never) };
   const level = buildLevel(workflows as never, "root", "root", ["root"], report as never);
   const phase = level.items.find((i) => i.key === "root/phase")!;
   assert.equal(costOf(phase, report as never)?.costUsd, 0.25);

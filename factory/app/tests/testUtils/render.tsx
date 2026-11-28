@@ -9,7 +9,8 @@ import { agentsOnly } from "../../src/agents-only.ts";
 import { layoutGraph, scriptsHeight } from "../../src/layout.ts";
 import { nodeTypes } from "../../src/nodes.tsx";
 import { agentScripts, buildLevel, humanIcons } from "../../src/tree.ts";
-import type { FlowNode, Workflow } from "../../src/types.ts";
+import type { FlowNode } from "../../src/layout.ts";
+import type { Workflow } from "../../src/types.ts";
 import { agents, mainWorkflow } from "./data.ts";
 
 export function viewerState(overrides: Partial<ViewerState> = {}): ViewerState {
