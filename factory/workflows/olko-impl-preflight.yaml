@@ -1,0 +1,151 @@
+name: olko-impl-preflight
+version: 0.3.0
+description: "Step 2: the flow, runtime, test and readiness workers check the approved Task plan against current code; only four PASS results allow implementation. Otherwise you decide the open points (through the question gate when the project adapter sets it), the plan is updated in every deliverable the decision touches and all four run again, at most three rounds."
+source: "agents/opencode/olko-implementation-orchestrator.md (QUESTION GATE, DELTA CLOSURE) and skills/workflow/olko-task-implementation-workflow/SKILL.md (workflow.md gate 3, compatibility preflight)"
+roles:
+  plan-worker: medium
+  planner: high
+  orchestrator: medium
+entry: preflight-round
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: preflight-round
+    description: "Counts the preflight rounds."
+    kind: script
+    op: builtin.count
+    maxVisits: 3
+  - id: workers
+    description: "Four read-only investigation workers, each in its own remit, return PASS, PLAN_UPDATE_REQUIRED or BLOCKED with file:line evidence."
+    kind: llm
+    role: plan-worker
+    maxVisits: 3
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: { line: [check, verdict, detail] }
+    agents:
+      - { id: flow, agent: olko-investigation-flow-worker }
+      - { id: runtime, agent: olko-investigation-runtime-worker }
+      - { id: test, agent: olko-investigation-test-worker }
+      - { id: readiness, agent: olko-investigation-readiness-worker }
+    prompt: |
+      Task compatibility preflight for Task {{state.task.task.taskName}}, read only. Approved Task plan: {{state.task.task.taskFile}}. Feature plan: {{state.task.task.featurePlan}}. Current code: this worktree ({{state.worktree.worktree.path}}, branch base {{state.worktree.worktree.base}}).
+      Check only your remit: flow = entry points, boundaries, state and contracts; runtime = dependencies, configuration, resilience and compatibility risks; test = existing test contracts and reusable coverage; readiness = domain models, ownership boundaries, dependencies and whether the plan is implementable against current code.
+      Open items marked VERIFY-DURING-WORK or ACCEPTED-GAP do not block: return PASS when the plan is implementable against current code and every remaining item can only be confirmed by running the change. Use PLAN_UPDATE_REQUIRED or BLOCKED only for a wrong code claim, a missing decision, or a conflict with current code.
+      Keep it brief with file:line evidence. Do not edit anything and do not ask questions.
+      End with one line, the verdict in capitals: `preflight | <PASS|PLAN_UPDATE_REQUIRED|BLOCKED> | <one-line evidence>`
+  - id: preflight
+    description: "The implementation orchestrator records the four verdicts and their evidence in the Task journal and the shared Feature tracker, reads the question gate setting, hands open points to the question reviewer as proposals when it is on, and closes answered questions only with read-back evidence."
+    kind: llm
+    role: orchestrator
+    agent: olko-implementation-orchestrator
+    tools: [read, edit, bash]
+    maxVisits: 3
+    dirs: ["{{input.project}}", "{{state.task.task.featureDir}}"]
+    parse: { json: [gate, proposals?] }
+    prompt: |
+      Step 2, preflight round {{state.preflight-round.count}} for Task {{state.task.task.taskName}}: record these four verdicts and their evidence in the implementation journal of {{state.task.task.taskFile}} and in the shared Feature tracker {{state.task.task.tracker}}. Delegate nothing, ask nothing and change no code. Only four PASS results permit implementation; mark step 2 complete only then.
+      {{#each.state.workers}}
+      {{key}}: {{value.verdict}} | {{value.detail}}
+      {{/each.state.workers}}
+      QUESTION GATE: read questionReviewerAgent and questionGateCommand from .agents/skill-config.md of the main checkout {{input.project}}; with either unset the gate is off.
+      When the gate is on and there are open questions: you never author a planning question. Hand the children's open questions over verbatim as proposals for the question reviewer, one per question, in its input contract (cluster, topic, topicTerms, questionText exactly as the child wrote it, decisionStatement or cites, artifacts that the answer will change, exactly three options with label, semantics and effect).
+      When the gate is on, close a registered question [Q<n>] in the registry (questionGateCommand) only with evidence: DELTA CLOSURE, the answer has landed in every deliverable it names (plan, tracker, issue text, manifests, code) with read-back proof in its tracker row; until then it stays open.
+      End with one ```json block: {"gate": "<on|off>", "proposals": "<when the gate is on and a worker did not pass: the batch as one JSON array text; else empty>"}
+  - id: ask-preflight
+    description: "Shows the verdicts and asks for your decision on every open point (free text); stop ends the run."
+    kind: interrupt
+    askedBy: workers
+    maxVisits: 3
+    question:
+      id: "q-impl-preflight-{{state.preflight-round.count}}"
+      text: "Preflight round {{state.preflight-round.count}} did not give four PASS results:\n{{#each.state.workers}}{{key}}: {{value.verdict}} | {{value.detail}}\n{{/each.state.workers}}{{#state.preflight-grill.preflight-grill}}Approved questions:\n{{state.preflight-grill.preflight-grill}}\n{{/state.preflight-grill.preflight-grill}}Write your decision for each open point (it is recorded in the plan and all four checks run again), or answer stop."
+  - id: update-plan
+    description: "Plan editor folds the preflight evidence and your decision into the Task plan."
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    maxVisits: 3
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: text
+    prompt: |
+      Update the approved Task plan {{state.task.task.taskFile}} (and the Feature plan {{state.task.task.featurePlan}} only when it is affected) so that it fits current code, from this preflight evidence. Record the user's decision below as a locked decision and close the open items it settles; do not open new items the decision already answers. Classify every open item as BLOCKING (a missing decision or a wrong code claim), VERIFY-DURING-WORK (can only be confirmed by running the change) or ACCEPTED-GAP; only BLOCKING items may set `Ready for implementation: no`. Edit only the folder {{state.task.task.featureDir}}.
+      Preflight evidence:
+      {{#each.state.workers}}
+      {{key}}: {{value.verdict}} | {{value.detail}}
+      {{/each.state.workers}}
+      User decision:
+      {{state.ask-preflight.answer}}
+      {{#state.preflight-gate.preflight-gate}}
+      Question gate, latest result ({{verdict}}): {{detail}}. A question the reviewer rejected cites a registry decision: apply that decision, never reopen it.
+      {{/state.preflight-gate.preflight-gate}}
+      DELTA CLOSURE: apply the decision in the same turn to every deliverable in {{state.task.task.featureDir}} it touches (Task plan, Feature plan, the Feature tracker, the Task E2E manifest) and record read-back proof per deliverable in its tracker row. Name any deliverable outside this folder (issue text, code) as still open.
+  - id: preflight-gate
+    description: "QUESTION GATE (only when the project adapter sets questionReviewerAgent and questionGateCommand): the question reviewer checks the open preflight points against the decision registry before you see them. A decided cluster, an option that reverses an answered decision, or a question about the orchestrator's own consistency is rejected."
+    kind: llm
+    role: plan-worker
+    agent: olko-question-reviewer
+    tools: [read, bash]
+    maxVisits: 20
+    dirs: ["{{input.project}}", "{{state.task.task.featureDir}}"]
+    parse: { line: [gate, verdict, detail] }
+    prompt: |
+      QUESTION GATE for Feature {{state.task.task.featureId}}, Task {{state.task.task.taskName}} (compatibility preflight). Registry: questionRegistryPattern from .agents/skill-config.md of {{input.project}} (default {{state.task.task.featureDir}}/questions.json). Run your PROCEDURE on this batch, handed over by the implementation orchestrator:
+      {{state.preflight.preflight.proposals}}
+      Write your table. Number each approved question with the next free [Q<n>] id of the registry. Change no file.
+      End with one line, the verdict in lowercase: `gate | <ask|none|blocked> | <ask: every approved question verbatim with its [Q<n>] id, separated by ;; and then the rejected ones with the decision each cites; none: every question was rejected, with the registry decision each one cites; blocked: the missing input or command>`
+  - id: preflight-grill
+    description: "grill-with-docs presents only the questions the question reviewer approved, verbatim with their [Q<n>] ids, in the user's response language; it asks nothing itself."
+    kind: llm
+    role: plan-worker
+    skill: grill-with-docs
+    tools: [read]
+    maxVisits: 20
+    dirs: ["{{input.project}}", "{{state.task.task.featureDir}}"]
+    parse: text
+    prompt: |
+      Present only these approved questions of Task {{state.task.task.taskName}} (compatibility preflight open points), verbatim, each with its [Q<n>] id, with your question content rules: {{state.preflight-gate.preflight-gate.detail}}
+      Never present a question the reviewer rejected. Return the question text only; the workflow puts it to the user. Do not add questions and do not change any file.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it.
+      If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
+  - id: preflight-register
+    description: "QUESTION GATE: the implementation orchestrator registers each approved question with propose and records your answer with answer; the question stays open until DELTA CLOSURE has read-back proof."
+    kind: llm
+    role: orchestrator
+    agent: olko-implementation-orchestrator
+    tools: [read, edit, bash]
+    maxVisits: 20
+    dirs: ["{{input.project}}", "{{state.task.task.featureDir}}"]
+    parse: text
+    prompt: |
+      QUESTION GATE for Task {{state.task.task.taskName}}. Delegate nothing, ask nothing and change no code. With questionGateCommand from .agents/skill-config.md of {{input.project}} and the registry (questionRegistryPattern, default {{state.task.task.featureDir}}/questions.json): register each approved question with `propose`, then record the user's answer with `answer`. Do not close any question now.
+      Approved questions: {{state.preflight-gate.preflight-gate.detail}}
+      User answer: {{state.ask-preflight.answer}}
+      List in the Feature tracker {{state.task.task.tracker}} every deliverable this answer touches (plan, tracker, issue text, manifests, code), one row per question: DELTA CLOSURE keeps the decision open until each has read-back proof.
+  - id: stop-preflight-gate
+    description: "Stops: the question gate is on but the question reviewer is blocked (missing input or command) or grill-with-docs cannot be loaded; nothing is asked of you."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Implementation stopped: the question gate could not run; no unapproved question is shown to the user." }
+  - id: stop-preflight
+    description: "Stops: no implementer runs without four PASS results."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Implementation stopped: preflight did not give four PASS results after {{state.preflight-round.count}} rounds:\n{{#each.state.workers}}{{key}}: {{value.verdict}} | {{value.detail}}\n{{/each.state.workers}}" }
+edges:
+  - { from: preflight-round, to: workers }
+  - { from: workers, to: preflight }
+  - { from: preflight, to: END, when: 'workers.flow.verdict == "PASS" && workers.runtime.verdict == "PASS" && workers.test.verdict == "PASS" && workers.readiness.verdict == "PASS"', description: "four PASS results" }
+  - { from: preflight, to: stop-preflight, when: "preflight-round.count >= 3", description: "still not four PASS after three rounds" }
+  - { from: preflight, to: preflight-gate, when: 'preflight.preflight.gate == "on"', description: "a worker did not pass and the question gate is on: the question reviewer checks the open points first" }
+  - { from: preflight, to: ask-preflight, description: "a worker did not pass; question gate off" }
+  - { from: preflight-gate, to: stop-preflight-gate, when: 'preflight-gate.preflight-gate.verdict == "blocked"', description: "the question reviewer is blocked" }
+  - { from: preflight-gate, to: update-plan, when: 'preflight-gate.preflight-gate.verdict == "none"', description: "every open point was rejected as already decided: the plan follows the registry decisions, nothing is asked" }
+  - { from: preflight-gate, to: preflight-grill, description: "approved questions: grill-with-docs presents them" }
+  - { from: preflight-grill, to: stop-preflight-gate, when: 'preflight-grill.preflight-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded" }
+  - { from: preflight-grill, to: ask-preflight, description: "the approved questions go to you" }
+  - { from: ask-preflight, to: stop-preflight, when: 'ask-preflight.answer == "stop"', description: "you answered stop" }
+  - { from: ask-preflight, to: preflight-register, when: 'preflight.preflight.gate == "on"', description: "question gate on: your answer is registered first" }
+  - { from: ask-preflight, to: update-plan, description: "you gave your decisions" }
+  - { from: preflight-register, to: update-plan }
+  - { from: update-plan, to: preflight-round }

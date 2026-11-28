@@ -107,6 +107,8 @@ TEST-FIRST CONTRACT (HARD RULE):
 
 PROJECT DECISION STORE: take `adrDirectory` and `rulesDirectory` from `.agents/skill-config.md`; when the file or a key is missing, use the defaults `docs/adr` and `docs/rules`. The store exists when either directory exists, with or without the config file. When it exists, open only the `Accepted` ADRs from the `<adrDirectory>/README.md` log and the rule files from the `<rulesDirectory>/README.md` table whose scope globs match the scoped paths. Neither directory exists → skip this step.
 
+STORE DIGEST FIRST: when the prompt has a `Project store digest`, it is the binding store for this work. Follow its lines and do not read the ADR log, the rules table, or a full ADR again. Open a full ADR only to resolve a conflict with the digest, or before you return `Blocked:` about a decision. A topic the user decided in the prompt (`Binding ADR per overlapping topic`) follows that decision. No digest in the prompt → apply PROJECT DECISION STORE as written.
+
 HARD STOP — UNDECIDED DEPENDENCY OR CONVENTION:
 - ❌ NEVER choose alone a new dependency (package, library, framework, external service) or a new project convention that no project doc, store entry, or existing code settles.
 - ✅ Return `Blocked:` with the open question, 2–3 options, and a short example of each. Finish every unblocked part of the scope normally.

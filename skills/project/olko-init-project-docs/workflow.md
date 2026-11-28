@@ -29,19 +29,29 @@ Use the `question` tool when available; otherwise numbered prose, and accept a s
 
 For a rule, confirm its `scope` globs in the same question. A rule whose only honest scope is all code goes to `general.md`.
 
+For a decision, the question also shows the front matter it would write: `topic`, `scope`, `decision`, and `enforcedBy`. Set `enforcedBy` to a value other than `none` only when you found the test, lint rule, or CI check that fails on a violation.
+
+Topic collision: an `Accepted` ADR (existing, or approved earlier in this run) has the same `topic` and an overlapping `scope`. Then the three options of the question are:
+1. supersede: the new ADR gets `supersedes: [ADR-NNNN]`, and the old ADR gets status `Superseded`;
+2. exception: the new ADR has the narrower scope and gets `overrides: [ADR-NNNN]`;
+3. narrow scope: the question shows new globs for the new ADR that do not overlap.
+Recommend the option that leaves one binding ADR per path.
+
 Finish by asking once whether the user wants to add anything the scan missed.
 
 ## 4. Write
 Write approved content only, into missing files (re-runs: `edge-cases.md`). Shapes are in `examples.md`.
 
-- `<adrDirectory>/TEMPLATE.md`: `# NNNN. <title>`, `Date:`, `Status:`, then `## Context`, `## Considered options`, `## Decision`, `## Consequences`.
-- `<adrDirectory>/NNNN-<slug>.md`: one per approved decision; number = highest existing + 1, four digits. Consequences: `MUST` / `MUST NOT` / `SHOULD` statements, then `Trade-offs:`. Name modules and layers, not single files or classes.
-- `<adrDirectory>/README.md`: one-paragraph purpose, the ADR filter, the consequence style, and the log `| ADR | Title | Status | Scope |`. Status: `Proposed`, `Accepted`, `Deprecated`, or `Superseded by NNNN`. Add the log row together with the ADR.
+- `<adrDirectory>/TEMPLATE.md`: front matter (`status`, `topic`, `scope`, `decision`, `overrides`, `supersedes`, `enforcedBy`), then `# NNNN. <title>`, `Date:`, `Status:`, then `## Context`, `## Considered options`, `## Decision`, `## Consequences`.
+- `<adrDirectory>/NNNN-<slug>.md`: one per approved decision; number = highest existing + 1, four digits. Front matter as in `overview.md`. Consequences: `MUST` / `MUST NOT` / `SHOULD` statements, then `Trade-offs:`. Name modules and layers, not single files or classes.
+- `<adrDirectory>/README.md`: one-paragraph purpose, the ADR filter, the consequence style, the rule "one binding ADR per topic and path", and the log `| ADR | Title | Status | Topic | Scope |`. Status: `Proposed`, `Accepted`, `Deprecated`, or `Superseded by NNNN`. Add the log row together with the ADR. When an ADR supersedes another, change the old row to `Superseded by NNNN`.
 - `<rulesDirectory>/<name>.md`: front matter `scope` and `summary`, then the rule list.
 - `<rulesDirectory>/README.md`: one-paragraph purpose and `| File | Scope | Summary |`, one row per rule file.
 - `<architectureDirectory>/c4-context.md` (level 1) and `<architectureDirectory>/c4-containers.md` (level 2), written directly in `<architectureDirectory>`; never create a `c4/` subdirectory. One bullet per element and per connection; no component-level detail.
 
 Store files contain the approved text only, never the evidence.
+
+After writing, run `scripts/check-store.mjs` (see `overview.md`) on the project and show its output. Fix every error that this run caused before you finish.
 
 ## 5. Finish
 1. Directories differ from the defaults → propose the keys for `.agents/skill-config.md`; write them after approval.

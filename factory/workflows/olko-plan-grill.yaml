@@ -1,0 +1,165 @@
+name: olko-plan-grill
+version: 0.6.0
+description: "Steps 7 and 8: grill-with-docs composes the whole batch of questions (three options, recommendation first), the question reviewer approves them against the decision registry, the answered batch is recorded in tracker.md in one step, the answers are applied together, the investigation workers whose area changed re-validate only the changed claims and the consistency gate runs; repeated for follow-up questions, at most three rounds."
+source: "agents/opencode/olko-plan-documentation-orchestrator.md (FEATURE PLAN BATCH: one question batch for the Feature and every Task; USER QUESTION GATE: questions composed by grill-with-docs, checked by olko-question-reviewer); skills/workflow/olko-feature-plan-workflow/workflow.md (steps 7-8: grill-with-docs question batches, answers applied together, re-validation by the workers, consistency gate)"
+roles:
+  plan-gate: medium
+  plan-worker: medium
+  planner: high
+entry: grill-round
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: grill-round
+    description: "Counts the grill rounds; the edge after it stops before a fourth round."
+    kind: script
+    op: builtin.count
+    maxVisits: 4
+  - id: grill
+    description: "Grill-with-docs reads the plan package and returns the batch of open questions, each with three options and the recommended one first."
+    kind: llm
+    role: planner
+    skill: grill-with-docs
+    tools: [read]
+    dirs: ["{{input.project}}"]
+    maxVisits: 4
+    parse: { json: [questions] }
+    prompt: |
+      Grill the plan package {{state.feature.feature.featureDir}} (business.md, implementation.md, stack.md and the Task files of the Feature and every Task) in the project {{input.project}} against the project's docs and code. Read only. Use the full plan context: the verified facts in the plan package and all known decisions and earlier question batches with their answers recorded in its tracker.md.
+      Gather every currently answerable question (business scope, mechanism, delivery, risks, non-goals, acceptance criteria, assumptions) as ONE batch; when tracker.md already records a closed batch, return only follow-up questions its answers raised, or none. Do not ask the user yourself; the workflow puts your questions to the user. Do not split a question or paraphrase it into new choices, and do not repeat a decision already locked.
+      Every question has exactly 3 options, the recommended one first.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the questions and options in that language, concisely.
+      If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
+      End with one ```json block, one item per question, its text in this layout:
+      {"questions": [{"text": "Problem: <problem>\nWhy I am asking: <why>\n1. <recommended option> (recommended)\n   Business: <business consequence>\n   Change scope: <scope>\n2. <option>\n   Business: <business consequence>\n   Change scope: <scope>\n3. <option>\n   Business: <business consequence>\n   Change scope: <scope>\nGlossary: <terms, or leave this line out>"}]}
+      When .agents/skill-config.md sets questionReviewerAgent, also give each item the proposal fields the question reviewer requires: cluster, topic, topicTerms, decisionStatement or cites, artifacts (never empty), and the 3 options as {label, semantics, effect}.
+  - id: grill-review
+    description: "The question reviewer approves or rejects every grill question against the decision registry before the user sees it; only approved questions go on, copied unchanged."
+    kind: llm
+    role: plan-gate
+    agent: olko-question-reviewer
+    tools: [read, bash]
+    maxVisits: 4
+    parse: { json: [questions] }
+    prompt: |
+      Review this batch of grill questions for the Feature {{state.feature.feature.featureId}} (project {{input.project}}). Registry: questionRegistryPattern from .agents/skill-config.md (default {{state.feature.feature.featureDir}}/questions.json); tracker: {{state.feature.feature.featureDir}}/tracker.md. Follow your procedure; never reword, answer or add a question.
+      Batch:
+      {{state.grill.grill.text}}
+      When .agents/skill-config.md sets neither questionReviewerAgent nor questionGateCommand, the gate does not apply: approve every question with the reason `gate off`.
+      After your table, end with one ```json block that copies every APPROVED item of the batch unchanged: {"questions": [<approved items>]}
+  - id: grill-next
+    description: "Takes the next grill question of the batch."
+    kind: script
+    op: list.next
+    maxVisits: 100
+    with: { over: grill-review.grill-review.questions }
+  - id: ask-grill
+    description: "Asks one grill question with three options, composed by grill-with-docs and approved by the question reviewer, the recommended one first."
+    kind: interrupt
+    askedBy: [grill, grill-review]
+    maxVisits: 100
+    question:
+      id: "q-plan-grill-{{state.grill-round.count}}-{{state.grill-next.index}}"
+      text: "Grill question {{state.grill-next.number}} of {{state.grill-next.total}} (the whole batch is answered before anything changes):\n{{state.grill-next.item.text}}"
+      allowed: ["1", "2", "3"]
+  - id: grill-collect
+    description: "Keeps the question and its answer in the open batch; nothing is written until the whole batch is answered."
+    kind: script
+    op: list.append
+    maxVisits: 100
+    with: { values: { question: grill-next.item.text, answer: ask-grill.answer }, restartWhen: "grill-next.number == 1" }
+  - id: grill-record
+    description: "The plan documentation orchestrator records the whole answered batch in tracker.md in one step; the plan files stay unchanged."
+    kind: llm
+    role: plan-gate
+    agent: olko-plan-documentation-orchestrator
+    tools: [read, edit, bash]
+    maxVisits: 4
+    parse: text
+    prompt: |
+      Step 7 of olko-feature-plan-workflow (one batched question loop): record grill batch {{state.grill-round.count}}, every question with its answer, as one batch in {{state.feature.feature.featureDir}}/tracker.md (project {{input.project}}). Keep the plan files unchanged: edit only tracker.md, delegate nothing and ask nothing.
+      {{#state.grill-collect.items}}
+      Question {{number}}:
+      {{question}}
+      The user's answer: option {{answer}}.
+      {{/state.grill-collect.items}}
+      Record the decisions in English per userDecisionRecordLanguage and userDecisionRecordStyle in .agents/skill-config.md (unset: the repository documentation language; concise translation): translate and compact faithfully, keep IDs and meaning-critical exact wording, and add no new decision.
+      When .agents/skill-config.md sets questionGateCommand, also register every approved question of the batch in the decision registry (questionRegistryPattern, default {{state.feature.feature.featureDir}}/questions.json) with its `propose` command and record each answer with its `answer` command, each as one bare command (python3 scripts/plan/question_gate.py ...); otherwise run no command.
+      Reply with one line: `recorded | <number of questions>`.
+  - id: grill-apply
+    description: "Plan editor applies all answers of the batch together and records the batch closure in tracker.md."
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    maxVisits: 4
+    parse: { json: ["changes?", "areas?"] }
+    prompt: |
+      Apply ALL answers of grill batch {{state.grill-round.count}}, as recorded in {{state.feature.feature.featureDir}}/tracker.md, together to the plan package {{state.feature.feature.featureDir}} (project {{input.project}}) and record the batch closure in tracker.md. Edit only that folder.
+      Keep each recorded decision as tracker.md states it, and add no new decision.
+      End with one ```json block that lists every claim about the code you added or changed, with its plan file, and the areas those claims touch: flow (the mechanism and its call path), runtime (configuration, runtime risks), test (tests and their reuse), readiness (implementation readiness). Use empty lists when no claim about the code changed.
+      {"changes": ["<plan file>: <new or changed claim>"], "areas": ["<flow|runtime|test|readiness>"]}
+  - id: reval-workers
+    description: "Keeps only the investigation workers whose area the applied answers changed; with no area list, all four run."
+    kind: script
+    op: list.pick
+    maxVisits: 4
+    with:
+      ids: grill-apply.grill-apply.areas
+      items:
+        - { id: flow, agentName: olko-investigation-flow-worker }
+        - { id: runtime, agentName: olko-investigation-runtime-worker }
+        - { id: test, agentName: olko-investigation-test-worker }
+        - { id: readiness, agentName: olko-investigation-readiness-worker }
+  - id: revalidate
+    description: "The relevant investigation workers verify only the claims the applied answers added or changed against the code; with no worker picked the node is skipped."
+    kind: llm
+    role: plan-worker
+    maxVisits: 4
+    agentsFrom: state.reval-workers.items
+    freshResults: true
+    parse: { line: [check, verdict, count, detail] }
+    prompt: |
+      Re-validation after decisions of grill batch {{state.grill-round.count}} in {{state.feature.feature.featureDir}} (project {{input.project}}): verify only these new or changed claims against the codebase with file:line evidence; do not re-check claims verified earlier. Read only.
+      {{#state.grill-apply.grill-apply.changes}}
+      - {{.}}
+      {{/state.grill-apply.grill-apply.changes}}
+      When the list above is empty, verify every new or changed claim since the last closed batch in tracker.md.
+      End with one line: `findings | <none|found> | <count> | <unverified or false claims, semicolon separated>`.
+  - id: fold-reval
+    description: "Plan editor folds the re-validation findings into the plan."
+    kind: llm
+    role: planner
+    skill: olko-plan-editor
+    tools: [read, edit]
+    maxVisits: 4
+    parse: text
+    prompt: |
+      Fold only these verified re-validation findings into {{state.feature.feature.featureDir}} (project {{input.project}}); edit only that folder.
+      {{#each.state.revalidate}}
+      {{key}}: {{value.verdict}} | {{value.detail}}
+      {{/each.state.revalidate}}
+  - id: gate-grill
+    description: "Consistency gate after the grill round."
+    kind: call
+    workflow: olko-plan-gate
+    maxVisits: 4
+    input: { featureDir: "{{state.feature.feature.featureDir}}" }
+edges:
+  - { from: grill-round, to: END, when: "grill-round.count == 4", description: "three rounds done: the rest stays in Open items" }
+  - { from: grill-round, to: grill, description: "fewer than three rounds" }
+  - { from: grill, to: END, when: "grill.grill.questions == 0", description: "no open question" }
+  - { from: grill, to: grill-review, description: "the batch has questions: the question reviewer checks them" }
+  - { from: grill-review, to: END, when: "grill-review.grill-review.questions == 0", description: "the reviewer rejected every question: none is put to the user" }
+  - { from: grill-review, to: grill-next, description: "approved questions remain" }
+  - { from: grill-next, to: ask-grill, when: "grill-next.done == false", description: "a question of the batch is left" }
+  - { from: grill-next, to: grill-record, when: "grill-next.done == true", description: "every question of the batch answered" }
+  - { from: ask-grill, to: grill-collect }
+  - { from: grill-collect, to: grill-next }
+  - { from: grill-record, to: grill-apply }
+  - { from: grill-apply, to: reval-workers }
+  - { from: reval-workers, to: revalidate }
+  - { from: revalidate, to: fold-reval, when: 'revalidate.flow.verdict == "found" || revalidate.runtime.verdict == "found" || revalidate.test.verdict == "found" || revalidate.readiness.verdict == "found"', description: "a worker found unverified claims" }
+  - { from: revalidate, to: gate-grill, description: "no worker found an unverified claim: run the consistency gate" }
+  - { from: fold-reval, to: gate-grill }
+  - { from: gate-grill, to: grill-round }

@@ -1,0 +1,142 @@
+name: olko-marketplace-skill-sync
+version: 0.6.0
+description: "Synchronizes project-local skills and OpenCode agents with the marketplace: compares every artifact and asks the test coverage advisor for missing tests, asks one decision per difference and one for the accepted test suggestions, applies, writes the accepted tests, publishes through a marketplace PR, installs after the merge, and then delivers the project-side changes through a second, separate local project PR. Every question to the user is composed by grill-with-docs in the user's response language; the workflow only puts it to the user."
+inputs: "project, the absolute path of the local project, optional marketplace, the absolute path of the marketplace checkout, and optional artifacts, the skill and agent names to sync."
+source: agents/opencode/olko-marketplace-skill-sync-manager.md (phases 1-6, user question gate, response language)
+roles:
+  bootstrap: low
+  adapter: medium
+  comparator: medium
+  sync: medium
+  publisher: medium
+  auditor: medium
+entry: sources
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: sources
+    description: "Prepares both sides: the marketplace path, memory and missing skills, and a safe, current marketplace checkout."
+    kind: group
+    workflow: olko-skill-sync-sources
+  - id: compare-phase
+    description: "Phase 2: discovers local skills and agents, adapts the skills locally, checks their versions and compares every artifact with its marketplace copy in parallel."
+    kind: group
+    workflow: olko-skill-sync-compare
+  - id: decide-phase
+    description: "Phase 3: one decision per non-identical artifact, with the actions its classification allows."
+    kind: group
+    workflow: olko-skill-sync-decide
+  - id: plan
+    description: "The sync manager collects your decisions, the accepted ones and the approved version and route of each one, and the accepted test suggestion ids per artifact, kept only for artifacts that exist in the marketplace after apply (dropped ids are listed). Changes nothing."
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    parse: { json: [decided, accepted, acceptedTests, droppedTests?] }
+    prompt: |
+      Phase 3 is answered. Collect the decisions only; change nothing and ask nothing.
+      Artifacts that needed a decision, with the question that asked for it:
+      {{#state.rows.rows.decide}}
+      - {{type}} {{name}}: {{classification}}; marketplace {{marketplaceVersion}}; proposed {{nextVersion}}; question {{question}}
+      {{/state.rows.rows.decide}}
+      All artifacts:
+      {{state.rows.rows.table}}
+      Paths:
+      {{#state.discover.discover.compare}}
+      - {{type}} {{name}}: local {{localPath}}; marketplace {{marketplacePath}}
+      {{/state.discover.discover.compare}}
+      User answers by question id:
+      {{#each.answers}}
+      - {{key}}: {{value}}
+      {{/each.answers}}
+
+      The decision of an artifact is the answer to its question; an identical artifact has decision `none`, an unanswered one `unanswered`. `none`, `leave`, `reject` and `unanswered` are not accepted.
+      Route of an accepted decision: `revert-local` -> revert, `move-to-adapter` -> adapter, every other -> change.
+      Approved version: `adopt-<patch|minor|major>` -> the marketplace version bumped by that part (`1.0.0` when there is no marketplace version); `create` -> the proposed version; every other -> the marketplace version.
+      Test suggestions offered by the advisor: {{#state.rows.rows.testIds}}{{.}} {{/state.rows.rows.testIds}}
+      Accepted test suggestion ids (answer to q-tests): {{state.decide-tests.answer}}
+      `acceptedTests`: the answered ids that were offered, grouped by artifact (the name before `#`), one item per artifact with at least one id. Ignore ids that were not offered. `none`, an empty or an unanswered q-tests gives an empty list. Tests are not part of the artifact: they change no decision, route or version.
+      Keep an answered id only when its artifact exists in the marketplace after apply. Drop it, and list it in `droppedTests` with the reason, when its artifact's decision is `revert-local` (the suggestions describe the local copy that the revert discards), or when the artifact has marketplace `none` in Paths and its decision is not `create` (a local-only artifact stays out of the marketplace with leave, reject or unanswered). Keep it for an identical artifact and for every other decision on an artifact that already has a marketplace copy.
+
+      End with one ```json block:
+      {"decided": [{"type": "<skill|agent>", "name": "<name>", "classification": "<classification>", "decision": "<decision>"}], "accepted": [{"type": "<skill|agent>", "name": "<name>", "classification": "<classification>", "marketplaceVersion": "<x.y.z or none>", "decision": "<decision>", "route": "<change|revert|adapter>", "version": "<approved x.y.z>", "localPath": "<path>", "marketplacePath": "<path or none>"}], "acceptedTests": [{"id": "<artifact name>", "name": "<artifact name>", "ids": ["<accepted suggestion id>"]}], "droppedTests": [{"id": "<dropped suggestion id>", "reason": "<why its artifact is not in the marketplace after apply>"}]}
+  - id: apply-phase
+    description: "Phase 4: applies one accepted decision at a time: marketplace change, move-to-adapter with draft and approval, or revert-local after a final confirmation."
+    kind: group
+    workflow: olko-skill-sync-apply
+  - id: tests-gate
+    description: "Routes on whether any test suggestion was accepted, after the accepted artifact changes are applied."
+    kind: script
+    op: builtin.pass
+  - id: tests-apply
+    description: "One test coverage advisor per artifact with accepted suggestions writes those tests in the marketplace (apply mode), after the artifact changes and before publish. The tests go into the marketplace pull request and cause no version bump. Its reply is kept as text, so a malformed reply never fails the run; it never blocks the sync."
+    kind: llm
+    role: auditor
+    agent: olko-test-coverage-advisor
+    agentsFrom: state.plan.plan.acceptedTests
+    tools: [read, edit, bash]
+    dirs: ["{{state.resolve-path.resolve-path.path}}"]
+    parse: text
+    prompt: |
+      Mode: apply. Write only test files and test fixtures; do not commit, push or call gh.
+      testsRoot: {{state.resolve-path.resolve-path.path}}
+      Artifact name: {{agent.name}}
+      accepted: {{#agent.ids}}{{.}} {{/agent.ids}}
+      artifacts (find the one named {{agent.name}}):
+      {{#state.discover.discover.compare}}
+      - {{type}} {{name}}: local {{localPath}}; marketplace {{marketplacePath}}
+      {{/state.discover.discover.compare}}
+      Suggest reports from the suggest step, by artifact (use only the accepted ids of {{agent.name}}):
+      {{#each.state.tests}}
+      - {{key}}:
+      {{value}}
+      {{/each.state.tests}}
+
+      Follow your `apply` steps for the accepted ids only: write each test in its target file inside testsRoot, run `node --test <file>` for each file you touched, run the vacuity check for each new test and restore its exact text, and keep a test that fails on the current code with `{ todo: "<reason>" }`.
+      End with one ```json block:
+      {"written": ["<test file path>"], "results": [{"id": "<suggestion id>", "status": "<pass|todo>", "vacuityChecked": <true|false>}]}
+  - id: publish-phase
+    description: "Phase 5 and phase 6: validates the marketplace, publishes through olko-commit after approval, then leave, wait for CI or squash merge, installs after the merge, and delivers the local project pull request last."
+    kind: group
+    workflow: olko-skill-sync-publish
+  - id: report
+    description: "The sync manager reports every artifact with its classification and decision, and what was published, merged, installed and delivered locally. Changes nothing."
+    kind: llm
+    role: sync
+    agent: olko-marketplace-skill-sync-manager
+    parse: text
+    prompt: |
+      Write the final report of this sync run. Change nothing.
+      Marketplace: {{state.resolve-path.resolve-path.path}} at {{#state.safe-source.safe-source.head}}{{state.safe-source.safe-source.head}}{{/state.safe-source.safe-source.head}}{{^state.safe-source.safe-source.head}}an unknown head{{/state.safe-source.safe-source.head}}
+      Decisions:
+      {{#state.plan.plan.decided}}
+      - {{type}} {{name}}: {{classification}} -> {{decision}}
+      {{/state.plan.plan.decided}}
+      {{#state.tests-apply}}Test coverage advisor apply reports (name the test files and the result per id from them):
+      {{#each.state.tests-apply}}
+      - {{key}}:
+      {{value}}
+      {{/each.state.tests-apply}}
+      {{/state.tests-apply}}
+      {{#state.plan.plan.droppedTests}}Dropped test suggestion: {{id}} ({{reason}})
+      {{/state.plan.plan.droppedTests}}
+      {{#state.validate}}Validation: {{state.validate.validate.summary}} (changed files: {{state.validate.validate.changed}}).{{/state.validate}}{{^state.validate}}Marketplace, branches and installs: unchanged.{{/state.validate}}
+      {{#state.publish}}Marketplace pull request: {{state.publish.publish.url}}.{{/state.publish}}
+      {{#state.pr.merge}}Squash merged as {{state.pr.merge.merge.commit}}.{{/state.pr.merge}}
+      {{#state.install}}Install: {{#state.install.install.lines}}{{.}}; {{/state.install.install.lines}}{{/state.install}}
+      {{#state.local-commit}}Local pull request: {{state.local-commit.local-commit.url}}.{{/state.local-commit}}
+
+      Report one line per artifact with its classification and decision, then the outcome: what was published, merged and installed, and the local delivery. Follow your two-pull-request contract: do not report the run complete while only one of the two deliveries exists, and say explicitly when the local pull request was omitted because no local file was written.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{state.discover.discover.project}} (unset: the language of the user's latest message); an explicit language request from the user in this conversation overrides it. Write the report concisely in that language; keep IDs, names, versions and URLs exactly as given. Ask the user nothing.
+edges:
+  - { from: sources, to: compare-phase }
+  - { from: compare-phase, to: decide-phase }
+  - { from: decide-phase, to: plan }
+  - { from: plan, to: apply-phase, when: "plan.plan.accepted > 0", description: "some decisions change something" }
+  - { from: plan, to: tests-apply, when: "plan.plan.acceptedTests > 0", description: "no decision changes anything, but some test suggestions are accepted: write and publish the tests" }
+  - { from: plan, to: report, description: "every decision is leave or reject and no test suggestion is accepted" }
+  - { from: apply-phase, to: tests-gate, description: "accepted artifact changes applied" }
+  - { from: tests-gate, to: tests-apply, when: "plan.plan.acceptedTests > 0", description: "some test suggestions are accepted: write them before publish" }
+  - { from: tests-gate, to: publish-phase, description: "no test suggestion is accepted" }
+  - { from: tests-apply, to: publish-phase, description: "tests written; the advisor never blocks publish" }
+  - { from: publish-phase, to: report }
+  - { from: report, to: END }

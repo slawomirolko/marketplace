@@ -59,6 +59,10 @@ The `.agents/context/` directory lives in the consuming project, not in this mar
 
 `memory/<skill>.md` holds accumulated knowledge about how a skill applies to the project (e.g. test command, framework). Committing it benefits the whole team; the scratchpad, summaries, and cache are overwritten or regenerated and should stay local. If you prefer fully reproducible rebuilds via `conventionDiscovery`, ignore all of `.agents/context/` instead.
 
+## Skill factory (proof of concept)
+
+[`factory/`](factory/README.md) holds a harness-agnostic factory prototype: an MCP server that owns the workflow loop, user questions and cost, with Claude Code, Codex, OpenCode or LangGraph as thin clients.
+
 ## Registry maintenance
 
 Validate the root registry, generated category indexes, capability graph, and search index:

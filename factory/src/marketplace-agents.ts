@@ -1,0 +1,203 @@
+import fs from "node:fs";
+import path from "node:path";
+import { parse as parseYaml } from "yaml";
+import { DEFAULT_MEMORY_LAYER } from "./config.ts";
+import { FACTORY_DIR } from "./paths.ts";
+
+/** The alphabet of agent and skill names; a name is also a file name and a CLI argument. */
+export const AGENT_NAME = /^[a-z0-9-]+$/;
+
+export interface MarketplaceSkill {
+  name: string;
+  file: string;
+}
+
+export interface MarketplaceAgent {
+  name: string;
+  description: string;
+  prompt: string;
+  file: string;
+  frontmatter: string;
+  skills: MarketplaceSkill[];
+  dirs: string[];
+  skillDir?: string;
+  pluginRoot?: string;
+}
+
+interface Frontmatter {
+  description?: string;
+  permission?: { skill?: Record<string, string> };
+  skills?: string[];
+}
+
+export function marketplaceDir(): string {
+  return process.env.FACTORY_MARKETPLACE_DIR ?? path.join(FACTORY_DIR, "..");
+}
+
+function readFrontmatter(file: string): { front: Frontmatter; raw: string; body: string } {
+  const text = fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n");
+  const match = text.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  if (!match?.[1] || match[2] === undefined) throw new Error(`${file}: no frontmatter`);
+  return { front: parseYaml(match[1]) as Frontmatter, raw: match[1], body: match[2].trim() };
+}
+
+function findSkill(name: string): string | undefined {
+  const root = path.join(marketplaceDir(), "skills");
+  if (!fs.existsSync(root)) return undefined;
+  for (const category of fs.readdirSync(root)) {
+    const file = path.join(root, category, name, "SKILL.md");
+    if (fs.existsSync(file)) return file;
+  }
+  const plugins = path.join(marketplaceDir(), "plugins");
+  if (!fs.existsSync(plugins)) return undefined;
+  return fs.readdirSync(plugins).map((p) => path.join(plugins, p, "skills", name, "SKILL.md")).find((f) => fs.existsSync(f));
+}
+
+function findPluginAgent(name: string): string | undefined {
+  const plugins = path.join(marketplaceDir(), "plugins");
+  if (!fs.existsSync(plugins)) return undefined;
+  return fs.readdirSync(plugins).map((p) => path.join(plugins, p, "agents", `${name}.md`)).find((f) => fs.existsSync(f));
+}
+
+function findPluginSkill(ref: string, pluginRoot: string): string | undefined {
+  const [plugin, skill] = ref.includes(":") ? (ref.split(":", 2) as [string, string]) : [path.basename(pluginRoot), ref];
+  const file = path.join(marketplaceDir(), "plugins", plugin, "skills", skill, "SKILL.md");
+  return fs.existsSync(file) ? file : findSkill(skill);
+}
+
+function withPluginRoot(text: string, pluginRoot: string | undefined): string {
+  return pluginRoot ? text.split("${CLAUDE_PLUGIN_ROOT}").join(pluginRoot) : text;
+}
+
+function declaredSkills(name: string, front: Frontmatter): string[] {
+  const allowed = Object.entries(front.permission?.skill ?? {}).filter(([skill, rule]) => skill !== "*" && rule === "allow").map(([skill]) => skill);
+  const manifest = path.join(marketplaceDir(), "agents", "opencode", "index.json");
+  const listed = fs.existsSync(manifest) ? ((JSON.parse(fs.readFileSync(manifest, "utf8")).agents as { name: string; skills?: string[] }[]).find((a) => a.name === name)?.skills ?? []) : [];
+  return [...new Set([...allowed, ...listed])];
+}
+
+function skillsSection(skills: MarketplaceSkill[], missing: string[], pluginRoot?: string): string {
+  const root = pluginRoot ? `\n\nCLAUDE_PLUGIN_ROOT is ${pluginRoot}; use that path wherever a skill or these instructions write \${CLAUDE_PLUGIN_ROOT}.` : "";
+  if (!skills.length && !missing.length) return root;
+  const lines = skills.map((s) => `- ${s.name}: ${s.file}`);
+  const absent = missing.length ? `\nNot in the marketplace, so not available in this run: ${missing.join(", ")}.` : "";
+  return `${root}\n\nSkills: when these instructions load a skill or say a skill is preloaded, read its SKILL.md from the marketplace path below and follow it, not through the Skill tool and not from an installed copy. Files a skill names are next to its SKILL.md.\n${lines.join("\n")}${absent}`;
+}
+
+/** The skills found in the marketplace for the given names, and the names that were not found. */
+function resolveSkills(names: string[], find: (name: string) => string | undefined): { skills: MarketplaceSkill[]; missing: string[] } {
+  const skills = names.flatMap((name) => {
+    const found = find(name);
+    return found ? [{ name, file: found }] : [];
+  });
+  return { skills, missing: names.filter((name) => !skills.some((skill) => skill.name === name)) };
+}
+
+export function readMarketplaceAgent(name: string): MarketplaceAgent {
+  if (!AGENT_NAME.test(name)) throw new Error(`invalid agent name ${name}`);
+  const file = path.join(marketplaceDir(), "agents", "opencode", `${name}.md`);
+  if (fs.existsSync(file)) {
+    const { front, raw, body } = readFrontmatter(file);
+    const { skills, missing } = resolveSkills(declaredSkills(name, front), findSkill);
+    return { name, description: front.description ?? name, prompt: body + skillsSection(skills, missing), file, frontmatter: raw, skills, dirs: skills.map((s) => path.dirname(s.file)) };
+  }
+  const pluginFile = findPluginAgent(name);
+  if (pluginFile) {
+    const pluginRoot = path.dirname(path.dirname(pluginFile));
+    const { front, raw, body } = readFrontmatter(pluginFile);
+    const { skills, missing } = resolveSkills(front.skills ?? [], (ref) => findPluginSkill(ref, pluginRoot));
+    return { name, description: front.description ?? name, prompt: withPluginRoot(body, pluginRoot) + skillsSection(skills, missing, pluginRoot), file: pluginFile, frontmatter: raw, skills, dirs: [pluginRoot, ...skills.map((s) => path.dirname(s.file))], pluginRoot };
+  }
+  const skillFile = findSkill(name);
+  if (!skillFile) throw new Error(`agent or skill ${name} is not in the marketplace (${file})`);
+  const skillDir = path.dirname(skillFile);
+  const inPlugin = path.basename(path.dirname(path.dirname(path.dirname(skillDir)))) === "plugins";
+  const pluginRoot = inPlugin ? path.dirname(path.dirname(skillDir)) : undefined;
+  const { front, body } = readFrontmatter(skillFile);
+  const prompt = `Follow the skill ${name} below for the task in the user message. The skill directory is ${skillDir}; read the files it names from there.\n\n${withPluginRoot(body, pluginRoot)}${skillsSection([], [], pluginRoot)}`;
+  return { name, description: front.description ?? name, prompt, file: skillFile, frontmatter: "", skills: [], dirs: pluginRoot ? [pluginRoot, skillDir] : [skillDir], skillDir, ...(pluginRoot ? { pluginRoot } : {}) };
+}
+
+export interface SkillScript {
+  skill: string;
+  name: string;
+  file: string;
+}
+
+export interface AgentInfo {
+  name: string;
+  kind: "agent" | "plugin-agent" | "skill";
+  description: string;
+  file: string;
+  skills: { name: string; description: string; file: string }[];
+  scripts: SkillScript[];
+  missing: string[];
+  memoryLayer: boolean;
+  asks: string | null;
+}
+
+/** The permission that lets an agent ask the user itself: OpenCode `question: allow` or a Claude Code `AskUserQuestion` tool. */
+function askPermission(frontmatter: string): string | null {
+  if (!frontmatter) return null;
+  const front = parseYaml(frontmatter) as { permission?: { question?: unknown }; tools?: unknown };
+  if (front.permission?.question === "allow") return "question: allow";
+  const tools = Array.isArray(front.tools) ? front.tools.map(String) : String(front.tools ?? "").split(",").map((t) => t.trim());
+  return tools.includes("AskUserQuestion") ? "AskUserQuestion tool" : null;
+}
+
+function skillDescription(file: string): string {
+  try {
+    return String(readFrontmatter(file).front.description ?? "").replace(/\s+/g, " ").trim();
+  } catch {
+    return "";
+  }
+}
+
+function skillScripts(skill: string, skillFile: string): { skill: string; name: string; path: string }[] {
+  const dir = path.join(path.dirname(skillFile), "scripts");
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && !/\.tests?\.[a-z0-9]+$/i.test(entry.name))
+    .map((entry) => ({ skill, name: entry.name, path: path.join(dir, entry.name) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function describeAgent(name: string, memoryLayer: string = DEFAULT_MEMORY_LAYER): AgentInfo | null {
+  let agent: MarketplaceAgent;
+  try {
+    agent = readMarketplaceAgent(name);
+  } catch {
+    return null;
+  }
+  const root = marketplaceDir();
+  const rel = (f: string) => path.relative(root, f).split(path.sep).join("/");
+  const kind = agent.skillDir ? "skill" : agent.pluginRoot ? "plugin-agent" : "agent";
+  const declared = kind === "skill" ? [] : agent.skills;
+  const scripts = kind === "skill" ? skillScripts(name, agent.file) : declared.flatMap((s) => skillScripts(s.name, s.file));
+  const fromPrompt = agent.prompt.match(/Not in the marketplace, so not available in this run: ([^\n]+)\./)?.[1]?.split(", ") ?? [];
+  return {
+    name,
+    kind,
+    description: String(agent.description).replace(/\s+/g, " ").trim(),
+    file: rel(agent.file),
+    skills: declared.map((s) => ({ name: s.name, description: skillDescription(s.file), file: rel(s.file) })),
+    scripts: scripts.map((s) => ({ skill: s.skill, name: s.name, file: rel(s.path) })),
+    missing: fromPrompt,
+    asks: askPermission(agent.frontmatter),
+    memoryLayer: kind !== "skill" && [...declared.map((s) => s.name), ...fromPrompt].includes(memoryLayer),
+  };
+}
+
+/** An agent given by its instructions, for example a delegate work item, instead of by its marketplace name. */
+export type AgentDefinition = Pick<MarketplaceAgent, "name" | "description" | "prompt"> & Partial<MarketplaceAgent>;
+
+/** The neutral definition of an agent: the given definition after a name check, or the marketplace agent of that name. */
+export function agentDefinition(agent: string | AgentDefinition): AgentDefinition {
+  if (typeof agent !== "string") {
+    if (!AGENT_NAME.test(agent.name)) {
+      throw new Error(`invalid agent name ${agent.name}`);
+    }
+    return agent;
+  }
+  return readMarketplaceAgent(agent);
+}

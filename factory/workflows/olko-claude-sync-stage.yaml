@@ -1,0 +1,182 @@
+name: olko-claude-sync-stage
+version: 0.2.0
+description: "Phase 4 Wave C: the sync manager prepares one stage folder per approved row, one porter per row translates it there and runs the sanitize gate; the user decides every finding and every missing dependency, and the sync manager fixes the staged files."
+source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 4, steps 1 to 3)"
+roles:
+  sync-worker: low
+  sync: medium
+entry: stage-round
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: stage-round
+    description: "Counts the staging waves; a second wave stages the missing dependencies the user added."
+    kind: script
+    op: builtin.count
+    maxVisits: 2
+  - id: stage-plan
+    description: "The sync manager makes one empty stage folder per row to port (per added dependency in the second wave) and lists the porter jobs."
+    kind: llm
+    role: sync
+    agent: olko-claude-sync-manager
+    tools: [read, bash]
+    maxVisits: 2
+    parse: { json: [stageRoot, wave, items] }
+    prompt: |
+      Prepare wave {{state.stage-round.count}} of Wave C in your Phase 4. Ask nothing and dispatch no porter: the factory dispatches one porter per job you list.
+      {{#state.stage-plan}}Reuse the stage root {{state.stage-plan.stage-plan.stageRoot}}.{{/state.stage-plan}}{{^state.stage-plan}}Make one new empty stage root with `mktemp -d`.{{/state.stage-plan}} Make one new empty stage directory per job inside the stage root.
+      {{^state.findings}}
+      Jobs: one per approved change row.
+      {{#state.plan.plan.changes}}
+      - {{id}} ({{kind}}): {{decision}}, proposed Olko version {{nextVersion}}
+      {{/state.plan.plan.changes}}
+      Copies per capability:
+      {{#state.exclusions.exclusions.compare}}
+      - {{id}}: {{copiesText}}
+      {{/state.exclusions.exclusions.compare}}
+      Direction and source: port-to-olko and take-target go to-olko from the target copy; publish-to-olko goes to-olko from the user copy; install-user, update-user, revert-user and take-olko go to-user from the Olko copy. take-target, take-olko and revert-user overwrite the existing copy. existing is the Olko copy for to-olko and the user copy for to-user, or none. version: the Olko version for to-user; for a decision with a bump, the Olko version raised by that bump (from 0.0.0 when there is none); otherwise the proposed Olko version, 1.0.0 when it is not SemVer.
+      {{/state.findings}}
+      {{#state.findings}}
+      Jobs: one install-user job per missing dependency the user added. q-claude-sync-missing-<id> is the user's answer; install-user adds the job, with direction to-user, source its Olko path, source store olko, existing none, overwrite false and version none.
+      {{#state.findings.findings.missing}}
+      - {{id}}: {{kind}} {{name}} at {{olkoPath}}
+      {{/state.findings.findings.missing}}
+      {{#each.answers}}
+      - {{key}}: {{value}}
+      {{/each.answers}}
+      Jobs of the earlier waves:
+      {{#state.stage-plan.stage-plan.items}}
+      - {{id}} {{kind}} {{name}} {{decision}} {{direction}} {{sourceStore}} {{source}} existing {{existing}} overwrite {{overwrite}} version {{version}} stage {{stageDir}}
+      {{/state.stage-plan.stage-plan.items}}
+      {{/state.findings}}
+      End with one ```json block. wave lists the jobs of this wave; items lists the jobs of the earlier waves, then this wave:
+      {"stageRoot": "<absolute stage root>", "wave": [{"id": "<capability id, or <kind>-<name> for a dependency>", "kind": "skill|agent", "name": "<artifact name>", "decision": "<decision>", "direction": "to-olko|to-user", "source": "<absolute source path>", "sourceStore": "target|olko|user", "existing": "<absolute path or none>", "overwrite": false, "version": "<version>", "stageDir": "<absolute stage directory>"}], "items": []}
+  - id: stage
+    description: "One porter per job translates it into its stage folder and runs the sanitize gate."
+    kind: llm
+    role: sync-worker
+    agent: olko-claude-sync-porter
+    agentsFrom: state.stage-plan.stage-plan.wave
+    tools: [read, edit, bash]
+    dirs: ["{{state.setup.setup.target}}", "{{state.setup.setup.olko}}", "{{state.setup.setup.user}}", "{{state.setup.setup.stateDir}}", "{{agent.stageDir}}"]
+    maxVisits: 2
+    parse: { json: [name, stagedPath, findings, missing, blockers, entry?, category?] }
+    prompt: |
+      Source path: {{agent.source}}
+      Direction: {{agent.direction}}
+      Existing copy: {{agent.existing}}
+      Stage directory: {{agent.stageDir}}
+      Approved version: {{agent.version}}
+      Sync state directory: {{state.setup.setup.stateDir}} (pass --state-dir with it to sync-state.mjs)
+      The Olko checkout is {{state.setup.setup.olko}}; the user scope `~/.claude` is {{state.setup.setup.user}}. Write only inside the stage directory.
+      Stage the files even when the sanitize gate has findings: the manager asks the user about each finding before anything leaves the stage. Put every finding in `findings` and every missing dependency in `missing`, never in `blockers`. A blocker is only a failure that makes staging impossible (unreadable source, no stage written). The approved version for a to-user port is the Olko version; keep it.
+
+      After your report, end with one ```json block in this exact shape:
+      {"name": "<name of the staged artifact>", "stagedPath": "<absolute path of the staged skill directory or agent file>", "findings": [{"file": "<staged file>", "line": 1, "category": "<leak term #n or category>", "replacement": "<proposed generic replacement>"}], "missing": ["skill:<name>", "agent:<name>"], "entry": null, "category": null, "blockers": []}
+      entry is your proposed registry.json or agents/opencode/index.json entry, category your proposed Olko skill category.
+  - id: findings
+    description: "The sync manager collects the porters' sanitize findings, missing dependencies and blockers of this wave."
+    kind: llm
+    role: sync
+    agent: olko-claude-sync-manager
+    dirs: ["{{state.setup.setup.olko}}", "{{state.setup.setup.user}}"]
+    maxVisits: 2
+    parse: { json: [findings, missing, blocked] }
+    prompt: |
+      Do only the collection in steps 2 and 3 of your Phase 4 for wave {{state.stage-round.count}}. Ask nothing and fix nothing yet: the factory asks the user each finding and each missing dependency.
+      Jobs of this wave:
+      {{#state.stage-plan.stage-plan.wave}}
+      - {{id}}: {{direction}} {{kind}} from {{source}}, stage {{stageDir}}
+      {{/state.stage-plan.stage-plan.wave}}
+      Porter reports (only the jobs of this wave count):
+      {{#each.state.stage}}
+      ### {{key}}
+      {{value.text}}
+      {{/each.state.stage}}
+      A missing dependency is a skill or agent a to-user job needs that is not in the user scope {{state.setup.setup.user}}. Give its Olko path (its skill directory under {{state.setup.setup.olko}}/skills or {{state.setup.setup.olko}}/plugins, or its agent file). Leave out one that is not in Olko, one that already is a job, and duplicates.
+      blocked lists the porter blockers of this wave as `<job id>: <blocker>`; a blocker stops the run before anything is applied.
+      End with one ```json block:
+      {"findings": [{"id": "w{{state.stage-round.count}}-<n>", "item": "<job id>", "line": "<job id> <file>:<line> — <category> — proposed: <replacement>"}], "missing": [{"id": "<kind>-<name>", "kind": "skill|agent", "name": "<name>", "olkoPath": "<absolute path>", "line": "<kind> <name>, needed by <job id>"}], "blocked": []}
+  - id: stop-blocked
+    description: "Stops the run: a porter could not stage its row; nothing was applied."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Porter blockers, nothing applied: the findings step lists them in blocked." }
+  - id: finding-next
+    description: "Takes the next sanitize finding."
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: findings.findings.findings }
+  - id: ask-finding
+    description: "Asks: replace, delete, keep, or skip the row."
+    kind: interrupt
+    askedBy: findings
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-finding-{{state.finding-next.item.id}}"
+      text: "Sanitize finding {{state.finding-next.number}} of {{state.finding-next.total}}:\n{{state.finding-next.item.line}}\n\nreplace uses the proposed generic text, delete removes the line, keep leaves it (it then reaches Olko), skip-row drops this row from the sync."
+      allowed: [replace, delete, keep, skip-row]
+  - id: fix
+    description: "The sync manager fixes the staged files as the user decided, in the stage folders only."
+    kind: llm
+    role: sync
+    agent: olko-claude-sync-manager
+    tools: [read, edit]
+    dirs: ["{{state.stage-plan.stage-plan.stageRoot}}"]
+    maxVisits: 2
+    parse: { json: [skipped] }
+    prompt: |
+      Do only the fixes in step 2 of your Phase 4: fix the staged files yourself as the user decided. Write only inside the stage directories below; ask nothing.
+      Findings of this wave:
+      {{#state.findings.findings.findings}}
+      - {{id}} | {{line}}
+      {{/state.findings.findings.findings}}
+      Stage directories:
+      {{#state.stage-plan.stage-plan.wave}}
+      - {{id}}: {{stageDir}}
+      {{/state.stage-plan.stage-plan.wave}}
+      The user's answers. q-claude-sync-finding-<finding id> is the decision: replace puts the proposed generic text in place, delete removes the line, keep and skip-row change nothing (skip-row drops the whole row).
+      {{#each.answers}}
+      - {{key}}: {{value}}
+      {{/each.answers}}
+      Rows dropped in earlier waves: {{#state.fix.fix.skipped}}{{.}} {{/state.fix.fix.skipped}}
+      After the list of changed files, end with one ```json block: {"skipped": ["<every job id dropped by skip-row, earlier waves included>"]}
+  - id: missing-next
+    description: "Takes the next missing dependency."
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: findings.findings.missing }
+  - id: ask-missing
+    description: "Asks whether to add it as an install-user row."
+    kind: interrupt
+    askedBy: findings
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-missing-{{state.missing-next.item.id}}"
+      text: "Missing dependency in the user scope: {{state.missing-next.item.line}}. Add it as an install-user row?"
+      allowed: [install-user, leave]
+  - id: more-deps
+    description: "Counts the dependencies added as install-user rows."
+    kind: script
+    op: builtin.count
+    maxVisits: 200
+edges:
+  - { from: stage-round, to: stage-plan }
+  - { from: stage-plan, to: stage }
+  - { from: stage, to: findings }
+  - { from: findings, to: stop-blocked, when: "findings.findings.blocked > 0", description: "a porter could not stage its row" }
+  - { from: findings, to: finding-next, description: "every row staged" }
+  - { from: stop-blocked, to: END }
+  - { from: finding-next, to: ask-finding, when: "finding-next.done == false", description: "a finding is left" }
+  - { from: finding-next, to: fix, when: "findings.findings.findings > 0", description: "all findings decided: fix the staged files" }
+  - { from: finding-next, to: missing-next, description: "no sanitize finding" }
+  - { from: ask-finding, to: finding-next }
+  - { from: fix, to: missing-next }
+  - { from: missing-next, to: ask-missing, when: "missing-next.done == false", description: "a missing dependency is left" }
+  - { from: missing-next, to: stage-round, when: "more-deps.count > 0 && stage-round.count < 2", description: "new install-user rows to stage in a second wave" }
+  - { from: missing-next, to: END, description: "nothing more to stage" }
+  - { from: ask-missing, to: more-deps, when: 'ask-missing.answer == "install-user"', description: "you added it" }
+  - { from: ask-missing, to: missing-next, description: "you left it" }
+  - { from: more-deps, to: missing-next }

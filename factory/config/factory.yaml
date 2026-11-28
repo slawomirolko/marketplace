@@ -1,0 +1,92 @@
+# Factory configuration. It never names a model: the tier-to-model map is
+# proposed at run start from the backend and confirmed by the user.
+schemaVersion: 1
+tiers: [low, medium, high]
+backends:
+  - { id: claude-cli, kind: cli, cli: claude, discovery: ask_user }
+  - { id: opencode-cli, kind: cli, cli: opencode, discovery: list_models }
+  - { id: host-subagent, kind: delegate }
+roles:
+  planner: high
+  implementer: medium
+  reviewer: medium
+  accountant: low
+  lens: medium
+  verifier: medium
+  rules: medium
+  feedback: medium
+  bootstrap: low
+  adapter: medium
+  comparator: medium
+  sync: medium
+  publisher: medium
+  sync-worker: low
+  backlog: medium
+  plan-worker: medium
+  writer: medium
+  plan-gate: medium
+  auditor: medium
+  runner: low
+  context: low
+budget:
+  maxCostUsd: 20
+  infoRatio: 0.5
+  pauseRatio: 0.8
+  onExceeded: ask_user
+switches:
+  tracker: true
+  editor: true
+  docker: true
+  obsidian: true
+  adopt: false
+# Marketplace skill that gives an agent persistent memory; the viewer marks agents that declare it.
+memoryLayer: olko-memory-layer
+# The post-run agent: it runs once after every run ends, reads the run summary the factory
+# makes from the run's events and ledger, and ends its output with the verdict line.
+supervisor:
+  agent: olko-factory-supervisor
+  prompt: |-
+    Supervise this finished factory run. The JSON below is its summary, made by a script from the run's events and ledger; it is your only data.
+
+    ```json
+    {{summaryJson}}
+    ```
+  hostHint: "The run has ended. Run supervisorWork now in its own subagent like a pendingWork item (supervisorWork.prompt, supervisorWork.model, the agent supervisorWork.agentName with supervisorWork.agentInstructions), then call factory_submit with its output, nodePath and agentId. After that, call factory_report and show the user viewerUrl."
+  verdictLine: { prefix: supervise, verdicts: [ok, improve, fix] }
+# Local projects that use the marketplace. The project list and the root folders to search
+# are kept in ~/.skill-factory/projects.json, never in this repository.
+projects:
+  markers: [.agents/skill-config.md, .agents/skills, .opencode/agents, .claude/skills, .claude/agents]
+  maxDepth: 3
+  statusWorkflow: olko-project-status
+  mergeWorkflow: olko-marketplace-merge
+  # The viewer's Analyze button runs the status workflow on this CLI backend.
+  statusBackend: { kind: cli, cli: opencode }
+
+# Interval watches. Each one runs its command per known project (the registered projects,
+# the `dirs` list of projects.json in the data dir and every run's input.project), and starts one run of its workflow per item
+# that stayed the same for stableChecks checks. The run stops at its first question,
+# so nothing happens until you answer it in the viewer. The viewer process runs them.
+# A change you already approved (for example applied by a marketplace merge) skips the question
+# of olko-marketplace-upstream only when its own lock check (olko-marketplace-lock.mjs approved)
+# confirms the recorded approval and the unchanged copy; the sanitize gate still runs.
+watches:
+  - id: marketplace-upstream
+    everyMinutes: 10
+    stableChecks: 2
+    command: ["{{node}}", "{{marketplace}}/scripts/olko-marketplace-lock.mjs", status, --project, "{{project}}", --marketplace, "{{marketplace}}", --json]
+    projectsWhen: .agents/marketplace.lock.json
+    items: changed
+    skipWhen: [rejected, pending]
+    key: "{{item.artifact}}@{{item.contentHash}}"
+    workflow: olko-marketplace-upstream
+    goal: "Upstream {{item.artifact}} changed in {{projectName}}"
+    input:
+      project: "{{project}}"
+      marketplace: "{{marketplace}}"
+      artifact: "{{item.artifact}}"
+      contentHash: "{{item.contentHash}}"
+      base: "{{item.base}}"
+      files: "{{item.files}}"
+      approved: "{{item.approved}}"
+    backend: { kind: cli, cli: opencode }

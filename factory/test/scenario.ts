@@ -1,0 +1,281 @@
+import assert from "node:assert/strict";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import http from "node:http";
+import type { IncomingHttpHeaders } from "node:http";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { Report, RunStatusView } from "../src/types.ts";
+import { fakeRunSteps } from "./helpers/fake-steps.ts";
+import { pollUntil } from "./helpers/poll.ts";
+
+type Payload = Partial<RunStatusView> & Partial<Omit<Report, keyof RunStatusView>> & {
+  runId: string;
+  error?: string;
+  reused?: boolean;
+  duplicate?: boolean;
+  timedOut?: boolean;
+  viewerUrl?: string;
+  trace?: string;
+};
+
+interface HttpResult {
+  status: number | undefined;
+  headers: IncomingHttpHeaders;
+  body: string;
+}
+
+const URL_ = process.env.FACTORY_URL ?? "http://127.0.0.1:7340/mcp";
+const TOKEN = process.env.FACTORY_TOKEN;
+const results: { name: string; outcome: "pass" | "fail" | "skip" }[] = [];
+
+/** Thrown by skip(): the check could not run here, which is reported as SKIP, never as PASS. */
+class SkippedCheck extends Error {}
+
+function skip(reason: string): never {
+  throw new SkippedCheck(reason);
+}
+
+async function check(name: string, fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn();
+    results.push({ name, outcome: "pass" });
+    console.log(`PASS  ${name}`);
+  } catch (error) {
+    const skipped = error instanceof SkippedCheck;
+    results.push({ name, outcome: skipped ? "skip" : "fail" });
+    console.log(`${skipped ? "SKIP" : "FAIL"}  ${name}\n      ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+async function connect(token = TOKEN): Promise<Client> {
+  const client = new Client({ name: "scenario-test", version: "0.1.0" });
+  const transport = new StreamableHTTPClientTransport(new URL(URL_), {
+    requestInit: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  await client.connect(transport);
+  return client;
+}
+
+async function call(client: Client, name: string, args: Record<string, unknown>): Promise<{ payload: Payload; isError: boolean }> {
+  const res = (await client.callTool({ name, arguments: args })) as CallToolResult;
+  const first = res.content[0];
+  const payload = (res.structuredContent ?? JSON.parse(first?.type === "text" ? first.text : "{}")) as Payload;
+  return { payload, isError: Boolean(res.isError) };
+}
+
+/** factory_status goes over HTTP: slower than in-process polling, so a wider interval and limit. */
+const STATUS_POLL = { intervalMs: 30, timeoutMs: 10000 };
+
+function statusReaches(client: Client, runId: string, statuses: string[]): Promise<Payload> {
+  return pollUntil(async () => (await call(client, "factory_status", { runId })).payload, statuses, {
+    ...STATUS_POLL,
+    check: (payload) => assert.ok(payload.cost, "every status response carries the cost footer"),
+  });
+}
+
+/** The states a fake run stops in before it ends: a question, the end, or a stop. */
+const STOPPING = ["waiting_for_user", "done", "stopped"];
+
+/**
+ * Answers the endpoint question when the run stopped at it and waits for the next stop; returns any other state as it
+ * is. A budget run reaches its pause either before or after that question, depending on how the fake costs add up.
+ */
+async function answerEndpointIfAsked(client: Client, runId: string, state: Payload): Promise<Payload> {
+  if (state.pendingQuestion?.id !== "q-endpoint") {
+    return state;
+  }
+  await call(client, "factory_answer", { runId, questionId: "q-endpoint", answer: "new" });
+  return statusReaches(client, runId, STOPPING);
+}
+
+const client = await connect();
+
+try {
+  await check("tools are listed", async () => {
+    const { tools } = await client.listTools();
+    const names = tools.map((t) => t.name).sort();
+    assert.deepEqual(names, ["factory_answer", "factory_cancel", "factory_confirm", "factory_install_guide", "factory_next", "factory_projects", "factory_report", "factory_start", "factory_status", "factory_submit", "factory_trace", "factory_wait"]);
+  });
+
+  await check("wrong token is rejected with 401", async () => {
+    const res = await fetch(URL_, { method: "POST", headers: { Authorization: "Bearer wrong", "content-type": "application/json" }, body: "{}" });
+    assert.equal(res.status, 401);
+  });
+
+  let runId = "";
+  await check("start returns proposal waiting for confirmation (no model names in config, tiers only)", async () => {
+    const { payload } = await call(client, "factory_start", { goal: "hello feature", idempotencyKey: "k-1" });
+    runId = payload.runId;
+    assert.equal(payload.status, "needs_confirmation");
+    assert.deepEqual(payload.proposal?.roles, { planner: "high", implementer: "medium", reviewer: "medium", accountant: "low" });
+    assert.equal(payload.cost?.costUsd, 0);
+  });
+
+  await check("start is idempotent for the same key", async () => {
+    const { payload } = await call(client, "factory_start", { goal: "hello feature", idempotencyKey: "k-1" });
+    assert.equal(payload.runId, runId);
+    assert.equal(payload.reused, true);
+  });
+
+  await check("confirm starts run asynchronously and it pauses on the node question", async () => {
+    const { payload } = await call(client, "factory_confirm", { runId });
+    assert.equal(payload.status, "running");
+    const waiting = await statusReaches(client, runId, ["waiting_for_user"]);
+    assert.equal(waiting.pendingQuestion?.id, "q-endpoint");
+    assert.equal(waiting.currentNode, "hello/build/implement");
+    assert.ok((waiting.cost?.costUsd ?? 0) > 0, "cost already visible while waiting");
+  });
+
+  await check("invalid answer is rejected by the question schema", async () => {
+    const { isError, payload } = await call(client, "factory_answer", { runId, questionId: "q-endpoint", answer: "maybe" });
+    assert.equal(isError, true);
+    assert.match(payload.error ?? "", /invalid answer/);
+  });
+
+  await check("answer resumes the same node; repeated answer is idempotent", async () => {
+    const first = await call(client, "factory_answer", { runId, questionId: "q-endpoint", answer: "extend" });
+    assert.equal(first.payload.duplicate, false);
+    const second = await call(client, "factory_answer", { runId, questionId: "q-endpoint", answer: "extend" });
+    assert.equal(second.payload.duplicate, true);
+    const done = await statusReaches(client, runId, ["done", "stopped", "cancelled"]);
+    assert.equal(done.status, "done");
+  });
+
+  await check("report: steps and cost per node and tier add up to the footer", async () => {
+    const { payload } = await call(client, "factory_report", { runId });
+    const byNode = payload.byNode ?? {};
+    const cost = payload.cost;
+    assert.ok(cost);
+    const sumNodes = Object.values(byNode).reduce((s, n) => s + n.costUsd, 0);
+    const sumSteps = Object.values(byNode).reduce((s, n) => s + n.steps, 0);
+    assert.ok(Math.abs(sumNodes - cost.costUsd) < 0.001, `nodes ${sumNodes} vs total ${cost.costUsd}`);
+    assert.equal(sumSteps, cost.steps);
+    assert.equal(cost.steps, fakeRunSteps("hello") + (payload.supervisor ? 1 : 0), "every hello step once, plus the post-run supervisor when it ran");
+    assert.deepEqual(Object.keys(payload.byTier ?? {}).sort(), ["high", "low", "medium", "script"]);
+    assert.equal(byNode["hello/build/verify"]?.costUsd, 0);
+    assert.equal(payload.synthetic, true, "a fake model run is marked synthetic");
+    console.log(`      total $${cost.costUsd}, tokens ${cost.tokens}, steps ${cost.steps}`);
+  });
+
+  await check("trace shows nested node paths and the user question event", async () => {
+    const { payload } = await call(client, "factory_trace", { runId });
+    const trace = payload.trace ?? "";
+    assert.match(trace, /hello\/build\/implement/);
+    assert.match(trace, /event needs_input/);
+    console.log(trace.split("\n").map((l) => `      ${l}`).join("\n"));
+  });
+
+  await check("budget: info at 50%, pause at 80% asks the user, 'stop' stops the run", async () => {
+    const { payload } = await call(client, "factory_start", { goal: "budget test" });
+    const id = payload.runId;
+    await call(client, "factory_confirm", { runId: id, overrides: { budget: { maxCostUsd: 0.45 } } });
+    const state = await answerEndpointIfAsked(client, id, await statusReaches(client, id, STOPPING));
+    assert.equal(state.pendingQuestion?.id, "q-budget-pause", `expected budget pause, got ${state.status}`);
+    assert.ok(state.cost?.warnings.includes("budget threshold: info"));
+    assert.ok((state.cost?.budgetRatio ?? 0) >= 0.8);
+    await call(client, "factory_answer", { runId: id, questionId: "q-budget-pause", answer: "stop" });
+    const end = await statusReaches(client, id, ["stopped", "done"]);
+    assert.equal(end.status, "stopped");
+  });
+
+  await check("factory_wait: run reaches the question and the end with 2 waits, no status polling", async () => {
+    const { payload } = await call(client, "factory_start", { goal: "wait test" });
+    const id = payload.runId;
+    const confirmed = await call(client, "factory_confirm", { runId: id });
+    assert.match(confirmed.payload.next ?? "", /factory_wait/);
+    assert.equal(confirmed.payload.retryAfterMs, 2000);
+    const atQuestion = await call(client, "factory_wait", { runId: id, timeoutSec: 10 });
+    assert.equal(atQuestion.payload.status, "waiting_for_user");
+    assert.equal(atQuestion.payload.timedOut, false);
+    await call(client, "factory_answer", { runId: id, questionId: "q-endpoint", answer: "new" });
+    const end = await call(client, "factory_wait", { runId: id, timeoutSec: 10 });
+    assert.equal(end.payload.status, "done");
+    assert.equal(end.payload.retryAfterMs, null);
+  });
+
+  await check("factory_wait says it timed out exactly when the run is still running after the wait", async () => {
+    const { payload } = await call(client, "factory_start", { goal: "timeout test" });
+    await call(client, "factory_confirm", { runId: payload.runId, overrides: { budget: { maxCostUsd: 100 } } });
+    const res = await call(client, "factory_wait", { runId: payload.runId, timeoutSec: 1 });
+    assert.ok(["running", "waiting_for_user"].includes(res.payload.status ?? ""), `status ${res.payload.status}`);
+    assert.equal(res.payload.timedOut, res.payload.status === "running");
+    await call(client, "factory_cancel", { runId: payload.runId });
+  });
+
+  await check("throttle: tight factory_status loop is slowed to the minimum interval", async () => {
+    const { payload } = await call(client, "factory_start", { goal: "throttle test" });
+    const started = Date.now();
+    for (let i = 0; i < 6; i += 1) await call(client, "factory_status", { runId: payload.runId });
+    const elapsed = Date.now() - started;
+    assert.ok(elapsed >= 5 * 450, `6 calls took only ${elapsed} ms`);
+    console.log(`      6 rapid calls took ${elapsed} ms`);
+  });
+
+  await check("throttle: tight factory_wait loop on an ended run is slowed and told to stop", async () => {
+    const { payload } = await call(client, "factory_start", { goal: "ended wait test" });
+    await call(client, "factory_cancel", { runId: payload.runId });
+    const started = Date.now();
+    let last: { payload: Payload } | undefined;
+    for (let i = 0; i < 6; i += 1) last = await call(client, "factory_wait", { runId: payload.runId, timeoutSec: 5 });
+    const elapsed = Date.now() - started;
+    assert.equal(last?.payload.status, "cancelled");
+    assert.match(last?.payload.next ?? "", /Do not call factory_wait/);
+    assert.ok(elapsed >= 5 * 450, `6 calls took only ${elapsed} ms`);
+    console.log(`      6 rapid waits on an ended run took ${elapsed} ms`);
+  });
+
+  function get(path: string, { host, method = "GET" }: { host?: string; method?: string } = {}): Promise<HttpResult> {
+    const base = new URL(URL_);
+    return new Promise((resolve, reject) => {
+      const req = http.request({ hostname: base.hostname, port: base.port, path, method, headers: host ? { host } : {} }, (res) => {
+        let body = "";
+        res.on("data", (d) => (body += d));
+        res.on("end", () => resolve({ status: res.statusCode, headers: res.headers, body }));
+      });
+      req.on("error", reject);
+      req.end();
+    });
+  }
+
+  /** The built run page; a server image without the built viewer answers 503, which skips the page checks. */
+  async function viewerPage(): Promise<HttpResult> {
+    const page = await get("/viewer/");
+    if (page.status === 503) {
+      skip("the viewer is not built in this image (503)");
+    }
+    return page;
+  }
+
+  await check("viewer: the run page is served with a nonce CSP", async () => {
+    const page = await viewerPage();
+    assert.equal(page.status, 200);
+    assert.match(String(page.headers["content-security-policy"] ?? ""), /script-src 'self' 'nonce-/);
+    assert.doesNotMatch(page.body, /FACTORYCSPNONCEPLACEHOLD/, "the nonce placeholder is replaced");
+  });
+
+  await check("viewer: no path traversal out of the viewer folder", async () => {
+    await viewerPage();
+    assert.equal((await get("/viewer/..%2f..%2fsrc%2fserver.ts")).status, 404);
+  });
+
+  await check("viewer: run responses link to the run page and its API shows the run without the MCP token", async () => {
+    const { payload } = await call(client, "factory_start", { goal: "viewer test" });
+    assert.ok(payload.viewerUrl?.endsWith(`/viewer/?run=${payload.runId}`), payload.viewerUrl ?? "no viewerUrl");
+    const detail = await get(`/viewer/api/runs/${payload.runId}`);
+    assert.equal(detail.status, 200, "the viewer API does not need the MCP token");
+    assert.equal((JSON.parse(detail.body) as { report: { runId: string } }).report.runId, payload.runId);
+    await call(client, "factory_cancel", { runId: payload.runId });
+  });
+
+  await check("viewer: the API refuses other Host headers and POST, and the MCP endpoint still needs the token", async () => {
+    assert.equal((await get("/viewer/api/runs", { host: "evil.example:7340" })).status, 403, "other Host headers are refused");
+    assert.equal((await get("/viewer/api/runs", { method: "POST" })).status, 405);
+    assert.equal((await get("/mcp")).status, 401, "the MCP endpoint still needs the token");
+  });
+} finally {
+  await client.close();
+}
+const failed = results.filter((result) => result.outcome === "fail").length;
+const skipped = results.filter((result) => result.outcome === "skip").length;
+console.log(`\n${results.length - failed - skipped}/${results.length} passed, ${skipped} skipped`);
+process.exit(failed ? 1 : 0);

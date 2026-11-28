@@ -1,0 +1,23 @@
+name: hello-build
+version: 0.2.0
+source: sample subgraph of the hello workflow
+description: "Sample subgraph of hello: implement, then verify."
+roles:
+  implementer: medium
+entry: implement
+nodes:
+  - id: implement
+    description: "Implements the change (sample step)."
+    kind: llm
+    role: implementer
+    turns: 4
+    askAfterTurn: 2
+    question: { id: q-endpoint, text: New endpoint or extend the existing one?, allowed: [new, extend] }
+    prompt: "You are the implementer node of a test workflow. Goal: {{goal}}. The user chose: {{answer}}. Reply with a JavaScript function of at most 8 lines that returns a greeting. Do not use any tools."
+  - id: verify
+    description: "Verifies the change (sample script)."
+    kind: script
+    op: builtin.pass
+edges:
+  - { from: implement, to: verify }
+  - { from: verify, to: END }

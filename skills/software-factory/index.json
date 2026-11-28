@@ -1,0 +1,88 @@
+{
+  "registrySchemaVersion": 1,
+  "skills": [
+    {
+      "name": "olko-factory-project",
+      "category": "software-factory",
+      "version": "0.3.0",
+      "description": "Script command that reports the Olko marketplace status of one local project for the Software Factory: the harnesses set up in it, every installed skill and agent with its state (current, adapted, outdated, modified, unknown-base, missing, removed, local-only) against the marketplace history, and the factory workflows that run them. Read only for the project. Use when you check a project's marketplace sync or run the project status workflow. Triggers: 'project status', 'project marketplace sync', 'which marketplace skills are installed', 'olko-factory-project'.",
+      "tags": [
+        "software-factory",
+        "factory",
+        "project",
+        "sync"
+      ],
+      "capabilities": [
+        "software-factory",
+        "software-factory.factory.project.status"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md",
+        "scripts/installed-artifacts.mjs",
+        "scripts/project-scan.mjs"
+      ]
+    },
+    {
+      "name": "olko-factory-run-supervision",
+      "category": "software-factory",
+      "version": "0.1.0",
+      "description": "Rules to read the summary of one finished Software Factory run and find its bottleneck and optimizations: the summary fields, how to rank cost and time, and which changes to propose (cheaper tier, fewer rounds, a script instead of an LLM step, fewer questions). Use when you supervise or review the cost and time of a factory run. Triggers: 'supervise factory run', 'factory run bottleneck', 'optimize factory run', 'olko-factory-run-supervision'.",
+      "tags": [
+        "software-factory",
+        "factory",
+        "run",
+        "supervision"
+      ],
+      "capabilities": [
+        "software-factory",
+        "software-factory.factory.run.supervision"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "olko-factory-workflow-sync",
+      "category": "software-factory",
+      "version": "0.2.1",
+      "description": "Script commands that keep the Software Factory workflows in step with the Olko marketplace: scan the lock for changed, removed and new sources, count mapping rounds and validate, build the YAML diff, and lock or revert. Use when you run the workflow sync loop or a mapping round of it. Triggers: 'workflow sync', 'sync factory workflows', 'factory workflows stale', 'olko-factory-workflow-sync'.",
+      "tags": [
+        "software-factory",
+        "factory",
+        "workflow",
+        "sync"
+      ],
+      "capabilities": [
+        "software-factory",
+        "software-factory.factory.workflow.sync"
+      ],
+      "cost": 2,
+      "files": [
+        "SKILL.md",
+        "scripts/workflow-sync.mjs"
+      ]
+    },
+    {
+      "name": "olko-factory-workflow-yaml",
+      "category": "software-factory",
+      "version": "0.2.1",
+      "description": "Rules for the Software Factory workflow YAML in factory/workflows: how an Olko agent's steps map to phase groups, nodes, edges and conditions, which engine operations exist, how a workflow names its sources, and how to validate it. Use when you write, update or verify a factory workflow from an Olko agent or skill. Triggers: 'factory workflow', 'map agent to yaml', 'update factory yaml', 'verify factory workflow', 'olko-factory-workflow-yaml'.",
+      "tags": [
+        "software-factory",
+        "factory",
+        "workflow",
+        "yaml"
+      ],
+      "capabilities": [
+        "software-factory",
+        "software-factory.factory.workflow.yaml"
+      ],
+      "cost": 1,
+      "files": [
+        "SKILL.md"
+      ]
+    }
+  ]
+}

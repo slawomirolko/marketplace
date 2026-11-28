@@ -1,0 +1,368 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "factory-config.schema.json",
+  "title": "Factory configuration",
+  "description": "How the factory may reach models, which tier each role uses, and the budget. It never names a model: tier-to-model mapping is resolved and confirmed at run start.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "tiers",
+    "backends",
+    "roles",
+    "budget"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "tiers": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/name"
+      }
+    },
+    "backends": {
+      "description": "Ways to reach models, in order of preference.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/backend"
+      }
+    },
+    "roles": {
+      "description": "Role name to tier name.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/name"
+      }
+    },
+    "budget": {
+      "type": "object",
+      "required": [
+        "maxCostUsd"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "maxCostUsd": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "infoRatio": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "default": 0.5
+        },
+        "pauseRatio": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "default": 0.8
+        },
+        "onExceeded": {
+          "enum": [
+            "ask_user",
+            "stop"
+          ],
+          "default": "ask_user"
+        }
+      }
+    },
+    "switches": {
+      "description": "Named on/off switches for optional workflow parts (subgraph enabledWhen). A run can override them in its input.",
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "memoryLayer": {
+      "description": "Marketplace skill that gives an agent persistent memory. An agent that declares it has the memory layer attached. Default olko-memory-layer.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*(:[a-z][a-z0-9-]*)?$",
+      "default": "olko-memory-layer"
+    },
+    "supervisor": {
+      "description": "The agent that runs once after every run ends and judges how the run spent money and time. Without this section no post-run agent runs.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent", "prompt", "hostHint", "verdictLine"],
+      "properties": {
+        "agent": {
+          "description": "The marketplace agent that supervises the run.",
+          "$ref": "#/$defs/name"
+        },
+        "prompt": {
+          "description": "Mustache template of the agent's task. {{summaryJson}} is the run summary that the factory makes from the run's events and ledger.",
+          "type": "string",
+          "minLength": 1
+        },
+        "hostHint": {
+          "description": "The next step the factory gives a delegate-mode client while the supervisor work waits for it.",
+          "type": "string",
+          "minLength": 1
+        },
+        "verdictLine": {
+          "description": "The last line of the agent's output that the factory reads: '<prefix> | <verdict> | <bottleneck> | <idea>'. The first verdict means nothing to improve.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["prefix", "verdicts"],
+          "properties": {
+            "prefix": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+            "verdicts": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" } }
+          }
+        }
+      }
+    },
+    "projects": {
+      "description": "How the factory finds local projects that use the marketplace. The project list and the root folders stay outside the repository, in the user's factory home.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "markers": {
+          "description": "Paths relative to a folder that make it a candidate project when one exists.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "maxDepth": {
+          "description": "How many folder levels under a root folder discovery looks.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8,
+          "default": 3
+        },
+        "statusWorkflow": {
+          "description": "The workflow whose latest finished run gives a project's status in the viewer.",
+          "$ref": "#/$defs/name"
+        },
+        "mergeWorkflow": {
+          "description": "The workflow the viewer's Merge updates button starts to merge marketplace updates into a project.",
+          "$ref": "#/$defs/name"
+        },
+        "statusBackend": {
+          "description": "The CLI backend that runs the status workflow when the viewer's Analyze button starts it.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "cli"],
+          "properties": {
+            "kind": { "const": "cli" },
+            "cli": { "$ref": "#/$defs/name" }
+          }
+        }
+      }
+    },
+    "watches": {
+      "description": "Interval watches: each runs a command per known project, reads a list of items from its JSON output, and starts one run of a workflow per item that stayed the same for stableChecks checks. The run stops at its first question until the user answers it in the viewer.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "everyMinutes",
+          "command",
+          "projectsWhen",
+          "items",
+          "key",
+          "workflow",
+          "goal",
+          "input",
+          "backend"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/name"
+          },
+          "everyMinutes": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "stableChecks": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2
+          },
+          "command": {
+            "description": "Executable and arguments; Mustache: project, projectName, marketplace, node (this Node binary).",
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "projectsWhen": {
+            "description": "A project is checked only when this relative path exists in it.",
+            "type": "string",
+            "minLength": 1
+          },
+          "items": {
+            "description": "Dotted path of the item list in the command's JSON output.",
+            "type": "string",
+            "minLength": 1
+          },
+          "skipWhen": {
+            "description": "Item fields that skip the item when truthy.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "key": {
+            "description": "Mustache key of an item; a run starts once per project and key.",
+            "type": "string",
+            "minLength": 1
+          },
+          "workflow": {
+            "$ref": "#/$defs/name"
+          },
+          "goal": {
+            "type": "string",
+            "minLength": 1
+          },
+          "input": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "backend": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "cli"
+            ],
+            "properties": {
+              "kind": {
+                "const": "cli"
+              },
+              "cli": {
+                "description": "Name of a CLI backend this factory supports (see backends).",
+                "$ref": "#/$defs/name"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "backend": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/name"
+        },
+        "kind": {
+          "enum": [
+            "api",
+            "cli",
+            "harness",
+            "delegate"
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "description": "The factory calls a model API directly. Keys come from environment variables only.",
+          "properties": {
+            "id": true,
+            "kind": {
+              "const": "api"
+            },
+            "protocol": {
+              "enum": [
+                "anthropic",
+                "openai-compatible"
+              ]
+            },
+            "apiKeyEnv": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9_]*$"
+            },
+            "baseUrlEnv": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9_]*$"
+            },
+            "discovery": {
+              "enum": [
+                "list_models",
+                "ask_user"
+              ]
+            }
+          },
+          "required": [
+            "protocol",
+            "apiKeyEnv"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "The factory runs a signed-in harness CLI headless (for example claude -p, opencode run) and reads tokens from its JSON output.",
+          "properties": {
+            "id": true,
+            "kind": {
+              "const": "cli"
+            },
+            "cli": {
+              "enum": [
+                "claude",
+                "opencode",
+                "codex"
+              ]
+            },
+            "discovery": {
+              "enum": [
+                "list_models",
+                "ask_user"
+              ]
+            }
+          },
+          "required": [
+            "cli"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "The calling harness tells the factory which of its models to use per tier.",
+          "properties": {
+            "id": true,
+            "kind": {
+              "const": "harness"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "The calling harness runs nodes in its own subagents. Usage is reported, not measured.",
+          "properties": {
+            "id": true,
+            "kind": {
+              "const": "delegate"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

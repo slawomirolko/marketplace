@@ -1,0 +1,176 @@
+name: olko-adr-store-reconcile
+version: 0.1.0
+description: "Brings one project's ADR store into the digest format (topic, scope, decision, enforcedBy) and resolves overlapping ADRs, one question per batch or group; writes only approved changes, in a worktree of the project, and never commits."
+source: "agents/opencode/olko-adr-store-reconciler.md (modes inventory, fields, group, apply, verify)"
+roles:
+  publisher: medium
+  context: low
+  planner: high
+  writer: medium
+entry: worktree
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: worktree
+    description: "The worktree lifecycle manager creates or resumes the store worktree on docs/adr-store-reconcile; the run workspace moves there."
+    kind: llm
+    role: publisher
+    agent: olko-worktree-lifecycle-manager
+    tools: [read, bash]
+    dirs: ["{{input.project}}"]
+    workspace: "{{state.worktree.worktree.path}}"
+    parse: { json: [path, branch, base, baseCommit, resumed] }
+    prompt: |
+      Phase create, or resume when the worktree already exists. Main repository path: {{input.project}}. Branch name: docs/adr-store-reconcile. Worktree path: {{input.project}}-worktrees/adr-store-reconcile.
+      Follow your worktree-create skill. Do not edit source, plan, configuration or agent files.
+      End with one ```json block, with the absolute path: {"path": "<worktree>", "branch": "<branch>", "base": "<the branch or ref the worktree started from>", "baseCommit": "<base commit SHA>", "resumed": <true|false>}
+  - id: inventory
+    description: "The store reconciler runs check-store.mjs and lists the ADRs without front matter (in batches of 5), the groups of overlapping ADRs, and the other store errors."
+    kind: llm
+    role: context
+    agent: olko-adr-store-reconciler
+    tools: [read, bash]
+    parse: { json: [noStore, batches, groups, errors] }
+    prompt: |
+      MODE inventory. Project worktree: the current working directory.
+      End with one ```json block: {"noStore": <true|false>, "batches": [{"ids": ["ADR-NNNN"]}], "groups": [{"topic": "<topic>", "adrs": ["ADR-NNNN"]}], "errors": ["<other store error>"]}
+  - id: stop-no-store
+    description: "Stops: the project has no ADR or rules directory."
+    kind: script
+    op: builtin.stop
+    with: { reason: "The project has no decision store (no ADR or rules directory). Run olko-init-project-docs first." }
+  - id: batch-next
+    description: "Takes the next batch of ADRs without front matter."
+    kind: script
+    op: list.next
+    maxVisits: 100
+    with: { over: inventory.inventory.batches }
+  - id: fields
+    description: "The store reconciler proposes topic, scope, decision, status and enforcedBy for each ADR of the batch."
+    kind: llm
+    role: context
+    agent: olko-adr-store-reconciler
+    tools: [read]
+    maxVisits: 100
+    parse: { json: [proposals] }
+    prompt: |
+      MODE fields. Batch {{state.batch-next.number}} of {{state.batch-next.total}}: {{#state.batch-next.item.ids}}{{.}} {{/state.batch-next.item.ids}}
+      End with one ```json block: {"proposals": [{"id": "ADR-NNNN", "frontMatter": "<the exact front matter block>", "reason": "<one line; for enforcedBy other than none, the check with file:line>"}]}
+  - id: ask-fields
+    description: "You approve the proposed front matter of the batch, correct it, or skip the batch."
+    kind: interrupt
+    askedBy: fields
+    maxVisits: 100
+    question:
+      id: "q-adr-fields-{{state.batch-next.index}}"
+      text: "Front matter for batch {{state.batch-next.number}} of {{state.batch-next.total}}:\n{{#state.fields.fields.proposals}}{{id}} ({{reason}}):\n{{frontMatter}}\n\n{{/state.fields.fields.proposals}}Answer approve, skip, or approve with corrections (for example: approve, ADR-0003 topic=logging.format)."
+  - id: fields-apply
+    description: "The store reconciler writes the approved front matter of the batch and updates the log rows."
+    kind: llm
+    role: writer
+    agent: olko-adr-store-reconciler
+    tools: [read, edit, bash]
+    maxVisits: 100
+    parse: { json: [written] }
+    prompt: |
+      MODE apply. The user approved this front matter{{#state.ask-fields.answer}} with this answer: {{state.ask-fields.answer}}{{/state.ask-fields.answer}}. Apply the corrections in the answer, and nothing else.
+      {{#state.fields.fields.proposals}}
+      {{id}}:
+      {{frontMatter}}
+      {{/state.fields.fields.proposals}}
+      Add or update the Topic column of the log rows of these ADRs.
+      End with one ```json block: {"written": ["<file>"]}
+  - id: regroup
+    description: "The store reconciler runs check-store.mjs again after the front matter is written, because ADRs that had no topic can only now form groups of overlapping ADRs."
+    kind: llm
+    role: context
+    agent: olko-adr-store-reconciler
+    tools: [read, bash]
+    parse: { json: [groups] }
+    prompt: |
+      MODE inventory, groups only. Project worktree: the current working directory.
+      End with one ```json block: {"groups": [{"topic": "<topic>", "adrs": ["ADR-NNNN"]}]}
+  - id: group-next
+    description: "Takes the next group of overlapping ADRs, largest group first."
+    kind: script
+    op: list.next
+    maxVisits: 100
+    with: { over: regroup.regroup.groups }
+  - id: group-proposal
+    description: "The store reconciler proposes three fixes for the group: merge with supersedes, overrides links, or narrower scopes; the recommendation first."
+    kind: llm
+    role: planner
+    agent: olko-adr-store-reconciler
+    tools: [read]
+    maxVisits: 100
+    parse: { json: [options] }
+    prompt: |
+      MODE group. Group {{state.group-next.number}} of {{state.group-next.total}}, topic {{state.group-next.item.topic}}: {{#state.group-next.item.adrs}}{{.}} {{/state.group-next.item.adrs}}
+      End with one ```json block: {"options": [{"number": 1, "kind": "<merge|exception|narrow>", "reason": "<one line>", "changes": "<the exact text and front matter that would change, per file>"}]}
+  - id: ask-group
+    description: "You choose the fix for the group of overlapping ADRs, skip the group, or stop asking."
+    kind: interrupt
+    askedBy: group-proposal
+    maxVisits: 100
+    question:
+      id: "q-adr-group-{{state.group-next.index}}"
+      text: "Overlapping ADRs, topic {{state.group-next.item.topic}}: {{#state.group-next.item.adrs}}{{.}} {{/state.group-next.item.adrs}}\n{{#state.group-proposal.group-proposal.options}}Option {{number}} ({{kind}}): {{reason}}\n{{changes}}\n\n{{/state.group-proposal.group-proposal.options}}Which option (1 is the recommendation)? Or skip this group, or stop to finish with the groups decided so far."
+      allowed: ["1", "2", "3", "skip", "stop"]
+  - id: group-apply
+    description: "The store reconciler writes the chosen fix for the group."
+    kind: llm
+    role: writer
+    agent: olko-adr-store-reconciler
+    tools: [read, edit, bash]
+    maxVisits: 100
+    parse: { json: [written] }
+    prompt: |
+      MODE apply. The user chose option {{state.ask-group.answer}} for the group with topic {{state.group-next.item.topic}} ({{#state.group-next.item.adrs}}{{.}} {{/state.group-next.item.adrs}}). The options were:
+      {{#state.group-proposal.group-proposal.options}}
+      Option {{number}} ({{kind}}):
+      {{changes}}
+      {{/state.group-proposal.group-proposal.options}}
+      Write exactly the chosen option.
+      End with one ```json block: {"written": ["<file>"]}
+  - id: verify
+    description: "The store reconciler runs check-store.mjs again on the worktree."
+    kind: llm
+    role: context
+    agent: olko-adr-store-reconciler
+    tools: [read, bash]
+    parse: { json: [valid, errors] }
+    prompt: |
+      MODE verify.
+      End with one ```json block: {"valid": <true when the exit code is 0>, "errors": ["<each error line>"]}
+  - id: report
+    description: "The store reconciler reports what changed in the worktree and what is left; you review the diff and commit."
+    kind: llm
+    role: context
+    agent: olko-adr-store-reconciler
+    tools: [read, bash]
+    parse: text
+    prompt: |
+      Report, read only, no MODE work: worktree {{state.worktree.worktree.path}} on {{state.worktree.worktree.branch}}.
+      Inventory: {{state.inventory.inventory.batches.length}} batches of ADRs without front matter, {{state.regroup.regroup.groups.length}} groups of overlapping ADRs after the front matter. Other errors before:{{#state.inventory.inventory.errors}}{{.}}; {{/state.inventory.inventory.errors}}
+      Check now: valid {{state.verify.verify.valid}}; errors: {{#state.verify.verify.errors}}{{.}}; {{/state.verify.verify.errors}}
+      Run `git status --short` and `git diff --stat` and list the changed files. Say which batches and groups were skipped (the store check above lists what is left). Nothing is committed: the user reviews the diff and commits.
+edges:
+  - { from: worktree, to: inventory }
+  - { from: inventory, to: stop-no-store, when: "inventory.inventory.noStore == true", description: "no decision store" }
+  - { from: inventory, to: batch-next, description: "the store exists" }
+  - { from: batch-next, to: fields, when: "batch-next.done == false", description: "a batch is left" }
+  - { from: batch-next, to: regroup, description: "every batch handled" }
+  - { from: regroup, to: group-next }
+  - { from: fields, to: ask-fields }
+  - { from: ask-fields, to: batch-next, when: 'ask-fields.answer == "skip"', description: "you skipped the batch" }
+  - { from: ask-fields, to: fields-apply, description: "you approved the batch" }
+  - { from: fields-apply, to: batch-next }
+  - { from: group-next, to: group-proposal, when: "group-next.done == false", description: "a group is left" }
+  - { from: group-next, to: verify, description: "every group handled" }
+  - { from: group-proposal, to: ask-group }
+  - { from: ask-group, to: group-next, when: 'ask-group.answer == "skip"', description: "you skipped the group" }
+  - { from: ask-group, to: verify, when: 'ask-group.answer == "stop"', description: "you stopped the group questions" }
+  - { from: ask-group, to: group-apply, description: "you chose a fix" }
+  - { from: group-apply, to: group-next }
+  - { from: verify, to: report }
+  - { from: report, to: END }

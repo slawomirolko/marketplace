@@ -1,0 +1,111 @@
+name: olko-skill-sync-local
+version: 0.5.0
+description: "Phase 6: after the marketplace pull request is merged and reinstalled, or directly when no marketplace pull request was made (revert-only run), shows the local project diff this run wrote, asks before committing, opens the local pull request through olko-commit, reports the marketplace and local pull request URLs together, then hands the local pull request to the shared PR step (leave, wait or squash merge). A run that wrote no local file ends here with the explicit statement that the local pull request is omitted."
+source: "agents/opencode/olko-marketplace-skill-sync-manager.md (phase 6, local project delivery; USER QUESTION GATE: every question composed by grill-with-docs)"
+roles:
+  publisher: medium
+  grill: medium
+entry: local-diff
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: local-diff
+    description: "Read-only: shows git status and per-file diffs of the local project, the proposed conventional commit subject and the target feature branch. Writes, stages and commits nothing."
+    kind: llm
+    role: publisher
+    agent: olko-marketplace-skill-sync-manager
+    tools: [read, bash]
+    dirs: ["{{state.discover.discover.project}}"]
+    parse: text
+    prompt: |
+      Phase 6 step 1 only, read-only. Do not write, stage, commit or push anything.
+      Local project: {{state.discover.discover.project}}
+      {{#state.publish}}Marketplace pull request already merged: {{state.publish.publish.url}}.{{/state.publish}}{{^state.publish}}No marketplace pull request was made (revert-only run): say so.{{/state.publish}}
+
+      Run `git status` and the per-file `git diff` in the local project. Show only the files this marketplace sync run wrote in the project: adapted local SKILL.md versions (local-only SemVer lines), project adapters (`.agents/skill-config.md`, `.agents/skills/<name>/project.md`), move-to-adapter changes, permission narrowing and other local bindings, `opencode.json` changes, reverted local copies, reinstalled artifact copies and accepted reverts. If this run wrote no local file, say exactly: "No local file written: the local pull request is omitted. Choose stop."
+      Propose the conventional commit subject and the target feature branch (never the default branch).
+      Reply with the diff summary, the file list, the subject and the branch.
+  - id: local-grill
+    description: "grill-with-docs composes the one question whether to commit the local project diff and open the local pull request, in the user's response language; it asks nothing itself and changes no file."
+    kind: llm
+    role: grill
+    skill: grill-with-docs
+    tools: [read]
+    maxVisits: 20
+    parse: text
+    prompt: |
+      Compose one question, one question per turn, for the local project delivery (second pull request). The read-only local diff, file list, proposed commit subject and feature branch:
+      {{state.local-diff.local-diff}}
+
+      Ask whether to commit these files on that feature branch and open the local pull request, or stop. If the diff says no local file was written, recommend stop: the local pull request is then omitted.
+      Return the question text only, with the choices `commit` and `stop`; the workflow puts it to the user and waits for the answer. Add no other option or follow-up and change no file.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{state.discover.discover.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it. Write the question in that language, concisely; keep the choice words exactly `commit` and `stop`.
+      If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
+  - id: ask-local
+    description: "Puts the commit-or-stop question composed by grill-with-docs to the user, before any commit. When the diff says no local file was written, the answer is stop and no local pull request is made."
+    kind: interrupt
+    askedBy: local-grill
+    maxVisits: 20
+    question:
+      id: q-sync-local-publish
+      text: "{{state.local-grill.local-grill}}"
+      allowed: [commit, stop]
+  - id: grill-blocked-local
+    description: "Stops the run when grill-with-docs cannot be loaded: the tooling blocker is reported and nothing is asked of the user directly."
+    kind: script
+    op: builtin.stop
+    with: { reason: "grill-with-docs cannot be loaded: the sync stopped without asking the user about the local project commit and pull request." }
+  - id: local-commit
+    description: "olko-commit commits only the approved local files on a feature branch, pushes and opens the local pull request (GitHub gh pr create or GitLab glab mr create, per the project config)."
+    kind: llm
+    role: publisher
+    skill: olko-commit
+    tools: [read, edit, bash]
+    dirs: ["{{state.discover.discover.project}}"]
+    parse: { line: [marker, url, branch, commit] }
+    prompt: |
+      Run the olko-commit workflow in the LOCAL project repository {{state.discover.discover.project}} (use `git -C` or change into it), not in the marketplace.
+      Commit only the files listed in the approved diff below. Stage them by name; never `git add -A`. Never pass --force and never push to the default branch: use a feature branch. Do not merge. Do not ask questions; the user already approved this commit.
+      If the approved diff lists no file, do not commit and do not open a pull request; end with `pr | none | none | none` and say nothing was written.
+      Hosting: read `gitHosting`, `remoteName` and `defaultBranch` from .agents/skill-config.md. GitHub: `gh pr create`; GitLab: `glab mr create`.
+      PR title: the approved conventional commit subject.
+      PR description, concise: the local changes, and {{#state.publish}}the marketplace pull request they accompany: {{state.publish.publish.url}}{{/state.publish}}{{^state.publish}}that no marketplace pull request was made (revert-only run): say so{{/state.publish}}. Never fold project adapters, local bindings, machine paths or credentials into any marketplace change.
+
+      Approved diff and subject:
+      {{state.local-diff.local-diff}}
+
+      End with exactly one line: `pr | <PR URL> | <branch> | <commit sha>`.
+  - id: report-prs
+    description: "Reports the marketplace and the local pull request URLs together, before the leave, wait or merge decision. Changes nothing."
+    kind: llm
+    role: publisher
+    agent: olko-marketplace-skill-sync-manager
+    prompt: |
+      Phase 6 report only. Do not write, stage, commit, push or merge anything.
+      Report both pull requests together in one short message:
+      Marketplace pull request: {{#state.publish}}{{state.publish.publish.url}}{{/state.publish}}{{^state.publish}}none (revert-only run){{/state.publish}}
+      Local pull request: {{state.local-commit.local-commit.url}}
+      The next step asks whether to leave the local pull request open, wait for CI or squash merge it.
+  - id: stop-local-main
+    description: "Stops the run: the local commit step reports the default branch, and the local delivery requires a feature branch."
+    kind: script
+    op: builtin.stop
+    with: { reason: "The local commit step reported branch main; the local delivery requires a feature branch and pull request. Check the local project repository." }
+  - id: local-pr
+    description: "Calls the shared PR step for the local pull request: leave it open, wait for CI or squash merge after your explicit approval."
+    kind: call
+    workflow: olko-pr-merge
+    input: { path: "{{state.discover.discover.project}}", prUrl: "{{state.local-commit.local-commit.url}}", prBranch: "{{state.local-commit.local-commit.branch}}", label: "local" }
+edges:
+  - { from: local-diff, to: local-grill }
+  - { from: local-grill, to: grill-blocked-local, when: 'local-grill.local-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded: stop" }
+  - { from: local-grill, to: ask-local, description: "grill-with-docs composed the question: put it to the user" }
+  - { from: grill-blocked-local, to: END, description: "never reached: grill-blocked-local fails the run" }
+  - { from: ask-local, to: local-commit, when: 'ask-local.answer == "commit"', description: "you approved the commit and the local pull request" }
+  - { from: ask-local, to: END, description: "you chose stop (any other answer also stops here): local changes stay uncommitted and no local pull request is created; for a run that wrote no local file this is the expected answer" }
+  - { from: local-commit, to: stop-local-main, when: 'local-commit.local-commit.branch == "main"', description: "pushed to the default branch" }
+  - { from: stop-local-main, to: END, description: "never reached: stop-local-main fails the run" }
+  - { from: local-commit, to: report-prs, when: 'local-commit.local-commit.url != "none"', description: "a local pull request was opened" }
+  - { from: local-commit, to: END, description: "no local file was written, so no local pull request exists: the run says so and ends here" }
+  - { from: report-prs, to: local-pr }
+  - { from: local-pr, to: END, description: "the local pull request was left open, waited for or squash merged" }

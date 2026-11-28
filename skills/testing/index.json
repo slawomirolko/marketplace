@@ -36,6 +36,40 @@
           "edge-cases"
         ]
       }
+    },
+    {
+      "name": "olko-test-coverage-advisor",
+      "category": "testing",
+      "version": "1.0.0",
+      "description": "Advise which test principles the tests of an agent or skill miss. In suggest mode, read the artifact and its tests, and report gaps by severity with a TypeScript sketch per gap. In apply mode, write the accepted suggestions as real tests and check that each test can fail. Use when an agent or skill is added or changed, or when asked what tests an agent or skill is missing. Triggers: 'test coverage advisor', 'which tests are missing', 'test principles gap'.",
+      "tags": [
+        "testing",
+        "test",
+        "coverage",
+        "advisor"
+      ],
+      "capabilities": [
+        "testing",
+        "testing.test.coverage.advisor"
+      ],
+      "cost": 3,
+      "files": [
+        "SKILL.md",
+        "edge-cases.md",
+        "examples.md",
+        "overview.md",
+        "workflow.md"
+      ],
+      "loading": {
+        "mode": "progressive",
+        "first": "overview.md",
+        "sections": [
+          "overview",
+          "workflow",
+          "examples",
+          "edge-cases"
+        ]
+      }
     }
   ]
 }

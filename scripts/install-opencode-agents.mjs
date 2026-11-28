@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readJson } from "./lib/cli.mjs";
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 const marketplaceRoot = path.resolve(scriptsDir, "..");
@@ -38,10 +39,6 @@ function parseArgs(args) {
   return result;
 }
 
-function readJson(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
-}
-
 function validateManifest(manifest, registry) {
   if (manifest.schemaVersion !== 2 || manifest.opencodeAgentFormat !== "v1") {
     throw new Error("Unsupported OpenCode agent manifest format");
@@ -55,7 +52,7 @@ function validateManifest(manifest, registry) {
   const files = new Set();
   const semVer = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
   const roles = new Set(["auditor", "bootstrapper", "comparator", "implementer", "investigator", "orchestrator", "test-runner", "writer"]);
-  const stacks = new Set(["army-python", "cross-stack", "dotnet", "mobile", "react", "react-native"]);
+  const stacks = new Set(["army-python", "cross-stack", "dotnet", "mobile", "react", "react-native", "software-factory"]);
 
   for (const agent of manifest.agents) {
     if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(agent.name) || names.has(agent.name)) {

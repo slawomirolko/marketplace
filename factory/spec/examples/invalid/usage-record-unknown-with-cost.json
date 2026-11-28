@@ -1,0 +1,14 @@
+{
+  "runId": "r-0001",
+  "workflow": "feature@0.1.0",
+  "nodePath": "feature/review",
+  "kind": "llm",
+  "tier": "medium",
+  "model": null,
+  "backend": "host-subagent",
+  "turn": 1,
+  "tokens": { "input": null, "output": null },
+  "costUsd": 0.12,
+  "costSource": "unknown",
+  "at": "2026-11-10T15:00:00Z"
+}

@@ -1,0 +1,67 @@
+import { homeEnvNote } from "./home-env.ts";
+import { spawn } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { Factory, parseBackend, parseCli } from "./engine.ts";
+import { cliExecutor, hostExec } from "./cli-backend.ts";
+import { createFactoryTools } from "./tools.ts";
+import { DEFAULT_VIEWER_PORT, VIEWER_HEALTH, defaultDataDir, registerDataSource } from "./paths.ts";
+
+const settingsNote = homeEnvNote();
+if (settingsNote) {
+  console.error(settingsNote);
+}
+
+const FIRST_PORT = Number(process.env.FACTORY_VIEWER_PORT ?? DEFAULT_VIEWER_PORT);
+const DATA_DIR = defaultDataDir();
+const PORTS_TO_TRY = 10;
+
+async function viewerOn(port: number): Promise<"ours" | "other" | "free"> {
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(1000) });
+    const body = (await response.json()) as { name?: string; dataDir?: string };
+    return body.name === VIEWER_HEALTH && body.dataDir === path.resolve(DATA_DIR) ? "ours" : "other";
+  } catch (error) {
+    return (error as { cause?: { code?: string } }).cause?.code === "ECONNREFUSED" ? "free" : "other";
+  }
+}
+
+/** Starts the run page as a detached process without stdio, so it outlives this stdio session and keeps serving runs and watches after the harness exits. */
+function startViewer(port: number): void {
+  const self = fileURLToPath(import.meta.url);
+  const script = path.join(path.dirname(self), `viewer-server${path.extname(self)}`);
+  const child = spawn(process.execPath, [script], {
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+    env: { ...process.env, FACTORY_DATA_DIR: DATA_DIR, FACTORY_VIEWER_PORT: String(port) },
+  });
+  child.on("error", (error) => console.error(`run page did not start: ${error.message}`));
+  child.unref();
+}
+
+async function ensureViewer(): Promise<number> {
+  for (let port = FIRST_PORT; port < FIRST_PORT + PORTS_TO_TRY; port += 1) {
+    const state = await viewerOn(port);
+    if (state === "ours") {
+      return port;
+    }
+    if (state === "free") {
+      startViewer(port);
+      return port;
+    }
+  }
+  console.error(`no free port for the run page in ${FIRST_PORT}-${FIRST_PORT + PORTS_TO_TRY - 1}`);
+  return FIRST_PORT;
+}
+
+const BACKEND = parseBackend(process.env.FACTORY_BACKEND);
+const CLI = BACKEND === "cli" ? parseCli(process.env.FACTORY_CLI) : undefined;
+registerDataSource(DATA_DIR);
+const factory = new Factory(DATA_DIR, { backend: BACKEND, executors: { exec: hostExec, ...(CLI ? { [CLI]: cliExecutor(CLI) } : {}) }, ...(CLI ? { cli: CLI } : {}) });
+const port = await ensureViewer();
+const server = createFactoryTools(factory, `http://127.0.0.1:${port}`).buildServer();
+const transport = new StdioServerTransport();
+transport.onclose = () => process.exit(0);
+await server.connect(transport);

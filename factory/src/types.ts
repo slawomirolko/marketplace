@@ -1,0 +1,548 @@
+import type { ParseSpec } from "./parse-spec.ts";
+export type Tier = "low" | "medium" | "high";
+export type BackendKind = "fake" | "cli" | "delegate";
+export type CliName = "claude" | "opencode";
+export type CostSource = "measured" | "estimated" | "reported" | "unknown";
+export type RunStatus = "needs_confirmation" | "running" | "waiting_for_user" | "waiting_for_client" | "done" | "stopped" | "cancelled" | "failed";
+
+export interface Backend {
+  kind: BackendKind;
+  cli?: CliName;
+}
+
+export interface Budget {
+  maxCostUsd: number;
+  infoRatio: number;
+  pauseRatio: number;
+}
+
+export interface RunConfig {
+  roles: Record<string, Tier>;
+  tiers: Record<Tier, string>;
+  backend: Backend;
+  budget: Budget;
+}
+
+export interface ConfirmOverrides {
+  roles?: Record<string, Tier>;
+  budget?: Partial<Budget>;
+  backend?: Backend;
+  tierModels?: Partial<Record<Tier, string>>;
+}
+
+export interface Question {
+  id: string;
+  text: string;
+  allowed?: string[];
+  allowedFrom?: string;
+  multiple?: boolean;
+  itemsFrom?: string;
+}
+
+export interface QuestionItem {
+  id: string;
+  label: string;
+  detail: string;
+  checked: boolean;
+}
+
+export type AgentTool = "read" | "edit" | "bash";
+
+export interface PendingQuestion extends Question {
+  node?: string;
+  items?: QuestionItem[];
+}
+
+export interface PendingWork {
+  nodePath: string;
+  agentId: string;
+  tier: Tier;
+  model: string;
+  prompt: string;
+  agentName?: string;
+  agentDescription?: string;
+  agentInstructions?: string;
+  tools: AgentTool[];
+  dirs: string[];
+  cwd?: string;
+  retried?: boolean;
+}
+
+export interface Agent {
+  id: string;
+  role?: string;
+  agentName?: string;
+  paths?: string[];
+  files?: { path: string; diff: string }[];
+  criteria?: string;
+  mode?: string;
+}
+
+export type WorkflowState = Record<string, unknown>;
+
+export interface RunInput {
+  cwd?: string;
+  agentConfigDir?: string;
+  repo?: string;
+  pr?: number;
+  fresh?: boolean;
+  plan?: string;
+  criteria?: string;
+  project?: string;
+  marketplace?: string;
+  artifacts?: string[];
+  artifact?: string;
+  contentHash?: string;
+  files?: string;
+  target?: string;
+  targetName?: string;
+  olko?: string;
+  user?: string;
+  stateDir?: string;
+  switches?: Record<string, boolean>;
+  idea?: string;
+  route?: string;
+  featureId?: string;
+  path?: string;
+  label?: string;
+  prUrl?: string;
+  prBranch?: string;
+  base?: string;
+  taskId?: string;
+  adopt?: boolean;
+  workflowsDir?: string;
+  /** The registered project this run belongs to; the factory fills `project` from it. */
+  projectId?: string;
+  /** "true" when the lock status reported this exact change as approved; shown only: olko-marketplace-upstream skips its question only after its own lock check. */
+  approved?: string;
+}
+
+export interface ExecResult {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+export type HostExec = (command: string, args: string[], options?: { cwd?: string }) => ExecResult | Promise<ExecResult>;
+
+export interface TokenCounts {
+  input: number | null;
+  output: number | null;
+  cacheRead?: number;
+  cacheWrite5m?: number;
+  cacheWrite1h?: number;
+  reasoning?: number;
+}
+
+export interface ModelUsage {
+  model: string;
+  tokens: TokenCounts;
+  cacheWriteTtlKnown: boolean;
+  harnessCostUsd: number | null;
+}
+
+export interface CliRequest {
+  model: string;
+  prompt: string;
+  agent?: string | undefined;
+  cwd?: string | undefined;
+  configDir?: string | undefined;
+  tools?: AgentTool[] | undefined;
+  dirs?: string[] | undefined;
+  /** Set only for an isolated step (`isolate: true`): an agent with its own permissions may then leave its workspace only for these (the step's directories and its skill folders) and the temp folder. */
+  limitDirs?: string[] | undefined;
+  /** The agent's own instructions, used instead of looking `agent` up in the marketplace. */
+  definition?: { name: string; description: string; prompt: string } | undefined;
+  env?: Record<string, string> | undefined;
+  /** Ends the CLI process tree when aborted; the request then fails with "(aborted)". */
+  signal?: AbortSignal | undefined;
+}
+
+export interface CliResult {
+  ok: boolean;
+  error?: string | undefined;
+  text?: string;
+  turns?: number;
+  sessionId?: string | null;
+  harnessCostUsd?: number | null;
+  usageByModel?: ModelUsage[];
+  durationMs?: number;
+  timedOut?: boolean;
+  /** Output lines that were not JSON and so were left out of the parsed events. */
+  malformedLines?: number;
+}
+
+export type CliExecutor = (request: CliRequest) => Promise<CliResult>;
+
+export interface Executors {
+  exec?: HostExec;
+  claude?: CliExecutor;
+  opencode?: CliExecutor;
+}
+
+export interface ScriptContext {
+  input: RunInput;
+  state: WorkflowState;
+  exec: HostExec | undefined;
+  goal?: string;
+  answers?: Record<string, string>;
+  cwd?: string;
+  nodeId?: string;
+  runId?: string;
+}
+
+export interface ScriptResult {
+  state: unknown;
+  output?: string | null;
+  metrics?: Record<string, number>;
+  workspace?: string;
+}
+
+export type Operation = (context: ScriptContext & { args: Record<string, unknown> }) => Promise<ScriptResult>;
+
+export interface PromptContext {
+  goal: string;
+  input: RunInput | undefined;
+  state: WorkflowState | undefined;
+  agent: Agent;
+  answer?: string;
+  answers?: Record<string, string>;
+  steps?: number;
+}
+
+export interface WorkflowNode {
+  id: string;
+  path: string;
+  kind: "llm" | "script" | "interrupt";
+  role?: string;
+  agent?: string;
+  turns?: number;
+  askAfterTurn?: number;
+  question?: Question;
+  askedBy?: string[];
+  prompt?: (context: PromptContext) => string;
+  agents?: Agent[];
+  agentsFrom?: (state: WorkflowState | undefined) => Agent[];
+  freshResults?: boolean;
+  script?: (context: ScriptContext) => Promise<ScriptResult>;
+  parse?: (text: string) => unknown;
+  skipIf?: (state: WorkflowState | undefined) => boolean;
+  skipReason?: string;
+  maxVisits?: number;
+  parallel?: number;
+  tools?: AgentTool[];
+  dirs?: (context: PromptContext) => string[];
+  /** The agent may leave its workspace only for this node's dirs (cli backend); see the workflow schema. */
+  isolate?: boolean;
+  workspace?: (context: PromptContext) => string;
+  scope?: string;
+  localId?: string;
+  enterScope?: { workflow: string; input: Record<string, string> };
+}
+
+export interface Workflow {
+  name: string;
+  version: string;
+  inputs?: string;
+  source?: string;
+  roles?: Record<string, Tier>;
+  entry: string;
+  nodes: WorkflowNode[];
+  edges: WorkflowSpecEdge[];
+  maxCycleIterations: number;
+}
+
+export interface LedgerRecord {
+  runId: string;
+  workflow: string;
+  at: string;
+  nodePath: string;
+  agentId?: string;
+  kind: "llm" | "script";
+  tier: Tier | null;
+  model: string | null;
+  requestedModel?: string;
+  backend: string;
+  turn: number;
+  harnessTurns?: number | undefined;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cacheReadTokens?: number | undefined;
+  cacheWrite5mTokens?: number | undefined;
+  cacheWrite1hTokens?: number | undefined;
+  totalTokens?: number | null;
+  childSessionId?: string | null;
+  costUsd: number | null;
+  costSource: CostSource;
+  harnessCostUsd?: number | null;
+  durationMs?: number | undefined;
+  outputPreview?: string;
+  output?: string | null;
+  agentName?: string | null;
+  enrichedFrom?: string;
+}
+
+export type LedgerEntry = Omit<LedgerRecord, "runId" | "workflow" | "at">;
+
+export interface RunEvent {
+  at: string;
+  type: string;
+  node?: string;
+  cursor?: number;
+  questionId?: string;
+  level?: string;
+  error?: string;
+  [key: string]: unknown;
+}
+
+export interface Run {
+  runId: string;
+  ownerPid?: number;
+  idempotencyKey: string | null;
+  goal: string;
+  workflow?: string;
+  input?: RunInput;
+  state?: WorkflowState;
+  nodeAgents?: Record<string, Agent[]>;
+  scopes?: Record<string, { iteration: number; input: RunInput }>;
+  workspace?: string;
+  status: RunStatus;
+  proposal: RunConfig;
+  config: RunConfig | null;
+  cursor: number;
+  visits?: Record<string, number>;
+  nodeTurn: number;
+  agentIndex?: number;
+  steps: number;
+  pendingQuestion: PendingQuestion | null;
+  pendingWork: PendingWork | null;
+  pendingWorkItems?: PendingWork[];
+  answers: Record<string, string>;
+  ledger: LedgerRecord[];
+  events: RunEvent[];
+  thresholdsHit: string[];
+  supervisor?: SupervisorRecord;
+}
+
+export type SupervisorStatus = "pending" | "running" | "waiting_for_client" | "done" | "failed";
+
+/** The post-run agent from the `supervisor` section of config/factory.yaml. */
+export interface SupervisorSettings {
+  agent: string;
+  /** Mustache template; {{summaryJson}} is the run summary. */
+  prompt: string;
+  hostHint: string;
+  verdictLine: VerdictLineFormat;
+}
+
+/** The output line '<prefix> | <verdict> | <bottleneck> | <idea>'; the first verdict means nothing to improve. */
+export interface VerdictLineFormat {
+  prefix: string;
+  verdicts: string[];
+}
+
+export interface SupervisorRecord {
+  status: SupervisorStatus;
+  agent: string;
+  tier?: Tier;
+  model?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  costUsd?: number | null;
+  summary?: unknown;
+  output?: string | null;
+  verdict?: string | null;
+  bottleneck?: string | null;
+  idea?: string | null;
+  error?: string | null;
+  work?: PendingWork | null;
+}
+
+export interface SubmitUsage {
+  model?: string | undefined;
+  totalTokens?: number | undefined;
+  inputTokens?: number | undefined;
+  outputTokens?: number | undefined;
+  cacheReadTokens?: number | undefined;
+  cacheWriteTokens?: number | undefined;
+  childSessionId?: string | undefined;
+}
+
+export interface Coverage {
+  llmSteps: number;
+  unknownSteps: number;
+}
+
+export interface AgentCost extends Coverage {
+  steps: number;
+  tokens: number;
+  cacheTokens: number;
+  costUsd: number;
+  tier: Tier | null;
+  model: string | null;
+  agentName: string | null;
+  costSource: string;
+  sources?: CostSource[];
+}
+
+export interface NodeCost extends Coverage {
+  steps: number;
+  tokens: number;
+  cacheTokens: number;
+  costUsd: number;
+  tier: Tier | "mixed" | null;
+  model: string | null;
+  byAgent: Record<string, AgentCost>;
+  costSource: string;
+}
+
+export interface CostFooter {
+  costUsd: number;
+  budgetUsd: number;
+  budgetRatio: number;
+  tokens: number;
+  steps: number;
+  perNode: Record<string, number>;
+  source: string;
+  warnings: string[];
+}
+
+export interface Report {
+  runId: string;
+  status: RunStatus;
+  workflow: string;
+  backend: Backend | undefined;
+  tierModels: Record<Tier, string> | undefined;
+  synthetic: boolean;
+  byNode: Record<string, NodeCost>;
+  byTier: Record<string, number>;
+  byModel: Record<string, number>;
+  byCostSource: Record<string, number>;
+  coverage: { run: Coverage; byTier: Record<string, Coverage>; byModel: Record<string, Coverage> };
+  cacheTokens: number;
+  harnessCostUsd: number;
+  result: string | null;
+  cost: CostFooter;
+  supervisor?: Omit<SupervisorRecord, "work">;
+}
+
+export interface RunStatusView {
+  runId: string;
+  status: RunStatus;
+  currentNode: string | null;
+  pendingQuestion: PendingQuestion | null;
+  pendingWork?: PendingWork | null;
+  pendingWorkItems?: PendingWork[] | undefined;
+  retryAfterMs: number | null;
+  next: string;
+  proposal?: RunConfig;
+  cost: CostFooter;
+  supervisor?: Pick<SupervisorRecord, "status" | "verdict" | "bottleneck" | "idea" | "costUsd">;
+  supervisorWork?: PendingWork;
+}
+
+export interface WorkflowSpecAgent {
+  id: string;
+  role?: string;
+  agent?: string;
+}
+
+/** A step of another workflow, found through the nearest workflow that inlines both. */
+export interface AskedByStep {
+  workflow: string;
+  step: string;
+}
+
+export type AskedByRef = string | AskedByStep;
+
+/** The llm step or steps whose output an interrupt passes on to the user. */
+export type AskedBy = AskedByRef | AskedByRef[];
+
+export interface WorkflowSpecNode {
+  id: string;
+  kind: string;
+  role?: string;
+  agent?: string;
+  agents?: WorkflowSpecAgent[];
+  agentsFrom?: string;
+  freshResults?: boolean;
+  op?: string;
+  with?: Record<string, unknown>;
+  prompt?: string;
+  parse?: ParseSpec;
+  turns?: number;
+  askAfterTurn?: number;
+  maxVisits?: number;
+  parallel?: number;
+  workflow?: string;
+  over?: string;
+  question?: Question;
+  askedBy?: AskedBy;
+  skill?: string;
+  tools?: AgentTool[];
+  dirs?: string[];
+  isolate?: boolean;
+  workspace?: string;
+  enabledWhen?: string;
+  required?: boolean;
+  input?: Record<string, string>;
+  description?: string;
+  scope?: string;
+  localId?: string;
+}
+
+export interface WorkflowSpecEdge {
+  from: string;
+  to: string;
+  when?: string;
+  description?: string;
+}
+
+export interface WorkflowSpec {
+  name: string;
+  description?: string;
+  /** The parameters a caller puts in factory_start input, as help text. */
+  inputs?: string;
+  version: string;
+  source?: string;
+  roles?: Record<string, string>;
+  entry: string;
+  nodes: WorkflowSpecNode[];
+  edges: WorkflowSpecEdge[];
+  limits?: { maxCycleIterations?: number; maxTurnsPerNode?: number };
+}
+
+export interface FactoryConfigFile {
+  tiers: string[];
+  roles: Record<string, string>;
+  switches?: Record<string, boolean>;
+  memoryLayer?: string;
+  projects?: ProjectsConfig;
+  supervisor?: SupervisorSettings;
+}
+
+export interface ProjectsConfig {
+  markers?: string[];
+  maxDepth?: number;
+  statusWorkflow?: string;
+  /** The workflow the viewer starts to merge marketplace updates into a project. */
+  mergeWorkflow?: string;
+  /** The CLI backend that runs the status workflow when the viewer starts it. */
+  statusBackend?: { kind: "cli"; cli: CliName };
+}
+
+/** An interval watch from config/factory.yaml: see watch.ts for how it starts runs. */
+export interface WatchSpec {
+  id: string;
+  everyMinutes: number;
+  stableChecks: number;
+  command: string[];
+  projectsWhen: string;
+  items: string;
+  skipWhen: string[];
+  key: string;
+  workflow: string;
+  goal: string;
+  input: Record<string, string>;
+  backend: { kind: "cli"; cli: CliName };
+}

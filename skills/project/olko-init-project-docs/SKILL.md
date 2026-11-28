@@ -20,3 +20,4 @@ Create the project decision store that agents read: `adrDirectory` (ADR files, t
 - `workflow.md` - scan, grill, write; file contents to create.
 - `examples.md` - grill question and file shapes.
 - `edge-cases.md` - re-runs, conflicts, strict rules.
+- `scripts/check-store.mjs` - checks the store and builds the digest of binding rules for given paths (usage in `overview.md`).

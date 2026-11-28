@@ -1,6 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readJson } from "./lib/cli.mjs";
+
+export { readJson };
 
 const root = process.cwd();
 const registryPath = path.join(root, "registry.json");
@@ -44,10 +47,6 @@ export function buildSearchIndex(registry) {
       };
     }),
   };
-}
-
-export function readJson(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
 export function writeJson(filePath, value) {

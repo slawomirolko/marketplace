@@ -1,0 +1,29 @@
+{
+  "questions": [
+    "Q1: Which answers does the approval question offer: yes / no / stop (recommended), yes / no, or yes / stop?",
+    "Q2: Who sets the id and text of the approval question: the engine (recommended), or the YAML author as for interrupt nodes?",
+    "Q3: When a loop enters the same approval node again, is the question asked again on every entry (recommended), or is the earlier answer reused?",
+    "Q4: Does T1 include factory/spec/workflow.schema.json and the auto-answer code in factory/host/cli-matrix.ts and factory/app/data.ts (recommended), or only the engine and the loader?",
+    "Q5: When approval is set on a node that is not kind: script, does the load fail with an error naming the node id (recommended), or is the field ignored?",
+    "Q6: Which answer do the auto-answer helpers give to an approval question: no (recommended), stop, or yes?",
+    "Q7: When the approval answer is stop, does the run end with status stopped as the budget stop does (recommended), or with another status?"
+  ],
+  "decisions": [],
+  "feature": {
+    "title": "Approval gate before a script operation",
+    "goal": "A script node marked approval: required waits for the user before its operation runs.",
+    "criteria": [
+      "FAC1: A script node with approval: required asks the user before its operation runs."
+    ]
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Approval gate in the engine and the loader",
+      "criteria": [
+        "AC1: The operation of an approval node does not run before the user answers."
+      ]
+    }
+  ],
+  "hierarchy": "- Feature: Approval gate before a script operation\n  - T1: Approval gate in the engine and the loader"
+}

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { buildSearchIndex, validateSearchIndex } from "./search-index.mjs";
+import { readJson } from "./lib/cli.mjs";
 
 const root = process.cwd();
 const registryPath = path.join(root, "registry.json");
@@ -12,10 +13,6 @@ const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const capabilityPattern = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 const progressiveSections = ["overview", "workflow", "examples", "edge-cases"];
 const largeSkillLineThreshold = 100;
-
-function readJson(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
-}
 
 function writeJson(filePath, value) {
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);

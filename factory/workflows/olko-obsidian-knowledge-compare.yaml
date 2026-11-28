@@ -1,0 +1,56 @@
+name: olko-obsidian-knowledge-compare
+version: 0.1.0
+description: "Compare phase: reads the docs/knowledge source and the matching Obsidian notes, then writes a read-only proposal of note creates and updates for you to approve. Nothing is written in this phase."
+source: "agents/opencode/olko-obsidian-knowledge-manager.md (steps 1-3 of the approval-gated workflow, the documentation language rule, the human readability rule, the STE editorial pass, the no issue-fix notes rule)"
+roles:
+  writer: medium
+  verifier: medium
+entry: propose
+nodes:
+  - id: propose
+    description: "Knowledge manager compares the repository docs with the active Obsidian vault and drafts the proposal; it reads only and writes no note."
+    kind: llm
+    role: writer
+    agent: olko-obsidian-knowledge-manager
+    tools: [read, bash]
+    dirs: ["{{input.project}}", "{{input.worktree}}"]
+    parse: text
+    prompt: |
+      Read only. Do not create, change, rename, move or delete any note, file or vault state in this step.
+      Request from the user: {{input.request}}
+      Project: {{input.project}}
+
+      1. Load the skill olko-memory-layer through the skill tool before any memory read or write; it owns the storage and retention policy. Load obsidian-cli before any Obsidian interaction. Load olko-ste100-skill-adapter when you draft or revise note content. Load obsidian-best-practices only when the request concerns an Obsidian plugin, theme, API or UI customization. If the skill tool cannot load a skill, read that skill's SKILL.md with read or grep instead and say so in the proposal.
+      2. Read the files under docs/knowledge in the project. They are the documentation source for this workflow. Do not edit, rename or delete them.
+      3. Inspect the active Obsidian vault with the Obsidian CLI. Use another vault only when the user names it. If Obsidian is not open, report that Obsidian must be open, give the command to retry, and stop. Never invent vault state.
+      4. Resolve each matching note by its exact vault-relative path when the request gives one. Otherwise try the same relative path first, then search by title. Report an ambiguous match; never choose one.
+      5. Compare titles, frontmatter properties, headings, links, tasks and body content. Classify each note as missing, stale, extra, ambiguous or unchanged. A missing source file never permits deleting a note.
+      6. Resolve the language from the docsLanguage key in .agents/skill-config.md in the project. Use English when the key is absent or unset. Write all note prose in that language, as natural and grammatical sentences with one idea each. Keep code identifiers, file paths, environment variable names and technical terms verbatim. Never save prose in another language.
+      7. Draft each proposed create or update. Keep local note content that the change does not cover. Load olko-ste100-skill-adapter and review the full text: one main idea per sentence, direct verbs, one term for each concept, specific headings and list items. Keep every verified fact, link, identifier, path, name and value. Add no claim the source does not support.
+      8. Notes describe how the mechanisms work now, in the present tense. Never create a note that records a fixed issue, a runtime verification of a fix, a defect investigation or a before and after story. Never write words like "previously", "used to" or "before the fix". Replace a false statement in a note with the present truth. If a mechanism did not change, propose no change for it. If the request asks for an issue-fix or verification note, refuse it and propose only an update to an existing mechanism note.
+      9. If the request asks for the step 8b reconciliation after implementation, resolve the feature worktree path from the request. If it is absent, ask for it before any write and propose no write yet. The running vault is the main checkout, so the proposal names the worktree docs/knowledge paths as the write targets.
+      10. Write the proposal as a draft for human review. It states: the resolved language; the target vault; every note path with create, update or leave unchanged; the exact final text or a compact diff for each write; and any ambiguity, missing context or assumption. The proposal must contain the final reviewed text, because the approval applies to that text. Do not claim that any write happened.
+      11. Do not commit, push, change OpenCode configuration, install plugins, modify repository documentation or modify Obsidian plugin or theme files, unless the user explicitly asks for that separate action.
+      12. If the request comes from olko-plan-documentation-orchestrator with a user question or plan pair, first identify the domain topic and the related mechanisms from that question or plan pair. Check them against docs/knowledge and the vault. Then return verified domain context and a short Domain changes recommendation. The recommendation lists the notes to create or update only after the matching implementation is complete. It writes nothing, and it does not ask for approval to write. Never recommend a note that records a fixed issue, a runtime verification or a defect investigation.
+  - id: check-proposal
+    description: "Checks the proposal text: passes when it is a draft of note changes for your approval, or a write-free Domain changes recommendation from the plan documentation orchestrator; fails when it only reports that Obsidian is not open or asks for a missing worktree path."
+    kind: llm
+    role: verifier
+    agent: olko-obsidian-knowledge-manager
+    parse: { line: [check, verdict, count, reason] }
+    prompt: |
+      Read only. Do not write any file, note or vault state in this step.
+      Proposal to check:
+      {{state.propose.propose}}
+
+      Decide from the proposal text alone. Reply pass when it is either of these:
+      - a draft of note creates and updates, with the target vault and the exact text of each write;
+      - a write-free Domain changes recommendation, with the verified domain context and the notes to create or update later.
+      Reply fail when it only reports that Obsidian must be open and gives a retry command, or when it only asks for a missing worktree path. Reply fail also when a recommendation claims that a write happened or asks for a note that records a fixed issue or a verification.
+      End your reply with exactly one line, with no backticks:
+      consistency | pass | 0 | <one sentence with the reason>
+      or
+      consistency | fail | 1 | <one sentence with the reason>
+edges:
+  - { from: propose, to: check-proposal, description: "the proposal is drafted: check that it is a usable draft" }
+  - { from: check-proposal, to: END, description: "the check is done; the root workflow reads its pass result" }

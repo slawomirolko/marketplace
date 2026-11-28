@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { tokenize } from "./search-index.mjs";
+import { readJson } from "./lib/cli.mjs";
 
 const root = process.cwd();
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
@@ -41,10 +42,6 @@ function parseArgs(argv) {
   }
 
   return args;
-}
-
-function readJson(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
 function parseScalar(value) {

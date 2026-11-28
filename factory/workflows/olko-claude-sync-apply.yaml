@@ -1,0 +1,97 @@
+name: olko-claude-sync-apply
+version: 0.2.0
+description: "Phase 4: the sync manager applies one staged row at a time into Olko (registry or agent manifest, validation) or into the user scope after a yes, and records lineage."
+source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 4, step 4 and apply)"
+roles:
+  sync: medium
+entry: apply-plan
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: apply-plan
+    description: "The sync manager lists the staged rows to apply one at a time, with the diff against the existing copy."
+    kind: llm
+    role: sync
+    agent: olko-claude-sync-manager
+    dirs: ["{{state.setup.setup.olko}}", "{{state.stage-plan.stage-plan.stageRoot}}"]
+    parse: { json: [rows] }
+    prompt: |
+      Prepare step 4 of your Phase 4: list the staged rows to apply, one at a time. Ask nothing and write nothing.
+      Staged jobs:
+      {{#state.stage-plan.stage-plan.items}}
+      - {{id}}: {{kind}} {{decision}}, {{direction}} from {{sourceStore}} {{source}}, existing {{existing}}, overwrite {{overwrite}}, version {{version}}, stage {{stageDir}}
+      {{/state.stage-plan.stage-plan.items}}
+      Porter results per job:
+      {{#each.state.stage}}
+      - {{key}}: name {{value.name}}, staged {{value.stagedPath}}, proposed category {{value.category}}
+      {{/each.state.stage}}
+      Rows the user dropped with skip-row: {{#state.fix.fix.skipped}}{{.}} {{/state.fix.fix.skipped}}
+      Leave out the dropped rows. needsCategory is true for a new skill going to Olko (existing none). categories are the category folders under {{state.setup.setup.olko}}/skills, the porter's proposed category first. diff is the content of diff.patch in the job's stage directory (at most 6000 characters), or `new file, no existing copy`.
+      End with one ```json block, rows in the order of the jobs:
+      {"rows": [{"id": "<job id>", "kind": "skill|agent", "name": "<staged name>", "decision": "<decision>", "direction": "to-olko|to-user", "source": "<source path>", "sourceStore": "target|olko|user", "existing": "<path or none>", "overwrite": false, "version": "<version>", "stagedPath": "<staged path>", "needsCategory": false, "categories": ["<category>"], "diff": "<diff>"}]}
+  - id: apply-next
+    description: "Takes the next staged row."
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: apply-plan.apply-plan.rows }
+  - id: ask-category
+    description: "Asks the Olko category of a new skill."
+    kind: interrupt
+    askedBy: apply-plan
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-category-{{state.apply-next.item.id}}"
+      text: "New Olko skill {{state.apply-next.item.name}}: which category?"
+      allowedFrom: state.apply-next.item.categories
+  - id: ask-overwrite
+    description: "Final confirmation before take-target, take-olko or revert-user overwrites a copy."
+    kind: interrupt
+    askedBy: apply-plan
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-overwrite-{{state.apply-next.item.id}}"
+      text: "Final confirmation: {{state.apply-next.item.decision}} overwrites {{state.apply-next.item.existing}}. Overwrite it?"
+      allowed: [overwrite, keep]
+  - id: ask-write
+    description: "Shows the diff and asks before writing into the user scope."
+    kind: interrupt
+    askedBy: apply-plan
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-write-{{state.apply-next.item.id}}"
+      text: "Write {{state.apply-next.item.kind}} {{state.apply-next.item.name}} into the user scope?\n{{state.apply-next.item.diff}}"
+      allowed: [write, skip]
+  - id: apply
+    description: "The sync manager writes the confirmed row into Olko (entry, validation) or into the user scope, and records lineage."
+    kind: llm
+    role: sync
+    agent: olko-claude-sync-manager
+    tools: [read, edit, bash]
+    dirs: ["{{state.setup.setup.olko}}", "{{state.setup.setup.user}}", "{{state.setup.setup.stateDir}}", "{{state.stage-plan.stage-plan.stageRoot}}"]
+    maxVisits: 200
+    parse: { json: [applied, olkoChanged, failed, results?] }
+    prompt: |
+      Apply this one row as step 4 of your Phase 4 says for its direction, then record its lineage with `hash` and `lineage set` (pass `--state-dir {{state.setup.setup.stateDir}}`). The user confirmed every question of this row; ask nothing. Write only this artifact and its own manifest entry.
+      Row {{state.apply-next.item.id}}: {{state.apply-next.item.kind}} {{state.apply-next.item.name}}, {{state.apply-next.item.decision}}, {{state.apply-next.item.direction}}, source ({{state.apply-next.item.sourceStore}}) {{state.apply-next.item.source}}, staged {{state.apply-next.item.stagedPath}}, existing {{state.apply-next.item.existing}}, approved version {{state.apply-next.item.version}}.
+      {{#state.apply-next.item.needsCategory}}New Olko skill: the user chose the category {{state.ask-category.answer}}.{{/state.apply-next.item.needsCategory}}
+      Olko checkout: {{state.setup.setup.olko}}. User scope: {{state.setup.setup.user}} (`~/.claude` means this path).
+      Rows applied before:
+      {{#state.apply.apply.applied}}
+      - {{.}}
+      {{/state.apply.apply.applied}}
+      After your report, end with one ```json block: {"applied": ["<every row applied before>", "<id> <direction>"], "olkoChanged": <true when any applied row went to Olko>, "failed": <number of failed validation commands of this row>, "results": ["<command>: pass or FAIL <last lines>"]}
+edges:
+  - { from: apply-plan, to: apply-next }
+  - { from: apply-next, to: END, when: "apply-next.done == true", description: "all rows applied" }
+  - { from: apply-next, to: ask-category, when: "apply-next.item.needsCategory == true", description: "new Olko skill" }
+  - { from: apply-next, to: ask-overwrite, when: "apply-next.item.overwrite == true", description: "the row overwrites a copy" }
+  - { from: apply-next, to: apply, when: 'apply-next.item.direction == "to-olko"', description: "row goes to Olko" }
+  - { from: apply-next, to: ask-write, description: "row goes to the user scope" }
+  - { from: ask-category, to: apply }
+  - { from: ask-overwrite, to: apply, when: 'ask-overwrite.answer == "overwrite" && apply-next.item.direction == "to-olko"', description: "confirmed, row goes to Olko" }
+  - { from: ask-overwrite, to: ask-write, when: 'ask-overwrite.answer == "overwrite"', description: "confirmed, row goes to the user scope" }
+  - { from: ask-overwrite, to: apply-next, description: "you kept the copy: nothing written" }
+  - { from: ask-write, to: apply, when: 'ask-write.answer == "write"', description: "you chose write" }
+  - { from: ask-write, to: apply-next, description: "you chose skip: nothing written" }
+  - { from: apply, to: apply-next }

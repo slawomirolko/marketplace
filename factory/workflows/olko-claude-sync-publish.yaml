@@ -1,0 +1,74 @@
+name: olko-claude-sync-publish
+version: 0.2.0
+description: "Phase 5: the sync manager runs the Olko tests and the leak check, then opens a draft PR after approval; leave, wait for CI or squash merge."
+source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 4 tests and phase 5)"
+roles:
+  sync: medium
+entry: olko-changed
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: olko-changed
+    description: "Routes on whether an applied row changed the Olko checkout."
+    kind: script
+    op: builtin.pass
+  - id: check
+    description: "The sync manager runs the Olko node tests and checks that no leak term, target name or path, or target plugin name reached Olko."
+    kind: llm
+    role: sync
+    agent: olko-claude-sync-manager
+    tools: [read, bash]
+    dirs: ["{{state.setup.setup.olko}}", "{{state.setup.setup.target}}", "{{state.setup.setup.stateDir}}"]
+    parse: { json: [files, passed, summary, leaks] }
+    prompt: |
+      The Olko checkout {{state.setup.setup.olko}} changed. Do only these checks; ask nothing and change no file.
+      1. Run `node --test scripts/*.test.mjs` in the Olko checkout (end of your Phase 4).
+      2. Leak check before Phase 5: list the changed files with `git status --porcelain --untracked-files=all`. Check each changed file (for a .json file only its added diff lines) for the leak terms from `target get --state-dir {{state.setup.setup.stateDir}}`, the target name and path ({{state.setup.setup.target}}) and its folder name, and the plugin names under the target's plugins folder except the plugins of rows ported from the target.
+      Rows applied: {{#state.apply.apply.applied}}{{.}}; {{/state.apply.apply.applied}}
+      Never print a leak term, the target name or its path: name each hit as `<file>: leak term #<n>`.
+      End with one ```json block: {"files": ["<changed file>"], "passed": <true|false>, "summary": "<pass and fail counts>", "leaks": ["<file>: leak term #<n>"]}
+  - id: stop-leak
+    description: "Stops the run: something of the target reached Olko; nothing is published."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Leak check failed, nothing published: the check step lists the files with a leak term, the target name or path, or a target plugin name." }
+  - id: ask-publish
+    description: "Shows the Olko changes and validation; asks before branch, commit, push and draft PR."
+    kind: interrupt
+    askedBy: check
+    question:
+      id: q-claude-sync-publish
+      text: "Olko changes:\n{{#state.check.check.files}}{{.}}\n{{/state.check.check.files}}\nApplied: {{#state.apply.apply.applied}}{{.}}; {{/state.apply.apply.applied}}\nValidation: {{state.check.check.summary}} (passed: {{state.check.check.passed}})\n\nCommit on a new feature branch, push and open a draft PR?"
+      allowed: [publish, stop]
+  - id: publish-pr
+    description: "The sync manager creates the feature branch, commits only the changed files, pushes and opens a draft PR."
+    kind: llm
+    role: sync
+    agent: olko-claude-sync-manager
+    tools: [read, bash]
+    dirs: ["{{state.setup.setup.olko}}"]
+    parse: { json: [url, branch, commit] }
+    prompt: |
+      Do steps 2 to 4 of your Phase 5 in the Olko checkout {{state.setup.setup.olko}}; the user approved the commit. Open the PR as a draft (`gh pr create --draft --base main`). Do not merge and ask nothing: the factory asks leave, wait for CI or merge.
+      Files changed in Phase 4 (stage only these):
+      {{#state.check.check.files}}
+      - {{.}}
+      {{/state.check.check.files}}
+      Rows applied: {{#state.apply.apply.applied}}{{.}}; {{/state.apply.apply.applied}}
+      Validation: {{state.check.check.summary}}
+      End with one ```json block: {"url": "<PR URL>", "branch": "<branch>", "commit": "<commit sha>"}
+  - id: pr
+    description: "Calls the shared PR step: leave, wait for CI or mark ready and squash merge."
+    kind: call
+    workflow: olko-pr-merge
+    input: { path: "{{state.setup.setup.olko}}", prUrl: "{{state.publish-pr.publish-pr.url}}", prBranch: "{{state.publish-pr.publish-pr.branch}}", label: "Olko" }
+edges:
+  - { from: olko-changed, to: check, when: "apply.apply.olkoChanged == true", description: "Olko changed" }
+  - { from: olko-changed, to: END, description: "Olko unchanged, nothing to publish" }
+  - { from: check, to: stop-leak, when: "check.check.leaks > 0", description: "a leak reached Olko" }
+  - { from: check, to: ask-publish, description: "no leak" }
+  - { from: stop-leak, to: END }
+  - { from: ask-publish, to: publish-pr, when: 'ask-publish.answer == "publish"', description: "you chose publish" }
+  - { from: ask-publish, to: END, when: 'ask-publish.answer == "stop"', description: "you chose stop: changes stay unpublished" }
+  - { from: publish-pr, to: pr }
+  - { from: pr, to: END }

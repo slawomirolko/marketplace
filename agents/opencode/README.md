@@ -45,6 +45,10 @@ Review runs with `mode: all`, so other orchestrators can call
 `olko-review-orchestrator`. `olko-review-requirements-lens` checks the diff or a plan
 against the acceptance criteria, and `olko-project-rules-check` checks confirmed findings
 against the project's decision store (see `docs/skill-adaptation-contract.md` §9).
+`olko-project-context` builds the store digest for a Task or a review: the binding
+ADR and rule lines for the given paths, from `scripts/check-store.mjs` of
+`olko-init-project-docs`. Implementers and checkers read that digest first and open
+a full ADR only for a conflict.
 Its PLAN ROUTE reviews a plan before the user approves it.
 
 An orchestrator that calls `olko-review-orchestrator` nests subagents two levels deep. OpenCode allows one level by default, so the installer sets `experimental.subagent_depth` in the project's `opencode.json` to the deepest delegation chain it installs (it never lowers an existing value).

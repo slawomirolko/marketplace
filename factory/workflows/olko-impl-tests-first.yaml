@@ -1,0 +1,187 @@
+name: olko-impl-tests-first
+version: 0.4.0
+description: "Step 3a: the orchestrator names the stacks of the Task and their agents; the test-first author writes one failing test per acceptance criterion for every stack; unclear criteria and blocked choices go to you, never guessed, through the question gate when the project adapter sets it."
+source: "agents/opencode/olko-implementation-orchestrator.md (QUESTION GATE, DELTA CLOSURE) and skills/workflow/olko-task-implementation-workflow/SKILL.md (workflow.md gate 4, failing tests first; agent and verification constraints)"
+roles:
+  implementer: medium
+  orchestrator: medium
+  context: low
+entry: stacks
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: stacks
+    description: "The implementation orchestrator finds the stacks the Task plan touches and picks the test author, implementer and test runner of each from its allowlist."
+    kind: llm
+    role: orchestrator
+    agent: olko-implementation-orchestrator
+    tools: [read]
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: { json: [stacks, authors, implementers, runners] }
+    prompt: |
+      Read only: name the stacks that Task {{state.task.task.taskName}} touches, from its approved plan {{state.task.task.taskFile}} and the Feature plan {{state.task.task.featurePlan}}, and choose the agents of each stack by your stack rule and your permission.task allowlist. Delegate nothing, ask nothing and change no file.
+      Stack ids: dotnet, army-python, mobile, react, react-native. Never invent an agent name and never leave one null: the implementer of a stack is olko-<stack id>-implementer and its test runner is olko-<stack id>-test-runner, both in your permission.task allowlist.
+      End with one ```json block, one item per stack in each list: {"stacks": ["<stack id>"], "authors": [{"id": "<stack id>", "agentName": "olko-test-first-author"}], "implementers": [{"id": "<stack id>", "agentName": "<the stack implementer>"}], "runners": [{"id": "<stack id>", "agentName": "<the stack test runner>"}]}
+  - id: tests-store-context
+    description: "olko-project-context builds the project store digest for the files and directories the Task plan names, for the test-first author."
+    kind: llm
+    role: context
+    agent: olko-project-context
+    tools: [read, bash]
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: { json: [noStore, digest, blocked, enforced?, cut?, error?] }
+    prompt: |
+      Project: the current working directory (the Task worktree).
+      Paths: read the approved Task plan {{state.task.task.taskFile}} and use every file path and directory it names (a directory as <dir>/x).
+      Build the store digest for these paths.
+  - id: tests-ask-store
+    description: "Overlapping ADRs leave more than one binding answer for a topic: you name the binding ADR per topic, or stop. The test-first author waits for your answer."
+    kind: interrupt
+    askedBy: tests-store-context
+    question:
+      id: q-tests-store
+      text: "The project store has topics where more than one ADR binds the same files, and no overrides link decides between them:\n{{#state.tests-store-context.tests-store-context.blocked}}- {{topic}}: {{#adrs}}{{.}} {{/adrs}}(files: {{#paths}}{{.}} {{/paths}})\n{{/state.tests-store-context.tests-store-context.blocked}}For each topic, name the ADR that binds here (for example: logging.format=ADR-0007), or answer stop. Fix the store later with the olko-adr-store-reconcile workflow."
+  - id: tests-stop-store
+    description: "Stops: you chose to fix the project store first."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Stopped: the project store has overlapping ADRs without a binding answer. Run the olko-adr-store-reconcile workflow for this project, then start again." }
+  - id: tests-round
+    description: "Counts the failing-tests-first rounds."
+    kind: script
+    op: builtin.count
+    maxVisits: 3
+  - id: write-tests
+    description: "olko-test-first-author (mode write), one call per stack: one failing test per criterion, run, failing for the reason the criterion describes."
+    kind: llm
+    role: implementer
+    agentsFrom: state.stacks.stacks.authors
+    tools: [read, edit, bash]
+    maxVisits: 3
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: { line: [result, count, unclear, blocked] }
+    prompt: |
+      {{#state.tests-store-context.tests-store-context.digest.length}}
+      Project store digest for this Task (binding; open a full ADR only to resolve a conflict with it or before you return Blocked: about a decision):
+      {{/state.tests-store-context.tests-store-context.digest.length}}
+      {{#state.tests-store-context.tests-store-context.digest}}
+      - {{source}} [{{topic}}]: {{line}}
+      {{/state.tests-store-context.tests-store-context.digest}}
+      {{#state.tests-store-context.tests-store-context.blocked}}
+      Overlapping topic {{topic}} ({{#adrs}}{{.}} {{/adrs}}): the user named the binding ADR: {{state.tests-ask-store.answer}}. Open that ADR and follow it; the other ADRs of the topic do not apply.
+      {{/state.tests-store-context.tests-store-context.blocked}}
+      Mode: write. Task {{state.task.task.taskName}}, stack {{agent.id}}. Approved Task plan: {{state.task.task.taskFile}}. Work only in this worktree.
+      Acceptance criteria:
+      {{state.task.task.criteria}}
+      {{#state.ask-unclear.answer}}
+      The user answered your open questions: {{state.ask-unclear.answer}}
+      {{/state.ask-unclear.answer}}
+      {{#state.tests-gate.tests-gate}}
+      Question gate, latest result ({{verdict}}): {{detail}}. A rejected question cites a registry decision: follow it, never ask it again.
+      {{/state.tests-gate.tests-gate}}
+      Write one failing test per criterion, run them, and make each fail for the reason the criterion describes. No comments and no criterion or plan ids in test code. No CI/CD workflow files.
+      End with one line: `tests | <number of failing tests written> | unclear: <none or questions separated by ;> | blocked: <none or question with options>`
+  - id: tests-check
+    description: "The implementation orchestrator records criterion, test and failure reason in the journal, lists the failing-test-first files as read-only input for the implementers, and lists open items."
+    kind: llm
+    role: orchestrator
+    agent: olko-implementation-orchestrator
+    tools: [read, edit, bash]
+    maxVisits: 3
+    dirs: ["{{input.project}}", "{{state.task.task.featureDir}}"]
+    parse: { json: [verdict, testFiles, questions, gate?, proposals?] }
+    prompt: |
+      Step 3a, round {{state.tests-round.count}} for Task {{state.task.task.taskName}}. Delegate nothing, ask nothing and change no code or test.
+      Test-first author results per stack:
+      {{#each.state.write-tests}}
+      {{key}}:
+      {{value.text}}
+      {{/each.state.write-tests}}
+      {{#state.ask-unclear.answer}}
+      The user's answer to the open items: {{state.ask-unclear.answer}}
+      {{/state.ask-unclear.answer}}
+      Record each criterion -> test -> failure reason, the test files, and any user answer in the implementation journal of {{state.task.task.taskFile}}. An `Unclear criteria` or `Blocked:` item blocks the stack's implementation until the user decides; never guess it.
+      QUESTION GATE: read questionReviewerAgent and questionGateCommand from .agents/skill-config.md of the main checkout {{input.project}}; with either unset the gate is off.
+      When the gate is on and there are open questions: you never author a planning question. Hand the children's open questions over verbatim as proposals for the question reviewer, one per question, in its input contract (cluster, topic, topicTerms, questionText exactly as the child wrote it, decisionStatement or cites, artifacts that the answer will change, exactly three options with label, semantics and effect).
+      When the gate is on, close a registered question [Q<n>] in the registry (questionGateCommand) only with evidence: DELTA CLOSURE, the answer has landed in every deliverable it names (plan, tracker, issue text, manifests, code) with read-back proof in its tracker row; until then it stays open.
+      End with one ```json block: {"verdict": "<done when no open item is left, else unclear>", "testFiles": ["<path of a test file the author created or changed, relative to the worktree>"], "questions": "<the open questions and blocked choices with their options, one per line, or empty>", "gate": "<on|off>", "proposals": "<when the gate is on and items are open: the batch as one JSON array text; else empty>"}
+  - id: ask-unclear
+    description: "Asks you to settle the unclear criteria and blocked choices (free text)."
+    kind: interrupt
+    askedBy: tests-check
+    maxVisits: 3
+    question:
+      id: "q-impl-unclear-{{state.tests-round.count}}"
+      text: "The test author could not write these tests without guessing:\n{{#state.tests-grill.tests-grill}}{{state.tests-grill.tests-grill}}{{/state.tests-grill.tests-grill}}{{^state.tests-grill.tests-grill}}{{state.tests-check.tests-check.questions}}{{/state.tests-grill.tests-grill}}\nYour answer (it goes back to the author):"
+  - id: tests-gate
+    description: "QUESTION GATE (only when the project adapter sets questionReviewerAgent and questionGateCommand): the question reviewer checks the unclear criteria and blocked choices against the decision registry before you see them. A decided cluster, an option that reverses an answered decision, or a question about the orchestrator's own consistency is rejected."
+    kind: llm
+    role: orchestrator
+    agent: olko-question-reviewer
+    tools: [read, bash]
+    maxVisits: 20
+    dirs: ["{{input.project}}", "{{state.task.task.featureDir}}"]
+    parse: { line: [gate, verdict, detail] }
+    prompt: |
+      QUESTION GATE for Feature {{state.task.task.featureId}}, Task {{state.task.task.taskName}} (failing tests first). Registry: questionRegistryPattern from .agents/skill-config.md of {{input.project}} (default {{state.task.task.featureDir}}/questions.json). Run your PROCEDURE on this batch, handed over by the implementation orchestrator:
+      {{state.tests-check.tests-check.proposals}}
+      Write your table. Number each approved question with the next free [Q<n>] id of the registry. Change no file.
+      End with one line, the verdict in lowercase: `gate | <ask|none|blocked> | <ask: every approved question verbatim with its [Q<n>] id, separated by ;; and then the rejected ones with the decision each cites; none: every question was rejected, with the registry decision each one cites; blocked: the missing input or command>`
+  - id: tests-grill
+    description: "grill-with-docs presents only the questions the question reviewer approved, verbatim with their [Q<n>] ids, in the user's response language; it asks nothing itself."
+    kind: llm
+    role: orchestrator
+    skill: grill-with-docs
+    tools: [read]
+    maxVisits: 20
+    dirs: ["{{input.project}}", "{{state.task.task.featureDir}}"]
+    parse: text
+    prompt: |
+      Present only these approved questions of Task {{state.task.task.taskName}} (unclear criteria and blocked choices of the test author), verbatim, each with its [Q<n>] id, with your question content rules: {{state.tests-gate.tests-gate.detail}}
+      Never present a question the reviewer rejected. Return the question text only; the workflow puts it to the user. Do not add questions and do not change any file.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it.
+      If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
+  - id: tests-register
+    description: "QUESTION GATE: the implementation orchestrator registers each approved question with propose and records your answer with answer; the question stays open until DELTA CLOSURE has read-back proof."
+    kind: llm
+    role: orchestrator
+    agent: olko-implementation-orchestrator
+    tools: [read, edit, bash]
+    maxVisits: 20
+    dirs: ["{{input.project}}", "{{state.task.task.featureDir}}"]
+    parse: text
+    prompt: |
+      QUESTION GATE for Task {{state.task.task.taskName}}. Delegate nothing, ask nothing and change no code. With questionGateCommand from .agents/skill-config.md of {{input.project}} and the registry (questionRegistryPattern, default {{state.task.task.featureDir}}/questions.json): register each approved question with `propose`, then record the user's answer with `answer`. Do not close any question now.
+      Approved questions: {{state.tests-gate.tests-gate.detail}}
+      User answer: {{state.ask-unclear.answer}}
+      List in the Feature tracker {{state.task.task.tracker}} every deliverable this answer touches (plan, tracker, issue text, manifests, code), one row per question: DELTA CLOSURE keeps the decision open until each has read-back proof.
+  - id: tests-stop-gate
+    description: "Stops: the question gate is on but the question reviewer is blocked (missing input or command) or grill-with-docs cannot be loaded; nothing is asked of you."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Implementation stopped: the question gate could not run; no unapproved question is shown to the user." }
+  - id: stop-unclear
+    description: "Stops: implementation of a stack waits until its criteria are clear."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Implementation stopped: criteria still unclear after {{state.tests-round.count}} rounds:\n{{state.tests-check.tests-check.questions}}" }
+edges:
+  - { from: stacks, to: tests-store-context }
+  - { from: tests-store-context, to: tests-ask-store, when: "tests-store-context.tests-store-context.blocked > 0", description: "overlapping ADRs without a binding answer" }
+  - { from: tests-store-context, to: tests-round, description: "the digest is ready (or there is no store)" }
+  - { from: tests-ask-store, to: tests-stop-store, when: 'tests-ask-store.answer == "stop"', description: "you chose to fix the store first" }
+  - { from: tests-ask-store, to: tests-round, description: "you named the binding ADRs" }
+  - { from: tests-round, to: write-tests }
+  - { from: write-tests, to: tests-check }
+  - { from: tests-check, to: END, when: 'tests-check.tests-check.verdict == "done"', description: "every criterion has a failing test" }
+  - { from: tests-check, to: stop-unclear, when: "tests-round.count >= 3", description: "still unclear after three rounds" }
+  - { from: tests-check, to: tests-gate, when: 'tests-check.tests-check.gate == "on"', description: "open items and the question gate is on: the question reviewer checks them first" }
+  - { from: tests-check, to: ask-unclear, description: "a criterion is unclear or a choice is blocked; question gate off" }
+  - { from: tests-gate, to: tests-stop-gate, when: 'tests-gate.tests-gate.verdict == "blocked"', description: "the question reviewer is blocked" }
+  - { from: tests-gate, to: tests-round, when: 'tests-gate.tests-gate.verdict == "none"', description: "every question was rejected as already decided: the author follows the registry decisions, nothing is asked" }
+  - { from: tests-gate, to: tests-grill, description: "approved questions: grill-with-docs presents them" }
+  - { from: tests-grill, to: tests-stop-gate, when: 'tests-grill.tests-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded" }
+  - { from: tests-grill, to: ask-unclear, description: "the approved questions go to you" }
+  - { from: ask-unclear, to: tests-register, when: 'tests-check.tests-check.gate == "on"', description: "question gate on: your answer is registered first" }
+  - { from: ask-unclear, to: tests-round, description: "your answer goes back to the author" }
+  - { from: tests-register, to: tests-round }

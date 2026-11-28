@@ -1,0 +1,91 @@
+name: olko-claude-sync-inventories
+version: 0.2.0
+description: "Phase 2: three inventory workers list every skill and agent per store, the matcher links copies into capabilities, probable links are confirmed and the sync manager checks exclusions."
+source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 2, inventory, match and exclusions)"
+roles:
+  sync-worker: low
+  sync: medium
+entry: inventory
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: inventory
+    description: "Three inventory workers list every skill and agent of target, Olko and user scope, in parallel."
+    kind: llm
+    role: sync-worker
+    agents:
+      - { id: target, agent: olko-claude-sync-inventory }
+      - { id: olko, agent: olko-claude-sync-inventory }
+      - { id: user, agent: olko-claude-sync-inventory }
+    tools: [read, bash]
+    dirs: ["{{state.setup.setup.target}}", "{{state.setup.setup.olko}}", "{{state.setup.setup.user}}", "{{state.setup.setup.stateDir}}"]
+    parse: { json: [rows, unreadable?] }
+    prompt: |
+      Store: {{agent.id}}
+      Store paths: target {{state.setup.setup.target}}, olko {{state.setup.setup.olko}}, user {{state.setup.setup.user}} (`~/.claude` means this path). Inventory only the store {{agent.id}}.
+      Sync state directory: {{state.setup.setup.stateDir}} (pass --state-dir with it to sync-state.mjs).
+
+      After your report, end with one ```json block, one row per artifact you found:
+      {"rows": [{"kind": "skill|agent", "name": "<name>", "path": "<absolute path>", "version": "<version or —>", "description": "<first 200 characters>", "triggers": "<trigger phrases>", "hash": "<content hash>", "portedFrom": "<marker or —>"}], "unreadable": ["<path>"]}
+  - id: match
+    description: "The matcher groups the copies across stores into capabilities and proposes probable links."
+    kind: llm
+    role: sync-worker
+    agent: olko-claude-sync-matcher
+    dirs: ["{{state.setup.setup.target}}", "{{state.setup.setup.olko}}", "{{state.setup.setup.user}}", "{{state.setup.setup.stateDir}}"]
+    parse: { json: [capabilities, probable, notFound?] }
+    prompt: |
+      Lineage file: {{state.setup.setup.stateDir}}/lineage.json
+
+      Inventory report of store target:
+      {{state.inventory.target.text}}
+
+      Inventory report of store olko:
+      {{state.inventory.olko.text}}
+
+      Inventory report of store user:
+      {{state.inventory.user.text}}
+
+      {{#input.artifacts.length}}Report only the capabilities whose id, or the name of one of whose copies, matches one of these requested names under your name rule: {{#input.artifacts}}{{.}} {{/input.artifacts}}
+      List every requested name that matches no artifact in notFound.{{/input.artifacts.length}}{{^input.artifacts.length}}Report every capability.{{/input.artifacts.length}}
+      An unmatched artifact is its own single-store capability with basis single. List in probable only the links of capabilities you report.
+      After your report, end with one ```json block:
+      {"capabilities": [{"id": "<capability id>", "basis": "lineage|marker|name|probable|single", "kind": "skill|agent", "copies": {"target": {"name": "<name>", "path": "<absolute path>", "version": "<version or —>", "hash": "<hash or —>"}, "olko": {}, "user": {}}}], "probable": [{"id": "<capability id>", "evidence": "<one line>"}], "notFound": []}
+      Leave out a store key when the capability has no copy there.
+  - id: stop-scope
+    description: "Stops the run: a requested artifact is in no store."
+    kind: script
+    op: builtin.stop
+    with: { reason: "input.artifacts names an artifact that is in no store; the match step lists it in notFound." }
+  - id: probable-loop
+    description: "Asks the user to confirm or split every probable link the matcher proposed."
+    kind: group
+    workflow: olko-claude-sync-probable
+  - id: exclusions
+    description: "The sync manager splits the probable links the user split and runs exclusion check per capability and direction."
+    kind: llm
+    role: sync
+    agent: olko-claude-sync-manager
+    tools: [read, bash]
+    dirs: ["{{state.setup.setup.stateDir}}"]
+    parse: { json: [compare, excluded] }
+    prompt: |
+      Do only step 3 of your Phase 2 (exclusions). Ask nothing, dispatch no worker and change no exclusion: run only `exclusion check` with `--state-dir {{state.setup.setup.stateDir}}`.
+      Capabilities from the matcher:
+      {{#state.match.match.capabilities}}
+      - {{id}} ({{kind}}, basis {{basis}}){{#copies.target}}; target: {{name}} {{path}}{{#version}} version {{version}}{{/version}}{{#hash}} hash {{hash}}{{/hash}}{{/copies.target}}{{#copies.olko}}; olko: {{name}} {{path}}{{#version}} version {{version}}{{/version}}{{#hash}} hash {{hash}}{{/hash}}{{/copies.olko}}{{#copies.user}}; user: {{name}} {{path}}{{#version}} version {{version}}{{/version}}{{#hash}} hash {{hash}}{{/hash}}{{/copies.user}}
+      {{/state.match.match.capabilities}}
+      The user's answers so far. q-claude-sync-probable-<capability id> is the answer on a probable link: confirm keeps one capability; split makes one single-store capability per copy, with id <capability id>@<store> and basis split.
+      {{#each.answers}}
+      - {{key}}: {{value}}
+      {{/each.answers}}
+      Check each direction whose source store has a copy: target->olko for the target copy, olko->user for the Olko copy, user->olko for the user copy, with the artifact `<kind>:<name in that store>` and its version when it has one. A capability is excluded when every check says excluded.
+      After your report, end with one ```json block:
+      {"compare": [{"id": "<capability id>", "kind": "skill|agent", "basis": "<basis>", "copiesText": "<one line per copy: <store>: <name> <path> version <version> hash <hash>>"}], "excluded": [{"id": "<capability id>", "reason": "<reason and date>"}]}
+edges:
+  - { from: inventory, to: match }
+  - { from: match, to: stop-scope, when: "match.match.notFound > 0", description: "a requested artifact is in no store" }
+  - { from: match, to: probable-loop, description: "every requested artifact found" }
+  - { from: stop-scope, to: END }
+  - { from: probable-loop, to: exclusions }
+  - { from: exclusions, to: END }

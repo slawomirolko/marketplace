@@ -1,0 +1,46 @@
+name: olko-safe-source
+version: 0.2.0
+description: "Shared Phase 1 step of the Claude sync, called with input path and label: the Claude sync manager requires a clean checkout on main, fast-forwarded to origin/main; asks before switching branch and stops the run otherwise. Never compares against a stale checkout."
+source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 1)"
+roles:
+  sync: medium
+entry: safe-source
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: safe-source
+    description: "The Claude sync manager checks the checkout in input.path: Git repository, clean worktree, branch main, fetch and fast-forward pull. It switches to main only after your answer."
+    kind: llm
+    role: sync
+    agent: olko-claude-sync-manager
+    tools: [read, bash]
+    dirs: ["{{input.path}}"]
+    maxVisits: 2
+    parse: { json: [ok, reason, detail, head?] }
+    prompt: |
+      Do only Phase 1 (safe sources) for one checkout: the {{input.label}} checkout at {{input.path}}. Use `git -C` on that path. Do not run the state script, compare, edit or commit anything.
+      {{#answers.q-safe-source-main}}The user answered `{{answers.q-safe-source-main}}` to switching this checkout to main: when the answer is `switch` and the worktree is clean, run `git checkout main` first.{{/answers.q-safe-source-main}}{{^answers.q-safe-source-main}}The user has not approved a branch switch: when the checkout is not on main, do not switch; report the branch.{{/answers.q-safe-source-main}}
+      Stop at the first failing check: not a Git repository or status fails, dirty worktree, not on main, missing origin remote, fetch failure, fast-forward pull failure.
+
+      End with one ```json block:
+      {"ok": <true only when the checkout is clean, on main and fast-forwarded to origin/main>, "reason": "<ok|status|dirty|not-main|checkout|no-remote|fetch|pull>", "detail": "<the branch name for not-main, else what failed or the head>", "head": "<HEAD sha when ok, else null>"}
+  - id: ask-main
+    description: "Asks whether to switch the checkout to main."
+    kind: interrupt
+    askedBy: safe-source
+    question:
+      id: q-safe-source-main
+      text: "The {{input.label}} checkout is on {{state.safe-source.safe-source.detail}}, not main. Switch it to main?"
+      allowed: [switch, stop]
+  - id: stop-unsafe
+    description: "Stops the run: the checkout is not safe to compare against."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Sync stopped before any comparison: a checkout is not safe; the safe-source step names the checkout and what failed." }
+edges:
+  - { from: safe-source, to: END, when: "safe-source.safe-source.ok == true", description: "clean and current" }
+  - { from: safe-source, to: ask-main, when: 'safe-source.safe-source.reason == "not-main"', description: "not on main" }
+  - { from: safe-source, to: stop-unsafe, description: "dirty, no remote or pull failed" }
+  - { from: ask-main, to: safe-source, when: 'ask-main.answer == "switch"', description: "you chose switch" }
+  - { from: ask-main, to: stop-unsafe, when: 'ask-main.answer == "stop"', description: "you chose stop" }
+  - { from: stop-unsafe, to: END, description: "never reached: stop-unsafe fails the run" }

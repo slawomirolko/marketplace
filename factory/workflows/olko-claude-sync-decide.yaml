@@ -1,0 +1,105 @@
+name: olko-claude-sync-decide
+version: 0.2.0
+description: "Phase 3: one decision per non-identical row; exclusions ask for their scope and reason; the sync manager records exclusions and rejections."
+source: "plugins/olko-sync/agents/olko-claude-sync-manager.md (phase 3)"
+roles:
+  sync: medium
+entry: decide-next
+limits:
+  maxCycleIterations: 3
+nodes:
+  - id: decide-next
+    description: "Takes the next non-identical row."
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: rows.rows.decide }
+  - id: decide
+    description: "Asks your decision for this row (port, install, publish, exclude, leave...)."
+    kind: interrupt
+    askedBy: { workflow: olko-claude-sync-compare, step: rows }
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-row-{{state.decide-next.item.id}}"
+      text: "Row {{state.decide-next.number}} of {{state.decide-next.total}} needs a decision.\n{{state.decide-next.item.line}}\n\nAll rows:\n{{state.rows.rows.table}}\n\nNothing changes until you decide. take-* and revert-user overwrite a copy after one more confirmation."
+      allowedFrom: state.decide-next.item.options
+  - id: plan
+    description: "The sync manager splits the decisions into changes, exclusions and rejections."
+    kind: llm
+    role: sync
+    agent: olko-claude-sync-manager
+    parse: { json: [decided, records, rejects, changes] }
+    prompt: |
+      Phase 3: sort the user's decisions. Ask nothing, run nothing and change nothing.
+      Rows:
+      {{#state.rows.rows.rows}}
+      - {{id}} ({{kind}}): {{verdict}}, proposed Olko version {{nextVersion}}
+      {{/state.rows.rows.rows}}
+      The user's answers. q-claude-sync-row-<capability id> is the decision on that row; a row without one is identical and has decision none.
+      {{#each.answers}}
+      - {{key}}: {{value}}
+      {{/each.answers}}
+      After a short summary, end with one ```json block:
+      {"decided": [{"id": "<capability id>", "kind": "skill|agent", "verdict": "<verdict>", "decision": "<decision>"}], "records": [{"id": "<row decided exclude>", "kind": "skill|agent"}], "rejects": [{"id": "<row decided reject>", "kind": "skill|agent"}], "changes": [{"id": "<row decided any other action than none, leave, exclude or reject>", "kind": "skill|agent", "decision": "<decision>", "nextVersion": "<proposed Olko version>"}]}
+  - id: record-next
+    description: "Takes the next exclusion."
+    kind: script
+    op: list.next
+    maxVisits: 200
+    with: { over: plan.plan.records }
+  - id: ask-scope
+    description: "Asks the exclusion scope: all or one direction."
+    kind: interrupt
+    askedBy: plan
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-scope-{{state.record-next.item.id}}"
+      text: "Exclude {{state.record-next.item.kind}} {{state.record-next.item.id}} for all directions or one?"
+      allowed: [all, "target->olko", "olko->user", "user->olko"]
+  - id: ask-reason
+    description: "Asks the reason for the exclusion."
+    kind: interrupt
+    askedBy: plan
+    maxVisits: 200
+    question:
+      id: "q-claude-sync-reason-{{state.record-next.item.id}}"
+      text: "Why exclude {{state.record-next.item.kind}} {{state.record-next.item.id}}? One line."
+  - id: record
+    description: "The sync manager writes the exclusions and rejections into the sync state."
+    kind: llm
+    role: sync
+    agent: olko-claude-sync-manager
+    tools: [bash]
+    parse: text
+    prompt: |
+      Do only the exclude and reject actions of your Phase 3. The user decided each of them; run exactly these, with `--state-dir {{state.setup.setup.stateDir}}`, and change nothing else.
+      Excluded rows:
+      {{#state.plan.plan.records}}
+      - {{kind}} {{id}}
+      {{/state.plan.plan.records}}
+      Rejected rows:
+      {{#state.plan.plan.rejects}}
+      - {{kind}} {{id}}
+      {{/state.plan.plan.rejects}}
+      Copies per capability:
+      {{#state.exclusions.exclusions.compare}}
+      - {{id}}: {{copiesText}}
+      {{/state.exclusions.exclusions.compare}}
+      The user's answers. q-claude-sync-scope-<capability id> is the exclusion scope, q-claude-sync-reason-<capability id> its reason.
+      {{#each.answers}}
+      - {{key}}: {{value}}
+      {{/each.answers}}
+      The artifact is `<kind>:<name>` with the name in the source store: target, else olko, else user. Exclude: `exclusion add --artifact <artifact> --reason "<reason>"`, plus `--scope <scope>` unless the scope is all. Reject: `exclusion add --artifact <artifact> --reason "rejected new artifact" --kind rejected-new --version <Olko version, 0.0.0 when none>`.
+      Reply with one line: `recorded | <artifact and decision, comma separated>`.
+edges:
+  - { from: decide-next, to: decide, when: "decide-next.done == false", description: "a non-identical row is left" }
+  - { from: decide-next, to: END, when: "rows.rows.decide == 0", description: "every row is identical: nothing to decide" }
+  - { from: decide-next, to: plan, when: "decide-next.done == true", description: "all rows decided" }
+  - { from: decide, to: decide-next }
+  - { from: plan, to: record-next }
+  - { from: record-next, to: ask-scope, when: "record-next.done == false", description: "an exclusion is left" }
+  - { from: record-next, to: record, when: "plan.plan.records > 0 || plan.plan.rejects > 0", description: "all exclusions described: record them and the rejections" }
+  - { from: record-next, to: END, description: "nothing to record" }
+  - { from: ask-scope, to: ask-reason }
+  - { from: ask-reason, to: record-next }
+  - { from: record, to: END }

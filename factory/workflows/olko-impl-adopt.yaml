@@ -1,0 +1,28 @@
+name: olko-impl-adopt
+version: 0.3.0
+description: "Current-code adoption: intake, the code-path count of the EXISTING diff against the path budget before any handoff, and safe transfer of changes that already exist; a blocked intake stops and returns to plan documentation or Task-impact review. Never commits, opens a PR, deletes plans or marks a Task done."
+source: "agents/opencode/olko-implementation-orchestrator.md and skills/workflow/olko-task-implementation-workflow/SKILL.md (workflow.md Adoption) and skills/*/olko-task-scope-gates (PATH BUDGET)"
+roles:
+  implementer: medium
+entry: adopt-code
+nodes:
+  - id: adopt-code
+    description: "Runs olko-implement-current-code: intake, the path budget counted on the existing diff before the handoff, and the transfer into the worktree."
+    kind: llm
+    role: implementer
+    skill: olko-implement-current-code
+    tools: [read, edit, bash]
+    dirs: ["{{input.project}}", "{{state.task.task.featureDir}}"]
+    parse: { line: [result, verdict, detail] }
+    prompt: |
+      Adopt the changes that already exist in {{input.project}} for Task {{state.task.task.taskName}} into the worktree {{state.worktree.worktree.path}}. Approved Task plan: {{state.task.task.taskFile}}; Feature plan: {{state.task.task.featurePlan}}.
+      Do intake, the Task-scope checks and the safe transfer only. Before any handoff, count the code paths of the EXISTING diff with the PATH BUDGET of olko-task-scope-gates; never leave the count to the pre-delivery gate. Over the budget without an explicit developer extension, or any other intake blocker: transfer nothing. Do not commit, push, open or merge a PR, delete plans, or mark a Task or Feature complete.
+      End with one line, the verdict in lowercase: `adopt | <adopted|blocked> | <counted code paths and adopted paths, or the blocker>`
+  - id: stop-adopt
+    description: "Stops: intake blocked (for example the existing diff is over the path budget); the Task returns to plan documentation or Task-impact review."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Implementation stopped at adoption: {{state.adopt-code.adopt-code.detail}}. Return to olko-plan-documentation-orchestrator or Task-impact review." }
+edges:
+  - { from: adopt-code, to: stop-adopt, when: 'adopt-code.adopt-code.verdict == "blocked"', description: "intake blocked: nothing is transferred" }
+  - { from: adopt-code, to: END, description: "existing changes adopted within the path budget" }

@@ -1,0 +1,145 @@
+import { MarkerType } from "@xyflow/react";
+import type { Edge, Node } from "@xyflow/react";
+import dagre from "@dagrejs/dagre";
+import { isGroup } from "./tree.ts";
+import type { Bounds, Item, Level, LevelEdge } from "./types.ts";
+
+export type NodeData = { item: Item; expanded: boolean };
+export type CardFlowNode = Node<NodeData, "card">;
+export type ClusterFlowNode = Node<NodeData, "cluster">;
+export type TerminalFlowNode = Node<NodeData, "terminal">;
+export type FlowNode = CardFlowNode | ClusterFlowNode | TerminalFlowNode;
+export type FlowEdge = Edge;
+
+const STEP = { width: 270, height: 112 };
+const TERMINAL = { width: 90, height: 40 };
+const AGENT = { width: 220, height: 124 };
+const PAD = 20;
+const HEADER = 72;
+const SCRIPT_BOX = 26;
+const SCRIPT_LIST = 34;
+/** Space below the last script box inside an agent card. */
+const SCRIPTS_PADDING = 8;
+/** Horizontal space between two nodes of the same rank, in px. */
+const NODE_GAP = 36;
+/** Vertical space between two ranks, in px. */
+const RANK_GAP = 56;
+/**
+ * Dagre reserves room for an edge label, but cannot measure text. The width is estimated at 6.5 px per character
+ * (edge labels use an 11 px font in styles.css) and capped at 240 px, so one long label cannot spread the graph
+ * sideways; one line is 18 px high.
+ */
+const LABEL_CHAR_WIDTH = 6.5;
+const LABEL_MAX_WIDTH = 240;
+const LABEL_HEIGHT = 18;
+const ARROW_SIZE = 18;
+/** The dash pattern of an optional edge: one that runs only under a condition or a switch. */
+const OPTIONAL_DASH = "6 4";
+
+/** Extra card height for an agent's scripts: one box per script inside the card, or a two-line name list. */
+export function scriptsHeight(count: number, listed: boolean): number {
+  if (count === 0) return 0;
+  return listed ? SCRIPT_LIST : count * SCRIPT_BOX + SCRIPTS_PADDING;
+}
+
+interface LevelLayout {
+  nodes: FlowNode[];
+  edges: FlowEdge[];
+  width: number;
+  height: number;
+}
+
+interface Box {
+  item: Item;
+  inner?: LevelLayout;
+  width: number;
+  height: number;
+}
+
+function nodeTypeOf(box: Box): FlowNode["type"] {
+  if (box.inner) return "cluster";
+  if (box.item.kind === "terminal") return "terminal";
+  return "card";
+}
+
+function sizeOf(item: Item, extra: (item: Item) => number): { width: number; height: number } {
+  if (item.kind === "terminal") return TERMINAL;
+  const base = item.kind === "agent" ? AGENT : STEP;
+  return { width: base.width, height: base.height + extra(item) };
+}
+
+/** Joins edges between the same pair of nodes into one: dagre keeps one edge per pair and React Flow needs unique ids, so the labels are merged and the edge is dashed only when every merged edge is. */
+function mergeParallel(edges: LevelEdge[]): LevelEdge[] {
+  const byPair = new Map<string, LevelEdge>();
+  for (const edge of edges) {
+    const pair = `${edge.from}->${edge.to}`;
+    const prior = byPair.get(pair);
+    if (!prior) {
+      byPair.set(pair, edge);
+      continue;
+    }
+    const labels = [prior.label, edge.label].filter((label): label is string => Boolean(label));
+    byPair.set(pair, { ...prior, label: labels.length ? labels.join(" | ") : null, dashed: Boolean(prior.dashed) && Boolean(edge.dashed) });
+  }
+  return [...byPair.values()];
+}
+
+function layoutLevel(level: Level, expanded: Set<string>, parentKey: string | null, extra: (item: Item) => number): LevelLayout {
+  const sized = level.items.map((item): Box => {
+    if (isGroup(item) && expanded.has(item.key)) {
+      const inner = layoutLevel(item.inner, expanded, item.key, extra);
+      return { item, inner, width: Math.max(inner.width + PAD * 2, STEP.width), height: inner.height + PAD * 2 + HEADER };
+    }
+    return { item, ...sizeOf(item, extra) };
+  });
+
+  const graph = new dagre.graphlib.Graph();
+  graph.setGraph({ rankdir: "TB", nodesep: NODE_GAP, ranksep: RANK_GAP, marginx: 0, marginy: 0 });
+  graph.setDefaultEdgeLabel(() => ({}));
+  const levelEdges = mergeParallel(level.edges);
+  for (const entry of sized) graph.setNode(entry.item.key, { width: entry.width, height: entry.height });
+  for (const edge of levelEdges) graph.setEdge(edge.from, edge.to, edge.label ? { label: edge.label, width: Math.min(LABEL_MAX_WIDTH, edge.label.length * LABEL_CHAR_WIDTH), height: LABEL_HEIGHT } : {});
+  dagre.layout(graph);
+
+  const placed = sized.map((entry) => {
+    const center = graph.node(entry.item.key);
+    return { ...entry, x: center.x - entry.width / 2, y: center.y - entry.height / 2 };
+  });
+  const minX = Math.min(...placed.map((box) => box.x));
+  const minY = Math.min(...placed.map((box) => box.y));
+  const nodes: FlowNode[] = [];
+  for (const box of placed) {
+    const expandedGroup = Boolean(box.inner);
+    nodes.push({
+      id: box.item.key,
+      type: nodeTypeOf(box),
+      position: { x: box.x - minX, y: box.y - minY },
+      data: { item: box.item, expanded: expandedGroup },
+      width: box.width,
+      height: box.height,
+      style: { width: box.width, height: box.height },
+      ...(parentKey ? { parentId: parentKey } : {}),
+      draggable: false,
+    });
+    if (box.inner) {
+      for (const child of box.inner.nodes) {
+        nodes.push(child.parentId === box.item.key ? { ...child, position: { x: child.position.x + PAD, y: child.position.y + PAD + HEADER } } : child);
+      }
+    }
+  }
+  const edges: FlowEdge[] = [
+    ...levelEdges.map((edge) => ({ id: `${edge.from}->${edge.to}`, source: edge.from, target: edge.to, label: edge.label ?? undefined, type: "smoothstep", ...(edge.dashed ? { style: { strokeDasharray: OPTIONAL_DASH }, className: "optional" } : {}), markerEnd: { type: MarkerType.ArrowClosed, width: ARROW_SIZE, height: ARROW_SIZE } })),
+    ...placed.flatMap((box) => box.inner?.edges ?? []),
+  ];
+  return {
+    nodes,
+    edges,
+    width: Math.max(...placed.map((box) => box.x - minX + box.width)),
+    height: Math.max(...placed.map((box) => box.y - minY + box.height)),
+  };
+}
+
+export function layoutGraph(level: Level, expanded: Set<string>, extra: (item: Item) => number = () => 0): { nodes: FlowNode[]; edges: FlowEdge[]; bounds: Bounds } {
+  const { nodes, edges, width, height } = layoutLevel(level, expanded, null, extra);
+  return { nodes, edges, bounds: { x: 0, y: 0, width, height } };
+}

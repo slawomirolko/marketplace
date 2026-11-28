@@ -116,7 +116,7 @@ test("installs the implementation orchestrator with delegation-only permissions"
   const agent = fs.readFileSync(
     path.join(project, ".opencode", "agents", "olko-implementation-orchestrator.md"),
     "utf8",
-  );
+  ).replace(/\r\n/g, "\n");
   assert.match(agent, /edit: allow/);
   assert.match(agent, /bash:\n    "\*": allow\n    gh pr merge\*: deny\n    gh api \*pulls\*merge\*: deny\n    gh api \*merge\*: deny/);
   assert.match(agent, /task:\s+"\*": deny/);
@@ -242,7 +242,7 @@ test("installs the visible marketplace skill sync manager and its comparator", (
     JSON.parse(fs.readFileSync(path.join(marketplaceRoot, "agents", "opencode", "index.json"), "utf8")).agents.find(
       (agent) => agent.name === "olko-marketplace-skill-sync-manager",
     ).version,
-    "2.7.1",
+    "2.8.0",
   );
   assert.match(manager, /bash: allow/);
   assert.match(manager, /Never pass `--force` to `olko-commit`/);

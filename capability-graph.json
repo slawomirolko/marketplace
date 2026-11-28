@@ -483,9 +483,11 @@
       "skills": [
         "olko-adapt-to-marketplace",
         "olko-install-skill",
+        "olko-marketplace-upstream",
         "olko-optimize-project-skill"
       ],
       "related": [
+        "marketplace.upstream",
         "marketplace.install.skill",
         "marketplace.adapt.to.marketplace",
         "marketplace.optimize.project.skill"
@@ -516,6 +518,16 @@
       "id": "marketplace.optimize.project.skill",
       "skills": [
         "olko-optimize-project-skill"
+      ],
+      "related": [
+        "marketplace"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "marketplace.upstream",
+      "skills": [
+        "olko-marketplace-upstream"
       ],
       "related": [
         "marketplace"
@@ -779,12 +791,70 @@
       "prerequisites": []
     },
     {
-      "id": "testing",
+      "id": "software-factory",
       "skills": [
-        "olko-test"
+        "olko-factory-project",
+        "olko-factory-run-supervision",
+        "olko-factory-workflow-sync",
+        "olko-factory-workflow-yaml"
       ],
       "related": [
-        "testing.test"
+        "software-factory.factory.project.status",
+        "software-factory.factory.run.supervision",
+        "software-factory.factory.workflow.sync",
+        "software-factory.factory.workflow.yaml"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "software-factory.factory.project.status",
+      "skills": [
+        "olko-factory-project"
+      ],
+      "related": [
+        "software-factory"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "software-factory.factory.run.supervision",
+      "skills": [
+        "olko-factory-run-supervision"
+      ],
+      "related": [
+        "software-factory"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "software-factory.factory.workflow.sync",
+      "skills": [
+        "olko-factory-workflow-sync"
+      ],
+      "related": [
+        "software-factory"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "software-factory.factory.workflow.yaml",
+      "skills": [
+        "olko-factory-workflow-yaml"
+      ],
+      "related": [
+        "software-factory"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "testing",
+      "skills": [
+        "olko-test",
+        "olko-test-coverage-advisor"
+      ],
+      "related": [
+        "testing.test",
+        "testing.test.coverage.advisor"
       ],
       "prerequisites": []
     },
@@ -794,7 +864,19 @@
         "olko-test"
       ],
       "related": [
-        "testing"
+        "testing",
+        "testing.test.coverage.advisor"
+      ],
+      "prerequisites": []
+    },
+    {
+      "id": "testing.test.coverage.advisor",
+      "skills": [
+        "olko-test-coverage-advisor"
+      ],
+      "related": [
+        "testing",
+        "testing.test"
       ],
       "prerequisites": []
     },

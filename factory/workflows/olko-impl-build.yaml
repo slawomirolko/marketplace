@@ -1,0 +1,265 @@
+name: olko-impl-build
+version: 0.4.0
+description: "Step 3b: the orchestrator splits the Task into small ordered chunks with exclusive files and a stack implementer each; olko-project-context builds the project store digest for those files once, and you decide topics where overlapping ADRs leave no single binding answer; every chunk result is checked by the orchestrator against its child-result hard rules (no comments, no ids in code, no CI files, failing-test-first files untouched). Test disputes, edge cases and blocked decisions are resolved before the next chunk; a blocked decision reaches you through the question gate and grill-with-docs when the project adapter sets the gate."
+source: "agents/opencode/olko-implementation-orchestrator.md (QUESTION GATE, DELTA CLOSURE) and skills/workflow/olko-task-implementation-workflow/SKILL.md (workflow.md hard rules, chunked delegation, gate 4 test disputes and edge cases, gate 5, Blocked decisions and the decision store)"
+roles:
+  planner: high
+  implementer: medium
+  orchestrator: medium
+  context: low
+entry: chunker
+limits:
+  maxCycleIterations: 4
+nodes:
+  - id: chunker
+    description: "Splits the Task plan into small chunks (one phase, mechanism or file slice each) with exclusive file ownership and the stack implementer of each."
+    kind: llm
+    role: planner
+    agent: olko-implementation-orchestrator
+    tools: [read]
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: { json: [chunks] }
+    prompt: |
+      Do only the chunking of CHUNKED DELEGATION, read only; do not delegate, edit or ask. Task plan: {{state.task.task.taskFile}}.
+      Stack implementers: {{#state.stacks.stacks.implementers}}{{id}} = {{agentName}}; {{/state.stacks.stacks.implementers}}
+      Split the implementation into small ordered chunks that a child finishes in a few tool calls: one phase, mechanism or file slice per chunk. Give each file to exactly one chunk. Production code only; the failing tests already exist. A brief never asks for comments.
+      End with one ```json block: {"chunks": [{"stack": "<stack id>", "title": "", "files": ["path"], "brief": "what to change", "agents": [{"id": "<stack id>", "agentName": "<the implementer of that stack, from the list above>"}]}]}
+  - id: store-context
+    description: "olko-project-context builds the project store digest once for the files of all chunks: the binding ADR decisions and MUST / MUST NOT lines, rule-file lines, and the topics where overlapping ADRs leave more than one binding answer."
+    kind: llm
+    role: context
+    agent: olko-project-context
+    tools: [read, bash]
+    parse: { json: [noStore, digest, blocked, enforced?, cut?, error?] }
+    prompt: |
+      Project: the current working directory (the Task worktree).
+      Paths: {{#state.chunker.chunker.chunks}}{{#files}}{{.}} {{/files}}{{/state.chunker.chunker.chunks}}
+      Build the store digest for these paths.
+  - id: ask-store
+    description: "Overlapping ADRs leave more than one binding answer for a topic: you name the binding ADR per topic for this Task, or stop."
+    kind: interrupt
+    askedBy: store-context
+    question:
+      id: q-impl-store
+      text: "The project store has topics where more than one ADR binds the same files, and no overrides link decides between them:\n{{#state.store-context.store-context.blocked}}- {{topic}}: {{#adrs}}{{.}} {{/adrs}}(files: {{#paths}}{{.}} {{/paths}})\n{{/state.store-context.store-context.blocked}}For each topic, name the ADR that binds for this Task (for example: logging.format=ADR-0007), or answer stop. Fix the store later with the olko-adr-store-reconcile workflow."
+  - id: stop-store
+    description: "Stops: you chose to fix the project store before the implementation."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Implementation stopped before the first chunk: the project store has overlapping ADRs without a binding answer. Run the olko-adr-store-reconcile workflow for this project, then start the Task again." }
+  - id: chunk-next
+    description: "Takes the next chunk."
+    kind: script
+    op: list.next
+    maxVisits: 60
+    with: { over: chunker.chunker.chunks }
+  - id: implement
+    description: "The stack implementer changes production code for this chunk until the failing tests pass; never writes or changes tests."
+    kind: llm
+    role: implementer
+    agentsFrom: state.chunk-next.item.agents
+    tools: [read, edit, bash]
+    maxVisits: 60
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: { line: [result, verdict, summary] }
+    prompt: |
+      {{#state.store-context.store-context.digest.length}}
+      Project store digest for this Task (binding; open a full ADR only to resolve a conflict with it or before you return Blocked: about a decision):
+      {{/state.store-context.store-context.digest.length}}
+      {{#state.store-context.store-context.digest}}
+      - {{source}} [{{topic}}]: {{line}}
+      {{/state.store-context.store-context.digest}}
+      {{#state.ask-store.answer}}
+      Binding ADR per overlapping topic, decided by the user for this Task: {{state.ask-store.answer}}
+      {{/state.ask-store.answer}}
+      {{#state.tests-ask-store.answer}}
+      Binding ADR per overlapping topic, decided by the user in the test-first step: {{state.tests-ask-store.answer}}
+      {{/state.tests-ask-store.answer}}
+      Chunk {{state.chunk-next.number}} of {{state.chunk-next.total}} of Task {{state.task.task.taskName}}: {{state.chunk-next.item.title}}
+      Files you own: {{#state.chunk-next.item.files}}{{.}} {{/state.chunk-next.item.files}}
+      Brief: {{state.chunk-next.item.brief}}
+      Approved Task plan: {{state.task.task.taskFile}}. The failing-test-first files are read-only input: {{#state.tests-check.tests-check.testFiles}}{{.}} {{/state.tests-check.tests-check.testFiles}}
+      Rules: no explanatory or inline comments; no acceptance-criterion, plan or PR ids in code; do not write new tests or change the given tests; no CI/CD workflow files; never choose a new dependency or convention alone.
+      {{#state.child-check.child-check.violations.length}}
+      Fix these rule violations first:
+      {{/state.child-check.child-check.violations.length}}
+      {{#state.child-check.child-check.violations}}
+      - {{.}}
+      {{/state.child-check.child-check.violations}}
+      {{#state.ask-blocked.answer}}
+      Your blocked question was decided: option {{state.ask-blocked.answer}}.
+      {{/state.ask-blocked.answer}}
+      {{#state.blocked-gate.blocked-gate}}
+      Question gate, latest result ({{verdict}}): {{detail}}. A rejected question cites a registry decision: follow it.
+      {{/state.blocked-gate.blocked-gate}}
+      {{#state.ask-dispute.answer}}
+      Test dispute decision: {{state.ask-dispute.answer}} (test author: {{state.dispute.dispute.reason}}).
+      {{/state.ask-dispute.answer}}
+      Report changed files with the output of `git status --porcelain` and `git diff` for them, and the test results. Use `Blocked:` with 2-3 options, `Test dispute:` or `Edge cases:` sections when they apply.
+      End with one line: `chunk | <done|blocked|dispute|edge-cases> | <one-line summary>`
+  - id: child-check
+    description: "The implementation orchestrator checks the chunk result against its child-result hard rules on the reported diff and the changed files, and records it in the journal."
+    kind: llm
+    role: orchestrator
+    agent: olko-implementation-orchestrator
+    tools: [read, edit, bash]
+    maxVisits: 60
+    dirs: ["{{input.project}}", "{{state.task.task.featureDir}}"]
+    parse: { json: [verdict, violations, report, gate?, proposals?] }
+    prompt: |
+      Step 3b, chunk {{state.chunk-next.number}} of {{state.chunk-next.total}} ({{state.chunk-next.item.stack}}: {{state.chunk-next.item.title}}) of Task {{state.task.task.taskName}}. Delegate nothing, ask nothing and change no code or test.
+      Implementer results by stack; the entry {{state.chunk-next.item.stack}} is this chunk:
+      {{#each.state.implement}}
+      {{key}}:
+      {{value.text}}
+      {{/each.state.implement}}
+      Failing-test-first files (read-only for implementers): {{#state.tests-check.tests-check.testFiles}}{{.}} {{/state.tests-check.tests-check.testFiles}}
+      {{#state.edge-tests}}
+      The EDGE CASES loop already ran: olko-test-first-author (mode edge-cases) added these tests to the test files, and they are not an implementer change. Record them in the journal as the edge-case tests of the Task; judge only what the implementer changed after them:
+      {{state.edge-tests.edge-tests.text}}
+      {{/state.edge-tests}}
+      Apply your child-result hard rules to the reported diff and read the changed files in this worktree: reject added explanatory or inline comments (also in tests), acceptance-criterion, plan, deviation or PR ids inside code, any changed CI/CD workflow file, and any change to a failing-test-first file.
+      Record the chunk's changed files (### Changed files), verification results and blockers in the implementation journal of {{state.task.task.taskFile}}, with the attempt number of this chunk. Read the journal to count the attempts of this chunk.
+      Verdict: `fix` when a rule is broken and this was attempt 1 or 2 of the chunk; `stop` when a rule is still broken on attempt 3; otherwise the implementer's own outcome: `blocked` (Blocked:), `dispute` (Test dispute:), `edge-cases` (Edge cases:), or `done`.
+      QUESTION GATE: read questionReviewerAgent and questionGateCommand from .agents/skill-config.md of the main checkout {{input.project}}; with either unset the gate is off.
+      When the gate is on and there are a Blocked: section: you never author a planning question. Hand the children's a Blocked: section over verbatim as proposals for the question reviewer, one per question, in its input contract (cluster, topic, topicTerms, questionText exactly as the child wrote it, decisionStatement or cites, artifacts that the answer will change, exactly three options with label, semantics and effect).
+      When the gate is on, close a registered question [Q<n>] in the registry (questionGateCommand) only with evidence: DELTA CLOSURE, the answer has landed in every deliverable it names (plan, tracker, issue text, manifests, code) with read-back proof in its tracker row; until then it stays open.
+      End with one ```json block: {"verdict": "<fix|stop|blocked|dispute|edge-cases|done>", "violations": ["<file: broken rule and line; empty unless the verdict is fix or stop>"], "report": "<for blocked, dispute or edge-cases: the implementer's section verbatim, else empty>", "gate": "<on|off>", "proposals": "<for blocked with the gate on: the batch as one JSON array text; else empty>"}
+  - id: blocked-round
+    description: "Counts the blocked decisions."
+    kind: script
+    op: builtin.count
+    maxVisits: 20
+  - id: ask-blocked
+    description: "A child is blocked on a dependency or convention: you choose one of its options."
+    kind: interrupt
+    askedBy: child-check
+    maxVisits: 20
+    question:
+      id: "q-impl-blocked-{{state.blocked-round.count}}"
+      text: "Chunk {{state.chunk-next.number}} is blocked:\n{{#state.blocked-grill.blocked-grill}}{{state.blocked-grill.blocked-grill}}{{/state.blocked-grill.blocked-grill}}{{^state.blocked-grill.blocked-grill}}{{state.child-check.child-check.report}}{{/state.blocked-grill.blocked-grill}}\nWhich option (1 is the implementer's recommendation)?"
+      allowed: ["1", "2", "3"]
+  - id: dispute
+    description: "olko-test-first-author (mode dispute) fixes the disputed test or justifies it."
+    kind: llm
+    role: implementer
+    agent: olko-test-first-author
+    tools: [read, edit, bash]
+    maxVisits: 20
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: { line: [result, verdict, reason] }
+    prompt: |
+      Mode: dispute. Task {{state.task.task.taskName}}, stack {{state.chunk-next.item.stack}}, Task plan {{state.task.task.taskFile}}. The implementer objects to a test:
+      {{state.child-check.child-check.report}}
+      Either fix the test or keep it and justify in two or three sentences, citing the criterion. Never weaken a test only to make it pass.
+      End with one line: `dispute | <fixed|justified> | <reason>`
+  - id: dispute-round
+    description: "Counts the test disputes that went to you."
+    kind: script
+    op: builtin.count
+    maxVisits: 20
+  - id: ask-dispute
+    description: "Shows both positions verbatim; you decide which holds."
+    kind: interrupt
+    askedBy: dispute
+    maxVisits: 20
+    question:
+      id: "q-impl-dispute-{{state.dispute-round.count}}"
+      text: "Test dispute in chunk {{state.chunk-next.number}}.\nImplementer:\n{{state.child-check.child-check.report}}\nTest author: {{state.dispute.dispute.reason}}\nWhich position holds?"
+      allowed: [test-holds, implementer-holds]
+  - id: edge-tests
+    description: "olko-test-first-author (mode edge-cases) adds one test per edge case; runs once per Task."
+    kind: llm
+    role: implementer
+    agent: olko-test-first-author
+    tools: [read, edit, bash]
+    maxVisits: 1
+    dirs: ["{{state.task.task.featureDir}}"]
+    parse: { line: [result, count, unclear, blocked] }
+    prompt: |
+      Mode: edge-cases. Task {{state.task.task.taskName}}, stack {{state.chunk-next.item.stack}}, Task plan {{state.task.task.taskFile}}. The implementer described these edge cases:
+      {{state.child-check.child-check.report}}
+      Add one test per edge case, run them, and report which pass and which fail. No comments in tests.
+      End with one line: `tests | <number of tests added> | unclear: none | blocked: none`
+  - id: blocked-gate
+    description: "QUESTION GATE (only when the project adapter sets questionReviewerAgent and questionGateCommand): the question reviewer checks the implementer's Blocked: question against the decision registry before you see them. A decided cluster, an option that reverses an answered decision, or a question about the orchestrator's own consistency is rejected."
+    kind: llm
+    role: orchestrator
+    agent: olko-question-reviewer
+    tools: [read, bash]
+    maxVisits: 20
+    dirs: ["{{input.project}}", "{{state.task.task.featureDir}}"]
+    parse: { line: [gate, verdict, detail] }
+    prompt: |
+      QUESTION GATE for Feature {{state.task.task.featureId}}, Task {{state.task.task.taskName}} (blocked decision). Registry: questionRegistryPattern from .agents/skill-config.md of {{input.project}} (default {{state.task.task.featureDir}}/questions.json). Run your PROCEDURE on this batch, handed over by the implementation orchestrator:
+      {{state.child-check.child-check.proposals}}
+      Write your table. Number each approved question with the next free [Q<n>] id of the registry. Change no file.
+      End with one line, the verdict in lowercase: `gate | <ask|none|blocked> | <ask: every approved question verbatim with its [Q<n>] id, separated by ;; and then the rejected ones with the decision each cites; none: every question was rejected, with the registry decision each one cites; blocked: the missing input or command>`
+  - id: blocked-grill
+    description: "grill-with-docs presents only the questions the question reviewer approved, verbatim with their [Q<n>] ids, in the user's response language; it asks nothing itself."
+    kind: llm
+    role: orchestrator
+    skill: grill-with-docs
+    tools: [read]
+    maxVisits: 20
+    dirs: ["{{input.project}}", "{{state.task.task.featureDir}}"]
+    parse: text
+    prompt: |
+      Present only these approved questions of Task {{state.task.task.taskName}} (blocked decision, with the implementer's options and recommendation first), verbatim, each with its [Q<n>] id, with your question content rules: {{state.blocked-gate.blocked-gate.detail}}
+      Never present a question the reviewer rejected. Return the question text only; the workflow puts it to the user. Do not add questions and do not change any file.
+      Language: read userResponseLanguage from .agents/skill-config.md in {{input.project}} (unset: the language of the user's latest message). An explicit language request from the user in this conversation overrides it.
+      If the skill cannot be loaded, reply only with `blocker | grill-with-docs cannot be loaded`.
+  - id: blocked-register
+    description: "QUESTION GATE: the implementation orchestrator registers each approved question with propose and records your answer with answer; the question stays open until DELTA CLOSURE has read-back proof."
+    kind: llm
+    role: orchestrator
+    agent: olko-implementation-orchestrator
+    tools: [read, edit, bash]
+    maxVisits: 20
+    dirs: ["{{input.project}}", "{{state.task.task.featureDir}}"]
+    parse: text
+    prompt: |
+      QUESTION GATE for Task {{state.task.task.taskName}}. Delegate nothing, ask nothing and change no code. With questionGateCommand from .agents/skill-config.md of {{input.project}} and the registry (questionRegistryPattern, default {{state.task.task.featureDir}}/questions.json): register each approved question with `propose`, then record the user's answer with `answer`. Do not close any question now.
+      Approved questions: {{state.blocked-gate.blocked-gate.detail}}
+      User answer: {{state.ask-blocked.answer}}
+      List in the Feature tracker {{state.task.task.tracker}} every deliverable this answer touches (plan, tracker, issue text, manifests, code), one row per question: DELTA CLOSURE keeps the decision open until each has read-back proof.
+  - id: stop-blocked-gate
+    description: "Stops: the question gate is on but the question reviewer is blocked (missing input or command) or grill-with-docs cannot be loaded; nothing is asked of you."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Implementation stopped: the question gate could not run; no unapproved question is shown to the user." }
+  - id: stop-chunk
+    description: "Stops: a child kept breaking the hard rules."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Implementation stopped: chunk {{state.chunk-next.number}} still breaks the child-result rules after three attempts:\n{{#state.child-check.child-check.violations}}{{.}}\n{{/state.child-check.child-check.violations}}" }
+edges:
+  - { from: chunker, to: store-context }
+  - { from: store-context, to: ask-store, when: "store-context.store-context.blocked > 0 && tests-ask-store == null", description: "overlapping ADRs without a binding answer, not decided in the test-first step" }
+  - { from: store-context, to: chunk-next, description: "the digest is ready (or there is no store)" }
+  - { from: ask-store, to: stop-store, when: 'ask-store.answer == "stop"', description: "you chose to fix the store first" }
+  - { from: ask-store, to: chunk-next, description: "you named the binding ADRs" }
+  - { from: chunk-next, to: implement, when: "chunk-next.done == false", description: "a chunk is left" }
+  - { from: chunk-next, to: END, description: "every chunk is done" }
+  - { from: implement, to: child-check }
+  - { from: child-check, to: implement, when: 'child-check.child-check.verdict == "fix"', description: "the result broke a hard rule: same chunk again" }
+  - { from: child-check, to: stop-chunk, when: 'child-check.child-check.verdict == "stop"', description: "rules still broken after three attempts" }
+  - { from: child-check, to: blocked-round, when: 'child-check.child-check.verdict == "blocked"', description: "the implementer returned Blocked" }
+  - { from: child-check, to: dispute, when: 'child-check.child-check.verdict == "dispute"', description: "the implementer disputes a test" }
+  - { from: child-check, to: edge-tests, when: 'child-check.child-check.verdict == "edge-cases" && edge-tests == null', description: "first edge-case report of the Task" }
+  - { from: child-check, to: chunk-next, description: "chunk done (a later edge-case report needs no second loop)" }
+  - { from: blocked-round, to: blocked-gate, when: 'child-check.child-check.gate == "on"', description: "question gate on: the question reviewer checks the blocked question first" }
+  - { from: blocked-round, to: ask-blocked, description: "question gate off: the options go to you" }
+  - { from: blocked-gate, to: stop-blocked-gate, when: 'blocked-gate.blocked-gate.verdict == "blocked"', description: "the question reviewer is blocked" }
+  - { from: blocked-gate, to: implement, when: 'blocked-gate.blocked-gate.verdict == "none"', description: "the question was rejected as already decided: the implementer follows the registry decision, nothing is asked" }
+  - { from: blocked-gate, to: blocked-grill, description: "approved question: grill-with-docs presents it" }
+  - { from: blocked-grill, to: stop-blocked-gate, when: 'blocked-grill.blocked-grill == "blocker | grill-with-docs cannot be loaded"', description: "grill-with-docs could not be loaded" }
+  - { from: blocked-grill, to: ask-blocked, description: "the approved question goes to you" }
+  - { from: ask-blocked, to: blocked-register, when: 'child-check.child-check.gate == "on"', description: "question gate on: your answer is registered first" }
+  - { from: ask-blocked, to: implement, description: "your option goes back to the implementer" }
+  - { from: blocked-register, to: implement }
+  - { from: dispute, to: dispute-round, when: 'dispute.dispute.verdict == "justified"', description: "the author keeps the test" }
+  - { from: dispute, to: implement, description: "the author fixed the test" }
+  - { from: dispute-round, to: ask-dispute }
+  - { from: ask-dispute, to: implement }
+  - { from: edge-tests, to: implement }

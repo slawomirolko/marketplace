@@ -30,6 +30,23 @@ vendor-specific directories are referenced.
 
 `<skill-name>` matches the marketplace skill name.
 
+### Adapter files in an installed skill folder
+
+An installed copy of a skill may hold files that belong to the project, not to the
+marketplace. Tools that compare an installed copy with the marketplace (the project
+status scan and the marketplace lock) leave them out:
+
+- `project.md` at the root of the skill folder (the adapter above);
+- every `*.local.*` file anywhere in the skill folder (a personal or machine-local
+  override, for example `config.local.json`);
+- for an agent file, the `model:` line of its front matter (the model is chosen per
+  project).
+
+Everything else in the folder is marketplace content: an edit to it is a local change.
+`project.md` in a subfolder is marketplace content. The one implementation of this rule is
+`isAdapterFile` and `portableText` in
+`skills/software-factory/olko-factory-project/scripts/installed-artifacts.mjs`.
+
 ## 3. Loading rules
 
 - **If the adapter exists**, the agent must load it before executing the
