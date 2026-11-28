@@ -10,7 +10,7 @@ after a person says so. A person always merges or closes the PR.
 |------|------|
 | `.agents/marketplace.lock.json` (in the project) | Provenance per installed artifact: marketplace version, source commit, content hash without the project adapter (`project.md`, `*.local.*`, the agent `model:` line). Commit it with the project. |
 | `scripts/olko-marketplace-lock.mjs` | `init` writes the lock (finds the base version in marketplace history), `status` lists changed artifacts, `record` stores a pending PR or a rejected content hash. |
-| `scripts/olko-sanitize.mjs` | Blocking gate: names derived from the project (git remote owner and repository, package names, directory name), configured leak terms, forbidden words. Reports `#n`, never the value. Exit 0 clean, 2 blocked, 1 failed. |
+| `scripts/olko-sanitize.mjs` | Blocking gate: names derived from the project (git remote owner and repository, package names, directory name) and private terms (see [Forbidden terms](#forbidden-terms)). Reports `#n`, never the value. Exit 0 clean, 2 blocked, 1 failed. |
 | `scripts/olko-upstream-plan.mjs` | Deterministic PR plan: `open`, `append` (open draft PR on the same base) or `skip` (duplicate, rejected, adapter-only). |
 | `olko-marketplace-upstream` (agent and skill) | `stage`, `optimize` and `publish` steps. Draft PRs only; deny rules for merge, ready, reviewers and `gh api`. |
 | Factory watch `marketplace-upstream` | Every 10 minutes, per known project with a lock, runs `status`. A change whose hash is the same in two checks starts one `olko-marketplace-upstream` run. |
@@ -31,3 +31,15 @@ after a person says so. A person always merges or closes the PR.
 - The marketplace is public. The sanitize gate blocks the run before anything leaves the machine; nothing is pushed when it finds a hit.
 - The viewer accepts an answer only with its own request header (`x-factory-action: answer`), from a local origin and an allowed host, and only for runs its own process owns.
 - Use a GitHub token limited to the marketplace repository (contents and pull requests). The flow never needs admin or workflow scopes.
+
+## Forbidden terms
+
+The repository is public, so it holds no list of forbidden words, not even hashed.
+The sanitize gate reads them from private configuration only:
+
+- `leakTerms` and `forbiddenTerms` (arrays of strings) in `~/.olko-sync/targets.json`
+  (the folder named by `OLKO_SYNC_HOME`, or the file given with `--terms-file`), plus the
+  last path segment of every sync target;
+- `FACTORY_LEAK_TERMS`: comma-separated terms in the environment of the factory or shell.
+
+Keep these values out of every tracked file, issue, PR and commit message.

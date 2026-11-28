@@ -11,7 +11,7 @@ const stateDir = process.env.OLKO_SYNC_HOME ? path.resolve(process.env.OLKO_SYNC
 const targetsPath = path.join(stateDir, "targets.json");
 
 function leakTerms(targets) {
-  const terms = new Set(targets.leakTerms ?? []);
+  const terms = new Set([...(targets.leakTerms ?? []), ...(targets.forbiddenTerms ?? [])]);
   for (const target of Object.values(targets.targets ?? {})) {
     terms.add(target.path);
     terms.add(target.path.replace(/\\/g, "/"));

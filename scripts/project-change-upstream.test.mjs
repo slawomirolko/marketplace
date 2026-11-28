@@ -13,7 +13,6 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -31,25 +30,13 @@ const upstreamAgent = path.join(marketplaceRoot, "agents", "opencode", "olko-mar
 
 const FICTIONAL_PROJECT = "billing-portal";
 const FICTIONAL_ORG = "fictionalcorp";
-const forbiddenHashes = new Set(
-  JSON.parse(fs.readFileSync(path.join(scriptsDir, "forbidden-terms.json"), "utf8")).sha256,
-);
-
-// Words of `text` whose SHA-256 is listed in forbidden-terms.json. The file
-// stores hashes only, so neither it nor this test contains the words.
-function forbiddenWords(text) {
-  return text
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((word) => word && forbiddenHashes.has(createHash("sha256").update(word).digest("hex")));
-}
 
 function tmp(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), `olko-upstream-${prefix}-`));
 }
 
-function node(script, args, cwd = marketplaceRoot) {
-  return spawnSync(process.execPath, [script, ...args], { cwd, encoding: "utf8" });
+function node(script, args, cwd = marketplaceRoot, env = process.env) {
+  return spawnSync(process.execPath, [script, ...args], { cwd, encoding: "utf8", env });
 }
 
 function git(cwd, ...args) {
@@ -250,10 +237,19 @@ test("AC2: an edit to a portable skill file is reported with its base and files"
 // Sanitize exit codes: 0 clean, 2 blocked by a leak, 1 the script itself failed.
 const SANITIZE_BLOCKED = 2;
 
-function sanitize(stage, project, terms = []) {
+/** Environment of a sanitize run: no leak terms from the caller's shell unless the test sets them. */
+function sanitizeEnv(extra = {}) {
+  const env = { ...process.env, ...extra };
+  if (!("FACTORY_LEAK_TERMS" in extra)) {
+    delete env.FACTORY_LEAK_TERMS;
+  }
+  return env;
+}
+
+function sanitize(stage, project, terms = [], { config = {}, env = {}, args = [] } = {}) {
   const termsFile = path.join(tmp("terms"), "terms.json");
-  fs.writeFileSync(termsFile, JSON.stringify({ leakTerms: terms }));
-  return node(sanitizeScript, ["--path", stage, "--project", project, "--terms-file", termsFile, "--json"]);
+  fs.writeFileSync(termsFile, JSON.stringify({ leakTerms: terms, ...config }));
+  return node(sanitizeScript, ["--path", stage, "--project", project, "--terms-file", termsFile, "--json", ...args], marketplaceRoot, sanitizeEnv(env));
 }
 
 test("AC4: sanitize blocks names derived from the project and never prints them", () => {
@@ -280,6 +276,30 @@ test("AC4: sanitize blocks configured leak terms and passes clean content", () =
   const result = sanitize(clean, root, ["zebraproject"]);
   assert.equal(result.status, 0, result.stdout);
   assert.deepEqual(JSON.parse(result.stdout), { clean: true, hits: [] });
+});
+
+test("forbidden terms stay out of the public repository", () => {
+  const tracked = spawnSync("git", ["ls-files", "--", "scripts/forbidden-terms.json"], { cwd: marketplaceRoot, encoding: "utf8" });
+  assert.equal(tracked.stdout.trim(), "", "forbidden terms belong in the private ~/.olko-sync/targets.json, not in the repository");
+  assert.equal(fs.existsSync(path.join(scriptsDir, "forbidden-terms.json")), false);
+});
+
+test("sanitize blocks forbidden terms from the private config, also inside longer words", () => {
+  const { root } = fixtureProject();
+  const stage = tmp("stage");
+  write(path.join(stage, "SKILL.md"), "Ask the quokkaware desk.\n");
+  const result = sanitize(stage, root, [], { config: { forbiddenTerms: ["quokka"] } });
+  assert.equal(result.status, SANITIZE_BLOCKED, result.stderr);
+  assert.equal(`${result.stdout}${result.stderr}`.includes("quokka"), false);
+});
+
+test("sanitize blocks terms from FACTORY_LEAK_TERMS", () => {
+  const { root } = fixtureProject();
+  const stage = tmp("stage");
+  write(path.join(stage, "SKILL.md"), "Owned by the wombat team.\n");
+  const result = sanitize(stage, root, [], { env: { FACTORY_LEAK_TERMS: "narwhal, wombat" } });
+  assert.equal(result.status, SANITIZE_BLOCKED, result.stderr);
+  assert.equal(`${result.stdout}${result.stderr}`.includes("wombat"), false);
 });
 
 function plan({ stage, classification, openPrs = [], lockEntry = { version: "1.0.0", pending: null } }) {
@@ -321,7 +341,6 @@ test("AC3+AC5: plan opens one draft PR per artifact, keeps adapter hunks local, 
   for (const forbidden of ["make ci-fast", FICTIONAL_PROJECT, FICTIONAL_ORG]) {
     assert.equal(published.includes(forbidden), false, `PR text contains a forbidden value (${forbidden.length} chars)`);
   }
-  assert.equal(forbiddenWords(published).length, 0, "PR text contains a word listed in forbidden-terms.json");
 });
 
 test("AC6: plan skips a change that already has an open PR with the same content", () => {

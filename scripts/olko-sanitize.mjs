@@ -2,26 +2,26 @@
 //
 // Blocks a staged directory when any file name or line contains a name derived
 // from the source project (git remote owner and repository, package names,
-// project directory name), a configured leak term, or a word whose SHA-256 is
-// listed in scripts/forbidden-terms.json. The report names a term only by its
-// number (#n), never by its value, so the gate itself cannot leak it.
+// project directory name), or a term from private configuration: `leakTerms` and
+// `forbiddenTerms` in ~/.olko-sync/targets.json (or --terms-file) and the
+// comma-separated FACTORY_LEAK_TERMS environment variable. Forbidden terms never
+// live in this public repository. The report names a term only by its number
+// (#n), never by its value, so the gate itself cannot leak it.
 //
 // Usage:
 //   node scripts/olko-sanitize.mjs --path <stage-dir> --project <dir> [--terms-file <json>] [--json]
 // Exit codes: 0 clean, 2 blocked by a leak, 1 the script failed.
 
 import { spawnSync } from "node:child_process";
-import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
 export const BLOCKED = 2;
 const MIN_TERM_LENGTH = 4;
 // Generic path and tooling words that name no project.
 const GENERIC = new Set(["src", "app", "apps", "main", "master", "test", "tests", "docs", "project", "projects", "repo", "repos", "code", "packages", "service", "services", "github", "gitlab", "users", "home", "temp", "local"]);
-const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 
 function addTerm(terms, value) {
   if (typeof value !== "string") return;
@@ -71,6 +71,10 @@ function manifestTerms(project, terms) {
   }
 }
 
+function environmentTerms(terms) {
+  for (const term of (process.env.FACTORY_LEAK_TERMS ?? "").split(",")) addTerm(terms, term);
+}
+
 function configuredTerms(termsFile, terms) {
   const file = termsFile ?? path.join(process.env.OLKO_SYNC_HOME ?? path.join(os.homedir(), ".olko-sync"), "targets.json");
   if (!fs.existsSync(file)) {
@@ -78,7 +82,7 @@ function configuredTerms(termsFile, terms) {
     return;
   }
   const config = JSON.parse(fs.readFileSync(file, "utf8"));
-  for (const term of config.leakTerms ?? []) addTerm(terms, term);
+  for (const term of [...(config.leakTerms ?? []), ...(config.forbiddenTerms ?? [])]) addTerm(terms, term);
   for (const target of Object.values(config.targets ?? {})) {
     if (typeof target?.path === "string") addTerm(terms, path.basename(target.path));
   }
@@ -90,13 +94,9 @@ export function collectTerms(project, termsFile) {
   remoteTerms(project, terms);
   manifestTerms(project, terms);
   configuredTerms(termsFile, terms);
+  environmentTerms(terms);
   // Longest first, so a hit reports the most specific term.
   return [...terms].sort((a, b) => b.length - a.length || a.localeCompare(b));
-}
-
-function forbiddenHashes() {
-  const file = path.join(scriptsDir, "forbidden-terms.json");
-  return fs.existsSync(file) ? new Set(JSON.parse(fs.readFileSync(file, "utf8")).sha256 ?? []) : new Set();
 }
 
 function stagedFiles(stage) {
@@ -108,18 +108,12 @@ function stagedFiles(stage) {
 
 export function scan(stage, project, termsFile) {
   const terms = collectTerms(project, termsFile);
-  const hashes = forbiddenHashes();
   const hits = [];
   const check = (file, line, text) => {
     const lower = text.toLowerCase();
     terms.forEach((term, index) => {
       if (lower.includes(term)) hits.push({ file, line, term: `#${index + 1}` });
     });
-    for (const word of lower.split(/[^a-z0-9]+/)) {
-      if (word && hashes.has(crypto.createHash("sha256").update(word).digest("hex"))) {
-        hits.push({ file, line, term: "#forbidden" });
-      }
-    }
   };
   for (const file of stagedFiles(stage)) {
     check(file, 0, file);
