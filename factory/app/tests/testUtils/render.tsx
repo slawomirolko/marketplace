@@ -5,11 +5,10 @@ import { ReactFlow, ReactFlowProvider } from "@xyflow/react";
 import type { NodeMouseHandler } from "@xyflow/react";
 import { ViewerContext } from "../../src/context.ts";
 import type { ViewerState } from "../../src/context.ts";
-import { agentsOnly } from "../../src/agents-only.ts";
-import { layoutGraph, scriptsHeight } from "../../src/layout.ts";
 import { nodeTypes } from "../../src/nodes.tsx";
 import { humanIcons } from "../../src/human.ts";
-import { agentScripts, buildLevel } from "../../src/tree.ts";
+import { buildLevel } from "../../src/tree.ts";
+import { drawGraph } from "../../src/viewer/useGraph.ts";
 import type { FlowNode } from "../../src/layout.ts";
 import type { Workflow } from "../../src/types.ts";
 import { agents, mainWorkflow } from "./data.ts";
@@ -51,12 +50,11 @@ export interface FlowOptions {
   onNodeClick?: NodeMouseHandler<FlowNode>;
 }
 
-/** Renders a workflow through the viewer's own pipeline (level, optional agents-only reduction, layout) into React Flow. */
+/** Renders a workflow through the viewer's own pipeline (buildLevel, then drawGraph as useGraph draws it) into React Flow. */
 export function renderFlow({ workflows = [mainWorkflow], root = "main", expanded = [], state = {}, onNodeClick }: FlowOptions = {}): RenderResult {
   const level = buildLevel(workflows, root);
   const full = viewerState({ workflows, humans: humanIcons(level, state.agents ?? agents), ...state });
-  const drawn = full.onlyAgents ? agentsOnly(level) : level;
-  const graph = layoutGraph(drawn, new Set(expanded), (item) => scriptsHeight(agentScripts(item, full.agents).length, full.onlyAgents));
+  const graph = drawGraph(level, { onlyAgents: full.onlyAgents, expanded: new Set(expanded), agents: full.agents });
   return render(
     <ViewerContext.Provider value={full}>
       <ReactFlowProvider>

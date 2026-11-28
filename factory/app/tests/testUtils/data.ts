@@ -1,4 +1,4 @@
-import type { AgentInfo, AskedQuestion, FactoryConfig, NodeCost, RunData, RunDetail, RunListItem, RunReport, Workflow } from "../../src/types.ts";
+import type { AgentInfo, AskedQuestion, FactoryConfig, NodeCost, RunCall, RunData, RunDetail, RunListItem, RunPass, RunReport, Workflow } from "../../src/types.ts";
 
 export const SYNC_SCRIPTS: AgentInfo["scripts"] = [
   { skill: "sync", name: "sync.mjs", file: "skills/demo/sync/scripts/sync.mjs" },
@@ -162,3 +162,23 @@ export const runListItem: RunListItem = {
   workflow: "main",
   ran: ["main"],
 };
+
+/** A run of the given events and ledger, for tests of one run fact; status "failed" unless `extra` says otherwise. */
+export function runWith(events: RunData["events"], extra: Partial<RunData> = {}): RunData {
+  return { runId: RUN_ID, goal: "", status: "failed", ledger: [], events, ...extra };
+}
+
+/** The sample report with its passes and calls (or other parts) replaced. */
+export function reportWith(parts: Partial<RunReport>): RunReport {
+  return { ...report, ...parts };
+}
+
+/** A finished pass of `node` with its active time; `extra` adds a wait, agents or an open end. */
+export function timedPass(node: string, visit: number, durationMs: number | null, extra: Partial<RunPass> = {}): RunPass {
+  return { node, visit, startedAt: T0, endedAt: T0, status: "done", agents: [], records: 0, durationMs, waitMs: 0, ...extra };
+}
+
+/** A finished call of `node` (of `agent` in a team) with its active time. */
+export function timedCall(node: string, agent: string | null, durationMs: number | null, extra: Partial<RunCall> = {}): RunCall {
+  return { node, agent, agentName: null, visit: 1, status: "done", startedAt: T0, costUsd: 0, records: 0, durationMs, waitMs: 0, ...extra };
+}

@@ -40,10 +40,24 @@ export interface Graph {
   runIndex: RunIndex;
 }
 
+export interface DrawOptions {
+  onlyAgents: boolean;
+  expanded: Set<string>;
+  agents: Record<string, AgentInfo>;
+}
+
+/**
+ * The drawn graph of a level: the agents-only reduction when it is switched on, then the layout with room for
+ * each card's skill scripts. useGraph memoizes it; tests render through it to draw exactly what the viewer draws.
+ */
+export function drawGraph(level: Level, { onlyAgents, expanded, agents }: DrawOptions): Graph["graph"] {
+  const drawn = onlyAgents ? agentsOnly(level) : level;
+  return layoutGraph(drawn, expanded, (item) => scriptsHeight(agentScripts(item, agents).length, onlyAgents));
+}
+
 /** The laid-out graph (all steps, or agents only) and the run facts of each of its nodes. */
 export function useGraph({ level, onlyAgents, expanded, agents, config, detail }: GraphInput): Graph {
-  const drawn = useMemo(() => (level && onlyAgents ? agentsOnly(level) : level), [level, onlyAgents]);
-  const graph = useMemo(() => (drawn ? layoutGraph(drawn, expanded, (item) => scriptsHeight(agentScripts(item, agents).length, onlyAgents)) : { nodes: [], edges: [], bounds: null }), [drawn, expanded, agents, onlyAgents]);
+  const graph = useMemo(() => (level ? drawGraph(level, { onlyAgents, expanded, agents }) : { nodes: [], edges: [], bounds: null }), [level, expanded, agents, onlyAgents]);
   const runIndex: RunIndex = useMemo(() => (level ? buildRunIndex(level, config, detail?.report ?? null, detail?.run ?? null) : new Map()), [level, config, detail]);
   return { graph, runIndex };
 }

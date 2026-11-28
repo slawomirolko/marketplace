@@ -1,8 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { subgraphCosts } from "../src/run-report.ts";
-import { runTimeline } from "../src/run-timing.ts";
-import type { LedgerRecord, NodeCost, Run, RunEvent, WorkflowSpec } from "../src/types.ts";
+import { runReport, subgraphCosts } from "../src/run-report.ts";
+import type { NodeCost, Run, WorkflowSpec } from "../src/types.ts";
 
 function nodeCost(costUsd: number, costSource = "measured", extra: Partial<NodeCost> = {}): NodeCost {
   return { costUsd, tokens: 10, cacheTokens: 2, steps: 1, llmSteps: 1, unknownSteps: costSource === "unknown" ? 1 : 0, costSource, tier: "low", model: "m", byAgent: {}, ...extra };
@@ -46,30 +45,41 @@ test("subgraph costs leave out subgraphs with no cost, cycles, missing workflows
   assert.equal(subgraphCosts(specs, "root", { "root/again/plan": nodeCost(0.1) })["root/again"], undefined, "a call back into an open workflow is not drawn as a subgraph");
 });
 
-function event(seconds: number, type: string, extra: Partial<RunEvent> = {}): RunEvent {
-  return { at: new Date(Date.UTC(2026, 0, 1) + seconds * 1000).toISOString(), type, ...extra };
-}
+test("subgraph costs: a group's cost includes its multi-agent nodes", () => {
+  const groupSpecs = [
+    spec("root", [{ id: "phase", kind: "group", workflow: "inner" }]),
+    spec("inner", [{ id: "workers", kind: "llm", agents: [{ id: "flow" }, { id: "test" }] }, { id: "gate", kind: "script" }]),
+  ];
+  const costs = subgraphCosts(groupSpecs, "root", { "root/workers": nodeCost(0.25), "root/gate": nodeCost(0, "none", { llmSteps: 0 }) });
+  assert.equal(costs["root/phase"]?.costUsd, 0.25);
+});
 
-function record(nodePath: string, seconds: number, costUsd: number | null, extra: Partial<LedgerRecord> = {}): LedgerRecord {
-  return { at: event(seconds, "").at, nodePath, kind: "llm", costUsd, costSource: costUsd === null ? "unknown" : "measured", ...extra } as LedgerRecord;
-}
-
-test("run timeline: a pass leaves out the user wait and a budget pause, and counts its ledger records", () => {
-  const run = {
+/** A done hello run with one measured step and two unknown ones, one of them on a model with no known step. */
+function partlyUnknownRun(): Run {
+  const ledgerRecord = (nodePath: string, model: string, costUsd: number | null, costSource: string) => ({ nodePath, agentId: nodePath.split("/").at(-1), kind: "llm", tier: "medium", model, inputTokens: 10, outputTokens: 1, costUsd, costSource });
+  return {
+    runId: "r-0000abcd",
     status: "done",
-    events: [
-      event(0, "node_started", { node: "w/ask", visit: 1 }),
-      event(5, "needs_input", { node: "w/ask", questionId: "q" }),
-      event(65, "run_resumed"),
-      event(70, "budget_threshold", { level: "pause" }),
-      event(100, "run_resumed"),
-      event(110, "node_completed", { node: "w/ask" }),
-      event(110, "supervisor_started", { node: "@supervisor" }),
-      event(112, "supervisor_completed", { node: "@supervisor" }),
-    ],
-    ledger: [record("w/ask", 3, 0.1, { durationMs: 3000 }), record("w/ask", 108, 0.2), record("@supervisor", 111, 0.05)],
+    workflow: "hello",
+    config: { tiers: { medium: "m" }, backend: { kind: "delegate" }, budget: { maxCostUsd: 1 } },
+    proposal: { budget: { maxCostUsd: 1 } },
+    steps: 3,
+    thresholdsHit: [],
+    ledger: [ledgerRecord("hello/plan", "known", 0.25, "measured"), ledgerRecord("hello/build/implement", "known", null, "unknown"), ledgerRecord("hello/build/verify", "lost", null, "unknown")],
   } as unknown as Run;
-  const { passes, calls } = runTimeline(run);
-  assert.deepEqual(passes.map((pass) => [pass.node, pass.status, pass.durationMs, pass.waitMs, pass.records]), [["w/ask", "done", 20_000, 90_000, 2], ["@supervisor", "done", 2000, 0, 1]]);
-  assert.deepEqual(calls.map((call) => [call.node, call.costUsd, call.records, call.durationMs, call.waitMs]), [["w/ask", 0.3, 2, 20_000, 90_000], ["@supervisor", 0.05, 1, 2000, 0]]);
+}
+
+test("run report: totals with unknown steps keep the known amount and count the unknown steps", () => {
+  const report = runReport(partlyUnknownRun());
+  assert.equal(report.cost.costUsd, 0.25);
+  assert.deepEqual(report.coverage.run, { llmSteps: 3, unknownSteps: 2 });
+  assert.deepEqual([report.byModel.lost, report.coverage.byModel.lost], [0, { llmSteps: 1, unknownSteps: 1 }], "a model with only unknown steps has no known amount");
+  assert.deepEqual([report.byModel.known, report.coverage.byModel.known], [0.25, { llmSteps: 2, unknownSteps: 1 }]);
+  assert.deepEqual([report.byTier.medium, report.coverage.byTier.medium], [0.25, { llmSteps: 3, unknownSteps: 2 }]);
+});
+
+test("subgraph costs: a subgraph whose LLM steps are all unknown is unknown, not $0", () => {
+  const helloSpecs = [spec("hello", [{ id: "plan", kind: "llm" }, { id: "build", kind: "subgraph", workflow: "build" }]), spec("build", [{ id: "implement", kind: "llm" }, { id: "verify", kind: "llm" }])];
+  const build = subgraphCosts(helloSpecs, "hello", runReport(partlyUnknownRun()).byNode)["hello/build"];
+  assert.deepEqual([build?.costSource, build?.llmSteps, build?.unknownSteps], ["unknown", 2, 2]);
 });
