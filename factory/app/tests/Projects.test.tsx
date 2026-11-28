@@ -217,6 +217,28 @@ describe("Projects", () => {
     expect(button).toHaveAttribute("title", expect.stringMatching(/source checkout is in sync with its remote/));
   });
 
+  test("Merge updates of a source checkout follows its commits behind and its local changes, and the title states the counts", async () => {
+    const source = { marketplaceSource: true, upstreamRef: "origin/main" };
+    const enabled = [
+      withData({ ...source, behind: 2, ahead: 0, localWorkflows: [], artifacts: [artifact({ harness: "source", state: "current" })] }),
+      withData({ ...source, behind: 0, ahead: 1, localWorkflows: ["sample-flow"], artifacts: [artifact({ harness: "source", state: "current" })] }),
+      withData({ ...source, behind: 0, ahead: 0, localWorkflows: [], artifacts: [artifact({ harness: "source", state: "modified" })] }),
+    ];
+    for (const view of enabled) {
+      serve({ statuses: { "sample-app": view, "sample-web": null } });
+      const { unmount } = render(<Projects onShowRuns={() => {}} />);
+      await screen.findByRole("table");
+      expect(screen.getByTestId("merge-updates")).toBeEnabled();
+      unmount();
+    }
+    serve({ statuses: { "sample-app": withData({ ...source, behind: 0, ahead: 3, localWorkflows: [], artifacts: [artifact({ harness: "source", state: "outdated" })] }), "sample-web": null } });
+    render(<Projects onShowRuns={() => {}} />);
+    await screen.findByRole("table");
+    const button = screen.getByTestId("merge-updates");
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("title", expect.stringMatching(/0 commits behind and 3 commits ahead of origin\/main/));
+  });
+
   test("Merge updates starts the merge workflow and re-checks the status when the run finishes", async () => {
     const posted = serve();
     let runCalls = 0;

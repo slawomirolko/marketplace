@@ -56,12 +56,13 @@ is enabled when the latest status has either:
 
 - an installed skill or agent in state `outdated`, or
 - an installed skill or agent in state `modified` where the marketplace moved on after its base, or
-- in a marketplace source checkout, a skill or agent the remote has newer content for
-  (`outdated`, `missing` or `removed`: the checkout is behind) or a `modified` or `local-only`
-  skill or agent.
+- in a marketplace source checkout, commits behind its remote branch (the status reports
+  `behind` and `ahead` against the branch it tracks, else the origin default branch, whatever
+  files the commits touch), or a `modified`, `local-only` or `unknown-base` skill or agent, or a
+  changed factory workflow (`localWorkflows`).
 
-When the button is disabled, its title says why, for example that the source checkout is in sync
-with its remote.
+When the button is disabled, its title says why. For a source checkout it states the counts, for
+example "0 commits behind and 3 commits ahead of origin/main".
 
 ### Steps
 
@@ -82,6 +83,11 @@ with its remote.
    diff, and what would go upstream.
 4. **Decide.** The viewer asks one question with one checkbox per artifact. Choose **Apply
    selected** or **Apply none**. A row starts unchecked when:
+   - it has a version conflict: its content differs from the version it is compared with while
+     the version is the same ("Version conflict: same version <v>, different content": the copy
+     and its base, or the copy and the marketplace), or both sides changed the version to
+     different values ("Version conflict: local <a>, marketplace <b>"). Versions come from the
+     registry or agent manifest first, else the front matter (a workflow: its YAML `version`);
    - its base is guessed (the project lock does not record which marketplace version the copy
      came from);
    - a resolved hunk is marked unsure;
@@ -108,13 +114,17 @@ A marketplace source checkout keeps skills under `skills/<category>/` and lists 
 resolve step, so a run with only these rows goes from prepare to the question.
 
 - **Pull row** (`pull`): "Pull <n> commits from origin/<branch> (fast-forward)" when the current
-  branch is behind the remote branch it tracks. The detail lists the commits. Applying it runs
+  branch is behind the remote branch it tracks (else the origin default branch), whatever files
+  the commits touch. The detail lists the commits. Applying it runs
   `git merge --ff-only` to exactly the commit the row shows, never a forced or merge-commit pull.
   The row starts unchecked, and apply refuses it, when the checkout has uncommitted changes to
   tracked files, untracked files the pull would overwrite, or commits that are not on the remote;
   the detail says which. A pull that git still refuses is reported as that row's result.
-- **Publish rows** (`publish:<kind>:<name>`): one per `modified` or `local-only` skill or agent
-  that differs from the remote default branch. The detail lists the changed files with a short
+- **Publish rows** (`publish:<kind>:<name>`): one per `modified`, `local-only` or `unknown-base`
+  skill or agent, and one per changed factory workflow (`factory/workflows/<name>.yaml`, kind
+  `workflow`), that differs from the remote default branch. A workflow row also carries its own
+  entry of `factory/workflows.lock.json` when the checkout changed it: the remote lock with only
+  that entry replaced, so the entries of other workflows stay as the remote has them. The detail lists the changed files with a short
   diff. Applying one puts exactly that artifact's files (adapter files excluded) on the remote
   default branch in a temporary git worktree, stages them and runs the sanitize gate on the
   staged commit and on the PR title, body and commit message. Only when the gate passes does it
@@ -127,7 +137,11 @@ resolve step, so a run with only these rows goes from prepare to the question.
   `FACTORY_LEAK_TERMS`) and the secret patterns apply. Without a configured term the gate fails
   closed and the row is blocked.
 - A publish row starts unchecked, and apply refuses it, when the remote changed the same artifact
-  after the checkout's commit (pull and merge first, so newer remote text is never replaced).
+  (for a workflow also its lock entry) after the checkout's commit (pull and merge first, so newer
+  remote text is never replaced).
+- A publish row also starts unchecked, though you may still check it, when it has a version
+  conflict (for example a change without a version bump) or its state is `unknown-base` (it
+  shares no file with any marketplace version).
 - Apply refuses every selected row before any action when the checkout moved, or an artifact's
   files changed, after prepare. Then it pulls first and opens the draft PRs one by one.
 

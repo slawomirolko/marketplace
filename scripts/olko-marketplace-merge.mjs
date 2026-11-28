@@ -63,7 +63,7 @@ import {
 } from "../skills/software-factory/olko-factory-project/scripts/installed-artifacts.mjs";
 import { projectStatus } from "../skills/software-factory/olko-factory-project/scripts/project-scan.mjs";
 import { isArtifactId, readLock, record } from "./olko-marketplace-lock.mjs";
-import { applySource, diffLines, fetchCheckout, isSourceItem, sourceItems, sourceRefusals, sourceRow } from "./olko-marketplace-merge-source.mjs";
+import { applySource, diffLines, fetchCheckout, isSourceItem, sourceItems, sourceRefusals, sourceRow, versionConflict } from "./olko-marketplace-merge-source.mjs";
 import { parseFlags } from "./lib/cli.mjs";
 
 const SOURCE_HARNESS = "source";
@@ -283,6 +283,11 @@ function collect(project, status) {
   return [...byId].sort(([left], [right]) => left.localeCompare(right));
 }
 
+/** True when two portable copies (Map of relative path to text) hold the same files and texts. */
+function sameContents(left, right) {
+  return left.size === right.size && [...left].every(([name, text]) => right.get(name) === text);
+}
+
 /** Builds the plan item of one group of identical copies. */
 function buildItem({ project, marketplace, ref, lock, out, id, group }) {
   const { status, copy } = group[0];
@@ -297,12 +302,20 @@ function buildItem({ project, marketplace, ref, lock, out, id, group }) {
   for (const [side, files] of Object.entries(texts)) {
     writeProposed(path.join(sides, side), files);
   }
+  const conflict = versionConflict({
+    local: copy.version ?? null,
+    base: base.version?.version ?? null,
+    upstream: upstream.version ?? null,
+    differsFromBase: !sameContents(copy.contents, base.version?.contents ?? new Map()),
+    differsFromUpstream: !sameContents(copy.contents, upstream.contents),
+  });
   return {
     id,
     kind: status.kind,
     name: status.name,
     state: status.state,
     locations,
+    versionConflict: conflict,
     base: base.commit,
     baseGuessed: base.guessed,
     versions: { local: base.version?.version ?? null, upstream: upstream.version ?? null, localCommit: base.version?.commit ?? base.commit, upstreamCommit: upstream.commit },
@@ -707,6 +720,7 @@ function summaryRow(plan, item) {
   const drift = driftOf(item);
   const drifted = drift.changed.length > 0 || drift.extra.length > 0;
   const detail = [
+    ...(typeof item.versionConflict === "string" ? [item.versionConflict] : []),
     ...driftLines(drift),
     ...(item.baseGuessed ? ["Base guessed: the project lock does not record which marketplace version this copy came from."] : []),
     ...(clean.length > 0 ? [`Merged cleanly: ${clean.map((file) => `${file.path} (${file.result})`).join(", ")}`] : []),
@@ -719,7 +733,7 @@ function summaryRow(plan, item) {
     id: item.id,
     label: `${item.kind} ${item.name}${location} (${item.state}) ${versionText(item.versions)}`,
     detail: detail.join("\n"),
-    checked: !item.baseGuessed && !unresolved && !drifted && unexplainedFiles(item).length === 0 && sure,
+    checked: !item.baseGuessed && !item.versionConflict && !unresolved && !drifted && unexplainedFiles(item).length === 0 && sure,
   };
 }
 

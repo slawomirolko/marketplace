@@ -286,6 +286,36 @@ function missingOnRemote(sources, listed, { marketplace, ref, workflows }) {
   return missing;
 }
 
+/** A factory workflow file of a marketplace source checkout. */
+const WORKFLOW_FILE = /^factory\/workflows\/([a-z0-9][a-z0-9-]*)\.yaml$/;
+
+/** The trimmed output of git, or null when it fails. */
+function gitOrNull(cwd, ...args) {
+  try {
+    return git(cwd, ...args);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * How a marketplace source checkout stands against its remote: the remote branch its current branch tracks (else the
+ * origin default branch), the commits it is behind and ahead, and the factory workflows changed in the checkout since
+ * their merge base (committed, uncommitted or new). Null for a checkout without such a remote branch.
+ */
+export function checkoutSync(project) {
+  const tracked = gitOrNull(project, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}");
+  const upstreamRef = tracked ?? originDefaultRef(project);
+  const base = upstreamRef ? gitOrNull(project, "merge-base", "HEAD", upstreamRef) : null;
+  if (!upstreamRef || !base) {
+    return null;
+  }
+  const count = (range) => Number(git(project, "rev-list", "--count", range));
+  const changed = [...git(project, "diff", "--name-only", base, "--", "factory/workflows").split("\n"), ...git(project, "ls-files", "--others", "--exclude-standard", "--", "factory/workflows").split("\n")];
+  const localWorkflows = [...new Set(changed.map((file) => file.match(WORKFLOW_FILE)?.[1]).filter(Boolean))].sort();
+  return { upstreamRef, behind: count(`HEAD..${upstreamRef}`), ahead: count(`${upstreamRef}..HEAD`), localWorkflows };
+}
+
 /** The count per state, the workflows that run an installed artifact, and a one-line summary. */
 function summarize(artifacts) {
   const counts = Object.fromEntries(STATES.map((state) => [state, artifacts.filter((artifact) => artifact.state === state).length]));
@@ -311,7 +341,8 @@ export function projectStatus({ project, marketplace, factory, depth = DEFAULT_D
   artifacts.sort((left, right) => STATES.indexOf(left.state) - STATES.indexOf(right.state) || left.id.localeCompare(right.id));
   const { counts, workflows, summary } = summarize(artifacts);
   const marketplaceSource = isMarketplaceSource(project);
-  return { project, marketplace, ref, fetched, fetchError, head: headOf(marketplace, ref), harnesses: detectHarnesses(project), marketplaceSource, artifacts, counts, workflows, summary };
+  const sync = marketplaceSource ? checkoutSync(project) : null;
+  return { project, marketplace, ref, fetched, fetchError, head: headOf(marketplace, ref), harnesses: detectHarnesses(project), marketplaceSource, ...(sync ?? {}), artifacts, counts, workflows, summary };
 }
 
 /** The `--depth` flag as a positive integer; DEFAULT_DEPTH when it is not given. */

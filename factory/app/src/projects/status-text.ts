@@ -18,28 +18,49 @@ const LOCAL_REF = "HEAD";
 /** The harness of the skills and agents of a marketplace source checkout. */
 const SOURCE_HARNESS = "source";
 
-/** States of a source checkout row that the remote has newer content for: the checkout is behind its remote. */
+/** States of a source checkout row that the remote has newer content for: the checkout is behind its remote (a status without commit counts). */
 const SOURCE_BEHIND = ["outdated", "missing", "removed"];
 /** States of a source checkout row that the merge offers as a draft PR. */
-const SOURCE_CHANGED = ["modified", "local-only"];
+const SOURCE_CHANGED = ["modified", "local-only", "unknown-base"];
 
-/** True when the merge has a row for this artifact: an installed copy to merge, or a source checkout to pull or publish. */
-function isMergeable(artifact: ProjectArtifact): boolean {
-  if (artifact.harness === SOURCE_HARNESS) {
-    return SOURCE_BEHIND.includes(artifact.state) || SOURCE_CHANGED.includes(artifact.state);
-  }
-  return artifact.state === "outdated" || (artifact.state === "modified" && artifact.upstreamMoved === true);
+/** True for an installed copy the merge can bring up to date. */
+function isMergeableCopy(artifact: ProjectArtifact): boolean {
+  return artifact.harness !== SOURCE_HARNESS && (artifact.state === "outdated" || (artifact.state === "modified" && artifact.upstreamMoved === true));
 }
 
-/** Why Merge updates is off for these artifacts, or null when one of them can be merged, pulled or published. */
-export function mergeBlocker(artifacts: ProjectArtifact[] | undefined): string | null {
-  if (!artifacts) {
-    return "Check the status first: the merge needs to know which skills and agents differ from the marketplace.";
-  }
-  if (artifacts.some(isMergeable)) {
+/** True for a skill or agent of a source checkout changed locally: the merge offers it as a draft PR. */
+function isChangedSource(artifact: ProjectArtifact): boolean {
+  return artifact.harness === SOURCE_HARNESS && SOURCE_CHANGED.includes(artifact.state);
+}
+
+function commits(count: number): string {
+  return `${count} commit${count === 1 ? "" : "s"}`;
+}
+
+/** Why Merge updates is off for a source checkout with commit counts, or null when it is behind or changed locally. */
+function sourceBlocker(data: ProjectStatusData, behind: number): string | null {
+  const changed = data.artifacts.some(isChangedSource) || (data.localWorkflows?.length ?? 0) > 0;
+  if (behind > 0 || changed) {
     return null;
   }
-  const source = artifacts.some((artifact) => artifact.harness === SOURCE_HARNESS);
+  return `Nothing to merge: this marketplace source checkout is ${commits(behind)} behind and ${commits(data.ahead ?? 0)} ahead of ${data.upstreamRef ?? "its remote"}, with no modified or local-only skill, agent or workflow to open a draft PR for.`;
+}
+
+/** Why Merge updates is off for this status, or null when an installed copy can be merged or a source checkout pulled or published. */
+export function mergeBlocker(data: ProjectStatusData | null | undefined): string | null {
+  if (!data) {
+    return "Check the status first: the merge needs to know which skills and agents differ from the marketplace.";
+  }
+  if (data.artifacts.some(isMergeableCopy)) {
+    return null;
+  }
+  if (typeof data.behind === "number") {
+    return sourceBlocker(data, data.behind);
+  }
+  const source = data.artifacts.some((artifact) => artifact.harness === SOURCE_HARNESS);
+  if (source && data.artifacts.some((artifact) => isChangedSource(artifact) || (artifact.harness === SOURCE_HARNESS && SOURCE_BEHIND.includes(artifact.state)))) {
+    return null;
+  }
   return source
     ? "Nothing to merge: this marketplace source checkout is in sync with its remote, with no modified or local-only skill or agent to open a draft PR for."
     : "Nothing to merge: no installed skill or agent is outdated, or modified with a newer marketplace version.";

@@ -7,8 +7,9 @@
  *   forced or merge-commit pull. A checkout with uncommitted changes, with untracked files the pull would overwrite,
  *   with commits that are not on the remote or that moved after prepare is refused; a pull git still fails is reported
  *   as that row's result. Only the temporary worktree of a publish row is removed; other worktrees are never pruned.
- * - One publish row per `modified` or `local-only` source skill or agent (`publish:<kind>:<name>`). Applying one
- *   puts exactly that artifact's changed files (adapter files excluded) on the remote default branch in a temporary
+ * - One publish row per `modified`, `local-only` or `unknown-base` source skill or agent and per changed factory
+ *   workflow with its own workflow lock entry (`publish:<kind>:<name>`); a version conflict or an unknown base starts
+ *   it unchecked. Applying one puts exactly that artifact's changed files (adapter files excluded) on the remote default branch in a temporary
  *   git worktree, stages them, runs the sanitize gate on the staged commit and on the PR title, body and commit
  *   message, and only when it passes commits, pushes the new branch `feature/upstream-<kind>-<name>-<hash8>` and
  *   opens a draft PR with gh (no shell). It never pushes the default branch, never merges, never marks a PR ready
@@ -25,15 +26,16 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { isAdapterFile, normalizeText } from "../skills/software-factory/olko-factory-project/scripts/installed-artifacts.mjs";
-import { isArtifactId } from "./olko-marketplace-lock.mjs";
+import { NAME, isAdapterFile, marketplaceVersions, normalizeText, workingTreeVersion } from "../skills/software-factory/olko-factory-project/scripts/installed-artifacts.mjs";
 import { GateError, scan } from "./olko-sanitize.mjs";
 import { resolveGh } from "./olko-upstream-plan.mjs";
 
 export const PULL = "pull";
 export const PUBLISH = "publish";
 const SOURCE_HARNESS = "source";
-const PUBLISHED_STATES = ["modified", "local-only"];
+const PUBLISHED_STATES = ["modified", "local-only", "unknown-base"];
+const PUBLISHED_KINDS = ["skill", "agent", "workflow"];
+const WORKFLOWS_LOCK = "factory/workflows.lock.json";
 const REMOTE = "origin";
 const BRANCH_PREFIX = "feature/upstream";
 const BRANCH_HASH = 8;
@@ -42,7 +44,7 @@ const DIFF_CONTEXT = 1;
 const DIFF_LINES = 40;
 const ERROR_TAIL = 300;
 const COMMIT = /^[0-9a-f]{40,64}$/;
-const SOURCE_LOCATION = /^(?:skills\/[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*|agents\/opencode\/[a-z0-9][a-z0-9-]*\.md)$/;
+const SOURCE_LOCATION = /^(?:skills\/[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*|agents\/opencode\/[a-z0-9][a-z0-9-]*\.md|factory\/workflows\/[a-z0-9][a-z0-9-]*\.yaml)$/;
 const GIT_MAX_BUFFER = 256 * 1024 * 1024;
 /** A safe git ref name: no leading dash or slash, no "..", "//", "@{", control characters, spaces or "~^:?*[\\", no trailing "/", "." or ".lock". */
 const REF_NAME = /^(?![-/])(?!.*\.\.)(?!.*\/\/)(?!.*@\{)[A-Za-z0-9._/-]+(?<![/.])(?<!\.lock)$/;
@@ -133,10 +135,13 @@ export function fetchCheckout(project) {
   spawnSync("git", ["-C", project, "fetch", "--quiet", REMOTE], { stdio: "ignore", env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } });
 }
 
-/** The pull row, or null when the checkout is not on a branch that tracks a remote branch or is not behind it. */
-function pullItem(project) {
+/**
+ * The pull row, or null when the checkout is not on a branch or is not behind the remote branch it tracks (else the
+ * origin default branch), whatever files the commits touch.
+ */
+function pullItem(project, remote) {
   const branch = gitTry(project, "symbolic-ref", "--quiet", "--short", "HEAD");
-  const remoteRef = branch ? gitTry(project, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}") : null;
+  const remoteRef = branch ? (gitTry(project, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}") ?? remote?.remoteRef ?? null) : null;
   if (!remoteRef) {
     return null;
   }
@@ -150,34 +155,76 @@ function pullItem(project) {
   return { id: PULL, action: PULL, branch, remoteRef, remoteCommit, head, behind, commits };
 }
 
-/** The repository paths of one source artifact: its folder (or agent file) in the working tree, adapter files excluded. */
+/** The path of `name` inside the artifact at `location`; an agent or workflow file is its own name, the workflow lock too. */
+function relativeTo(location, name) {
+  return name.startsWith(`${location}/`) ? name.slice(location.length + 1) : path.posix.basename(name);
+}
+
+/** The repository paths of one source artifact in the working tree: its folder or file, adapter files excluded. */
 function localFiles(project, location) {
   const names = gitNames(project, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", location);
   return [...new Set(names)].filter((name) => !isAdapterFile(relativeTo(location, name)) && fs.existsSync(path.join(project, ...name.split("/")))).sort();
 }
 
-/** The path of `name` inside the artifact at `location`; an agent file is its own name. */
-function relativeTo(location, name) {
-  return name === location ? path.posix.basename(name) : name.slice(location.length + 1);
+/** The repository paths under `paths` at a commit, adapter files excluded. */
+function filesAt(project, commit, location, paths) {
+  return gitNames(project, "ls-tree", "-r", "-z", "--name-only", commit, "--", ...paths).filter((name) => !isAdapterFile(relativeTo(location, name))).sort();
 }
 
-/** The repository paths of one source artifact at a remote commit, adapter files excluded. */
-function remoteFiles(project, commit, location) {
-  return gitNames(project, "ls-tree", "-r", "-z", "--name-only", commit, "--", location).filter((name) => !isAdapterFile(relativeTo(location, name))).sort();
+/** The parsed JSON of a file at a commit (or of the working tree for a null commit); an empty object when missing or invalid. */
+function jsonAt(project, commit, file) {
+  const text = commit === null ? (fs.existsSync(path.join(project, file)) ? fs.readFileSync(path.join(project, file), "utf8") : null) : gitTry(project, "cat-file", "blob", `${commit}:${file}`);
+  try {
+    const value = text === null ? {} : JSON.parse(text);
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  } catch {
+    return {};
+  }
 }
 
-/** The SHA-256 of every working-tree file of a source artifact by repository path. */
-function localHashes(project, location) {
-  return Object.fromEntries(localFiles(project, location).map((name) => [name, sha256(fs.readFileSync(path.join(project, ...name.split("/"))))]));
+/**
+ * The workflow lock to publish with one workflow: the lock at `commit` with only this workflow's entry taken from the
+ * checkout, so the entries of other workflows stay as the remote has them. Null when that entry is the same.
+ */
+function lockWithEntry(project, commit, name) {
+  const remote = jsonAt(project, commit, WORKFLOWS_LOCK);
+  const local = jsonAt(project, null, WORKFLOWS_LOCK);
+  if (JSON.stringify(local[name]) === JSON.stringify(remote[name])) {
+    return null;
+  }
+  const merged = { ...remote };
+  if (Object.hasOwn(local, name)) {
+    merged[name] = local[name];
+  } else {
+    delete merged[name];
+  }
+  const keys = Object.keys(remote);
+  const sorted = keys.every((key, index) => index === 0 || keys[index - 1].localeCompare(key) <= 0);
+  const ordered = sorted ? Object.fromEntries(Object.keys(merged).sort().map((key) => [key, merged[key]])) : merged;
+  return Buffer.from(`${JSON.stringify(ordered, null, 2)}\n`);
 }
 
-/** The files of a source artifact that differ from the remote commit: added, modified or deleted, with a short diff. */
-function changedFiles(project, commit, location) {
-  const local = localFiles(project, location);
-  const remote = remoteFiles(project, commit, location);
+/** The files a publish branch holds for one artifact, by repository path: its working-tree files, and for a workflow its lock entry. */
+function wantedFiles(project, spec, remoteCommit) {
+  const wanted = new Map(localFiles(project, spec.location).map((name) => [name, fs.readFileSync(path.join(project, ...name.split("/")))]));
+  const lock = spec.kind === "workflow" && remoteCommit ? lockWithEntry(project, remoteCommit, spec.name) : null;
+  if (lock) {
+    wanted.set(WORKFLOWS_LOCK, lock);
+  }
+  return wanted;
+}
+
+/** The SHA-256 of every wanted file by repository path. */
+function hashesOfWanted(wanted) {
+  return Object.fromEntries([...wanted].map(([name, buffer]) => [name, sha256(buffer)]));
+}
+
+/** The wanted files that differ from a commit under `paths`: added, modified or deleted, with a short diff. */
+function changedFiles(project, commit, location, wanted, paths) {
+  const remote = filesAt(project, commit, location, paths);
   const files = [];
-  for (const name of [...new Set([...local, ...remote])].sort()) {
-    const localText = local.includes(name) ? normalizeText(fs.readFileSync(path.join(project, ...name.split("/")), "utf8")) : undefined;
+  for (const name of [...new Set([...wanted.keys(), ...remote])].sort()) {
+    const localText = wanted.has(name) ? normalizeText(wanted.get(name).toString("utf8")) : undefined;
     const remoteText = remote.includes(name) ? normalizeText(gitRaw(project, "cat-file", "blob", `${commit}:${name}`)) : undefined;
     if (remoteText === undefined) {
       files.push({ path: name, change: "added", diff: [] });
@@ -190,42 +237,103 @@ function changedFiles(project, commit, location) {
   return files;
 }
 
-/** True when the remote changed the artifact between the checkout's commit (their merge base) and `commit`. */
-function remoteChanged(project, commit, location) {
-  const base = gitTry(project, "merge-base", "HEAD", commit);
+/** True when the remote changed the artifact (for a workflow also its lock entry) between the checkout's merge base and `commit`. */
+function remoteChanged(project, base, commit, spec) {
   if (!base) {
     return true;
   }
-  return runGit(project, ["diff", "--quiet", base, commit, "--", location]).status !== 0;
+  if (runGit(project, ["diff", "--quiet", base, commit, "--", spec.location]).status !== 0) {
+    return true;
+  }
+  return spec.kind === "workflow" && JSON.stringify(jsonAt(project, base, WORKFLOWS_LOCK)[spec.name]) !== JSON.stringify(jsonAt(project, commit, WORKFLOWS_LOCK)[spec.name]);
 }
 
-/** The publish row of one modified or local-only source artifact, or null when nothing differs from the remote. */
-function publishItem(project, artifact, remote) {
-  const id = `${PUBLISH}:${artifact.kind}:${artifact.name}`;
-  const location = artifact.location;
-  const fileHashes = localHashes(project, location);
-  const contentHash = sha256(Object.entries(fileHashes).map(([name, hash]) => `${name}\0${hash}\n`).join(""));
-  const common = { id, action: PUBLISH, kind: artifact.kind, name: artifact.name, state: artifact.state, location, branch: `${BRANCH_PREFIX}-${artifact.kind}-${artifact.name}-${contentHash.slice(0, BRANCH_HASH)}`, fileHashes };
-  if (!remote) {
-    return { ...common, remoteRef: null, baseBranch: null, remoteCommit: null, remoteChanged: false, files: Object.keys(fileHashes).map((name) => ({ path: name, change: "added", diff: [] })) };
+/** The `version:` of a workflow YAML text, or null without one. */
+function workflowVersion(text) {
+  return text?.match(/^version:\s*["']?([^"'\s]+)/m)?.[1] ?? null;
+}
+
+/** The version of an artifact at a commit (registry or manifest first, front matter or YAML `version` else), or null. */
+function versionAt(project, spec, commit) {
+  if (!commit) {
+    return null;
   }
-  const files = changedFiles(project, remote.remoteCommit, location);
+  if (spec.kind === "workflow") {
+    return workflowVersion(gitTry(project, "cat-file", "blob", `${commit}:${spec.location}`));
+  }
+  return marketplaceVersions(project, spec.kind, spec.location, 1, commit).versions[0]?.version ?? null;
+}
+
+/** The version of an artifact in the working tree, read as at a commit. */
+function localVersion(project, spec) {
+  if (spec.kind === "workflow") {
+    const file = path.join(project, ...spec.location.split("/"));
+    return fs.existsSync(file) ? workflowVersion(fs.readFileSync(file, "utf8")) : null;
+  }
+  return workingTreeVersion(project, spec.kind, spec.location);
+}
+
+/**
+ * The version conflict of a row, or null: the same version on both sides of a content change (the local copy and the
+ * version it came from, or the local copy and the marketplace), or both sides bumping the version to different values.
+ */
+export function versionConflict({ local, base, upstream, differsFromBase, differsFromUpstream }) {
+  if (local && base && upstream && local !== base && upstream !== base && local !== upstream) {
+    return `Version conflict: local ${local}, marketplace ${upstream}`;
+  }
+  if (local && ((differsFromBase && local === base) || (differsFromUpstream && local === upstream))) {
+    return `Version conflict: same version ${local}, different content`;
+  }
+  return null;
+}
+
+/** The version conflict of a publish row: the working tree against the merge base and the remote commit. */
+function publishVersionConflict(project, spec, base, remoteCommit, changedFromRemote) {
+  const ownFiles = new Map(localFiles(project, spec.location).map((name) => [name, fs.readFileSync(path.join(project, ...name.split("/")))]));
+  const differsFromBase = base ? changedFiles(project, base, spec.location, ownFiles, [spec.location]).length > 0 : false;
+  return versionConflict({ local: localVersion(project, spec), base: versionAt(project, spec, base), upstream: versionAt(project, spec, remoteCommit), differsFromBase, differsFromUpstream: changedFromRemote });
+}
+
+/** The publish row of one changed source artifact or workflow, or null when nothing differs from the remote. */
+function publishItem(project, spec, remote) {
+  const id = `${PUBLISH}:${spec.kind}:${spec.name}`;
+  const wanted = wantedFiles(project, spec, remote?.remoteCommit ?? null);
+  const paths = [spec.location, ...(wanted.has(WORKFLOWS_LOCK) ? [WORKFLOWS_LOCK] : [])];
+  const fileHashes = hashesOfWanted(wanted);
+  const contentHash = sha256(Object.entries(fileHashes).map(([name, hash]) => `${name}\0${hash}\n`).join(""));
+  const common = { id, action: PUBLISH, kind: spec.kind, name: spec.name, state: spec.state, location: spec.location, paths, branch: `${BRANCH_PREFIX}-${spec.kind}-${spec.name}-${contentHash.slice(0, BRANCH_HASH)}`, fileHashes };
+  if (!remote) {
+    return { ...common, remoteRef: null, baseBranch: null, remoteCommit: null, remoteChanged: false, versionConflict: null, files: Object.keys(fileHashes).map((name) => ({ path: name, change: "added", diff: [] })) };
+  }
+  const files = changedFiles(project, remote.remoteCommit, spec.location, wanted, paths);
   if (files.length === 0) {
     return null;
   }
-  return { ...common, ...remote, remoteChanged: remoteChanged(project, remote.remoteCommit, location), files };
+  const base = gitTry(project, "merge-base", "HEAD", remote.remoteCommit);
+  return { ...common, ...remote, remoteChanged: remoteChanged(project, base, remote.remoteCommit, spec), versionConflict: publishVersionConflict(project, spec, base, remote.remoteCommit, true), files };
 }
 
-/** The source rows of a marketplace source checkout: the pull row first, then one publish row per changed artifact in id order. */
+/** The changed factory workflows the status lists, as publish specs. */
+function workflowSpecs(project, status, remote) {
+  const names = Array.isArray(status.localWorkflows) ? status.localWorkflows.filter((name) => NAME.test(String(name))) : [];
+  return names.map((name) => {
+    const location = `factory/workflows/${name}.yaml`;
+    const onRemote = remote ? gitTry(project, "cat-file", "-e", `${remote.remoteCommit}:${location}`) !== null : false;
+    return { kind: "workflow", name, location, state: onRemote ? "modified" : "local-only" };
+  });
+}
+
+/** The source rows of a marketplace source checkout: the pull row first, then one publish row per changed artifact or workflow in id order. */
 export function sourceItems(project, status) {
   const remote = defaultRemote(project);
   const changed = status.artifacts.filter((artifact) => artifact.harness === SOURCE_HARNESS && PUBLISHED_STATES.includes(artifact.state) && SOURCE_LOCATION.test(artifact.location ?? ""));
-  const publish = changed.map((artifact) => publishItem(project, artifact, remote)).filter(Boolean).sort((left, right) => left.id.localeCompare(right.id));
-  const pull = pullItem(project);
+  const specs = [...changed.map((artifact) => ({ kind: artifact.kind, name: artifact.name, location: artifact.location, state: artifact.state })), ...workflowSpecs(project, status, remote)];
+  const publish = specs.map((spec) => publishItem(project, spec, remote)).filter(Boolean).sort((left, right) => left.id.localeCompare(right.id));
+  const pull = pullItem(project, remote);
   return [...(pull ? [pull] : []), ...publish];
 }
 
-/** A source item of the plan, checked: its id, kind, name, location, branch and commits are what prepare writes. */
+/** A source item of the plan, checked: its id, kind, name, location, paths, branch and commits are what prepare writes. */
 function checkItem(item) {
   if (item.action === PULL) {
     if (item.id !== PULL || !COMMIT.test(String(item.head)) || !COMMIT.test(String(item.remoteCommit)) || !isRefName(item.branch) || !isRefName(item.remoteRef)) {
@@ -233,10 +341,11 @@ function checkItem(item) {
     }
     return;
   }
-  const kindOk = item.kind === "skill" || item.kind === "agent";
+  const kindOk = PUBLISHED_KINDS.includes(item.kind) && NAME.test(String(item.name));
   const branchOk = item.branch === `${BRANCH_PREFIX}-${item.kind}-${item.name}-${String(item.branch).slice(-BRANCH_HASH)}` && /^[0-9a-f]+$/.test(String(item.branch).slice(-BRANCH_HASH));
   const remoteOk = item.remoteCommit === null || (COMMIT.test(String(item.remoteCommit)) && isRefName(item.baseBranch) && isRefName(item.remoteRef));
-  if (!kindOk || !isArtifactId(`${item.kind}:${item.name}`) || item.id !== `${PUBLISH}:${item.kind}:${item.name}` || !isLocationOf(item) || !branchOk || !remoteOk) {
+  const pathsOk = Array.isArray(item.paths) && item.paths[0] === item.location && item.paths.slice(1).every((extra) => item.kind === "workflow" && extra === WORKFLOWS_LOCK) && item.paths.length <= 2;
+  if (!kindOk || item.id !== `${PUBLISH}:${item.kind}:${item.name}` || !isLocationOf(item) || !pathsOk || !branchOk || !remoteOk) {
     throw new Error(`The plan holds an invalid item: ${item.id}`);
   }
 }
@@ -252,7 +361,13 @@ function isLocationOf(item) {
   if (!SOURCE_LOCATION.test(location)) {
     return false;
   }
-  return item.kind === "agent" ? location === `agents/opencode/${item.name}.md` : location.startsWith("skills/") && path.posix.basename(location) === item.name;
+  if (item.kind === "agent") {
+    return location === `agents/opencode/${item.name}.md`;
+  }
+  if (item.kind === "workflow") {
+    return location === `factory/workflows/${item.name}.yaml`;
+  }
+  return location.startsWith("skills/") && path.posix.basename(location) === item.name;
 }
 
 /** The untracked files (not ignored) that the commits between `head` and `commit` would write over. */
@@ -293,7 +408,7 @@ function publishRefusals(project, item) {
   if (item.remoteChanged) {
     reasons.push(`${item.remoteRef} changed this ${item.kind} after the checkout's commit; pull and merge first, so newer remote text is not replaced`);
   }
-  const now = localHashes(project, item.location);
+  const now = hashesOfWanted(wantedFiles(project, item, item.remoteCommit));
   const recorded = item.fileHashes && typeof item.fileHashes === "object" ? item.fileHashes : {};
   const names = new Set([...Object.keys(now), ...Object.keys(recorded)]);
   if ([...names].some((name) => now[name] !== recorded[name])) {
@@ -325,11 +440,13 @@ export function sourceRow(project, item) {
       checked: refusals.length === 0,
     };
   }
+  const unsure = item.state === "unknown-base" ? [`Unsure: this ${item.kind} shares no file with any marketplace version; check the change by hand.`] : [];
+  const conflict = typeof item.versionConflict === "string" ? [item.versionConflict] : [];
   return {
     id: item.id,
     label: `${item.kind} ${item.name} (${item.state}): draft PR from ${item.branch}`,
-    detail: [...refused, `Draft PR against ${item.remoteRef ?? "the remote default branch"} after the sanitize gate passes. Files:`, ...fileLines(item)].join("\n"),
-    checked: refusals.length === 0,
+    detail: [...refused, ...conflict, ...unsure, `Draft PR against ${item.remoteRef ?? "the remote default branch"} after the sanitize gate passes. Files:`, ...fileLines(item)].join("\n"),
+    checked: refusals.length === 0 && conflict.length === 0 && unsure.length === 0,
   };
 }
 
@@ -353,18 +470,18 @@ function hitText(hits) {
   return hits.map((hit) => `${hit.file}:${hit.line} ${hit.term}`).join(", ");
 }
 
-/** Copies the working-tree files of a publish row into the worktree and removes the files the checkout removed. */
+/** Writes the wanted files of a publish row into the worktree, removes the files the checkout removed, and stages them. */
 function stageArtifact(project, worktree, item) {
-  const local = localFiles(project, item.location);
-  for (const name of remoteFiles(worktree, "HEAD", item.location).filter((remoteName) => !local.includes(remoteName))) {
+  const wanted = wantedFiles(project, item, item.remoteCommit);
+  for (const name of filesAt(worktree, "HEAD", item.location, item.paths).filter((remoteName) => !wanted.has(remoteName))) {
     fs.rmSync(path.join(worktree, ...name.split("/")));
   }
-  for (const name of local) {
+  for (const [name, buffer] of wanted) {
     const target = path.join(worktree, ...name.split("/"));
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.copyFileSync(path.join(project, ...name.split("/")), target);
+    fs.writeFileSync(target, buffer);
   }
-  gitOut(worktree, "add", "-A", "--", item.location);
+  gitOut(worktree, "add", "-A", "--", ...item.paths);
 }
 
 /** Runs the sanitize gate on the staged commit and the texts; returns the reason it blocks, or null when it passes. */

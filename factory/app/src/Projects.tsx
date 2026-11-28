@@ -103,7 +103,7 @@ export function Projects({ onShowRuns, pollMs = ANALYZE_POLL_MS, updater }: { on
         {!selected && <p className="muted">Select a project.</p>}
         {selected && (
           <>
-            <ProjectHead project={selected} overview={overview} checkingRun={selectedRun} checkingState={analyzeState[selected.id]} mergingRun={mergingRun} mergeBlocker={mergeBlocker(status?.data?.artifacts)} hasStatus={Boolean(status || selected.status)} busy={busy} act={act} onAnalyze={(projectId) => void analyze(projectId)} onMerge={(projectId) => void merge(projectId)} onShowRuns={onShowRuns} updater={updater} />
+            <ProjectHead project={selected} overview={overview} checkingRun={selectedRun} checkingState={analyzeState[selected.id]} mergingRun={mergingRun} mergeBlocker={mergeBlocker(status?.data)} hasStatus={Boolean(status || selected.status)} busy={busy} act={act} onAnalyze={(projectId) => void analyze(projectId)} onMerge={(projectId) => void merge(projectId)} onShowRuns={onShowRuns} updater={updater} />
             {!overview.statusWorkflowInstalled && (
               <p className="warn">
                 The <code>{overview.statusWorkflow}</code> workflow is not installed, so the project status cannot be checked.

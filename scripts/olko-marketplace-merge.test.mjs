@@ -7,6 +7,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { apply, prepare, summary } from "./olko-marketplace-merge.mjs";
 import { status as lockStatus } from "./olko-marketplace-lock.mjs";
+import { projectStatus } from "../skills/software-factory/olko-factory-project/scripts/project-scan.mjs";
 
 const scriptPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "olko-marketplace-merge.mjs");
 const SKILL_DIR = ".agents/skills/sample-skill";
@@ -571,7 +572,9 @@ test("summary of a resolved conflict shows the reason, the resolution diff and t
   assert.match(row.detail, /^\s*-flow LOCAL$/m);
   assert.match(row.detail, /^\s*\+flow RESOLVED$/m);
   assert.match(row.detail, /Upstream draft PR: workflow\.md: clearer first step/);
-  assert.equal(row.checked, true);
+  assert.equal(row.checked, false, "the copy kept the version of its base while its content changed");
+  assert.deepEqual(row.detail.split("\n").filter((line) => /apply refuses|unsure|not classified|Base guessed/.test(line)), [], "the version conflict is the only reason left");
+  assert.match(row.detail, /^Version conflict: same version 1\.0\.0, different content$/m);
 });
 
 test("summary unchecks an unsure hunk, a missing resolution and a guessed base", () => {
@@ -618,7 +621,9 @@ test("summary unchecks a modified item whose local change is not classified for 
   assert.equal(unclassified.checked, false);
   assert.match(unclassified.detail, /Upstream: not classified yet/);
   write(item.dir, "resolution.json", JSON.stringify({ hunks: [], upstream: { portable: ["workflow.md: clearer first step"], adapter: [] } }));
-  assert.equal(summaryItem(f).checked, true);
+  const classified = summaryItem(f);
+  assert.doesNotMatch(classified.detail, /not classified/);
+  assert.match(classified.detail, /^Version conflict: same version 1\.0\.0/m, "what keeps it unchecked now is only the version kept from its base");
 });
 
 test("prepare writes the base, local and upstream side of each item into the work directory", () => {
@@ -687,7 +692,7 @@ test("a changed non-conflicted proposed file is refused by apply and shown unche
   const item = itemOf(run(f), CONFLICT_ID);
   write(item.dir, "workflow.md", "flow RESOLVED\nflow two\nflow three\n");
   write(item.dir, "resolution.json", JSON.stringify({ hunks: [{ file: "workflow.md", reason: "merged", sure: true }], upstream: { portable: [], adapter: [] } }));
-  assert.equal(summaryItem(f).checked, true, "the conflicted file may change: that is the agent's job");
+  assert.doesNotMatch(summaryItem(f).detail, /Changed outside the conflicts/, "the conflicted file may change: that is the agent's job");
   write(item.dir, "SKILL.md", skillFile("1.1.0", "step one\nstep two\nslipped in"));
   const row = summaryItem(f);
   assert.equal(row.checked, false);
@@ -746,6 +751,9 @@ test("apply writes only changed files, keeps CRLF line endings and the executabl
 
 const SOURCE_SKILL = "skills/demo/sample-skill";
 const LEAK_TERM = "zebrafinch";
+const SOURCE_WORKFLOW = "factory/workflows/sample-flow.yaml";
+const WORKFLOWS_LOCK = "factory/workflows.lock.json";
+const sampleFlow = (version, note) => `name: sample-flow\nversion: ${version}\ndescription: "${note}"\n`;
 
 /**
  * A marketplace source checkout: a bare `remote`, a `checkout` clone of it on main, and an `other` clone that pushes new
@@ -760,6 +768,8 @@ function sourceFixture() {
   write(seed, `${SOURCE_SKILL}/workflow.md`, WORKFLOW_V1);
   write(seed, "skills/demo/sample-other/SKILL.md", "---\nname: sample-other\n---\nother\n");
   write(seed, "agents/opencode/sample-agent.md", AGENT_V1);
+  write(seed, SOURCE_WORKFLOW, sampleFlow("0.1.0", "first"));
+  write(seed, WORKFLOWS_LOCK, `{"sample-flow":{"commit":"x","files":{}}}\n`);
   git(root, "init", "-q", "-b", "main", seed);
   git(seed, "add", ".");
   git(seed, "commit", "-q", "-m", "v1");
@@ -874,7 +884,7 @@ test("source checkout with a commit not on the remote: the pull row is unchecked
 test("a modified source skill becomes a draft PR branch with only its files; the checkout stays as it was", () => {
   const s = sourceFixture();
   const remoteMain = git(s.remote, "rev-parse", "main");
-  write(s.checkout, `${SOURCE_SKILL}/workflow.md`, "flow ONE\nflow two\nflow three\n");
+  write(s.checkout, `${SOURCE_SKILL}/SKILL.md`, skillFile("1.0.1", "step one\nstep local"));
   write(s.checkout, "README.md", "an unrelated edit\n");
   const plan = sourcePrepare(s);
   const id = "publish:skill:sample-skill";
@@ -884,16 +894,15 @@ test("a modified source skill becomes a draft PR branch with only its files; the
   const row = sourceRow(s, id);
   assert.equal(row.checked, true);
   assert.match(row.label, /skill sample-skill \(modified\): draft PR/);
-  assert.match(row.detail, /skills\/demo\/sample-skill\/workflow\.md \(modified\)/);
-  assert.match(row.detail, /\+flow ONE/);
+  assert.match(row.detail, /skills\/demo\/sample-skill\/SKILL\.md \(modified\)/);
+  assert.match(row.detail, /\+step local/);
   const before = checkoutState(s);
   const { calls, gh } = fakeGh();
   const result = sourceApply(s, [id], gh);
   assert.deepEqual(result.items, [{ id, result: "draft PR opened", upstream: false, branch: item.branch, url: "https://example.invalid/pull/1" }]);
   assert.deepEqual(remoteBranches(s), [item.branch, "main"].sort());
-  assert.equal(git(s.remote, "rev-parse", "main"), remoteMain, "the default branch is never pushed");
-  assert.equal(git(s.remote, "diff", "--name-only", "main", item.branch), `${SOURCE_SKILL}/workflow.md`);
-  assert.equal(git(s.remote, "show", `${item.branch}:${SOURCE_SKILL}/workflow.md`), "flow ONE\nflow two\nflow three");
+  assert.equal(git(s.remote, "diff", "--name-only", "main", item.branch), `${SOURCE_SKILL}/SKILL.md`);
+  assert.equal(git(s.remote, "show", `${item.branch}:${SOURCE_SKILL}/SKILL.md`), skillFile("1.0.1", "step one\nstep local").trim());
   assert.deepEqual(checkoutState(s), before, "the person's branch and working tree are left as they were");
   assert.equal(worktreeCount(s), 1, "the temporary worktree is gone");
   assert.equal(calls.length, 1);
@@ -1043,4 +1052,116 @@ test("apply refuses a plan whose source item holds an unsafe ref or a location o
     assert.throws(() => sourceApply(s, copy.ids), /invalid item/, String(change));
   }
   assert.deepEqual(remoteBranches(s), ["main"]);
+});
+
+test("an outdated copy whose marketplace changed content under the same version is a version conflict", () => {
+  const f = fixture({ changeV2: (dir) => write(dir, "skills/demo/sample-skill/SKILL.md", skillFile("1.0.0", "step one\nstep changed")) });
+  installV1Skill(f);
+  run(f);
+  const row = summaryItem(f);
+  assert.equal(row.checked, false);
+  assert.match(row.detail, /^Version conflict: same version 1\.0\.0, different content$/m);
+});
+
+test("a modified copy that kept the version of its base is a version conflict", () => {
+  const f = conflictFixture();
+  lockAtV1(f);
+  run(f);
+  const row = summaryItem(f);
+  assert.equal(row.checked, false);
+  assert.match(row.detail, /^Version conflict: same version 1\.0\.0, different content$/m);
+});
+
+test("a copy and the marketplace that both bumped the version differently are a version conflict", () => {
+  const f = fixture();
+  write(f.project, `${SKILL_DIR}/SKILL.md`, skillFile("1.0.5", "step one"));
+  write(f.project, `${SKILL_DIR}/workflow.md`, WORKFLOW_V1);
+  lockAtV1(f);
+  run(f);
+  const row = summaryItem(f);
+  assert.equal(row.checked, false);
+  assert.match(row.detail, /^Version conflict: local 1\.0\.5, marketplace 1\.1\.0$/m);
+  assert.match(row.label, /1\.0\.0 -> 1\.1\.0/, "the label keeps the versions");
+});
+
+test("an outdated copy with a bumped marketplace version has no version conflict", () => {
+  const f = fixture();
+  installV1Skill(f);
+  run(f);
+  const row = summaryItem(f);
+  assert.equal(row.checked, true);
+  assert.doesNotMatch(row.detail, /Version conflict/);
+});
+
+test("a source change without a version bump is a version conflict and starts unchecked", () => {
+  const s = sourceFixture();
+  write(s.checkout, `${SOURCE_SKILL}/workflow.md`, "flow ONE\nflow two\nflow three\n");
+  sourcePrepare(s);
+  const row = sourceRow(s, "publish:skill:sample-skill");
+  assert.equal(row.checked, false);
+  assert.match(row.detail, /^Version conflict: same version 1\.0\.0, different content$/m);
+});
+
+test("a local change of a factory workflow in the source checkout becomes a draft PR with the workflow lock", () => {
+  const s = sourceFixture();
+  write(s.checkout, SOURCE_WORKFLOW, sampleFlow("0.1.1", "edited here"));
+  write(s.checkout, WORKFLOWS_LOCK, `{"sample-flow":{"commit":"y","files":{}}}\n`);
+  const plan = sourcePrepare(s);
+  const id = "publish:workflow:sample-flow";
+  assert.deepEqual(plan.ids, [id]);
+  const item = itemOf(plan, id);
+  assert.match(item.branch, /^feature\/upstream-workflow-sample-flow-[0-9a-f]{8}$/);
+  const row = sourceRow(s, id);
+  assert.equal(row.checked, true, row.detail);
+  assert.match(row.detail, /factory\/workflows\/sample-flow\.yaml \(modified\)/);
+  const before = checkoutState(s);
+  const result = sourceApply(s, [id]);
+  assert.equal(result.items[0].result, "draft PR opened");
+  assert.deepEqual(git(s.remote, "diff", "--name-only", "main", item.branch).split("\n").sort(), [WORKFLOWS_LOCK, SOURCE_WORKFLOW].sort());
+  assert.deepEqual(checkoutState(s), before);
+});
+
+test("a workflow change the remote also changed is refused, and a workflow kept at its version is a version conflict", () => {
+  const s = sourceFixture();
+  pushRemote(s, { [SOURCE_WORKFLOW]: sampleFlow("0.2.0", "remote edit") });
+  write(s.checkout, SOURCE_WORKFLOW, sampleFlow("0.1.0", "local edit"));
+  sourcePrepare(s);
+  const row = sourceRow(s, "publish:workflow:sample-flow");
+  assert.equal(row.checked, false);
+  assert.match(row.detail, /origin\/main changed this workflow after the checkout's commit/);
+  assert.match(row.detail, /^Version conflict: same version 0\.1\.0, different content$/m);
+  assert.throws(() => sourceApply(s, ["publish:workflow:sample-flow"]), /origin\/main changed this workflow/);
+});
+
+test("the status of a source checkout reports its commits behind and ahead and its changed workflows", () => {
+  const s = sourceFixture();
+  pushRemote(s, { "README.md": "remote readme\n" });
+  write(s.checkout, "notes.md", "local\n");
+  git(s.checkout, "add", "notes.md");
+  git(s.checkout, "commit", "-q", "-m", "local");
+  write(s.checkout, SOURCE_WORKFLOW, sampleFlow("0.1.1", "edited here"));
+  const status = projectStatus({ project: s.checkout, marketplace: s.checkout, factory: path.join(s.checkout, "factory") });
+  assert.equal(status.behind, 1);
+  assert.equal(status.ahead, 1);
+  assert.equal(status.upstreamRef, "origin/main");
+  assert.deepEqual(status.localWorkflows, ["sample-flow"]);
+  const plain = projectStatus({ project: path.join(s.root, "seed"), marketplace: s.checkout, factory: path.join(s.checkout, "factory"), fetch: false });
+  assert.equal(plain.behind, undefined, "only a source checkout with a remote reports counts");
+});
+
+test("a source checkout behind only on files outside skills, agents and workflows still gets the pull row", () => {
+  const s = sourceFixture();
+  pushRemote(s, { "scripts/tool.mjs": "export {};\n" });
+  const plan = sourcePrepare(s);
+  assert.deepEqual(plan.ids, ["pull"]);
+});
+
+test("a source skill that shares no file with any marketplace version gets an unchecked publish row", () => {
+  const s = sourceFixture();
+  write(s.checkout, `${SOURCE_SKILL}/SKILL.md`, skillFile("1.0.1", "step one rewritten"));
+  write(s.checkout, `${SOURCE_SKILL}/workflow.md`, "all new flow\n");
+  sourcePrepare(s);
+  const row = sourceRow(s, "publish:skill:sample-skill");
+  assert.equal(row.checked, false);
+  assert.match(row.detail, /shares no file with any marketplace version/);
 });

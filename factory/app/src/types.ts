@@ -453,6 +453,14 @@ export interface ProjectStatusData {
   fetched?: boolean;
   /** Why the fetch failed; the comparison then used what the last fetch left. */
   fetchError?: string | null;
+  /** True when the project is a marketplace source checkout. */
+  marketplaceSource?: boolean;
+  /** For a source checkout with a remote: the remote branch it is compared with, and its commits behind and ahead of it. */
+  upstreamRef?: string;
+  behind?: number;
+  ahead?: number;
+  /** For a source checkout: the factory workflows changed in it since its merge base with the remote. */
+  localWorkflows?: string[];
   artifacts: ProjectArtifact[];
   counts: Record<string, number>;
   workflows: string[];

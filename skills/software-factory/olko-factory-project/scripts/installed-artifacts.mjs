@@ -236,7 +236,7 @@ function readCopy(kind, target) {
     contents.set(path.basename(target), portableText(kind, text));
     const meta = frontMatter(text);
     const requires = [...meta.skills.map((skillName) => `skill:${skillName}`), ...meta.tasks.map((agentName) => `agent:${agentName}`)];
-    return { contents, ...hashesOf(contents), adapter: false, model: modelLine(text), requires };
+    return { contents, ...hashesOf(contents), adapter: false, model: modelLine(text), requires, version: meta.version };
   }
   let adapter = false;
   for (const relativePath of listFiles(target)) {
@@ -248,7 +248,7 @@ function readCopy(kind, target) {
   }
   const skillFile = path.join(target, SKILL_FILE);
   const meta = fs.existsSync(skillFile) ? frontMatter(fs.readFileSync(skillFile, "utf8")) : frontMatter("");
-  return { contents, ...hashesOf(contents), adapter, model: null, requires: meta.uses.map((skillName) => `skill:${skillName}`) };
+  return { contents, ...hashesOf(contents), adapter, model: null, requires: meta.uses.map((skillName) => `skill:${skillName}`), version: meta.version };
 }
 
 function hashesOf(contents) {
@@ -490,6 +490,21 @@ function indexedVersion(kind, source, index) {
   const agents = Array.isArray(index.agents) ? index.agents : [];
   const entry = agents.find((agent) => (agent?.file ? agent.file === fileName : `${agent?.name}.md` === fileName));
   return versionString(entry?.version);
+}
+
+/**
+ * The version of a source path in the working tree of a marketplace checkout at `root`, read as the history is: the
+ * registry or agent manifest version, else the front matter `version`; null when neither names one.
+ */
+export function workingTreeVersion(root, kind, source) {
+  const indexFile = indexFileOf(kind, source);
+  const indexPath = indexFile ? path.join(root, indexFile) : null;
+  const indexed = indexPath && fs.existsSync(indexPath) ? indexedVersion(kind, source, parseJson(fs.readFileSync(indexPath, "utf8"))) : null;
+  if (indexed) {
+    return indexed;
+  }
+  const file = path.join(root, ...(kind === "skill" ? `${source}/${SKILL_FILE}` : source).split("/"));
+  return fs.existsSync(file) ? frontMatter(fs.readFileSync(file, "utf8")).version : null;
 }
 
 /**
