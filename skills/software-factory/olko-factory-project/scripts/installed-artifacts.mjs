@@ -33,6 +33,11 @@ const ADAPTER_FILE = "project.md";
 const NAME_SLOT = "{name}";
 const ANY_FOLDER = "*";
 const PLUGINS_FOLDER = "plugins";
+/** The line that opens front matter, with its newline. */
+const FENCE = "---\n";
+/** The object id in a `git cat-file --batch` header of a found object: `<id> <type> <size>`. */
+const OBJECT_ID = /^[0-9a-f]{40,64}$/;
+const NEWLINE_BYTE = 10;
 
 /** Where each harness keeps installed skills and agents, relative to the project root. */
 export const LOCATIONS = [
@@ -58,6 +63,7 @@ export const SOURCE_PATHS = [
 const indexCache = new Map();
 const treeCache = new Map();
 
+/** Runs git in `cwd` and returns its trimmed output; throws when git fails. */
 export function git(cwd, ...args) {
   return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", maxBuffer: GIT_MAX_BUFFER, stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
@@ -78,10 +84,10 @@ export function normalizeText(text) {
 
 /** The end of the front matter of normalized text (the index of its closing "\n---"), or -1 without one. */
 function frontMatterEnd(body) {
-  if (!body.startsWith("---\n")) {
+  if (!body.startsWith(FENCE)) {
     return -1;
   }
-  return body.indexOf("\n---", 4);
+  return body.indexOf("\n---", FENCE.length);
 }
 
 /** Normalized text without the `model:` lines of its front matter: the model belongs to the project. */
@@ -91,8 +97,8 @@ export function stripModelLine(text) {
   if (end < 0) {
     return body;
   }
-  const front = body.slice(4, end).split("\n").filter((line) => !/^model:/.test(line)).join("\n");
-  return `---\n${front}${body.slice(end)}`;
+  const front = body.slice(FENCE.length, end).split("\n").filter((line) => !/^model:/.test(line)).join("\n");
+  return `${FENCE}${front}${body.slice(end)}`;
 }
 
 /** The text a marketplace copy and a project copy are compared on: normalized, and without the model line for agents. */
@@ -107,9 +113,10 @@ export function modelLine(text) {
   if (end < 0) {
     return null;
   }
-  return body.slice(4, end).split("\n").find((line) => /^model:/.test(line)) ?? null;
+  return body.slice(FENCE.length, end).split("\n").find((line) => /^model:/.test(line)) ?? null;
 }
 
+/** The SHA-256 of one portable file, as bare hex (no prefix). */
 export function fileHash(text) {
   return crypto.createHash("sha256").update(text).digest("hex");
 }
@@ -117,6 +124,8 @@ export function fileHash(text) {
 /**
  * The content hash of portable files (Map of relative path to portable text): `sha256:` plus the
  * SHA-256 of `<path>\n<text>\n` for every file in path order, and the SHA-256 of each file.
+ * The lock stores the prefixed hash; the lock `status` and the upstream plan strip HASH_PREFIX and
+ * report bare hex (`contentHash`, the PR body, `record --content-hash` and `record --rejected`).
  */
 export function hashFiles(files) {
   const perFile = {};
@@ -137,58 +146,70 @@ function listValue(raw) {
   return inline[1].split(",").map((item) => item.trim().replace(/^["']|["']$/g, "")).filter((item) => NAME.test(item));
 }
 
+/** The result list of each permission section whose allowed names the scan keeps. */
+const PERMISSION_LISTS = { skill: "skills", task: "tasks" };
+
+/**
+ * Handlers for the indented lines under a top-level front matter key, by key. Each gets the line,
+ * the result and the parse state (`section`: the current permission sub-key).
+ */
+const BLOCK_HANDLERS = {
+  uses(line, result) {
+    const item = line.match(/^\s+-\s*([a-z0-9-]+)/);
+    if (item) {
+      result.uses.push(item[1]);
+    }
+  },
+  metadata(line, result) {
+    const version = line.match(/^\s+version:\s*["']?([^"'\s]+)/);
+    if (version && !result.version) {
+      result.version = version[1];
+    }
+  },
+  permission(line, result, state) {
+    const sub = line.match(/^ {2}([a-z]+):\s*$/);
+    if (sub) {
+      state.section = sub[1];
+      return;
+    }
+    const grant = line.match(/^ {4}["']?([a-z0-9][a-z0-9-]*)["']?:\s*["']?(allow|ask)/);
+    const list = grant && Object.hasOwn(PERMISSION_LISTS, state.section) ? PERMISSION_LISTS[state.section] : null;
+    if (list) {
+      result[list].push(grant[1]);
+    }
+  },
+};
+
+/** Applies a top-level `key: value` line: the inline `version` and `uses` values. */
+function topLevelValue(key, value, result) {
+  if (key === "version") {
+    result.version = value.replace(/^["']|["']$/g, "") || null;
+  }
+  if (key === "uses") {
+    result.uses = listValue(value);
+  }
+}
+
 /** Front matter fields the scan needs: version, uses, and the allowed names under permission.skill / permission.task. */
 export function frontMatter(text) {
   const body = normalizeText(text);
   const result = { version: null, uses: [], skills: [], tasks: [] };
-  if (!body.startsWith("---\n")) {
+  if (!body.startsWith(FENCE)) {
     return result;
   }
-  const end = body.indexOf("\n---", 4);
-  const lines = body.slice(4, end < 0 ? undefined : end).split("\n");
-  let block = null;
-  let section = null;
+  const end = body.indexOf("\n---", FENCE.length);
+  const lines = body.slice(FENCE.length, end < 0 ? undefined : end).split("\n");
+  const state = { block: null, section: null };
   for (const line of lines) {
     const top = line.match(/^([A-Za-z][\w-]*):\s*(.*)$/);
     if (top) {
-      block = top[1];
-      section = null;
-      if (block === "version") {
-        result.version = top[2].replace(/^["']|["']$/g, "") || null;
-      }
-      if (block === "uses") {
-        result.uses = listValue(top[2]);
-      }
+      state.block = top[1];
+      state.section = null;
+      topLevelValue(top[1], top[2], result);
       continue;
     }
-    if (block === "uses") {
-      const item = line.match(/^\s+-\s*([a-z0-9-]+)/);
-      if (item) {
-        result.uses.push(item[1]);
-      }
-      continue;
-    }
-    if (block === "metadata") {
-      const version = line.match(/^\s+version:\s*["']?([^"'\s]+)/);
-      if (version && !result.version) {
-        result.version = version[1];
-      }
-      continue;
-    }
-    if (block !== "permission") {
-      continue;
-    }
-    const sub = line.match(/^ {2}([a-z]+):\s*$/);
-    if (sub) {
-      section = sub[1];
-      continue;
-    }
-    const grant = line.match(/^ {4}["']?([a-z0-9][a-z0-9-]*)["']?:\s*["']?(allow|ask)/);
-    if (grant && section === "skill") {
-      result.skills.push(grant[1]);
-    }
-    if (grant && section === "task") {
-      result.tasks.push(grant[1]);
+    if (Object.hasOwn(BLOCK_HANDLERS, state.block ?? "")) {
+      BLOCK_HANDLERS[state.block](line, result, state);
     }
   }
   return result;
@@ -400,9 +421,9 @@ export function readObjects(marketplace, names) {
   const buffer = result.stdout;
   let offset = 0;
   for (const name of unique) {
-    const newline = buffer.indexOf(10, offset);
+    const newline = buffer.indexOf(NEWLINE_BYTE, offset);
     const header = buffer.subarray(offset, newline).toString("utf8").split(" ");
-    const found = header.length === 3 && /^[0-9a-f]{40,64}$/.test(header[0]) && /^\d+$/.test(header[2]);
+    const found = header.length === 3 && OBJECT_ID.test(header[0]) && /^\d+$/.test(header[2]);
     if (!found) {
       objects.set(name, null);
       offset = newline + 1;
@@ -478,47 +499,57 @@ function indexedVersion(kind, source, index) {
  * `truncated` is true when the path has older commits than the ones compared.
  */
 export function marketplaceVersions(marketplace, kind, source, depth = DEFAULT_DEPTH, ref = LOCAL_REF) {
-  const log = git(marketplace, "log", ref, "-n", String(depth + 1), "--format=%H %cs", "--", source);
-  const allCommits = log ? log.split("\n").map((line) => ({ commit: line.split(" ")[0], date: line.split(" ")[1] })) : [];
-  const truncated = allCommits.length > depth;
-  const commits = allCommits.slice(0, depth);
-  const trees = commits.map((entry) => {
-    const listing = git(marketplace, "ls-tree", "-r", "-z", "--full-tree", entry.commit, "--", source);
-    const files = listing.split("\0").filter(Boolean).map((line) => {
-      const [meta, file] = line.split("\t");
-      const [, type, blob] = meta.split(" ");
-      return { type, blob, relativePath: kind === "skill" ? path.posix.relative(source, file) : path.posix.basename(file) };
-    }).filter((file) => file.type === "blob");
-    return { ...entry, files };
-  });
+  const { commits, truncated } = commitsOf(marketplace, source, depth, ref);
+  const trees = commits.map((entry) => ({ ...entry, files: treeEntries(marketplace, kind, source, entry.commit) }));
   const blobs = readObjects(marketplace, trees.flatMap((tree) => tree.files.map((file) => file.blob)));
   const indexFile = indexFileOf(kind, source);
   const indexes = indexFile ? indexesAt(marketplace, commits.map((entry) => entry.commit), indexFile) : new Map();
   const versions = trees
     .filter((tree) => tree.files.length > 0)
-    .map((tree) => {
-      const contents = new Map();
-      let frontVersion = null;
-      let model = null;
-      for (const file of tree.files) {
-        if (isAdapterFile(file.relativePath)) {
-          continue;
-        }
-        const text = blobs.get(file.blob) ?? "";
-        contents.set(file.relativePath, portableText(kind, text));
-        if (file.relativePath === SKILL_FILE || kind === "agent") {
-          frontVersion = frontMatter(text).version;
-        }
-        if (kind === "agent") {
-          model = modelLine(text);
-        }
-      }
-      const version = indexedVersion(kind, source, indexes.get(tree.commit)) ?? frontVersion;
-      return { commit: tree.commit, date: tree.date, version, contents, ...hashesOf(contents), model };
-    });
+    .map((tree) => versionOf(kind, source, tree, blobs, indexes.get(tree.commit)));
   return { versions, truncated };
 }
 
+/** The last `depth` commits (with date) that touched a source path at `ref`, and whether older ones exist. */
+function commitsOf(marketplace, source, depth, ref) {
+  const log = git(marketplace, "log", ref, "-n", String(depth + 1), "--format=%H %cs", "--", source);
+  const allCommits = log ? log.split("\n").map((line) => ({ commit: line.split(" ")[0], date: line.split(" ")[1] })) : [];
+  return { commits: allCommits.slice(0, depth), truncated: allCommits.length > depth };
+}
+
+/** The blobs of a source path at a commit, each with its path relative to the skill folder (or the agent file name). */
+function treeEntries(marketplace, kind, source, commit) {
+  const listing = git(marketplace, "ls-tree", "-r", "-z", "--full-tree", commit, "--", source);
+  return listing.split("\0").filter(Boolean).map((line) => {
+    const [meta, file] = line.split("\t");
+    const [, type, blob] = meta.split(" ");
+    return { type, blob, relativePath: kind === "skill" ? path.posix.relative(source, file) : path.posix.basename(file) };
+  }).filter((file) => file.type === "blob");
+}
+
+/** One marketplace version of a source path: its portable contents, hashes, version and agent model line. */
+function versionOf(kind, source, tree, blobs, index) {
+  const contents = new Map();
+  let frontVersion = null;
+  let model = null;
+  for (const file of tree.files) {
+    if (isAdapterFile(file.relativePath)) {
+      continue;
+    }
+    const text = blobs.get(file.blob) ?? "";
+    contents.set(file.relativePath, portableText(kind, text));
+    if (file.relativePath === SKILL_FILE || kind === "agent") {
+      frontVersion = frontMatter(text).version;
+    }
+    if (kind === "agent") {
+      model = modelLine(text);
+    }
+  }
+  const version = indexedVersion(kind, source, index) ?? frontVersion;
+  return { commit: tree.commit, date: tree.date, version, contents, ...hashesOf(contents), model };
+}
+
+/** The file names whose hashes differ between two per-file hash maps, sorted. */
 export function differingFiles(left, right) {
   return [...new Set([...Object.keys(left), ...Object.keys(right)])].filter((file) => left[file] !== right[file]).sort();
 }

@@ -19,7 +19,7 @@ You build the store digest. You never edit a file and you never decide which ADR
 
 INPUT: the project directory and a list of paths (planned files of a Task, or the changed paths of a review). The paths are relative to the project.
 
-STEP 1 — SCRIPT: find `check-store.mjs` next to the `SKILL.md` of `olko-init-project-docs`. Use the path that your instructions list for that skill; otherwise use `.agents/skills/olko-init-project-docs/check-store.mjs` in the project. Run it from the project directory:
+STEP 1 — SCRIPT: find `scripts/check-store.mjs` in the folder of the `SKILL.md` of `olko-init-project-docs`. Use the path that your instructions list for that skill; otherwise use `.agents/skills/olko-init-project-docs/scripts/check-store.mjs` in the project. Run it from the project directory:
 
 `node <script> <project> --digest <path> <path> ...`
 

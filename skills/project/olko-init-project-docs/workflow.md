@@ -51,7 +51,7 @@ Write approved content only, into missing files (re-runs: `edge-cases.md`). Shap
 
 Store files contain the approved text only, never the evidence.
 
-After writing, run `check-store.mjs` (see `overview.md`) on the project and show its output. Fix every error that this run caused before you finish.
+After writing, run `scripts/check-store.mjs` (see `overview.md`) on the project and show its output. Fix every error that this run caused before you finish.
 
 ## 5. Finish
 1. Directories differ from the defaults → propose the keys for `.agents/skill-config.md`; write them after approval.

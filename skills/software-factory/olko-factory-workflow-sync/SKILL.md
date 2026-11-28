@@ -1,17 +1,17 @@
 ---
 name: olko-factory-workflow-sync
-version: 0.2.0
+version: 0.2.1
 description: "Script commands that keep the Software Factory workflows in step with the Olko marketplace: scan the lock for changed, removed and new sources, count mapping rounds and validate, build the YAML diff, and lock or revert. Use when you run the workflow sync loop or a mapping round of it. Triggers: 'workflow sync', 'sync factory workflows', 'factory workflows stale', 'olko-factory-workflow-sync'."
 ---
 
 # olko-factory-workflow-sync
 
 ## Routing Summary
-Deterministic commands for the factory workflow sync loop. Run each command as `node <this skill>/scripts/workflow-sync.mjs <command> [flags]`. Each command prints one JSON object on stdout. Exit code 0 means success. Any other exit code means an error, with the message on stderr: report the error and stop.
+Deterministic commands for the factory workflow sync loop. Run each command as `node <this skill>/scripts/workflow-sync.mjs <command> [flags]`. The factory work runs through the factory entry points `sources:lock` and `workflows:validate` (scripts of `<factory>/package.json`), never through factory source paths. Each command prints one JSON object on stdout. Exit code 0 means success. Any other exit code means an error, with the message on stderr: report the error and stop.
 
 ## Commands
 - `scan [--marketplace <checkout>] [--factory <factory folder>] [--workflows <folder>] [--state-dir <folder>] [--only <name>]...`
-  Compares `workflows.lock.json` with the marketplace and saves a copy of every YAML file in `<state dir>/snapshot`. Without flags, it uses the marketplace checkout that contains this skill, its `factory` folder and `factory/workflows`, and it makes a new temporary state folder. Pass the flags when the skill runs from an installed copy. `--only` (repeatable, or one comma-separated list) keeps only the items whose source is one of these skill or agent names, for example the artifacts installed in one project; without it, every item is kept.
+  Compares `workflows.lock.json` with the marketplace and saves a copy of every YAML file in `<state dir>/snapshot`. Without flags, it uses the marketplace checkout that contains this skill, its `factory` folder and `factory/workflows`, and it makes a new temporary state folder. An installed copy is not inside a checkout (no `registry.json` four folders up): it uses `FACTORY_MARKETPLACE_DIR` and `FACTORY_DIR` (default `<marketplace>/factory`), and exits 2 when neither `--marketplace` nor `FACTORY_MARKETPLACE_DIR` is set. `--only` (repeatable, or one comma-separated list) keeps only the items whose source is one of these skill or agent names, for example the artifacts installed in one project; without it, every item is kept.
   Output: `stateDir`, `workflows`, `marketplace`, `factory`, `head`, `pending` (the number of sources plus workflows missing from the lock), `summary`, and `items`: one per source, `{n, kind: changed|missing|new, source, ask, itemFile}`. `missing` means the source was removed from the marketplace. `ask` is true only for `new`, a new main agent. The `itemFile` JSON names the YAML files that implement the source (`yamlFiles`), every file of the workflows that contain them (`family`) and the `diffFile` with the source diff (the full text for a new agent).
 - `round --state-dir <dir> --source <source> [--needs-op "<line>"]... [--last-verdict <pass|fail>] [--last-engine-gaps <n>]`
   Ends one mapping round of a source. It records the verdict of the verifier of the previous round (the `--last-*` flags), counts this round, sets the verdict of this source to open, keeps the `needs engine op` lines, and runs the factory validator. Output: `source`, `round`, `valid`, `errors` (up to 20 validator lines).

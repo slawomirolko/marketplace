@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { artifactName, workflowFamily, workflowGraph } from "../skills/software-factory/olko-factory-workflow-sync/scripts/workflow-sync.mjs";
+import { artifactName, resolveCheckout, workflowFamily, workflowGraph } from "../skills/software-factory/olko-factory-workflow-sync/scripts/workflow-sync.mjs";
 
 const marketplaceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const scriptPath = path.join(marketplaceRoot, "skills", "software-factory", "olko-factory-workflow-sync", "scripts", "workflow-sync.mjs");
@@ -82,6 +82,21 @@ test("artifactName reads skill and agent names from source paths", () => {
   assert.equal(artifactName("agents/opencode/olko-a.md"), "olko-a");
   assert.equal(artifactName("skills/software-factory/olko-factory-project/SKILL.md"), "olko-factory-project");
   assert.equal(artifactName("skills/demo/sample-skill/scripts/x.mjs"), "sample-skill");
+});
+
+test("an installed copy outside a marketplace checkout needs --marketplace or FACTORY_MARKETPLACE_DIR", () => {
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-sync-installed-"));
+  assert.throws(() => resolveCheckout({}, {}, outside), /not inside a marketplace checkout; pass --marketplace/);
+  assert.deepEqual(resolveCheckout({}, { FACTORY_MARKETPLACE_DIR: outside }, outside), { marketplace: outside, factory: path.join(outside, "factory") });
+  assert.deepEqual(resolveCheckout({}, {}, marketplaceRoot), { marketplace: marketplaceRoot, factory: factory });
+  const scripts = path.join(outside, "skills", "olko-factory-workflow-sync", "scripts");
+  fs.mkdirSync(scripts, { recursive: true });
+  fs.copyFileSync(scriptPath, path.join(scripts, "workflow-sync.mjs"));
+  const env = { ...process.env };
+  delete env.FACTORY_MARKETPLACE_DIR;
+  const result = spawnSync(process.execPath, [path.join(scripts, "workflow-sync.mjs"), "scan", "--state-dir", path.join(outside, "state")], { encoding: "utf8", env });
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /not inside a marketplace checkout/);
 });
 
 test("round counts rounds per source, validates, and records the last verifier verdict; finish approve locks only verified workflows", () => {

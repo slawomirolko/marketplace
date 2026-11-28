@@ -46,7 +46,7 @@ Review runs with `mode: all`, so other orchestrators can call
 against the acceptance criteria, and `olko-project-rules-check` checks confirmed findings
 against the project's decision store (see `docs/skill-adaptation-contract.md` §9).
 `olko-project-context` builds the store digest for a Task or a review: the binding
-ADR and rule lines for the given paths, from `check-store.mjs` of
+ADR and rule lines for the given paths, from `scripts/check-store.mjs` of
 `olko-init-project-docs`. Implementers and checkers read that digest first and open
 a full ADR only for a conflict.
 Its PLAN ROUTE reviews a plan before the user approves it.

@@ -21,7 +21,7 @@ Load `olko-init-project-docs` and follow its store format (`overview.md`), its t
 
 Each request names one MODE. Do only that mode.
 
-SCRIPT: `check-store.mjs` next to the `SKILL.md` of `olko-init-project-docs` (the path your instructions list for that skill; otherwise `.agents/skills/olko-init-project-docs/check-store.mjs`). Run it from the working directory: `node <script> . --json`.
+SCRIPT: `scripts/check-store.mjs` in the folder of the `SKILL.md` of `olko-init-project-docs` (the path your instructions list for that skill; otherwise `.agents/skills/olko-init-project-docs/scripts/check-store.mjs`). Run it from the working directory: `node <script> . --json`.
 
 MODE inventory — read only. Run the script. Group the `missing` ADRs into batches of at most 5, in id order. Return the `groups` as the script lists them (largest first), and the `errors` that are not about missing front matter or a collision.
 

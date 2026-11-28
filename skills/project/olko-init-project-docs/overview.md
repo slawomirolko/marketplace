@@ -62,7 +62,7 @@ docs/
 - An older ADR without front matter stays valid. Its id is its topic, and agents read it in full.
 - Each rule file starts with front matter: `scope` (a list of path globs; `"**"` for all code) and `summary` (one line). The body is a list of `MUST` / `MUST NOT` / `SHOULD` rules.
 - The ADR log's `Scope` column uses the same globs, so agents open only the ADRs and rule files that match the paths they touch.
-- Check the store with `node <this skill directory>/check-store.mjs <project> [--adr <dir>] [--rules <dir>]`. Exit code 0: the store is valid. Exit code 1: the store has errors, one per line. Exit code 2: usage error.
+- Check the store with `node <this skill directory>/scripts/check-store.mjs <project> [--adr <dir>] [--rules <dir>]`. Exit code 0: the store is valid. Exit code 1: the store has errors, one per line. Exit code 2: usage error.
 
 ## Defaults
 - A re-run creates only missing files and never overwrites one.

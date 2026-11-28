@@ -16,6 +16,19 @@ after a person says so. A person always merges or closes the PR.
 | Factory watch `marketplace-upstream` | Every 10 minutes, per known project with a lock, runs `status`. A change whose hash is the same in two checks starts one `olko-marketplace-upstream` run. |
 | Factory viewer | Shows "Waiting for your decision" with `ok` / `no` for runs the viewer process owns. |
 
+## Script ownership
+
+`olko-marketplace-lock.mjs`, `olko-sanitize.mjs` and `olko-upstream-plan.mjs` are marketplace gates,
+owned by the marketplace checkout and kept in its root `scripts/` folder. They are not files of the
+`olko-marketplace-upstream` skill and are never installed with it:
+
+- The upstream flow always works in a marketplace checkout (the stage, the publish worktree and the
+  lock all need one), so the gates can always run from `<marketplace>/scripts/`.
+- The factory workflow and the skill call them by that path. A change to a gate is a marketplace
+  change with its tests in `scripts/`; it does not bump the skill version.
+- The lock imports the installed-artifact model from the `olko-factory-project` skill in the same
+  checkout (see below); the gates share `scripts/lib/cli.mjs` with the other root scripts.
+
 ## Flow
 
 1. Install skills or agents, then run once in the project's marketplace checkout:

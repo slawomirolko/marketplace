@@ -681,7 +681,7 @@
     },
     {
       "name": "olko-project-context",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-project-context.md",
       "stack": "cross-stack",
       "role": "investigator",
@@ -691,7 +691,7 @@
     },
     {
       "name": "olko-adr-store-reconciler",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "file": "olko-adr-store-reconciler.md",
       "stack": "cross-stack",
       "role": "implementer",

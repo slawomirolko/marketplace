@@ -230,6 +230,20 @@ test("the CLI fails with a message for a bad command or a missing project", () =
   assert.match(missing.stderr, /is not a folder/);
 });
 
+test("an installed copy outside a marketplace checkout needs --marketplace or FACTORY_MARKETPLACE_DIR", () => {
+  const installed = fs.mkdtempSync(path.join(os.tmpdir(), "project-scan-installed-"));
+  const scripts = path.join(installed, "skills", "olko-factory-project", "scripts");
+  fs.mkdirSync(scripts, { recursive: true });
+  for (const file of ["project-scan.mjs", "installed-artifacts.mjs"]) {
+    fs.copyFileSync(path.join(path.dirname(scriptPath), file), path.join(scripts, file));
+  }
+  const env = { ...process.env };
+  delete env.FACTORY_MARKETPLACE_DIR;
+  const result = spawnSync(process.execPath, [path.join(scripts, "project-scan.mjs"), "status", "--project", installed, "--print"], { encoding: "utf8", env });
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /not inside a marketplace checkout; pass --marketplace/);
+});
+
 test("front matter, portable text and helpers", () => {
   const meta = frontMatter("---\nversion: \"2.0.0\"\nuses: [caveman, sample-x]\npermission:\n  skill:\n    \"*\": deny\n    sample-a: allow\n  task:\n    sample-b: ask\n---\n");
   assert.deepEqual(meta, { version: "2.0.0", uses: ["caveman", "sample-x"], skills: ["sample-a"], tasks: ["sample-b"] });

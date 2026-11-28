@@ -144,6 +144,15 @@ Device settings: the server, the run page process and the stdio server read `KEY
 
 Configuration: `config/factory.yaml` (`FACTORY_CONFIG` changes it), validated against `spec/factory-config.schema.json`: roles to tiers, backends, budget, and the post-run `supervisor`: the marketplace agent that judges every ended run, its prompt template over the run summary (`{{summaryJson}}`), the next-step hint for delegate clients and the verdict line it ends with (without the section no post-run agent runs). It names no model; the proposal at run start shows the tier-to-model map and the user confirms or changes it. `docs/yaml-migration-plan.md` lists the workflows still to move.
 
+## Command-line entry points
+
+Scripts outside `factory/` (the `olko-factory-workflow-sync` skill) call the factory only through these `package.json` scripts, never through `src/` paths. Each is `node <file>`, so a caller can run the file with its own Node without pnpm.
+
+| Script | What it does |
+|---|---|
+| `sources:lock` | `scan` compares `workflows.lock.json` with a marketplace checkout; `lock` records the sources of named workflows at a commit. |
+| `workflows:validate` | Validates every workflow YAML file of a folder; exit code 0 when all are valid, the problems on stderr otherwise. |
+
 ## Layout
 
 ```text

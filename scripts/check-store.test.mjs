@@ -5,9 +5,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { buildDigest, checkStore, globToRegExp, globsCover, globsOverlap, loadStore, parseFrontMatter } from "../skills/project/olko-init-project-docs/check-store.mjs";
+import { buildDigest, checkStore, globToRegExp, globsCover, globsOverlap, loadStore, parseFrontMatter } from "../skills/project/olko-init-project-docs/scripts/check-store.mjs";
 
-const script = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "skills", "project", "olko-init-project-docs", "check-store.mjs");
+const script = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "skills", "project", "olko-init-project-docs", "scripts", "check-store.mjs");
 
 function adr({ status = "Accepted", topic, scope, decision, overrides, supersedes, enforcedBy = "none", consequences = [] }) {
   const lines = ["---", `status: ${status}`, `topic: ${topic}`, `scope: [${scope.map((s) => `"${s}"`).join(", ")}]`, `decision: "${decision}"`];

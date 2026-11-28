@@ -1,6 +1,6 @@
 ---
 name: olko-factory-project
-version: 0.2.0
+version: 0.2.1
 description: "Script command that reports the Olko marketplace status of one local project for the Software Factory: the harnesses set up in it, every installed skill and agent with its state (current, adapted, outdated, modified, unknown-base, missing, removed, local-only) against the marketplace history, and the factory workflows that run them. Read only for the project. Use when you check a project's marketplace sync or run the project status workflow. Triggers: 'project status', 'project marketplace sync', 'which marketplace skills are installed', 'olko-factory-project'."
 ---
 
@@ -11,7 +11,7 @@ One deterministic command. Run it as `node <this skill>/scripts/project-scan.mjs
 
 ## Command
 - `status --project <folder> [--id <name>] [--marketplace <checkout>] [--factory <folder>] [--out-dir <folder>] [--depth <n>] [--print]`
-  Without `--marketplace`, it uses `FACTORY_MARKETPLACE_DIR` or the marketplace checkout that contains this skill. Without `--factory`, it uses `FACTORY_DIR` or `<marketplace>/factory`. `--depth` limits how many marketplace commits per artifact it compares (a positive integer, default 40). When an artifact has older commits than that and its copy matches none of the compared ones, it is `unknown-base` with `baseOlderThanDepth: true`; run again with a larger `--depth`.
+  Without `--marketplace`, it uses `FACTORY_MARKETPLACE_DIR` or the marketplace checkout that contains this skill. An installed copy is not inside a checkout (no `registry.json` four folders up), so it exits 2 when neither is given. Without `--factory`, it uses `FACTORY_DIR` or `<marketplace>/factory`. `--depth` limits how many marketplace commits per artifact it compares (a positive integer, default 40). When an artifact has older commits than that and its copy matches none of the compared ones, it is `unknown-base` with `baseOlderThanDepth: true`; run again with a larger `--depth`.
   It writes the full status to `<out dir>/<id>-<time>.json` (default out dir: `~/.skill-factory/project-status`) and prints a short result: `file`, `head`, `counts` (one number per state), `harnesses`, `workflows` (the factory workflows that run an installed artifact) and `summary`. With `--print`, it prints the full status instead and writes no file.
 
 ## What it reads
