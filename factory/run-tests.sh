@@ -11,10 +11,12 @@ start_server() {
     curl -sf http://127.0.0.1:7340/health > /dev/null && return 0
     sleep 0.1
   done
-  echo "server did not start"; return 1
+  echo "server did not start"
+  kill $SERVER_PID 2>/dev/null
+  return 1
 }
 
-start_server
+start_server || exit 1
 
 echo "== versions"
 node -e "console.log('node', process.version, '| mcp sdk', require('/app/node_modules/@modelcontextprotocol/sdk/package.json').version)"
@@ -33,13 +35,20 @@ echo; echo "== restart resilience"
 kill $SERVER_PID 2>/dev/null
 wait $SERVER_PID 2>/dev/null
 export FACTORY_TURN_DELAY_MS=300
-start_server
+start_server || exit 1
 RUN_ID=$(node test/restart.ts begin)
+case "$RUN_ID" in
+  ""|*[!A-Za-z0-9_-]*)
+    echo "restart check returned no valid run id: '$RUN_ID'"
+    kill $SERVER_PID 2>/dev/null
+    exit 1
+    ;;
+esac
 sleep 0.5
 node -e "const r=JSON.parse(require('fs').readFileSync('/data/runs/$RUN_ID.json'));console.log('      before kill: status='+r.status+' steps='+r.steps)"
 kill -9 $SERVER_PID 2>/dev/null
 wait $SERVER_PID 2>/dev/null
-start_server
+start_server || exit 1
 node test/restart.ts finish "$RUN_ID"; RESTART_RC=$?
 
 kill $SERVER_PID 2>/dev/null
