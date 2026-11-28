@@ -183,3 +183,12 @@ the same versions.
   age limit for that.
 - Test fixtures (reuse the git fixtures in `scripts/project-scan.test.mjs`) and the
   viewer test cases.
+
+## Addendum (2026-11-28): the marketplace source checkout is synchronized too
+
+Decided by the person, replacing the earlier non-goal "A marketplace source checkout as the project".
+
+- "Merge updates" is offered for a marketplace source checkout (rows with harness `source`) as well. Nothing happens before the one answer.
+- Pull row: one row "Pull <n> commits from origin/<branch> (fast-forward)" when the checkout is behind its remote. Applying it runs `git pull --ff-only`. When the checkout has uncommitted changes or commits of its own that are not on the remote, the row starts unchecked and cannot be applied, and its detail says why. Never a forced or merge-commit pull.
+- Local change rows: one row per `modified` or `local-only` skill or agent of the checkout. Applying one puts that change on a new branch (`feature/upstream-<kind>-<name>-<hash>`) and opens a draft PR after the sanitize gate runs on the whole staged commit and on the PR title, body and commit message, as the upstream flow does. The person merges or closes the PR.
+- The same rules as for installed copies apply: rows with an unsure or guessed state start unchecked, nothing is written before the answer, and the button title explains when there is nothing to do.
