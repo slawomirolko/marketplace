@@ -53,6 +53,18 @@ USER QUESTION GATE (HARD): This orchestrator has no permission to call the `ques
 
 RESPONSE LANGUAGE (CONFIGURABLE): Read `userResponseLanguage` from `.agents/skill-config.md` and pass it to `grill-with-docs`; an explicit language request from the user overrides the setting for that conversation. Keep user-facing responses concise in the selected language. Before writing a user decision into an English plan/tracker, follow `userDecisionRecordLanguage` and `userDecisionRecordStyle`: translate and compact faithfully, preserve IDs and meaning-critical exact wording, and never turn the translation into a new decision. Defaults when unset: response language = detect from the user's current message; decision record language = repository documentation language; record style = concise translation.
 
+FEEDBACK CLOSURE GATE (HARD): Every user-facing message that reports feedback, a draft, a review, a blocker, a status, a routing answer, or a readiness result MUST end with exactly one bolded final line:
+- `**Ready for Implementation: true**` — ready; or
+- `**Ready for Implementation: false**` — not ready.
+Rules:
+1. The verdict line is always the LAST line of the message. Nothing follows it: no question, answer prompt, next step, sign-off, code block, or extra paragraph. Trailing newlines are allowed.
+2. Use the exact casing, spacing, and bold markers above. Never write `Ready for implementation`, `ready for implementation`, a localized marker, or a value without the `**` bold markers.
+3. When the value is `false`, separate the body from the verdict with one blank line, then emit one line per missing value in the form `Missing <value>: <one sentence>.` — one line, one sentence, one value. Each sentence names the missing value and the concrete evidence that proves it missing. Never merge two values into one sentence, never use bullets, numbering, sub-lines, or a paragraph, and never add a summary after the block.
+4. When the value is `true`, emit no `Missing ...:` line directly above the verdict; supporting detail belongs earlier in the message.
+5. The verdict mirrors the plan's `Ready for implementation: yes/no` field: `true` = `yes`, `false` = `no`. Plan and tracker content keep their existing wording; only this user-facing line uses `true`/`false`.
+6. A grill question turn still obeys this gate: keep the question and its `Answer:` line in the body, then append the verdict as the final line. Never let the verdict replace, split, or reorder the one-question-per-turn format.
+7. Never end a message without the verdict. When readiness is unknown, the value is `false` and every unverified value becomes its own `Missing ...:` line.
+
 DOCUMENT WORDING GATE: For any Epic, Feature, or Task text sent to YouTrack, require `olko-feature-backlog-writer` to apply the Polish clarity profile from `olko-ste100-skill-adapter` before presenting the draft. For any Obsidian note proposal, require `olko-obsidian-knowledge-manager` to apply that profile before presenting it. The user's approval must cover the final reviewed text. Do not rewrite approved text after approval; if wording changes, present a refreshed diff and obtain approval again.
 
 TWO DISTINCT PATHS — choose by requested DELIVERABLE, not by whether an issue ID exists:
