@@ -15848,28 +15848,34 @@ function resolveAskedBy(node, spec) {
 	};
 }
 function buildNode(workflow, spec) {
-	if (spec.kind === "call") {
-		const inputs = Object.fromEntries(Object.entries(spec.input ?? {}).map(([k, v]) => {
-			mustache.parse(v);
-			return [k, v];
-		}));
-		return {
-			id: spec.id,
-			path: `${workflow.name}/${spec.id}`,
-			kind: "script",
-			enterScope: {
-				workflow: spec.workflow ?? "",
-				input: inputs
-			},
-			...spec.maxVisits ? { maxVisits: spec.maxVisits } : {}
-		};
-	}
+	if (spec.kind === "call") return buildCallNode(workflow, spec);
 	if (spec.kind === "subgraph" || spec.kind === "map") throw new Error(`node ${spec.id}: ${spec.kind} ${spec.workflow ?? ""} is not expanded; load it with its workflow directory`);
 	const node = {
 		id: spec.id,
 		path: `${workflow.name}/${spec.id}`,
 		kind: spec.kind
 	};
+	applyOptionalFields(node, workflow, spec);
+	return node;
+}
+/** A call step runs as a script step that enters the called workflow's scope; its input templates are parsed now so a bad template fails at load time. */
+function buildCallNode(workflow, spec) {
+	const inputs = Object.fromEntries(Object.entries(spec.input ?? {}).map(([key, template]) => {
+		mustache.parse(template);
+		return [key, template];
+	}));
+	return {
+		id: spec.id,
+		path: `${workflow.name}/${spec.id}`,
+		kind: "script",
+		enterScope: {
+			workflow: spec.workflow ?? "",
+			input: inputs
+		},
+		...spec.maxVisits ? { maxVisits: spec.maxVisits } : {}
+	};
+}
+function applyOptionalFields(node, workflow, spec) {
 	if (spec.scope) node.scope = spec.scope;
 	if (spec.localId) node.localId = spec.localId;
 	if (spec.role) node.role = spec.role;
@@ -15881,10 +15887,10 @@ function buildNode(workflow, spec) {
 		node.dirs = (context) => dirs.map((dir) => dir(context)).filter(Boolean);
 	}
 	if (spec.workspace) node.workspace = render(spec.workspace);
-	if (spec.agents) node.agents = spec.agents.map((a) => ({
-		id: a.id,
-		...a.role ? { role: a.role } : {},
-		...a.agent ? { agentName: a.agent } : {}
+	if (spec.agents) node.agents = spec.agents.map((agent) => ({
+		id: agent.id,
+		...agent.role ? { role: agent.role } : {},
+		...agent.agent ? { agentName: agent.agent } : {}
 	}));
 	if (spec.question) node.question = spec.question;
 	const askedBy = askedByRefs(spec.askedBy).filter(isOwnStep);
@@ -15907,7 +15913,6 @@ function buildNode(workflow, spec) {
 			args
 		});
 	}
-	return node;
 }
 function readSpec(file) {
 	let spec;
@@ -15936,134 +15941,155 @@ function negateWhen(when) {
 }
 function expandSubgraphs(spec, specs, seen = []) {
 	if (seen.includes(spec.name)) throw new Error(`subgraph cycle: ${[...seen, spec.name].join(" -> ")}`);
-	let nodes = [];
-	let edges = [...spec.edges];
-	let entry = spec.entry;
-	const roles = { ...spec.roles ?? {} };
-	for (const node of spec.nodes) {
-		if (node.kind !== "subgraph" && node.kind !== "call" && node.kind !== "group") {
-			nodes.push(node);
-			continue;
-		}
-		if (node.kind === "group") {
-			const groupSpec = node.workflow ? specs.get(node.workflow) : void 0;
-			if (!groupSpec) throw new Error(`node ${node.id}: unknown group workflow ${node.workflow}`);
-			const group = expandSubgraphs(groupSpec, specs, [...seen, spec.name]);
-			const clash = group.nodes.find((n) => spec.nodes.some((o) => o.id === n.id) || nodes.some((o) => o.id === n.id));
-			if (clash) throw new Error(`group ${node.id}: node id ${clash.id} is used twice; a group keeps its node ids`);
-			nodes = nodes.concat(group.nodes);
-			for (const [role, tier] of Object.entries(group.roles ?? {})) roles[role] ??= tier;
-			const exits = edges.filter((e) => e.from === node.id);
-			const inner = group.edges.flatMap((e) => {
-				if (e.to !== "END") return [e];
-				return exits.map((x) => {
-					if (e.when && x.when) throw new Error(`group ${node.id}: both the inner edge from ${e.from} and the outer edge to ${x.to} have a condition`);
-					const when = e.when ?? x.when;
-					return {
-						from: e.from,
-						to: x.to,
-						...when ? { when } : {}
-					};
-				});
-			});
-			edges = edges.filter((e) => e.from !== node.id).map((e) => e.to === node.id ? {
-				...e,
-				to: group.entry
-			} : e).concat(inner);
-			if (entry === node.id) entry = group.entry;
-			continue;
-		}
-		const subSpec = node.workflow ? specs.get(node.workflow) : void 0;
-		if (!subSpec) throw new Error(`node ${node.id}: unknown subgraph workflow ${node.workflow}`);
-		const sub = expandSubgraphs(subSpec, specs, [...seen, spec.name]);
-		const prefix = (id) => `${node.id}/${id}`;
-		const scoped = node.kind === "call";
-		if (!scoped) {
-			const clash = sub.nodes.find((n) => !n.scope && (spec.nodes.some((o) => o.id === (n.localId ?? n.id)) || nodes.some((o) => !o.scope && (o.localId ?? o.id) === (n.localId ?? n.id))));
-			if (clash) throw new Error(`subgraph ${node.id}: step ${clash.localId ?? clash.id} is used twice; a subgraph shares its state keys with its parent`);
-		}
-		nodes = nodes.concat(sub.nodes.map((n) => ({
-			...prefixAskedBy(n, prefix),
-			id: prefix(n.id),
-			...scoped ? { scope: n.scope ? prefix(n.scope) : node.id } : {},
-			...scoped || !n.scope ? { localId: n.localId ?? n.id } : {}
-		})));
-		for (const [role, tier] of Object.entries(sub.roles ?? {})) roles[role] ??= tier;
-		const exits = edges.filter((e) => e.from === node.id);
-		if (node.enabledWhen) {
-			if (exits.some((x) => x.when)) throw new Error(`subgraph ${node.id}: a switched subgraph (enabledWhen) needs exits without conditions`);
-			nodes.push({
-				id: node.id,
-				kind: "script",
-				op: "builtin.gate",
-				with: {
-					subgraph: node.workflow,
-					when: node.enabledWhen,
-					...node.required ? { required: true } : {}
-				}
-			});
-		}
-		const inner = sub.edges.flatMap((e) => {
-			if (e.to === "FINISH" && !scoped) return [{
-				...e,
-				from: prefix(e.from)
-			}];
-			if (e.to !== "END" && e.to !== "FINISH") return [{
-				...e,
-				from: prefix(e.from),
-				to: prefix(e.to)
-			}];
-			return exits.map((x) => {
-				if (e.when && x.when) throw new Error(`subgraph ${node.id}: both the inner edge and the outer edge have a condition`);
-				const when = e.when ?? x.when;
-				return {
-					from: prefix(e.from),
-					to: x.to,
-					...when ? { when } : {}
-				};
-			});
-		});
-		if (scoped) {
-			if (exits.some((x) => x.when)) throw new Error(`call ${node.id}: its exits need no condition`);
-			nodes.push({
-				id: node.id,
-				kind: "call",
-				workflow: node.workflow,
-				input: node.input ?? {},
-				...node.maxVisits ? { maxVisits: node.maxVisits } : {}
-			});
-			edges = edges.filter((e) => e.from !== node.id).concat([{
-				from: node.id,
-				to: prefix(sub.entry)
-			}], inner);
-			continue;
-		}
-		if (node.enabledWhen) {
-			const gate = [{
-				from: node.id,
-				to: prefix(sub.entry),
-				when: node.enabledWhen
-			}, ...exits.map((x) => ({
-				from: node.id,
-				to: x.to,
-				when: negateWhen(node.enabledWhen)
-			}))];
-			edges = edges.filter((e) => e.from !== node.id).concat(gate, inner);
-			continue;
-		}
-		edges = edges.filter((e) => e.from !== node.id).map((e) => e.to === node.id ? {
-			...e,
-			to: prefix(sub.entry)
-		} : e).concat(inner);
-		if (entry === node.id) entry = prefix(sub.entry);
+	const expansion = {
+		nodes: [],
+		edges: [...spec.edges],
+		entry: spec.entry,
+		roles: { ...spec.roles ?? {} }
+	};
+	const chain = [...seen, spec.name];
+	for (const node of spec.nodes) switch (node.kind) {
+		case "group":
+			expandGroup(node, spec, specs, chain, expansion);
+			break;
+		case "call":
+			expandCall(node, spec, specs, chain, expansion);
+			break;
+		case "subgraph":
+			expandSubgraph(node, spec, specs, chain, expansion);
+			break;
+		default: expansion.nodes.push(node);
 	}
 	return {
 		...spec,
-		roles,
-		entry,
-		nodes: nodes.map((n) => resolveAskedBy(n, spec)),
-		edges
+		roles: expansion.roles,
+		entry: expansion.entry,
+		nodes: expansion.nodes.map((inlined) => resolveAskedBy(inlined, spec)),
+		edges: expansion.edges
 	};
+}
+/** A group inlines another workflow with its node ids unchanged and its END edges joined to the group step's exits. */
+function expandGroup(node, spec, specs, chain, expansion) {
+	const groupSpec = node.workflow ? specs.get(node.workflow) : void 0;
+	if (!groupSpec) throw new Error(`node ${node.id}: unknown group workflow ${node.workflow}`);
+	const group = expandSubgraphs(groupSpec, specs, chain);
+	const clash = group.nodes.find((inner) => spec.nodes.some((other) => other.id === inner.id) || expansion.nodes.some((other) => other.id === inner.id));
+	if (clash) throw new Error(`group ${node.id}: node id ${clash.id} is used twice; a group keeps its node ids`);
+	expansion.nodes = expansion.nodes.concat(group.nodes);
+	adoptRoles(expansion.roles, group.roles);
+	const exits = expansion.edges.filter((edge) => edge.from === node.id);
+	const inner = group.edges.flatMap((edge) => {
+		if (edge.to !== "END") return [edge];
+		return joinExits(edge, edge.from, exits, (exit) => `group ${node.id}: both the inner edge from ${edge.from} and the outer edge to ${exit.to} have a condition`);
+	});
+	expansion.edges = expansion.edges.filter((edge) => edge.from !== node.id).map((edge) => edge.to === node.id ? {
+		...edge,
+		to: group.entry
+	} : edge).concat(inner);
+	if (expansion.entry === node.id) expansion.entry = group.entry;
+}
+/** A call inlines another workflow in its own state scope; the call step stays in place to enter that scope. */
+function expandCall(node, spec, specs, chain, expansion) {
+	const { subEntry, exits, inner } = inlineSteps(node, spec, specs, chain, expansion, true);
+	if (exits.some((exit) => exit.when)) throw new Error(`call ${node.id}: its exits need no condition`);
+	expansion.nodes.push({
+		id: node.id,
+		kind: "call",
+		workflow: node.workflow,
+		input: node.input ?? {},
+		...node.maxVisits ? { maxVisits: node.maxVisits } : {}
+	});
+	expansion.edges = expansion.edges.filter((edge) => edge.from !== node.id).concat([{
+		from: node.id,
+		to: subEntry
+	}], inner);
+}
+/** A subgraph inlines another workflow that shares its parent's state keys; with enabledWhen the subgraph step stays as a gate that enters or skips it. */
+function expandSubgraph(node, spec, specs, chain, expansion) {
+	const { subEntry, exits, inner } = inlineSteps(node, spec, specs, chain, expansion, false);
+	if (node.enabledWhen) {
+		const gate = [{
+			from: node.id,
+			to: subEntry,
+			when: node.enabledWhen
+		}, ...exits.map((exit) => ({
+			from: node.id,
+			to: exit.to,
+			when: negateWhen(node.enabledWhen)
+		}))];
+		expansion.edges = expansion.edges.filter((edge) => edge.from !== node.id).concat(gate, inner);
+		return;
+	}
+	expansion.edges = expansion.edges.filter((edge) => edge.from !== node.id).map((edge) => edge.to === node.id ? {
+		...edge,
+		to: subEntry
+	} : edge).concat(inner);
+	if (expansion.entry === node.id) expansion.entry = subEntry;
+}
+/** Adds the prefixed nodes of a subgraph or call to the expansion and joins its END (and, for a call, FINISH) edges to the step's exits. */
+function inlineSteps(node, spec, specs, chain, expansion, scoped) {
+	const subSpec = node.workflow ? specs.get(node.workflow) : void 0;
+	if (!subSpec) throw new Error(`node ${node.id}: unknown subgraph workflow ${node.workflow}`);
+	const sub = expandSubgraphs(subSpec, specs, chain);
+	const prefix = (id) => `${node.id}/${id}`;
+	if (!scoped) {
+		const clash = sub.nodes.find((inner) => !inner.scope && (spec.nodes.some((other) => other.id === (inner.localId ?? inner.id)) || expansion.nodes.some((other) => !other.scope && (other.localId ?? other.id) === (inner.localId ?? inner.id))));
+		if (clash) throw new Error(`subgraph ${node.id}: step ${clash.localId ?? clash.id} is used twice; a subgraph shares its state keys with its parent`);
+	}
+	expansion.nodes = expansion.nodes.concat(sub.nodes.map((inner) => ({
+		...prefixAskedBy(inner, prefix),
+		id: prefix(inner.id),
+		...scoped ? { scope: inner.scope ? prefix(inner.scope) : node.id } : {},
+		...scoped || !inner.scope ? { localId: inner.localId ?? inner.id } : {}
+	})));
+	adoptRoles(expansion.roles, sub.roles);
+	const exits = expansion.edges.filter((edge) => edge.from === node.id);
+	if (node.enabledWhen) {
+		if (exits.some((exit) => exit.when)) throw new Error(`subgraph ${node.id}: a switched subgraph (enabledWhen) needs exits without conditions`);
+		expansion.nodes.push({
+			id: node.id,
+			kind: "script",
+			op: "builtin.gate",
+			with: {
+				subgraph: node.workflow,
+				when: node.enabledWhen,
+				...node.required ? { required: true } : {}
+			}
+		});
+	}
+	const inner = sub.edges.flatMap((edge) => {
+		if (edge.to === "FINISH" && !scoped) return [{
+			...edge,
+			from: prefix(edge.from)
+		}];
+		if (edge.to !== "END" && edge.to !== "FINISH") return [{
+			...edge,
+			from: prefix(edge.from),
+			to: prefix(edge.to)
+		}];
+		return joinExits(edge, prefix(edge.from), exits, () => `subgraph ${node.id}: both the inner edge and the outer edge have a condition`);
+	});
+	return {
+		subEntry: prefix(sub.entry),
+		exits,
+		inner
+	};
+}
+/** Replaces an inner edge that leaves the inlined workflow by one edge per outer exit; only one of the two may carry a condition. */
+function joinExits(innerEdge, from, exits, conflict) {
+	return exits.map((exit) => {
+		if (innerEdge.when && exit.when) throw new Error(conflict(exit));
+		const when = innerEdge.when ?? exit.when;
+		return {
+			from,
+			to: exit.to,
+			...when ? { when } : {}
+		};
+	});
+}
+/** Inlined roles never override a role the inlining workflow already has. */
+function adoptRoles(roles, inlined) {
+	for (const [role, tier] of Object.entries(inlined ?? {})) roles[role] ??= tier;
 }
 function buildWorkflow(spec, file) {
 	let nodes;
