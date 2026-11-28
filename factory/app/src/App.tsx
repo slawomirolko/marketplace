@@ -8,7 +8,7 @@ import { ViewerContext } from "./context.ts";
 import type { ViewerState } from "./context.ts";
 import { humanIcons } from "./human.ts";
 import type { FlowNode } from "./layout.ts";
-import { nodeAriaLabel } from "./nodes.tsx";
+import { nodeAriaLabel } from "./node-labels.ts";
 import { PendingDecisions } from "./Pending.tsx";
 import { Projects } from "./Projects.tsx";
 import { configDisabledKeys, disabledKeys } from "./switches.ts";

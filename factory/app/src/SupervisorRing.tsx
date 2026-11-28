@@ -1,15 +1,8 @@
 import { useState } from "react";
 import { Panel, ViewportPortal } from "@xyflow/react";
 import "./supervisor.css";
-import { supervisorRing } from "./supervisor.ts";
-import type { SupervisorData } from "./types.ts";
-import type { Bounds } from "./types.ts";
-
-export const RING_GAP = 40;
-
-export function ringBounds(bounds: Bounds | null): Bounds | null {
-  return bounds && { x: bounds.x - RING_GAP, y: bounds.y - RING_GAP, width: bounds.width + 2 * RING_GAP, height: bounds.height + 2 * RING_GAP };
-}
+import { ringBounds, supervisorRing } from "./supervisor.ts";
+import type { Bounds, SupervisorData } from "./types.ts";
 
 export function SupervisorRing({ supervisor, bounds }: { supervisor: SupervisorData | null | undefined; bounds: Bounds | null }) {
   const view = supervisorRing(supervisor);
@@ -21,7 +14,7 @@ export function SupervisorRing({ supervisor, bounds }: { supervisor: SupervisorD
     <>
       <ViewportPortal>
         <div className={`supervisor-ring tone-${view.tone}`} data-testid="supervisor-ring" style={box}>
-          <button type="button" className="supervisor-badge nopan" aria-expanded={open} disabled={!view.text} onClick={() => setOpen((o) => !o)} title={view.text ? "Show the full supervisor report" : view.headline}>
+          <button type="button" className="supervisor-badge nopan" aria-expanded={open} disabled={!view.text} onClick={() => setOpen((current) => !current)} title={view.text ? "Show the full supervisor report" : view.headline}>
             <strong>Supervisor</strong>
             <span className="supervisor-agent">{view.agent}</span>
             <span className="supervisor-status">{view.status}</span>

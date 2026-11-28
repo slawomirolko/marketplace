@@ -1,4 +1,4 @@
-import { allItems, descendantKeys } from "./tree.ts";
+import { allItems, descendantKeys, isWithin } from "./tree.ts";
 import type { Cost, FactoryConfig, Item, Level, LedgerRecord, RunCall, RunData, RunIndex, RunPass, RunReport } from "./types.ts";
 
 /** The cost of a graph node from the run report: an agent's or a step's own entry, or the backend's sum for a subgraph. */
@@ -34,12 +34,12 @@ function ranIndex(run: RunData): RanIndex {
   if (known) {
     return known;
   }
-  const index: RanIndex = { paths: new Set(), agents: new Set(run.ledger.map((r) => agentRef(r.nodePath, r.agentId))) };
-  for (const e of run.events) {
-    if (e.type === "agent_started") {
-      index.agents.add(agentRef(e.node, e.agentId));
-    } else if (e.type === "node_started" && typeof e.node === "string") {
-      const parts = e.node.split("/");
+  const index: RanIndex = { paths: new Set(), agents: new Set(run.ledger.map((record) => agentRef(record.nodePath, record.agentId))) };
+  for (const event of run.events) {
+    if (event.type === "agent_started") {
+      index.agents.add(agentRef(event.node, event.agentId));
+    } else if (event.type === "node_started" && typeof event.node === "string") {
+      const parts = event.node.split("/");
       for (let i = 1; i <= parts.length; i++) {
         index.paths.add(parts.slice(0, i).join("/"));
       }
@@ -62,20 +62,28 @@ export function ranIn(item: Item, run: RunData | null): boolean {
 
 export function tierOf(item: Item, config: FactoryConfig | null, report: RunReport | null): string | null {
   const cost = costOf(item, report);
-  if (cost?.tier) return cost.tier;
-  if (item.kind === "terminal") return null;
+  if (cost?.tier) {
+    return cost.tier;
+  }
+  if (item.kind === "terminal") {
+    return null;
+  }
   const role = item.kind === "agent" ? item.agent.role : item.node.role;
   return role ? (config?.roles?.[role] ?? null) : null;
 }
 
 export function ledgerOf(item: Item, run: RunData | null): LedgerRecord[] {
-  if (!run) return [];
-  if (item.kind === "agent") return run.ledger.filter((r) => r.nodePath === item.nodePath && r.agentId === item.agent.id);
+  if (!run) {
+    return [];
+  }
+  if (item.kind === "agent") {
+    return run.ledger.filter((record) => record.nodePath === item.nodePath && record.agentId === item.agent.id);
+  }
   if (item.kind === "subgraph") {
     const inside = descendantKeys(item);
-    return run.ledger.filter((r) => inside.some((k) => r.nodePath === k || r.nodePath.startsWith(`${k}/`)));
+    return run.ledger.filter((record) => inside.some((key) => isWithin(record.nodePath, key)));
   }
-  return run.ledger.filter((r) => r.nodePath === item.key);
+  return run.ledger.filter((record) => record.nodePath === item.key);
 }
 
 interface ParsedError {
@@ -91,7 +99,9 @@ function errorMessage(error: unknown): string {
     parsed = JSON.parse(text) as ParsedError | null;
   } catch {
     const first = (pattern: RegExp) => text.match(pattern)?.[1] ?? null;
-    if (text.startsWith("{")) parsed = { type: first(/^\{"type":"([^"]+)"/), status: first(/"status":(\d+)/), message: first(/"message":"([^"]*)"/) };
+    if (text.startsWith("{")) {
+      parsed = { type: first(/^\{"type":"([^"]+)"/), status: first(/"status":(\d+)/), message: first(/"message":"([^"]*)"/) };
+    }
   }
   if (!parsed || typeof parsed !== "object") {
     return text;
@@ -106,7 +116,8 @@ export function rawFailureOf(item: Item, run: RunData | null): string | null {
     return null;
   }
   const key = item.kind === "agent" ? item.nodePath : item.key;
-  const event = run.events.find((e) => e.type === "node_failed" && (e.node === key || (item.kind === "subgraph" && e.node?.startsWith(`${key}/`))));
+  const failedHere = (node: string | undefined) => node !== undefined && (item.kind === "subgraph" ? isWithin(node, key) : node === key);
+  const event = run.events.find((candidate) => candidate.type === "node_failed" && failedHere(candidate.node));
   return event ? String(event.error ?? "failed") : null;
 }
 
@@ -116,7 +127,7 @@ export function failureOf(item: Item, run: RunData | null): string | null {
 }
 
 export function runFailure(run: RunData | null): string | null {
-  const event = run?.events.find((e) => e.type === "node_failed" || e.type === "run_failed");
+  const event = run?.events.find((candidate) => candidate.type === "node_failed" || candidate.type === "run_failed");
   return event ? `${event.node ? `${event.node}: ` : ""}${errorMessage(event.error)}` : null;
 }
 
@@ -133,9 +144,11 @@ export function buildRunIndex(level: Level, config: FactoryConfig | null, report
 type WorkflowStepItem = Exclude<Item, { kind: "terminal" } | { kind: "agent" }>;
 
 function coversPath(item: WorkflowStepItem): (path: string) => boolean {
-  const keys = item.kind === "subgraph" ? descendantKeys(item) : [item.key];
-  const inside = item.kind === "subgraph";
-  return (path) => keys.some((k) => path === k || (inside && path.startsWith(`${k}/`)));
+  if (item.kind === "subgraph") {
+    const keys = descendantKeys(item);
+    return (path) => keys.some((key) => isWithin(path, key));
+  }
+  return (path) => path === item.key;
 }
 
 export function runCount(item: Item, run: RunData | null, report: RunReport | null): number | null {
@@ -143,14 +156,14 @@ export function runCount(item: Item, run: RunData | null, report: RunReport | nu
     return null;
   }
   if (item.kind === "agent") {
-    const started = run.events.filter((e) => e.type === "agent_started" && e.node === item.nodePath && e.agentId === item.agent.id).length;
+    const started = run.events.filter((event) => event.type === "agent_started" && event.node === item.nodePath && event.agentId === item.agent.id).length;
     if (started > 0) {
       return started;
     }
     return runCalls(report).filter((call) => call.node === item.nodePath && call.agent === item.agent.id).length;
   }
   const covers = coversPath(item);
-  return run.events.filter((e) => e.type === "node_started" && typeof e.node === "string" && covers(e.node)).length;
+  return run.events.filter((event) => event.type === "node_started" && typeof event.node === "string" && covers(event.node)).length;
 }
 
 /** The timed passes of a run, as the run report gives them. */
@@ -190,6 +203,11 @@ export function itemPasses(item: Item, report: RunReport | null): TimedPass[] {
 
 /** Total active time of a graph node in a run: the sum of its passes; null when no pass has a known duration. */
 export function timeSpent(item: Item, report: RunReport | null): number | null {
-  const known = itemPasses(item, report).map((p) => p.durationMs).filter((ms): ms is number => ms !== null);
-  return known.length ? known.reduce((s, ms) => s + ms, 0) : null;
+  const known = itemPasses(item, report).map((pass) => pass.durationMs).filter((ms): ms is number => ms !== null);
+  return known.length ? known.reduce((sum, ms) => sum + ms, 0) : null;
+}
+
+/** The graph key a call selects: the team member for a call of a team agent, else the node itself. */
+export function callKey(call: RunCall, teamNodes: Set<string>): string {
+  return call.agent && teamNodes.has(call.node) ? `${call.node}#${call.agent}` : call.node;
 }

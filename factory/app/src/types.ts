@@ -462,3 +462,13 @@ export interface ProjectStatusView {
   createdAt: string | null;
   data: ProjectStatusData | null;
 }
+
+/** A question of a run the viewer process owns, with the answers it allows. */
+export interface PendingDecision {
+  runId: string;
+  goal: string;
+  workflow: string;
+  questionId: string;
+  text: string;
+  allowed: string[];
+}

@@ -79,18 +79,29 @@ export function buildLevel(workflows: Workflow[], name: string, prefix = name, s
   return { items, edges, entry: `${prefix}/${workflow.entry}`, exits };
 }
 
+/** The keys a graph node stands for: its own key, or for a group (which draws no node of its own) every key inside it. */
 export function descendantKeys(item: Item): string[] {
-  if (!isGroup(item) || item.kind === "team") return [item.key];
-  if (item.kind === "subgraph" && item.node.kind !== "group") return [item.key];
-  return item.inner.items.flatMap((i) => (i.kind === "terminal" ? [] : descendantKeys(i)));
+  if (!isGroup(item) || item.kind === "team") {
+    return [item.key];
+  }
+  if (item.kind === "subgraph" && item.node.kind !== "group") {
+    return [item.key];
+  }
+  return item.inner.items.flatMap((inner) => (inner.kind === "terminal" ? [] : descendantKeys(inner)));
 }
 
 export function containedWorkflows(workflows: Workflow[], root: string): Set<string> {
   const found = new Set<string>();
   const visit = (name: string) => {
-    if (found.has(name)) return;
+    if (found.has(name)) {
+      return;
+    }
     found.add(name);
-    for (const node of workflows.find((w) => w.name === name)?.nodes ?? []) if (node.workflow) visit(node.workflow);
+    for (const node of workflows.find((workflow) => workflow.name === name)?.nodes ?? []) {
+      if (node.workflow) {
+        visit(node.workflow);
+      }
+    }
   };
   visit(root);
   return found;
@@ -103,8 +114,12 @@ export function isEngineScript(item: Item): boolean {
 
 /** The marketplace agent or skill that runs this step or team member, if it names one. */
 export function agentNameOf(item: Item): string | null {
-  if (item.kind === "agent") return item.agent.agentName ?? item.node.agent ?? null;
-  if (item.kind === "step" && item.node.kind === "llm") return item.node.agent ?? item.node.skill ?? null;
+  if (item.kind === "agent") {
+    return item.agent.agentName ?? item.node.agent ?? null;
+  }
+  if (item.kind === "step" && item.node.kind === "llm") {
+    return item.node.agent ?? item.node.skill ?? null;
+  }
   return null;
 }
 
@@ -135,7 +150,7 @@ export function allItems(level: Level): Item[] {
 }
 
 export function findItem(level: Level, key: string): Item | null {
-  return allItems(level).find((i) => i.key === key) ?? null;
+  return allItems(level).find((item) => item.key === key) ?? null;
 }
 
 export function ancestorKeys(level: Level, key: string): string[] {
@@ -146,10 +161,26 @@ export function ancestorKeys(level: Level, key: string): string[] {
         found.push(...above);
         return true;
       }
-      if (isGroup(item) && walk(item.inner.items, [...above, item.key])) return true;
+      if (isGroup(item) && walk(item.inner.items, [...above, item.key])) {
+        return true;
+      }
     }
     return false;
   };
   walk(level.items, []);
   return found;
+}
+
+export type WorkflowNodeAt = Workflow["nodes"][number] & { at: string };
+
+/** Every node of a workflow with its path, groups, subgraphs and calls expanded; a workflow already on the path is not entered again. */
+export function allNodes(workflow: Workflow, workflows: Workflow[], prefix = "", seen: string[] = []): WorkflowNodeAt[] {
+  return workflow.nodes.flatMap((node) => {
+    const here = { ...node, at: `${prefix}${node.id}` };
+    const inner = node.workflow ? workflows.find((candidate) => candidate.name === node.workflow) : undefined;
+    if (!inner || seen.includes(inner.name)) {
+      return [here];
+    }
+    return [here, ...allNodes(inner, workflows, node.kind === "group" ? prefix : `${prefix}${node.id}/`, [...seen, workflow.name])];
+  });
 }

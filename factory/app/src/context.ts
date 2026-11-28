@@ -1,8 +1,8 @@
 import { createContext, useContext } from "react";
 import type { HumanIcon } from "./human.ts";
 import type { LiveState } from "./live.ts";
-import type { Item, StaleWorkflow } from "./types.ts";
-import type { AgentInfo, AskedQuestion, FactoryConfig, RunData, RunIndex, RunReport, Workflow } from "./types.ts";
+import type { AgentInfo, AskedQuestion, FactoryConfig, Item, RunData, RunIndex, RunReport, StaleWorkflow, Workflow } from "./types.ts";
+import type { ViewMode } from "./viewer/view-mode.ts";
 
 export interface ViewerState {
   config: FactoryConfig | null;
@@ -12,7 +12,7 @@ export interface ViewerState {
   focusKey: string | null;
   index: RunIndex | null;
   disabled: string[];
-  mode: "runs" | "workflows" | "projects";
+  mode: ViewMode;
   workflow: Workflow | null;
   workflows: Workflow[];
   agents: Record<string, AgentInfo>;

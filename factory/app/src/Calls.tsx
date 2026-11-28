@@ -1,20 +1,8 @@
 import { useMemo } from "react";
 import { useViewer } from "./context.ts";
-import { formatDuration } from "./format.ts";
-import { runCalls } from "./run-facts.ts";
-import type { RunCall } from "./types.ts";
-
-export function callKey(call: RunCall, teamNodes: Set<string>): string {
-  return call.agent && teamNodes.has(call.node) ? `${call.node}#${call.agent}` : call.node;
-}
-
-function shortPath(path: string): string {
-  return path.split("/").slice(1).join("/") || path;
-}
-
-function cost(value: number | null): string {
-  return value == null ? "unknown" : `$${value.toFixed(6)}`;
-}
+import { formatCost, formatDuration } from "./format.ts";
+import { callKey, runCalls } from "./run-facts.ts";
+import { shortPath } from "./tree.ts";
 
 export function CallsList({ selectedKey, teamNodes, onSelect }: { selectedKey: string | null; teamNodes: Set<string>; onSelect: (key: string) => void }) {
   const { run, report, mode } = useViewer();
@@ -60,7 +48,7 @@ export function CallsList({ selectedKey, teamNodes, onSelect }: { selectedKey: s
                   <td title={call.agentName ?? undefined}>{call.agent ?? "—"}</td>
                   <td>{call.visit ?? "—"}</td>
                   <td>{call.status}</td>
-                  <td className={call.costUsd == null && call.records > 0 ? "cost-unknown" : ""}>{call.records ? cost(call.costUsd) : "—"}</td>
+                  <td className={call.costUsd == null && call.records > 0 ? "cost-unknown" : ""}>{call.records ? formatCost(call.costUsd) : "—"}</td>
                   <td title={call.waitMs ? `plus ${formatDuration(call.waitMs)} waiting for a user answer, not counted` : undefined}>{formatDuration(call.durationMs)}{call.waitMs ? " ⏸" : ""}</td>
                 </tr>
               );

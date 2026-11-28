@@ -1,4 +1,16 @@
-import type { SupervisorData } from "./types.ts";
+import { formatCost } from "./format.ts";
+import type { Bounds, SupervisorData } from "./types.ts";
+
+/** The space between the graph and the supervisor ring drawn around it. */
+export const RING_GAP = 40;
+
+/** The longest headline taken from the last line of a supervisor output without a verdict. */
+const HEADLINE_CHARS = 200;
+
+/** The box of the supervisor ring: the graph bounds grown by RING_GAP on every side. */
+export function ringBounds(bounds: Bounds | null): Bounds | null {
+  return bounds && { x: bounds.x - RING_GAP, y: bounds.y - RING_GAP, width: bounds.width + 2 * RING_GAP, height: bounds.height + 2 * RING_GAP };
+}
 
 export type SupervisorTone = "idle" | "busy" | "ok" | "improve" | "fix" | "failed";
 
@@ -41,7 +53,7 @@ function headlineOf(data: SupervisorData): string {
   if (data.status === "failed") return data.error ?? "the supervisor failed";
   if (data.status !== "done") return STATUS_TEXT[data.status];
   if (data.verdict) return `bottleneck: ${data.bottleneck || "none"} · idea: ${data.idea || "none"}`;
-  return (data.output ?? "").trim().split(/\r?\n/).at(-1)?.slice(0, 200) ?? "";
+  return (data.output ?? "").trim().split(/\r?\n/).at(-1)?.slice(0, HEADLINE_CHARS) ?? "";
 }
 
 export function supervisorRing(data: SupervisorData | null | undefined): SupervisorRingView {
@@ -49,7 +61,7 @@ export function supervisorRing(data: SupervisorData | null | undefined): Supervi
   return {
     tone: toneOf(data),
     status: data.status === "done" ? (data.verdict ?? "done") : STATUS_TEXT[data.status],
-    cost: data.costUsd === null || data.costUsd === undefined ? "" : `$${data.costUsd.toFixed(6)}`,
+    cost: formatCost(data.costUsd, ""),
     headline: headlineOf(data),
     text: data.status === "failed" ? (data.error ?? "") : (data.output ?? ""),
     agent: data.agent,

@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw";
 import { PendingDecisions } from "../src/Pending.tsx";
 import { READ_ONLY_NOTE } from "../src/api.ts";
-import type { PendingDecision } from "../src/Pending.tsx";
+import type { PendingDecision } from "../src/types.ts";
 import { render, screen, server, userEvent, waitFor } from "./testUtils/index.ts";
 
 const decision: PendingDecision = {

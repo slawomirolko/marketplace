@@ -1,14 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { API, LIVE_REFRESH_MS, messageOf, postAction, requestJson } from "./api.ts";
-
-export interface PendingDecision {
-  runId: string;
-  goal: string;
-  workflow: string;
-  questionId: string;
-  text: string;
-  allowed: string[];
-}
+import type { PendingDecision } from "./types.ts";
 
 /** Questions of runs the viewer process owns (for example runs started by a watch), with one button per allowed answer. */
 export function PendingDecisions({ onOpenRun }: { onOpenRun: (runId: string) => void }) {
