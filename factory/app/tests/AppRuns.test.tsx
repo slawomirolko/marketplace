@@ -1,8 +1,8 @@
-import { http, HttpResponse, delay } from "msw";
+import { http, HttpResponse } from "msw";
 import { App } from "../src/App.tsx";
 import { READ_ONLY_NOTE } from "../src/api.ts";
 import type { RunDetail, RunListItem } from "../src/types.ts";
-import { act, API, deferred, fireEvent, render, report, run, RUN_ID, runDetail, runListItem, screen, server, userEvent, waitFor } from "./testUtils/index.ts";
+import { act, API, deferred, fireEvent, render, report, run, RUN_ID, runDetail, runListItem, screen, server, settleNetwork, userEvent, waitFor } from "./testUtils/index.ts";
 
 const OTHER_ID = "r-0000bbbb";
 const otherItem: RunListItem = { ...runListItem, runId: OTHER_ID, goal: "the other run" };
@@ -22,8 +22,16 @@ function serveRuns(list: RunListItem[], details: Record<string, () => Response |
   );
 }
 
-function pause(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/** Records the text of every heading drawn from now on, so a heading shown only for a moment is not missed. */
+function headingsShown(): { seen: string[]; stop: () => void } {
+  const seen: string[] = [];
+  const observer = new MutationObserver(() => {
+    for (const heading of document.querySelectorAll("h1, h2, h3")) {
+      seen.push(heading.textContent ?? "");
+    }
+  });
+  observer.observe(document.body, { subtree: true, childList: true, characterData: true });
+  return { seen, stop: () => observer.disconnect() };
 }
 
 describe("App in runs mode", () => {
@@ -51,10 +59,11 @@ describe("App in runs mode", () => {
   });
 
   test("while the next run loads the previous one is not shown and no default workflow is drawn", async () => {
+    const release = deferred();
     serveRuns([runListItem, otherItem], {
       [RUN_ID]: () => HttpResponse.json(runDetail),
       [OTHER_ID]: async () => {
-        await delay(200);
+        await release.promise;
         return HttpResponse.json(otherDetail);
       },
     });
@@ -65,6 +74,7 @@ describe("App in runs mode", () => {
 
     expect(await screen.findByText("Loading run…")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: `Run ${RUN_ID}` })).not.toBeInTheDocument();
+    act(() => release.resolve());
     expect(await screen.findByRole("heading", { name: `Run ${OTHER_ID}` })).toBeInTheDocument();
   });
 
@@ -85,34 +95,40 @@ describe("App in runs mode", () => {
   });
 
   describe("with a live run", () => {
-    afterEach(() => vi.useRealTimers());
+    /** A short live refresh interval, so the tests use real timers and RTL's waitFor keeps polling. */
+    const REFRESH_MS = 20;
 
     test("a refresh that returns after a switch to another run does not replace it", async () => {
       const release = deferred();
       let liveCalls = 0;
+      let liveAnswered = 0;
       serveRuns([runListItem, otherItem], {
         [RUN_ID]: async () => {
           liveCalls += 1;
           if (liveCalls > 1) {
             await release.promise;
           }
+          liveAnswered += 1;
           return HttpResponse.json(liveDetail);
         },
         [OTHER_ID]: () => HttpResponse.json(otherDetail),
       });
-      vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
-      render(<App />);
+      render(<App liveRefreshMs={REFRESH_MS} />);
       await screen.findByRole("heading", { name: `Run ${RUN_ID}` });
 
-      act(() => {
-        vi.advanceTimersByTime(15_000);
-      });
-      await waitFor(() => expect(liveCalls).toBe(2));
+      await waitFor(() => expect(liveCalls).toBeGreaterThan(1));
       fireEvent.change(runPicker(), { target: { value: OTHER_ID } });
       await screen.findByRole("heading", { name: `Run ${OTHER_ID}` });
-      act(() => release.resolve());
+      const headings = headingsShown();
+      try {
+        act(() => release.resolve());
+        await waitFor(() => expect(liveAnswered).toBe(liveCalls));
+        await settleNetwork();
+      } finally {
+        headings.stop();
+      }
 
-      await pause(50);
+      expect(headings.seen).not.toContain(`Run ${RUN_ID}`);
       expect(screen.getByRole("heading", { name: `Run ${OTHER_ID}` })).toBeInTheDocument();
     });
 
@@ -124,13 +140,8 @@ describe("App in runs mode", () => {
           return calls > 1 ? HttpResponse.json({ error: "gone" }, { status: 500 }) : HttpResponse.json(liveDetail);
         },
       });
-      vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
-      render(<App />);
+      render(<App liveRefreshMs={REFRESH_MS} />);
       await screen.findByRole("heading", { name: `Run ${RUN_ID}` });
-
-      act(() => {
-        vi.advanceTimersByTime(15_000);
-      });
 
       expect(await screen.findByText(/refresh failed/)).toHaveTextContent(`refresh failed: /runs/${RUN_ID}: 500 (gone)`);
     });
@@ -146,7 +157,7 @@ describe("App in runs mode", () => {
     await user.click(await screen.findByRole("button", { name: OTHER_ID }));
 
     expect(await screen.findByRole("heading", { name: `Run ${OTHER_ID}` })).toBeInTheDocument();
-    await pause(50);
+    await settleNetwork();
     expect(runPicker().value).toBe(OTHER_ID);
     expect(screen.getByRole("heading", { name: `Run ${OTHER_ID}` })).toBeInTheDocument();
   });

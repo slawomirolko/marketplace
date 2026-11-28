@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { FLOW_HEIGHT, FLOW_WIDTH } from "../testUtils/flow-size.ts";
+import { recordUnhandledRequest, resetNetwork } from "../testUtils/network.ts";
 import { server } from "../testUtils/server.ts";
 
 class ResizeObserverStub {
@@ -30,10 +31,15 @@ Object.defineProperties(HTMLElement.prototype, {
   offsetHeight: { configurable: true, get: () => FLOW_HEIGHT },
 });
 
-beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+beforeAll(() => server.listen({ onUnhandledRequest: recordUnhandledRequest }));
 afterEach(() => {
   cleanup();
   server.resetHandlers();
   window.localStorage.clear();
+  window.history.replaceState(null, "", "/");
+  const unhandled = resetNetwork();
+  if (unhandled.length > 0) {
+    throw new Error(`requests no handler answered: ${unhandled.join(", ")}`);
+  }
 });
 afterAll(() => server.close());

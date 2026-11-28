@@ -18,9 +18,9 @@ function fetchRunDetail(runId: string): Promise<RunDetail> {
 
 /**
  * The detail of the selected run. It loads when the run or the view changes (not in the workflows view), and while
- * the run is live it and the run list refresh every LIVE_REFRESH_MS. Load errors go to the shared run error.
+ * the run is live it and the run list refresh every `refreshMs` (LIVE_REFRESH_MS by default). Load errors go to the shared run error.
  */
-export function useRunDetail(runId: string, mode: ViewMode, setRuns: Dispatch<SetStateAction<RunListItem[]>>, setRunError: Dispatch<SetStateAction<string | null>>): RunDetailState {
+export function useRunDetail(runId: string, mode: ViewMode, setRuns: Dispatch<SetStateAction<RunListItem[]>>, setRunError: Dispatch<SetStateAction<string | null>>, refreshMs = LIVE_REFRESH_MS): RunDetailState {
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
@@ -78,12 +78,12 @@ export function useRunDetail(runId: string, mode: ViewMode, setRuns: Dispatch<Se
           }
         })
         .catch(failed);
-    }, LIVE_REFRESH_MS);
+    }, refreshMs);
     return () => {
       current = false;
       clearInterval(timer);
     };
-  }, [runId, runStatus, setRuns]);
+  }, [runId, runStatus, setRuns, refreshMs]);
 
   return { detail, refreshedAt, refreshError };
 }

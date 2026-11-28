@@ -4,6 +4,7 @@ export * from "./data.ts";
 export * from "./deferred.ts";
 export * from "./flow-size.ts";
 export * from "./handlers.ts";
+export * from "./network.ts";
 export * from "./nodes.ts";
 export * from "./paths.ts";
 export * from "./render.tsx";

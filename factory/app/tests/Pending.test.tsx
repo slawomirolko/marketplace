@@ -2,7 +2,7 @@ import { http, HttpResponse } from "msw";
 import { PendingDecisions } from "../src/Pending.tsx";
 import { READ_ONLY_NOTE } from "../src/api.ts";
 import type { PendingDecision } from "../src/types.ts";
-import { API, render, screen, server, userEvent, waitFor } from "./testUtils/index.ts";
+import { API, render, screen, server, settleNetwork, userEvent, waitFor } from "./testUtils/index.ts";
 
 const decision: PendingDecision = {
   runId: "r-0000abcd",
@@ -15,9 +15,17 @@ const decision: PendingDecision = {
 
 describe("PendingDecisions", () => {
   test("renders nothing when no run waits for a decision", async () => {
+    let listed = 0;
+    server.use(
+      http.get(API.pending, () => {
+        listed += 1;
+        return HttpResponse.json([]);
+      }),
+    );
     const { container } = render(<PendingDecisions onOpenRun={() => undefined} />);
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await waitFor(() => expect(listed).toBe(1));
+    await settleNetwork();
     expect(container).toBeEmptyDOMElement();
   });
 

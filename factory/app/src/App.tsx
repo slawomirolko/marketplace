@@ -4,6 +4,7 @@ import { ReactFlowProvider } from "@xyflow/react";
 import type { NodeChange } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import "./styles.css";
+import { LIVE_REFRESH_MS } from "./api.ts";
 import { ViewerContext } from "./context.ts";
 import type { ViewerState } from "./context.ts";
 import { humanIcons } from "./human.ts";
@@ -36,7 +37,12 @@ import { WorkflowControls } from "./viewer/WorkflowControls.tsx";
 const SHOW_COUNTS_KEY = "factory-viewer.show-numbers";
 const AGENTS_ONLY_KEY = "factory-viewer.agents-only";
 
-function Viewer() {
+export interface AppProps {
+  /** How often a live run and the run list refresh; tests pass a short interval instead of faking timers. */
+  liveRefreshMs?: number;
+}
+
+function Viewer({ liveRefreshMs = LIVE_REFRESH_MS }: AppProps) {
   const params = new URLSearchParams(window.location.search);
   const [mode, setMode] = useState<ViewMode>(parseMode(params));
   const [projectFilter, setProjectFilter] = useState(params.get("project") ?? "");
@@ -54,7 +60,7 @@ function Viewer() {
   const projectIds = useProjectIds(mode, noteLoad);
   const filters = { projectFilter, runFilter, onlyRan };
   const { setRuns, runId, setRunId, runError, setRunError, shownRuns, openRun: openListedRun } = useRuns(mode, requestedRun, workflows, filters);
-  const runDetail = useRunDetail(runId, mode, setRuns, setRunError);
+  const runDetail = useRunDetail(runId, mode, setRuns, setRunError, liveRefreshMs);
   const { detail } = runDetail;
   useUrlSync({ mode, workflowName, runId, runFilter, onlyRan, projectFilter });
   useEffect(() => {
@@ -168,10 +174,10 @@ function Viewer() {
   );
 }
 
-export function App() {
+export function App({ liveRefreshMs }: AppProps = {}) {
   return (
     <ReactFlowProvider>
-      <Viewer />
+      <Viewer liveRefreshMs={liveRefreshMs} />
     </ReactFlowProvider>
   );
 }

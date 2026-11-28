@@ -3,7 +3,7 @@ import { App } from "../src/App.tsx";
 import { Projects } from "../src/Projects.tsx";
 import { actionOf, countsText, fetchNoteOf, remoteNameOf, verdictOf, versionText } from "../src/projects/status-text.ts";
 import type { ProjectArtifact, ProjectOverview, ProjectStatusView } from "../src/types.ts";
-import { API, deferred, fireEvent, render, screen, server, STATUS_WORKFLOW, userEvent, waitFor, within } from "./testUtils/index.ts";
+import { API, deferred, fireEvent, render, screen, server, settleNetwork, STATUS_WORKFLOW, userEvent, waitFor, within } from "./testUtils/index.ts";
 
 const artifact = (extra: Partial<ProjectArtifact>): ProjectArtifact => ({ id: "skill:sample-skill", kind: "skill", name: "sample-skill", harness: "agents", location: ".agents/skills/sample-skill", state: "current", installed: "1.0.0", current: "1.0.0", files: [], workflows: [], ...extra });
 
@@ -41,8 +41,6 @@ function withData(data: Partial<NonNullable<ProjectStatusView["data"]>>): Projec
   return { ...status, data: { ...status.data!, ...data } };
 }
 
-/** Keeps "Checking…" visible long enough to assert it. */
-const SLOW_STATUS_MS = 50;
 const remoteRef = "origin/main", installedCommit = "aaaaaaa", currentCommit = "bbbbbbb";
 
 type Posted = Record<string, string>;
@@ -137,12 +135,15 @@ describe("Projects", () => {
 
   test("Check status starts the status workflow, shows its progress and reloads the status when the run finishes", async () => {
     const posted = serve();
+    const statusRelease = deferred();
     let statusCalls = 0;
     let runCalls = 0;
     server.use(
       http.get(API.projectStatus, async () => {
         statusCalls += 1;
-        await new Promise((resolve) => setTimeout(resolve, SLOW_STATUS_MS));
+        if (statusCalls > 1) {
+          await statusRelease.promise;
+        }
         return HttpResponse.json(status);
       }),
       http.get(API.anyRun, ({ params }) => {
@@ -160,6 +161,7 @@ describe("Projects", () => {
     expect(await screen.findByText("Started the status check of sample-app (run r-0000000s).")).toBeInTheDocument();
     expect(posted).toEqual([{ action: "analyze", id: "sample-app" }]);
     expect(screen.getByRole("button", { name: /^Checking…/ })).toBeDisabled();
+    statusRelease.resolve();
     expect(await screen.findByText("Status check of sample-app finished: 2 of 3 differ from the marketplace: 1 outdated · 1 missing.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Re-check status" })).toBeEnabled();
     await waitFor(() => expect(statusCalls).toBe(3));
@@ -182,12 +184,14 @@ describe("Projects", () => {
     serve([], { "sample-busy": null }, { ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: "r-0000000t", status: null }] });
     const release = deferred();
     let statusAsked = false;
+    let statusAnswered = false;
     let listCalls = 0;
     server.use(
       http.get(API.anyRun, () => HttpResponse.json({ run: { status: "done" } })),
       http.get(API.projectStatus, async () => {
         statusAsked = true;
         await release.promise;
+        statusAnswered = true;
         return HttpResponse.json({ error: "none" }, { status: 404 });
       }),
       http.get(API.projects, () => {
@@ -200,7 +204,8 @@ describe("Projects", () => {
     const callsBefore = listCalls;
     unmount();
     release.resolve();
-    await new Promise((resolve) => setTimeout(resolve, SLOW_STATUS_MS));
+    await waitFor(() => expect(statusAnswered).toBe(true));
+    await settleNetwork();
     expect(listCalls).toBe(callsBefore);
   });
 
@@ -396,20 +401,32 @@ describe("Projects", () => {
     const analyzing = { ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: "r-0000000t", status: null }] };
     serve([], { "sample-busy": null }, analyzing);
     let polls = 0;
+    let listCalls = 0;
     const started = deferred();
+    const release = deferred();
     server.use(
+      http.get(API.projects, () => {
+        listCalls += 1;
+        return HttpResponse.json(analyzing);
+      }),
       http.get(API.anyRun, async () => {
         polls += 1;
         started.resolve();
-        await new Promise((resolve) => setTimeout(resolve, 300));
+        await release.promise;
         return HttpResponse.json({ run: { status: "failed" } });
       }),
     );
     render(<Projects onShowRuns={() => {}} pollMs={10} />);
     await started.promise;
+    const listedBefore = listCalls;
 
     fireEvent.change(screen.getByRole("textbox", { name: "Root folder" }), { target: { value: "/more" } });
     fireEvent.click(screen.getByRole("button", { name: "Add root" }));
+    await waitFor(() => {
+      expect(listCalls).toBe(listedBefore + 1);
+      expect(screen.getByRole("button", { name: "Remove root /src" })).toBeEnabled();
+    });
+    release.resolve();
 
     expect(await screen.findByText("Status check of sample-busy failed (run r-0000000t).")).toBeInTheDocument();
     expect(polls).toBe(1);
