@@ -22,12 +22,12 @@ function statusReaches(runId: string, statuses: string[]): Promise<Payload> {
   return pollUntil(() => call("factory_status", { runId }), statuses, STATUS_POLL);
 }
 
-if (phase === "begin") {
-  const { runId } = await call("factory_start", { goal: "restart test" });
-  await call("factory_confirm", { runId });
-  console.log(runId);
-} else {
-  try {
+try {
+  if (phase === "begin") {
+    const { runId } = await call("factory_start", { goal: "restart test" });
+    await call("factory_confirm", { runId });
+    console.log(runId);
+  } else {
     const mid = await call("factory_status", { runId: runIdArg });
     console.log(`      after restart: status=${mid.status} node=${mid.currentNode} steps=${mid.cost.steps}`);
     await statusReaches(runIdArg, ["waiting_for_user"]);
@@ -37,9 +37,10 @@ if (phase === "begin") {
     assert.equal(done.cost.steps, 13);
     assert.equal(report.byNode?.["hello/plan"]?.steps, 3);
     console.log("PASS  run survives server kill + restart, no duplicated turns");
-  } catch (error) {
-    console.log(`FAIL  restart: ${error instanceof Error ? error.message : String(error)}`);
-    process.exitCode = 1;
   }
+} catch (error) {
+  console.error(`FAIL  restart ${phase}: ${error instanceof Error ? error.message : String(error)}`);
+  process.exitCode = 1;
+} finally {
+  await client.close();
 }
-await client.close();

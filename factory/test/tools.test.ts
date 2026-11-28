@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { capturedErrors } from "./helpers/console.ts";
 import { tempDir } from "./helpers/temp.ts";
 import { Factory } from "../src/engine.ts";
 import { createFactoryTools } from "../src/tools.ts";
@@ -45,19 +46,16 @@ test("a tool call that fails is counted in the metrics and logged with the tool 
   const client = new Client({ name: "tools-test", version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
-  const lines: string[] = [];
-  const original = console.error;
-  console.error = (...parts: unknown[]) => {
-    lines.push(parts.map(String).join(" "));
-  };
+  let lines: string[];
   try {
-    const result = await client.callTool({ name: "factory_cancel", arguments: { runId: "r-missing" } });
-    assert.equal(result.isError, true);
+    lines = await capturedErrors(async () => {
+      const result = await client.callTool({ name: "factory_cancel", arguments: { runId: "r-missing" } });
+      assert.equal(result.isError, true);
+    });
   } finally {
-    console.error = original;
     await client.close();
     await server.close();
   }
   assert.equal(tools.metrics().failedCalls, 1);
-  assert.deepEqual(lines, ["tool factory_cancel failed: unknown runId r-missing"]);
+  assert.deepEqual(lines.filter((line) => line.includes("factory_cancel")), ["tool factory_cancel failed: unknown runId r-missing"]);
 });

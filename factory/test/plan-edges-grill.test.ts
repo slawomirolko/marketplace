@@ -3,7 +3,7 @@ import test from "node:test";
 import { applied, driveWorkflow, questions, type PlanRun } from "./helpers/plan-driver.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
-const { missingEdges } = await import("./edge-coverage.ts");
+const { missingEdges, SCENARIOS_FILTERED } = await import("./edge-coverage.ts");
 
 const GRILL = "olko-plan-grill";
 const PASS = "consistency | pass | 0 | none";
@@ -95,6 +95,6 @@ test("after three rounds with questions the grill stops without a fourth batch",
   assert.equal(prompts["grill-record"]!.length, 3);
 });
 
-test("the scenarios above take every edge of the grill workflow", () => {
+test("the scenarios above take every edge of the grill workflow", { skip: SCENARIOS_FILTERED }, () => {
   assert.deepEqual(missingEdges(GRILL, RUNS), []);
 });

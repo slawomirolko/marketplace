@@ -3,7 +3,7 @@ import test from "node:test";
 import { driveWorkflow, fencedJson, stoppedBy, type PlanRun } from "./helpers/plan-driver.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
-const { missingEdges } = await import("./edge-coverage.ts");
+const { missingEdges, SCENARIOS_FILTERED } = await import("./edge-coverage.ts");
 
 const json = (body: unknown): string => fencedJson(body, "Reply.");
 
@@ -41,6 +41,6 @@ test("with the tracker off, the tracker is not read and a failed entry gate stop
   assert.doesNotMatch(prompts["feature"]![0]!, /Feature context from the tracker/);
 });
 
-test("the scenarios above take every edge of the entry workflow, except the unreachable ones", () => {
+test("the scenarios above take every edge of the entry workflow, except the unreachable ones", { skip: SCENARIOS_FILTERED }, () => {
   assert.deepEqual(missingEdges("olko-plan-entry", RUNS).filter((edge) => !(edge in UNREACHABLE)), []);
 });

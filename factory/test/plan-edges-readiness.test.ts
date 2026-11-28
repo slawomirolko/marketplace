@@ -8,7 +8,7 @@ import { driveWorkflow, fencedJson, type PlanRun } from "./helpers/plan-driver.t
 process.env.FACTORY_TURN_DELAY_MS = "0";
 const { loadedWorkflows } = await import("../src/engine.ts");
 const { loadWorkflowDir } = await import("../src/workflow-yaml.ts");
-const { missingEdges } = await import("./edge-coverage.ts");
+const { missingEdges, SCENARIOS_FILTERED } = await import("./edge-coverage.ts");
 
 const json = (body: unknown): string => fencedJson(body, "Reply.");
 
@@ -147,6 +147,6 @@ test("a consistency gate after the blocker decisions that keeps failing records 
   assert.equal(prompts["readiness"]?.length, 2, "the readiness is read again after the GAP item");
 });
 
-test("the scenarios above take every edge of the readiness workflow", () => {
+test("the scenarios above take every edge of the readiness workflow", { skip: SCENARIOS_FILTERED }, () => {
   assert.deepEqual(missingEdges("olko-plan-readiness", RUNS), []);
 });

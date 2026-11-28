@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { ALLOWED_HOSTS } from "./helpers/data-api.ts";
+import { ALLOWED_HOSTS, callerFor } from "./helpers/data-api.ts";
 import { runReaches } from "./helpers/poll.ts";
 import { tempDir } from "./helpers/temp.ts";
 import { Factory } from "../src/engine.ts";
@@ -118,12 +118,17 @@ test("a watch ignores projects without the marker file and survives a failing co
   assert.equal(logs.join("\n").includes(project), false, "the log never names the project path");
 });
 
+/** Folders compared by their resolved path, in sorted order, whichever side produced them. */
+function resolvedDirs(dirs: string[]): string[] {
+  return dirs.map((dir) => path.resolve(dir)).sort();
+}
+
 test("known projects come from projects.json and from every run's input.project", () => {
   const { dataDir, project, factory } = setup();
   const other = tempDir("factory-watch-other-");
   const { run } = factory.start("goal", undefined, { workflow: "watched", input: { project: other } });
   assert.ok(run.runId);
-  assert.deepEqual(knownProjects(dataDir).map((dir) => path.resolve(dir)), [path.resolve(other), path.resolve(project)].sort());
+  assert.deepEqual(resolvedDirs(knownProjects(dataDir)), resolvedDirs([other, project]));
 });
 
 test("known projects also come from the project registry, wherever it lives", () => {
@@ -133,7 +138,7 @@ test("known projects also come from the project registry, wherever it lives", ()
   addProject({ path: registered });
   try {
     assert.notEqual(path.dirname(projectsFile()), dataDir, "the registry is not in the data directory");
-    assert.deepEqual(knownProjects(dataDir), [path.resolve(registered)]);
+    assert.deepEqual(resolvedDirs(knownProjects(dataDir)), resolvedDirs([registered]));
   } finally {
     fs.rmSync(projectsFile(), { force: true });
   }
@@ -164,12 +169,12 @@ test("starting the watches logs which watches run, or that none do", () => {
   assert.deepEqual(logs.slice(0, 2), ["watches: none started", "watches: sample every 10 min"]);
 });
 
+/**
+ * Calls the data API through the shared request double, which delivers request events like the HTTP server and
+ * rejects when the middleware throws, so a failing middleware fails the test instead of leaving it waiting.
+ */
 function call(api: ReturnType<typeof createDataApi>, method: string, url: string, headers: Record<string, string> = {}) {
-  return new Promise<{ status: number; body: unknown }>((resolve, reject) => {
-    Promise.resolve()
-      .then(() => apiMiddleware(api, ALLOWED_HOSTS)({ method, url, headers }, { writeHead: (status) => ({ end: (body: string) => resolve({ status, body: JSON.parse(body) }) }) }, () => resolve({ status: 404, body: null })))
-      .catch(reject);
-  });
+  return callerFor(apiMiddleware(api, ALLOWED_HOSTS))(method, url, { headers });
 }
 
 test("the viewer lists and answers only runs of its own process, and only with its own request", async () => {

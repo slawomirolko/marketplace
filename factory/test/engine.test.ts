@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { spawnSync } from "node:child_process";
+import { capturedErrors } from "./helpers/console.ts";
 import { until } from "./helpers/poll.ts";
 import { tempDir } from "./helpers/temp.ts";
 import type { CliRequest, CliResult, Run } from "../src/types.ts";
@@ -95,22 +95,30 @@ function ok(text: string): CliResult {
 }
 
 test("a failing parallel agent fails the node only after its siblings finished, with every failure", async () => {
-  const settled: Promise<unknown>[] = [];
+  const siblings = Promise.withResolvers<void>();
+  let slowStarted = 0;
+  let brokenAnswered = false;
   const factory = cliFactory(async (request) => {
     if (request.prompt.includes("broken")) {
+      brokenAnswered = true;
       return ok("not json");
     }
-    const slow = new Promise<CliResult>((resolve) => setTimeout(() => resolve(ok('{"verdict": "fine"}')), 60));
-    settled.push(slow);
-    return slow;
+    slowStarted += 1;
+    await siblings.promise;
+    return ok('{"verdict": "fine"}');
   });
   const { run } = factory.start("parallel goal", undefined, { workflow: "parallel" });
   factory.confirm(run.runId);
-  await until(() => settled.length === 2, "the slow agents to start");
-  await Promise.all(settled);
-  await until(() => factory.get(run.runId).status !== "running", "the run to end");
-  await new Promise((resolve) => setTimeout(resolve, 30));
-  const ended = factory.get(run.runId);
+  await until(() => slowStarted === 2 && brokenAnswered, "the broken agent to answer while the slow agents run");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(factory.get(run.runId).status, "running", "the node waits for the slow agents");
+
+  siblings.resolve();
+  const ended = await until(() => {
+    const current = factory.get(run.runId);
+    const completed = current.events.filter((event) => event.type === "agent_completed").length;
+    return current.status !== "running" && completed === 2 ? current : undefined;
+  }, "the run to end after both slow agents completed");
   assert.equal(ended.status, "failed");
   const types = eventTypes(ended);
   const failedAt = types.findIndex((type) => type === "node_failed" || type === "run_failed");
@@ -189,9 +197,11 @@ test("a script that moves the workspace to a folder records the move once", asyn
   assert.deepEqual(run.events.filter((event) => event.type === "workspace_changed").map((event) => event.workspace), [target]);
 });
 
-function deadPid(): number {
-  return spawnSync(process.execPath, ["-e", ""]).pid ?? 0;
-}
+/**
+ * An owner pid no live process can have: above pid_max on Linux (at most 2^22) and macOS, and far above the pids
+ * Windows hands out. A pid of an exited child could be reused by a new process while the test runs.
+ */
+const DEAD_PID = 2 ** 31 - 1;
 
 function rewriteRun(dir: string, runId: string, change: (run: Run) => void): void {
   const file = path.join(dir, "runs", `${runId}.json`);
@@ -200,25 +210,11 @@ function rewriteRun(dir: string, runId: string, change: (run: Run) => void): voi
   fs.writeFileSync(file, JSON.stringify(run));
 }
 
-async function capturedErrors(action: () => Promise<void>): Promise<string[]> {
-  const lines: string[] = [];
-  const original = console.error;
-  console.error = (...parts: unknown[]) => {
-    lines.push(parts.map(String).join(" "));
-  };
-  try {
-    await action();
-  } finally {
-    console.error = original;
-  }
-  return lines;
-}
-
 test("a restart records run_recovered for each rescheduled run and for a reset supervisor", () => {
   const dir = dataDir();
   const first = new Factory(dir, { backend: "fake" });
   const { run } = first.start("recover goal", undefined, { workflow: "single" });
-  const ownerPid = deadPid();
+  const ownerPid = DEAD_PID;
   rewriteRun(dir, run.runId, (stored) => {
     Object.assign(stored, { status: "running", config: stored.proposal, ownerPid, supervisor: { status: "running", agent: SUPERVISOR_AGENT ?? "supervisor" } });
   });
@@ -236,7 +232,7 @@ test("a run that fails in its step logs one line with the run id and the error",
   const first = new Factory(dir, { backend: "fake" });
   const { run } = first.start("failing goal", undefined, { workflow: "single" });
   rewriteRun(dir, run.runId, (stored) => {
-    Object.assign(stored, { status: "running", ownerPid: deadPid() });
+    Object.assign(stored, { status: "running", ownerPid: DEAD_PID });
   });
   const errors = await capturedErrors(async () => {
     const second = new Factory(dir, { backend: "fake" });

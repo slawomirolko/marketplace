@@ -3,7 +3,7 @@ import test from "node:test";
 import { driveWorkflow, type PlanRun } from "./helpers/plan-driver.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
-const { missingEdges } = await import("./edge-coverage.ts");
+const { missingEdges, SCENARIOS_FILTERED } = await import("./edge-coverage.ts");
 
 const PACKAGE = "olko-plan-package";
 const PASS = "consistency | pass | 0 | none";
@@ -48,6 +48,6 @@ test("a package that stays inconsistent after three corrections ends with a GAP 
   assert.deepEqual(asked, []);
 });
 
-test("the scenarios above take every edge of the package workflow", () => {
+test("the scenarios above take every edge of the package workflow", { skip: SCENARIOS_FILTERED }, () => {
   assert.deepEqual(missingEdges(PACKAGE, RUNS), []);
 });

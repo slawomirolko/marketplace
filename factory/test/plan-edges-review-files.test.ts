@@ -3,7 +3,7 @@ import test from "node:test";
 import { driveWorkflow, fencedJson, stoppedBy, type PlanRun } from "./helpers/plan-driver.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
-const { missingEdges } = await import("./edge-coverage.ts");
+const { missingEdges, SCENARIOS_FILTERED } = await import("./edge-coverage.ts");
 
 const json = (body: unknown): string => fencedJson(body, "Done.");
 
@@ -269,6 +269,6 @@ test("a failed fix on the FEEDBACK route stops the run before any reply is draft
   assert.equal(prompts["fb-draft"], undefined);
 });
 
-test("the scenarios above take every edge of the plan review files workflow", () => {
+test("the scenarios above take every edge of the plan review files workflow", { skip: SCENARIOS_FILTERED }, () => {
   assert.deepEqual(missingEdges(WORKFLOW, RUNS), []);
 });

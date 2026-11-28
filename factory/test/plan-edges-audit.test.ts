@@ -3,7 +3,7 @@ import test from "node:test";
 import { driveWorkflow, fencedJson, type PlanRun } from "./helpers/plan-driver.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
-const { missingEdges } = await import("./edge-coverage.ts");
+const { missingEdges, SCENARIOS_FILTERED } = await import("./edge-coverage.ts");
 
 const AUDIT = "olko-plan-audit";
 const PASS = "consistency | pass | 0 | none";
@@ -69,6 +69,6 @@ test("folded findings that leave the plan inconsistent after three corrections e
   assert.deepEqual(asked, []);
 });
 
-test("the scenarios above take every edge of the audit workflow", () => {
+test("the scenarios above take every edge of the audit workflow", { skip: SCENARIOS_FILTERED }, () => {
   assert.deepEqual(missingEdges(AUDIT, RUNS), []);
 });

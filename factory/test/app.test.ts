@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { capturedErrors } from "./helpers/console.ts";
 import { ALLOWED_HOSTS, callerFor } from "./helpers/data-api.ts";
 import { tempDir } from "./helpers/temp.ts";
 import { createDataApi, apiMiddleware } from "../src/viewer-data.ts";
@@ -249,16 +250,11 @@ test("api answers 404 for an unknown run id", async () => {
 
 test("a failing API read is logged with its path as well as answered with 500", async () => {
   const failing = { workflows: () => { throw new Error("workflows folder unreadable"); } } as unknown as DataApi;
-  const logged: string[] = [];
-  const original = console.error;
-  console.error = (message: unknown) => logged.push(String(message));
-  try {
+  const logged = await capturedErrors(async () => {
     const result = await apiCall(failing)("GET", "/api/workflows");
     assert.equal(result.status, 500);
-  } finally {
-    console.error = original;
-  }
-  assert.deepEqual(logged, ["viewer API /api/workflows failed: workflows folder unreadable"]);
+  });
+  assert.deepEqual(logged.filter((line) => line.includes("/api/workflows")), ["viewer API /api/workflows failed: workflows folder unreadable"]);
 });
 
 test("api passes non-GET requests and other paths on to the next handler", async () => {

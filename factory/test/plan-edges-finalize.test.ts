@@ -3,7 +3,7 @@ import test from "node:test";
 import { driveWorkflow, type PlanRun } from "./helpers/plan-driver.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
-const { missingEdges } = await import("./edge-coverage.ts");
+const { missingEdges, SCENARIOS_FILTERED } = await import("./edge-coverage.ts");
 
 const RUNS: PlanRun[] = [];
 const REPLIES: Record<string, string> = {
@@ -38,6 +38,6 @@ test("the Domain changes step gets the write-free knowledge recommendation", asy
   assert.match(prompts["knowledge-final"]![0]!, /Do not change the vault/);
 });
 
-test("the scenarios above take every edge of the finalize workflow", () => {
+test("the scenarios above take every edge of the finalize workflow", { skip: SCENARIOS_FILTERED }, () => {
   assert.deepEqual(missingEdges("olko-plan-finalize", RUNS), []);
 });

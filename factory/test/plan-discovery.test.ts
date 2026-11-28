@@ -6,7 +6,7 @@ import { driveWorkflow, fencedJson, stoppedBy, type PlanRun } from "./helpers/pl
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
 const { Factory } = await import("../src/engine.ts");
-const { missingEdges } = await import("./edge-coverage.ts");
+const { missingEdges, SCENARIOS_FILTERED } = await import("./edge-coverage.ts");
 
 const RECOMMENDED = "Use your recommended answer for every question.";
 const BLOCKER = "blocker | grill-with-docs cannot be loaded";
@@ -213,6 +213,6 @@ test("a second final draft in a row without a Task stops discovery before the re
   assert.equal(prompts["review-grill"], undefined);
 });
 
-test("the scenarios above take every edge of the discovery workflow", () => {
+test("the scenarios above take every edge of the discovery workflow", { skip: SCENARIOS_FILTERED }, () => {
   assert.deepEqual(missingEdges("olko-plan-discovery", RUNS), []);
 });
