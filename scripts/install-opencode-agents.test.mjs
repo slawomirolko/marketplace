@@ -116,9 +116,9 @@ test("installs the implementation orchestrator with delegation-only permissions"
   const agent = fs.readFileSync(
     path.join(project, ".opencode", "agents", "olko-implementation-orchestrator.md"),
     "utf8",
-  );
+  ).replace(/\r\n/g, "\n");
   assert.match(agent, /edit: allow/);
-  assert.match(agent, /bash: allow/);
+  assert.match(agent, /bash:\n    "\*": allow\n    gh pr merge\*: deny\n    gh api \*pulls\*merge\*: deny\n    gh api \*merge\*: deny/);
   assert.match(agent, /task:\s+"\*": deny/);
   assert.match(agent, /olko-worktree-lifecycle-manager: allow/);
   assert.match(agent, /olko-git-delivery-manager: allow/);
@@ -197,12 +197,13 @@ test("installs the plan documentation orchestrator with review-only stack delega
   assert.match(agent, /olko-investigate-existing: allow/);
   assert.match(agent, /grill-with-docs: allow/);
   assert.match(agent, /FULL FEATURE\/Epic PLAN PROCEDURE/);
+  assert.match(agent, /FEEDBACK CLOSURE GATE \(HARD\)/);
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-plan-editor", "SKILL.md")));
   assert.equal(
     JSON.parse(fs.readFileSync(path.join(marketplaceRoot, "agents", "opencode", "index.json"), "utf8")).agents.find(
       (entry) => entry.name === "olko-plan-documentation-orchestrator",
     ).version,
-    "3.1.1",
+    "3.2.0",
   );
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "olko-investigate-existing", "SKILL.md")));
   assert.ok(fs.existsSync(path.join(project, ".agents", "skills", "grill-with-docs", "SKILL.md")));

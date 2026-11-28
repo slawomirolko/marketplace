@@ -254,7 +254,7 @@
     {
       "name": "olko-implementation-pr-gates",
       "category": "workflow",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Steps 8b (Obsidian knowledge-base gate) and 8c (editor verification gate) of olko-implementation-orchestrator; both must pass before the merge.",
       "tags": [
         "workflow",
@@ -477,7 +477,7 @@
     {
       "name": "olko-task-implementation-workflow",
       "category": "workflow",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Ordered single-Task implementation, verification, PR, merge, post-merge E2E, and closure contract for the implementation orchestrator.",
       "tags": [
         "workflow",

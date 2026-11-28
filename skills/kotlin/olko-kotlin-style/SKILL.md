@@ -1,7 +1,7 @@
 ---
 name: olko-kotlin-style
-version: 1.2.0
-description: "Check Kotlin/Android style compliance for changed Kotlin files with marketplace defaults. Reads project docs and adapters, maps .kt/.kts files to Gradle module roots, runs documented format/lint commands such as ktlint/detekt when configured, checks common Kotlin style expectations that docs enable (naming, formatting, imports, classes, value classes, extension/scope functions, collection ops, nullability, coroutines/Flow, Compose, networking), and reports violations with rule sources. Use when validating Kotlin style, linting Kotlin changes, before commit/test gates, or when olko-commit-style delegates Kotlin style checks."
+version: 1.3.0
+description: "Check Kotlin/Android style compliance for changed Kotlin files with marketplace defaults. Reads project docs and adapters, maps .kt/.kts files to Gradle module roots, runs documented format/lint commands such as ktlint/detekt when configured, checks common Kotlin style expectations that docs enable (naming, formatting, imports, classes, value classes, extension/scope functions, collection ops, nullability, coroutines/Flow, Compose, networking, English-only runtime text and localized UI copy), and reports violations with rule sources. Use when validating Kotlin style, linting Kotlin changes, before commit/test gates, or when olko-commit-style delegates Kotlin style checks."
 ---
 
 # Olko Kotlin Style
@@ -47,6 +47,12 @@ Also apply the `olko-design-rules` catalogue to the changed lines: its design ru
 ### Language and target
 - Write all `.kt` files in Kotlin, not Java.
 - Target the JVM bytecode version the docs prescribe (typically JVM 17).
+
+### Language and user-visible copy
+- Write every identifier, comment, log message and tracing span/attribute name in English. Only documentation files may follow the project's documentation language; runtime text never does.
+- Never hardcode user-visible copy in UI code: read labels, status texts, error messages and content descriptions from `res/values/strings.xml` through `stringResource(...)`, so a translation can replace them without touching Kotlin.
+- A pure formatter that must stay `Context`-free may hold English label constants, but never non-English text; any new user-visible sentence belongs in `strings.xml`.
+- Keep test names, fixtures and test data English-only.
 
 ### Naming
 - Kotlin file names use PascalCase matching the main type (e.g. `HomeViewModel.kt`).
@@ -250,6 +256,7 @@ Check rules found in docs/adapters/config plus marketplace defaults when docs do
 - silent failures and fail-fast behavior for missing resources/config
 - generated-code edit restrictions
 - comments (code should be self-documenting)
+- language of runtime text and user-visible copy (English-only; UI strings read from resources, never inlined)
 
 ### Step 6 - Handle violations
 If violations exist and `kotlinStyleFixCommand` is configured or documented, ask before running it unless the parent workflow already authorized auto-fix.

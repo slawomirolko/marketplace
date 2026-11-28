@@ -183,6 +183,8 @@ If leftovers remain, report them and ask before force-removing explicit resource
 
 ## Step 8 - Merge the PR
 
+MERGE GATE (HARD): before asking anything, run the project adapter's merge-gate command (see `project.md`). A non-zero exit, a missing gate record, an unconfirmed editor inspection, or an adapter that names no runnable command means NO merge: report the blocker and stop. When the adapter names no command, require the owner's verbatim confirmation that both gates were performed and record it instead. Green CI, passing tests and compiler output never replace gate 8b/8c evidence. No substitute editor, no substitute check.
+
 Ask:
 
 ```text

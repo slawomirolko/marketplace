@@ -1,7 +1,7 @@
 ---
 name: olko-react-testing
-version: 1.1.0
-description: "Check React test conventions for changed TypeScript/React projects with marketplace defaults. Reads project docs/adapters, maps source changes to test files, verifies Vitest + Testing Library + MSW harness conventions, no-skip/no-silent-pass policy, network-boundary test doubles, parametrization, fixture reuse, React Query/React Hook Form testing conventions, manual e2e verification on the dev machine via the agent-browser (Vercel) tool, new-component test requirements, cross-boundary contract tests, and reports violations with rule sources. Use when validating React tests, before commit/test gates, or when olko-test/olko-commit-style delegates React test-convention checks."
+version: 1.2.0
+description: "Check React test conventions for changed TypeScript/React projects with marketplace defaults. Reads project docs/adapters, maps source changes to test files, verifies Vitest + Testing Library + MSW harness conventions, no-skip/no-silent-pass policy, English-only self-explanatory test names with zero comments, network-boundary test doubles, parametrization, fixture reuse, React Query/React Hook Form testing conventions, manual e2e verification on the dev machine via the agent-browser (Vercel) tool, new-component test requirements, cross-boundary contract tests, and reports violations with rule sources. Use when validating React tests, before commit/test gates, or when olko-test/olko-commit-style delegates React test-convention checks."
 ---
 
 # olko-react-testing

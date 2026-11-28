@@ -69,8 +69,8 @@
     {
       "name": "olko-react-style",
       "category": "react",
-      "version": "1.2.0",
-      "description": "Check React/TypeScript style compliance for changed files with marketplace defaults. Reads project docs and adapters, maps .ts/.tsx files to Vite project roots, runs documented format/lint commands such as ESLint/Prettier when configured, checks common React style expectations that docs enable (naming, formatting, imports, component patterns, hooks rules, CSS Modules, React Query, React Hook Form, typed API client), and reports violations with rule sources. Use when validating React style, linting React/TypeScript changes, before commit/test gates, or when olko-commit-style delegates React style checks.",
+      "version": "1.3.0",
+      "description": "Check React/TypeScript style compliance for changed files with marketplace defaults. Reads project docs and adapters, maps .ts/.tsx files to Vite project roots, runs documented format/lint commands such as ESLint/Prettier when configured, checks common React style expectations that docs enable (naming, formatting, imports, component patterns, hooks rules, CSS Modules, React Query, React Hook Form, typed API client, English-only runtime text and localized UI copy), and reports violations with rule sources. Use when validating React style, linting React/TypeScript changes, before commit/test gates, or when olko-commit-style delegates React style checks.",
       "tags": [
         "react",
         "style"
@@ -101,8 +101,8 @@
     {
       "name": "olko-react-testing",
       "category": "react",
-      "version": "1.1.0",
-      "description": "Check React test conventions for changed TypeScript/React projects with marketplace defaults. Reads project docs/adapters, maps source changes to test files, verifies Vitest + Testing Library + MSW harness conventions, no-skip/no-silent-pass policy, network-boundary test doubles, parametrization, fixture reuse, React Query/React Hook Form testing conventions, manual e2e verification on the dev machine via the agent-browser (Vercel) tool, new-component test requirements, cross-boundary contract tests, and reports violations with rule sources. Use when validating React tests, before commit/test gates, or when olko-test/olko-commit-style delegates React test-convention checks.",
+      "version": "1.2.0",
+      "description": "Check React test conventions for changed TypeScript/React projects with marketplace defaults. Reads project docs/adapters, maps source changes to test files, verifies Vitest + Testing Library + MSW harness conventions, no-skip/no-silent-pass policy, English-only self-explanatory test names with zero comments, network-boundary test doubles, parametrization, fixture reuse, React Query/React Hook Form testing conventions, manual e2e verification on the dev machine via the agent-browser (Vercel) tool, new-component test requirements, cross-boundary contract tests, and reports violations with rule sources. Use when validating React tests, before commit/test gates, or when olko-test/olko-commit-style delegates React test-convention checks.",
       "tags": [
         "react",
         "testing"

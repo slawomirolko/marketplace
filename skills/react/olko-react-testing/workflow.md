@@ -66,6 +66,8 @@ Apply these defaults unless config, adapter, or project docs override them.
 - Test file names mirror source file names: `UserCard.test.tsx` for `UserCard.tsx`, `useUserQuery.test.ts` for `useUserQuery.ts`.
 - Colocate the test file next to the file it tests (inside the component's directory), unless the project documents a centralized `__tests__/` convention.
 - Each test case verifies exactly one behavior; write separate `it`/`test` blocks per behavior, not one mega-test.
+- Write every test name, assertion message, fixture value and inline data string in English.
+- Do not write comments in a test body: the test name must be self-explanatory. The `// Arrange`/`// Act`/`// Assert` convention belongs to .NET only and never appears in React tests.
 
 ### Five qualities of a good unit test
 Every unit test must satisfy all five:

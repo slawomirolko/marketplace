@@ -4,7 +4,7 @@
   "agents": [
     {
       "name": "olko-question-reviewer",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "file": "olko-question-reviewer.md",
       "stack": "cross-stack",
       "role": "auditor",
@@ -14,7 +14,7 @@
     },
     {
       "name": "olko-implementation-orchestrator",
-      "version": "2.9.0",
+      "version": "2.11.0",
       "file": "olko-implementation-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -194,7 +194,7 @@
     },
     {
       "name": "olko-plan-documentation-orchestrator",
-      "version": "3.1.1",
+      "version": "3.2.0",
       "file": "olko-plan-documentation-orchestrator.md",
       "stack": "cross-stack",
       "role": "orchestrator",
@@ -294,7 +294,7 @@
     },
     {
       "name": "olko-dotnet-auditor",
-      "version": "1.4.1",
+      "version": "1.6.0",
       "file": "olko-dotnet-auditor.md",
       "stack": "dotnet",
       "role": "auditor",
@@ -325,7 +325,7 @@
     },
     {
       "name": "olko-dotnet-implementer",
-      "version": "1.7.0",
+      "version": "1.9.0",
       "file": "olko-dotnet-implementer.md",
       "stack": "dotnet",
       "role": "implementer",

@@ -1,7 +1,7 @@
 ---
 name: olko-python-style
-version: 1.3.0
-description: "Check Python style compliance for changed Python files with marketplace defaults. Reads project docs and adapters, maps .py files to pyproject.toml roots, runs documented format/lint/type commands such as ruff/mypy/pyright when configured, checks common Python style expectations that docs enable, and reports violations with rule sources. Use when validating Python style, linting Python changes, before commit/test gates, or when olko-commit-style delegates Python style checks."
+version: 1.4.0
+description: "Check Python style compliance for changed Python files with marketplace defaults. Reads project docs and adapters, maps .py files to pyproject.toml roots, runs documented format/lint/type commands such as ruff/mypy/pyright when configured, checks common Python style expectations that docs enable (English-only runtime text included), and reports violations with rule sources. Use when validating Python style, linting Python changes, before commit/test gates, or when olko-commit-style delegates Python style checks."
 ---
 
 # Olko Python Style
@@ -53,6 +53,11 @@ Also apply the `olko-design-rules` catalogue to the changed lines: its design ru
 - Prefer explicit `async` methods for gRPC and network I/O.
 - Do not mutate shared input dictionaries unless the contract says mutation is expected.
 - Keep log output structured and consistent with the surrounding codebase.
+
+### Language
+- Write identifiers, comments, docstrings, log messages, exception messages and tracing span/attribute names in English. Documentation files may follow the project's documentation language; runtime text never does.
+- Raise exceptions with an English message that names the missing resource, key or value; never emit a non-English log line or span attribute.
+- Keep test names, fixtures and test data English-only.
 
 ### Generated code
 - Do not edit generated gRPC stubs by hand (e.g. `*_pb2.py`, `*_pb2_grpc.py`).
@@ -146,7 +151,7 @@ Check rules found in docs/adapters/config plus marketplace defaults when docs do
 - import ordering beyond formatter config
 - typing strictness and `Any`/cast rules
 - async style and blocking-call restrictions
-- exception/logging conventions
+- exception/logging conventions and the language of runtime text (English-only logs, spans, docstrings, comments)
 - `pathlib.Path` vs `os.path` and explicit `encoding` for file operations
 - silent failures and fail-fast behavior for missing files/resources/config
 - resource lifecycle (single owner; no per-request construction)

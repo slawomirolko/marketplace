@@ -7,6 +7,7 @@ permission:
   edit: deny
   write: deny
   bash: deny
+  question: deny
   task: deny
   skill:
     "*": deny
@@ -26,7 +27,7 @@ CONFIGURATION: Resolve every value from the project adapter (`.agents/skill-conf
 | `questionGateScratchDir` | `plans/.question-gate` | scratch proposals |
 | `questionReversalPhrases` | English markers ("actually instead", "revert", "undo", "go back to", "once again") | wording that reopens a settled decision |
 
-INPUT CONTRACT: `feature`, `registry` (path to the decision registry), and `batch` (a JSON array of proposals). Each proposal carries `cluster`, `topic`, `topicTerms`, `questionText`, `decisionStatement` or `cites`, `artifacts`, and exactly three `options` with `label`, `semantics`, `effect`. Missing input → `BLOCKED` naming the missing item; never improvise.
+INPUT CONTRACT: `feature`, `registry` (path to the decision registry), and `batch` (a JSON array of proposals). Each proposal carries `cluster`, `topic`, `topicTerms`, `questionText`, `decisionStatement` or `cites`, `artifacts`, `kind` (`decision` by default, `confirmation` for a gate on an irreversible action), and exactly three `options` with `label`, `semantics`, `effect`. Missing input → `BLOCKED` naming the missing item; never improvise.
 
 REGISTRY SCHEMA — the contract every verdict relies on:
 - a question moves `ASKED` → `ANSWERED` → `EXECUTED`; `SUPERSEDED` marks a question replaced by a later one;
@@ -42,6 +43,7 @@ PROCEDURE:
    - the same subject was already answered, under any `cluster`;
    - the question keeps or reverses an answer the user already gave (`effect: alter`, a reversal phrase, or wording such as "or should it be" / "rather"), or its `decisionStatement` already settles what it asks;
    - it covers the author's own consistency, a tooling failure, or drafting mechanics instead of product scope or a trade-off;
+   - for `kind: confirmation`, the product-scope/trade-off rule does not apply; reject it instead when it does not name the irreversible action it gates, names no `artifacts`, or offers fewer or more than three legal options. A confirmation never reopens a settled decision;
    - two questions in the batch pull one decision in opposite directions;
    - an option is impossible against the repository (`file:line` proves it).
 3. A cluster already `ANSWERED` or `EXECUTED` is `REJECT` even when the gate passes, unless the user themself changed that decision.

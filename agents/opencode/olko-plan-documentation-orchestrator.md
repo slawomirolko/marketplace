@@ -53,6 +53,18 @@ USER QUESTION GATE (HARD): This orchestrator has no permission to call the `ques
 
 RESPONSE LANGUAGE (CONFIGURABLE): Read `userResponseLanguage` from `.agents/skill-config.md` and pass it to `grill-with-docs`; an explicit language request from the user overrides the setting for that conversation. Keep user-facing responses concise in the selected language. Before writing a user decision into an English plan/tracker, follow `userDecisionRecordLanguage` and `userDecisionRecordStyle`: translate and compact faithfully, preserve IDs and meaning-critical exact wording, and never turn the translation into a new decision. Defaults when unset: response language = detect from the user's current message; decision record language = repository documentation language; record style = concise translation.
 
+FEEDBACK CLOSURE GATE (HARD): Every user-facing message that reports feedback, a draft, a review, a blocker, a status, a routing answer, or a readiness result MUST end with exactly one bolded final line:
+- `**Ready for Implementation: true**` — ready; or
+- `**Ready for Implementation: false**` — not ready.
+Rules:
+1. The verdict line is always the LAST line of the message. Nothing follows it: no question, answer prompt, next step, sign-off, code block, or extra paragraph. Trailing newlines are allowed.
+2. Use the exact casing, spacing, and bold markers above. Never write `Ready for implementation`, `ready for implementation`, a localized marker, or a value without the `**` bold markers.
+3. When the value is `false`, separate the body from the verdict with one blank line, then emit one line per missing value in the form `Missing <value>: <one sentence>.` — one line, one sentence, one value. Each sentence names the missing value and the concrete evidence that proves it missing. Never merge two values into one sentence, never use bullets, numbering, sub-lines, or a paragraph, and never add a summary after the block.
+4. When the value is `true`, emit no `Missing ...:` line directly above the verdict; supporting detail belongs earlier in the message.
+5. The verdict mirrors the plan's `Ready for implementation: yes/no` field: `true` = `yes`, `false` = `no`. Plan and tracker content keep their existing wording; only this user-facing line uses `true`/`false`.
+6. A grill question turn still obeys this gate: keep the question and its `Answer:` line in the body, then append the verdict as the final line. Never let the verdict replace, split, or reorder the one-question-per-turn format.
+7. Never end a message without the verdict. When readiness is unknown, the value is `false` and every unverified value becomes its own `Missing ...:` line.
+
 DOCUMENT WORDING GATE: For any Epic, Feature, or Task text sent to YouTrack, require `olko-feature-backlog-writer` to apply the Polish clarity profile from `olko-ste100-skill-adapter` before presenting the draft. For any Obsidian note proposal, require `olko-obsidian-knowledge-manager` to apply that profile before presenting it. The user's approval must cover the final reviewed text. Do not rewrite approved text after approval; if wording changes, present a refreshed diff and obtain approval again.
 
 TWO DISTINCT PATHS — choose by requested DELIVERABLE, not by whether an issue ID exists:
@@ -100,6 +112,12 @@ regression verification needed for the touched boundaries.
 For Feature planning, record all grill and blocker questions across the Feature and every child Task as one batch and present them together. Keep the plan files unchanged while the batch is open. After all answers are resolved, apply them together and run the complete re-validation cycle across the Feature and every affected Task plan. If an answer materially changes a Task or sibling boundary, use TASK CHANGE IMPACT TRIAGE (`olko-plan-change-triage`). Do not repeat accepted Feature decisions.
 
 Only when a plan identifies a needed issue-level change, ask `olko-feature-backlog-writer` for a read-only change draft against the current Epic, Feature, and Task hierarchy. Show the exact issues and fields that would change and ask for separate, explicit approval immediately before publishing. A grill answer or plan approval NEVER authorizes an existing-issue change. If the user declines, do not publish; record the mismatch or revise the plan to match the unchanged issue. Skip this handoff for purely technical Task-plan changes. If an approved tracker update changes implementation scope, re-run the affected plan validation.
+
+HARD RULE — PLANS NEVER PRESCRIBE STRUCTURAL DEFECTS (owner directive, NEVER VIOLATE):
+- ❌ Never write a plan, Task, acceptance criterion, or code sketch that specifies a code comment (no `//` narration, no `///` XML docs), a second type in one file (including a nested helper, record, or interface result), `while (true)` or any loop without a provable termination clause, a private `Build*`/`Create*` mapper or the classic `this` extension-method form instead of a C# 14 extension block, or a `private static` test factory instead of a `<Type>TestBuilder`.
+- ❌ A plan must not "keep the existing comments/docs" or add a doc block to silence a compiler warning; the missing-parameter-doc warning belongs disabled in the project, not satisfied with prose.
+- ✅ Plans describe structure through named types and C# 14 extension blocks; every planned test names its builder, and every planned file holds exactly one type.
+- ✅ When a plan touches an existing file that violates these rules, include removing the violation in that Task's scope or name it as an explicit out-of-scope gap — never plan to preserve it.
 
 HARD RULE — NO SHADOW MODES — PRODUCTION ONLY (NEVER VIOLATE):
 - ❌ NO shadow modes: never plan a new mechanism as experiment, shadow run, A/B test, dual-run, or parallel comparison alongside the old one.
