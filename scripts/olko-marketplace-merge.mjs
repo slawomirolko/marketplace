@@ -5,7 +5,8 @@
  * moved on, and builds the proposed copy of each: the marketplace version the copy came from (base), the
  * project copy without its adapter (local) and the marketplace default branch (upstream) are merged file by
  * file with `git merge-file`. It writes only into its own output folder, never into the project or the
- * marketplace, and records what it found in `<out>/plan.json`.
+ * marketplace, and records what it found in `<out>/plan.json`. The three sides of each item (base, local without
+ * the adapter, upstream) go to `<out>/sides/<item>/`, so an agent resolving conflicts needs no other folder and no shell.
  *
  * What is installed, its portable content and its marketplace history come from the installed-artifact model
  * of the olko-factory-project skill, and the states from its project status, so the merge and the status agree.
@@ -57,6 +58,8 @@ const PREPARE = "prepare";
 const SUMMARY = "summary";
 const APPLY = "apply";
 const PLAN_FILE = "plan.json";
+/** The folder of the work directory that holds the base, local and upstream copy of each item, for the resolve agent; never installed. */
+const SIDES_DIR = "sides";
 const SHORT_COMMIT = 7;
 const DIFF_CONTEXT = 1;
 const DIFF_LINES = 40;
@@ -242,6 +245,11 @@ function buildItem({ marketplace, ref, lock, out, id, group }) {
   const merged = mergeCopy({ kind: status.kind, local: copy.contents, base: base.version?.contents ?? new Map(), upstream: upstream.contents, model: copy.model, modelIndex: copy.model ? modelLineIndex(copy.path) : -1 });
   const dir = path.join(out, safeName(id));
   writeProposed(dir, merged.proposed);
+  const sides = path.join(out, SIDES_DIR, safeName(id));
+  const texts = { base: base.version?.contents ?? new Map(), local: copy.contents, upstream: upstream.contents };
+  for (const [side, files] of Object.entries(texts)) {
+    writeProposed(path.join(sides, side), files);
+  }
   const conflicts = merged.files.filter((file) => file.result === "conflict").length;
   return {
     id,
@@ -254,6 +262,7 @@ function buildItem({ marketplace, ref, lock, out, id, group }) {
     versions: { local: base.version?.version ?? null, upstream: upstream.version ?? null, localCommit: base.version?.commit ?? base.commit, upstreamCommit: upstream.commit },
     files: merged.files,
     dir,
+    sides,
     checked: !base.guessed && conflicts === 0,
   };
 }

@@ -41,14 +41,14 @@ The plan's `action` is `open` or `append` (a `skip` never reaches this step).
 13. Reply with the PR number and URL. The person merges or closes it.
 
 ### Step resolve
-Used by the marketplace merge workflow. The prompt names the work directory `<work>`. Read the project and the marketplace checkout; write only inside `<work>`.
-1. Read `<work>/plan.json`. Each item has `id`, `kind`, `name`, `state`, `locations`, `base`, `versions` (`localCommit` is the base commit, `upstreamCommit` the newest), `files` (`path`, `result`, `conflictKind`) and `dir` (the proposed copy, adapter excluded).
-2. Source path of an item: agent `agents/opencode/<name>.md`; skill `skills/<category>/<name>/` (find it with `git -C <marketplace> ls-tree -r --name-only <upstreamCommit>`). Base text: `git -C <marketplace> show <localCommit>:<source>/<path>`. Upstream text: the same at `<upstreamCommit>`. Local text: `<project>/<locations[0]>/<path>` (agent: `<project>/<locations[0]>`).
+Used by the marketplace merge workflow. The prompt names the work directory `<work>`. Read and write only inside `<work>`, with the read and edit tools. Run no shell command: everything this step needs is in `<work>`.
+1. Read `<work>/plan.json`. Each item has `id`, `kind`, `name`, `state`, `locations`, `base`, `versions` (`localCommit` is the base commit, `upstreamCommit` the newest), `files` (`path`, `result`, `conflictKind`), `dir` (the proposed copy, adapter excluded) and `sides`.
+2. The three sides of a file: `<sides>/base/<path>` (the marketplace version the copy came from), `<sides>/local/<path>` (the project copy without its adapter) and `<sides>/upstream/<path>` (the newest marketplace version). A missing file means that side has no such file.
 3. Resolve every file with `result: "conflict"` in `<dir>/<path>`:
    - `both-edited`: replace each block from `<<<<<<< local` through `=======` to `>>>>>>> upstream` with one text. Start from the upstream text and put the local intent on top of it. Never drop upstream text in favour of base text. Leave no marker line.
-   - `deleted-upstream` (the file holds the local copy) and `deleted-locally` (the file holds the upstream copy): keep the file, or delete it from `<dir>` when the other side's removal clearly wins.
-   - Record one hunk per resolved block or deleted-file decision: `{"file": "<path>", "reason": "<one line: what you kept from each side>", "sure": <bool>}`. Set `"sure": false` whenever the intent of either side is unclear, the sides contradict each other, or you deleted a file.
-4. Classify each item with `state: "modified"`: compare the local text with the base text per changed file and classify each hunk as in step `stage` 5 (`portable` or `adapter`; when unsure, `adapter`). Describe each hunk in one line: `"<path>: <what it changes>"`. Stage nothing.
+   - `deleted-upstream` (the file holds the local copy) and `deleted-locally` (the file holds the upstream copy): keep the file as it is (you cannot delete files). When the other side's removal should win, say so in `reason`.
+   - Record one hunk per resolved block or deleted-file decision: `{"file": "<path>", "reason": "<one line: what you kept from each side>", "sure": <bool>}`. Set `"sure": false` whenever the intent of either side is unclear, the sides contradict each other, or the file was deleted on one side.
+4. Classify each item with `state: "modified"`: compare `<sides>/local` with `<sides>/base` per changed file and classify each hunk as in step `stage` 5 (`portable` or `adapter`; when unsure, `adapter`). Describe each hunk in one line: `"<path>: <what it changes>"`. Stage nothing.
 5. Write `<dir>/resolution.json` for each item with a conflict or `state: "modified"`: `{"hunks": [...], "upstream": {"portable": [...], "adapter": [...]}}`. Leave out `upstream` for an `outdated` item; use `"hunks": []` without conflicts.
 6. Change nothing else: not `plan.json`, not files without a conflict, not the project, not the marketplace checkout. Never write a project value into `reason` or `upstream` texts.
 7. Reply with the counts: conflicted files resolved, hunks with `sure: false`, items classified.

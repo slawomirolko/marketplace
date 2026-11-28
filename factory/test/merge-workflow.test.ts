@@ -1,6 +1,7 @@
 import "./helpers/isolated-home.ts";
 import "./helpers/no-turn-delay.ts";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fencedJson, driveRun, stoppedBy } from "./helpers/plan-driver.ts";
@@ -8,6 +9,7 @@ import type { DriveHandlers } from "./helpers/plan-driver.ts";
 import { tempDir } from "./helpers/temp.ts";
 import { testHomeDir } from "./helpers/isolated-home.ts";
 import { checkWorkflows } from "../src/validate-workflows.ts";
+import { opencodeConfigDir } from "../src/cli-agents.ts";
 import type { CliRequest, CliResult, ExecResult } from "../src/types.ts";
 
 const WORKFLOWS = path.join(import.meta.dirname, "..", "workflows");
@@ -186,6 +188,11 @@ test("merge run on a CLI backend: resolve runs in the work directory and may lea
   assert.equal(requests.length, 1);
   assert.equal(requests[0]?.agent, "olko-marketplace-upstream");
   assert.equal(requests[0]?.cwd, out, "the agent works in the work directory, not in the project");
+  assert.deepEqual(requests[0]?.tools, ["read", "edit"], "no shell: the folder limits cannot be bypassed");
+  const configDir = opencodeConfigDir("olko-marketplace-upstream", requests[0]!.tools, requests[0]!.dirs, requests[0]!.limitDirs);
+  const front = fs.readFileSync(path.join(configDir, "agents", "olko-marketplace-upstream.md"), "utf8").split("\n")[1] ?? "{}";
+  fs.rmSync(configDir, { recursive: true, force: true });
+  assert.equal((JSON.parse(front) as { permission: { bash: unknown } }).permission.bash, "deny", "the generated OpenCode agent of the resolve step has no shell");
   assert.equal(requests[0]?.limitDirs?.[0], out, "the step's own directories limit where the agent may go outside its workspace");
   assert.deepEqual(requests[0]?.limitDirs, requests[0]?.dirs, "besides the work directory only the folders of the skills the agent loads");
   assert.ok(!requests[0]?.limitDirs?.includes(PROJECT) && !requests[0]?.limitDirs?.includes(MARKETPLACE), "neither the project nor the marketplace checkout");

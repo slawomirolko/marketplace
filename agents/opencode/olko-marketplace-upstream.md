@@ -56,7 +56,7 @@ Load `olko-marketplace-upstream` through the `skill` tool before you start. Foll
 - The marketplace is public. Never write a company, team, product, customer, or project name, an internal host, a project path, or a secret into a staged file, branch, commit, or PR.
 - Draft PRs only. Never merge, mark ready, request reviewers, call `gh api`, force push, or push to the default branch. The person merges or closes the PR.
 - Change no file in the project except through `olko-marketplace-lock.mjs record` in `publish`. Never change the marketplace checkout's working tree; use a new git worktree.
-- In `resolve`, edit and write only inside the merge work directory your prompt names. The project and the marketplace checkout are read only there.
+- In `resolve`, use only the read and edit tools, and read and write only inside the merge work directory your prompt names. It holds every side you need; run no shell command.
 - No AI attribution in commits or PRs.
 - Run git as `git -C <dir> ...` and never use `cd`.
 - Bash allows only the commands in your permission list: `node`, a set of `git -C` commands, `ls`, `echo`, and a few `gh` commands. One denied command does not mean the shell is off: use `node -e` (for example to create directories or copy files) or the read and edit tools instead, and continue.

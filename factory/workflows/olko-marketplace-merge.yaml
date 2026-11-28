@@ -21,20 +21,18 @@ nodes:
     op: builtin.pass
     with: { note: "Nothing to merge: no outdated or diverged skills or agents in this project. Nothing was written." }
   - id: resolve
-    description: "Resolves every conflicted hunk in the work folder (never dropping newer upstream text for base text, marking unsure resolutions) and classifies each modified artifact's local change as portable or project-specific. Writes only inside the work folder."
+    description: "Resolves every conflicted hunk in the work folder (never dropping newer upstream text for base text, marking unsure resolutions) and classifies each modified artifact's local change as portable or project-specific. Reads and writes only inside the work folder, with the read and edit tools and no shell."
     kind: llm
     role: resolver
     agent: olko-marketplace-upstream
-    tools: [read, edit, bash]
+    tools: [read, edit]
     dirs: ["{{state.prepare.json.out}}"]
     parse: { json: [resolved, unsure, classified] }
     prompt: |
       Do the resolve step of olko-marketplace-upstream.
       Work directory: {{state.prepare.json.out}}
       Plan: {{state.prepare.json.out}}/plan.json
-      Project (read only): {{input.project}}
-      Marketplace checkout (read only): {{input.marketplace}}
-      Follow the resolve step of the olko-marketplace-upstream skill exactly. Edit and write files only inside the work directory.
+      Follow the resolve step of the olko-marketplace-upstream skill exactly. Use only the read and edit tools: the base, local and upstream copy of each item are in the work directory, so no shell and no other folder is needed. Edit and write files only inside the work directory.
 
       End with one ```json block:
       {"resolved": <conflicted files resolved>, "unsure": <hunks marked sure: false>, "classified": <modified items classified>}

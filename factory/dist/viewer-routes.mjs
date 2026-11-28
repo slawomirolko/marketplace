@@ -17769,7 +17769,8 @@ function claudeAgentsFile(agent, tools = ["read"]) {
 /**
 * The OpenCode config folder of one agent run. A generated agent may leave its workspace only for `dirs`. A marketplace
 * agent keeps its own front matter; when the step lists its own directories, `limitDirs` (those and the folders of
-* the skills the agent loads) and the temp folder become its `external_directory` allow list, and every other folder is denied.
+* the skills the agent loads) and the temp folder become its `external_directory` allow list, every other folder is denied,
+* and a tool the step does not give (`edit`, `bash`) is denied.
 */
 function opencodeConfigDir(agent, tools = ["read"], dirs = [], limitDirs = []) {
 	const definition = agentDefinition(agent);
@@ -17791,18 +17792,23 @@ function opencodeConfigDir(agent, tools = ["read"], dirs = [], limitDirs = []) {
 			}
 		};
 		fs.writeFileSync(target, `---\n${JSON.stringify(front)}\n---\n\n${definition.prompt}\n`);
-	} else if (limitDirs.length > 0) fs.writeFileSync(target, `---\n${JSON.stringify(limitedFrontmatter(definition.frontmatter, limitDirs))}\n---\n\n${definition.prompt}\n`);
+	} else if (limitDirs.length > 0) fs.writeFileSync(target, `---\n${JSON.stringify(limitedFrontmatter(definition.frontmatter, tools, limitDirs))}\n---\n\n${definition.prompt}\n`);
 	else fs.writeFileSync(target, `---\n${definition.frontmatter}\n---\n\n${definition.prompt}\n`);
 	return dir;
 }
-/** An agent's front matter with `external_directory` limited to `dirs` and the temp folder; its other fields stay as written. */
-function limitedFrontmatter(frontmatter, dirs) {
+/**
+* An agent's front matter with `external_directory` limited to `dirs` and the temp folder, and `edit` and `bash` denied
+* when the step does not give that tool (as the Claude backend allows only the step's tools); its other fields stay as written.
+*/
+function limitedFrontmatter(frontmatter, tools, dirs) {
 	const front = (0, import_dist.parse)(frontmatter) ?? {};
 	const permission = typeof front.permission === "object" && front.permission !== null ? front.permission : {};
+	const withheld = Object.fromEntries(["edit", "bash"].filter((tool) => !tools.includes(tool)).map((tool) => [tool, "deny"]));
 	return {
 		...front,
 		permission: {
 			...permission,
+			...withheld,
 			external_directory: externalDirectoryPermission([.../* @__PURE__ */ new Set([...dirs, os.tmpdir()])])
 		}
 	};

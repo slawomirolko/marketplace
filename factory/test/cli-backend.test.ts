@@ -13,6 +13,7 @@ import { until } from "./helpers/poll.ts";
 import { tempDir } from "./helpers/temp.ts";
 import { cliExecutor, hostExec } from "../src/cli-backend.ts";
 import { homeEnv } from "../src/home-env.ts";
+import { parse as parseYaml } from "yaml";
 import { opencodeConfigDir } from "../src/cli-agents.ts";
 
 interface Probe {
@@ -148,6 +149,12 @@ test("a marketplace agent with its own permissions may leave its workspace only 
   const limited = JSON.parse(frontOf(opencodeConfigDir(agent, ["read", "edit", "bash"], [work, ...agent.dirs], [work]))) as { model?: string; permission: Record<string, unknown> };
   assert.deepEqual(limited.permission.external_directory, { "*": "deny", [path.join(work, "*")]: "allow", [path.join(os.tmpdir(), "*")]: "allow" }, "the project, the marketplace checkout and every other folder are denied");
   assert.equal(limited.permission.edit, "allow", "the agent's other permissions stay");
+  assert.deepEqual(limited.permission.bash, (parseYaml(agent.frontmatter) as { permission: { bash: unknown } }).permission.bash, "a step with the bash tool keeps the agent's bash rules");
+  const noShell = JSON.parse(frontOf(opencodeConfigDir(agent, ["read", "edit"], [work, ...agent.dirs], [work]))) as { permission: Record<string, unknown> };
+  assert.equal(noShell.permission.bash, "deny", "a limited step without the bash tool gets no shell, whatever the agent allows");
+  assert.equal(noShell.permission.edit, "allow");
+  const readOnly = JSON.parse(frontOf(opencodeConfigDir(agent, ["read"], [work], [work]))) as { permission: Record<string, unknown> };
+  assert.equal(readOnly.permission.edit, "deny", "a limited step without the edit tool cannot edit");
   assert.ok(limited.model, "the agent's other front matter stays");
   assert.equal(frontOf(opencodeConfigDir(agent, ["read"], agent.dirs)), agent.frontmatter, "a node without its own directories keeps the agent's front matter as written");
 });

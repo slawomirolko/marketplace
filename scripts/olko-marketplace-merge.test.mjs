@@ -601,3 +601,14 @@ test("summary unchecks a modified item whose local change is not classified for 
   write(item.dir, "resolution.json", JSON.stringify({ hunks: [], upstream: { portable: ["workflow.md: clearer first step"], adapter: [] } }));
   assert.equal(summaryItem(f).checked, true);
 });
+
+test("prepare writes the base, local and upstream side of each item into the work directory", () => {
+  const f = conflictFixture();
+  const item = itemOf(run(f), CONFLICT_ID);
+  assert.equal(item.sides, path.join(path.resolve(f.out), "sides", path.basename(item.dir)));
+  assert.equal(read(item.sides, "base/workflow.md"), WORKFLOW_V1);
+  assert.equal(read(item.sides, "local/workflow.md"), "flow LOCAL\nflow two\nflow three\n");
+  assert.equal(read(item.sides, "upstream/workflow.md"), "flow UPSTREAM\nflow two\nflow three\n");
+  assert.equal(fs.existsSync(path.join(item.dir, "base")), false, "the sides stay out of the proposed copy");
+  assert.deepEqual(applyRun(f, []).applied, []);
+});
