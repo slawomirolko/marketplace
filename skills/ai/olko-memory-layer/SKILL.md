@@ -47,50 +47,48 @@ record in task artifacts.
 
 ## AUDIT MODE
 
-Triggered by a request to review, clean, compact or promote memory, or by a
-block over its configured limit. Run it only when asked; never prune memory
-during an unrelated task.
+Run on request to review, clean, compact or promote memory, or when a block
+exceeds its configured limit. Never prune memory during an unrelated task.
 
-Age a lesson in two units: calendar days since its newest `added`/`verified`
-date, and runs of the owning agent since that date. Run counts alone mislead:
-one agent can log hundreds of sessions inside a week while another needs
-months. Require both units before removing anything.
+Age each lesson in two units: days since its newest `added`/`verified` date and
+runs of the owning agent since that date. Run counts alone mislead (one agent
+logs hundreds of sessions in a week, another needs months), so require both.
 
 Read the runtime database read-only (`mode=ro`), table `session_v2`:
 
     SELECT count(*) FROM session_v2
     WHERE agent = :agent AND time_created >= :date_ms;
 
-`time_created` is epoch milliseconds; exclude the audit session itself. Fall
-back to table `session` only when `session_v2` is absent. Without shell access,
-ask the caller for the count and label it caller-supplied.
+`time_created` is epoch milliseconds; exclude the audit session. Fall back to
+`session` only when `session_v2` is absent. Without shell, ask the caller and
+label the count caller-supplied.
 
 Verdicts:
 
-- `DELETE-ELIGIBLE` — runs >= 30 AND age >= 30 days. Never removed on the
-  numbers alone; it must also pass the classification below.
+- `DELETE-ELIGIBLE` — runs >= 30 AND age >= 30 days; still needs the
+  classification below.
 - `REVIEW` — runs >= 20 OR age >= 30 days.
-- `FORCED REVIEW` — age >= 60 days, whatever the run count.
-- `UNDATED` — no date on the line: age is unknown, so review it by value and
-  ask before adding a date.
+- `FORCED REVIEW` — age >= 60 days, whatever the runs.
+- `UNDATED` — no date: review by value and ask before adding one.
 
-Classify each DELETE-ELIGIBLE lesson in this order and stop at the first hit:
+Classify each DELETE-ELIGIBLE lesson in this order, stopping at the first hit:
 
-1. `DUPLICATE` — the owning agent definition or one of its skills already
-   carries the same rule. Grep the exact mechanism, not the topic. Remove the
-   memory line and cite the file and line that now carries it.
-2. `PROMOTE` — generic, no carrier anywhere, and verified on at least two
-   separate dates. Name the exact target: a skill (hand it to the
-   `olko-skill-optimizer` agent), or the owning agent definition when the rule
-   governs that agent's own steps (hand it to the `olko-agents-optimizer`
-   skill). Propose the section and the exact sentence to add. Remove the memory
-   copy only after the update is approved, applied and verified.
-3. `SUPERSEDED` — current code, docs or a newer lesson contradicts it. Remove
-   it and cite the evidence.
-4. `STILL VALID` — keep it, refresh its `verified` date and say which carrier
-   is missing.
+1. `DUPLICATE` — an agent definition or skill already carries the *same* rule in
+   full. Grep the exact mechanism, not the topic: partial coverage is not a
+   duplicate.
+2. `MERGE` — the rule is partly covered, or a newer lesson restates part of it.
+   Propose the edit folding both into one rule: the owning agent definition via
+   `olko-agents-optimizer`, or the skill via `olko-skill-optimizer`. Delete the
+   old line only after that edit is approved and applied.
+3. `PROMOTE` — no carrier anywhere, generic, verified on at least two dates.
+   Name the target skill or agent section and the exact sentence; route it as
+   in `MERGE`.
+4. `SUPERSEDED` — current code, docs or a newer lesson contradicts it. Remove it
+   and cite the evidence.
+5. `STILL VALID` — keep it, refresh `verified`, and say which carrier is missing.
 
 Report one row per lesson: `file | lesson (8 words) | added | verified |
-age_days | runs | verdict`, then the count per verdict, then every removed
-line verbatim. Delete nothing when the run count is caller-supplied and the
-user has not confirmed it.
+age_days | runs | verdict`, then counts per verdict, then every removed line
+verbatim. Delete nothing while the run count is caller-supplied and the user has
+not confirmed it. Editing an agent or skill is a proposal: never apply it
+without approval.
