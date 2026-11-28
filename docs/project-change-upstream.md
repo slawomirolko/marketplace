@@ -111,7 +111,8 @@ resolve step, so a run with only these rows goes from prepare to the question.
   branch is behind the remote branch it tracks. The detail lists the commits. Applying it runs
   `git merge --ff-only` to exactly the commit the row shows, never a forced or merge-commit pull.
   The row starts unchecked, and apply refuses it, when the checkout has uncommitted changes to
-  tracked files or commits that are not on the remote; the detail says which.
+  tracked files, untracked files the pull would overwrite, or commits that are not on the remote;
+  the detail says which. A pull that git still refuses is reported as that row's result.
 - **Publish rows** (`publish:<kind>:<name>`): one per `modified` or `local-only` skill or agent
   that differs from the remote default branch. The detail lists the changed files with a short
   diff. Applying one puts exactly that artifact's files (adapter files excluded) on the remote

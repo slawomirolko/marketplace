@@ -997,3 +997,50 @@ test("a source checkout in sync with its remote gives no rows", () => {
   assert.deepEqual(plan.ids, []);
   assert.deepEqual(summary({ plan: s.plan }).items, []);
 });
+
+test("an untracked file the pull would overwrite unchecks the pull row and apply refuses it, naming the file", () => {
+  const s = sourceFixture();
+  pushRemote(s, { "notes.md": "from the remote\n" });
+  write(s.checkout, "notes.md", "untracked here\n");
+  sourcePrepare(s);
+  const row = sourceRow(s, "pull");
+  assert.equal(row.checked, false);
+  assert.match(row.detail, /untracked files the pull would overwrite: notes\.md/);
+  const head = git(s.checkout, "rev-parse", "HEAD");
+  assert.throws(() => sourceApply(s, ["pull"]), /Nothing was written\. pull: .*untracked files the pull would overwrite: notes\.md/);
+  assert.equal(git(s.checkout, "rev-parse", "HEAD"), head);
+  assert.equal(read(s.checkout, "notes.md"), "untracked here\n");
+});
+
+test("a publish leaves the other worktrees of the repository alone, even a prunable one", () => {
+  const s = sourceFixture();
+  const parked = path.join(s.root, "parked");
+  git(s.checkout, "worktree", "add", "-q", "--detach", parked);
+  fs.rmSync(parked, { recursive: true, force: true });
+  write(s.checkout, `${SOURCE_SKILL}/workflow.md`, "flow ONE\nflow two\nflow three\n");
+  sourcePrepare(s);
+  assert.equal(sourceApply(s, ["publish:skill:sample-skill"]).items[0].result, "draft PR opened");
+  assert.equal(worktreeCount(s), 2, "the prunable worktree is still registered: apply never prunes the person's worktrees");
+});
+
+test("apply refuses a plan whose source item holds an unsafe ref or a location of another artifact", () => {
+  const s = sourceFixture();
+  pushRemote(s, { "README.md": "remote readme\n" });
+  write(s.checkout, `${SOURCE_SKILL}/workflow.md`, "flow ONE\nflow two\nflow three\n");
+  git(s.checkout, "commit", "-q", "-am", "local skill change");
+  const plan = sourcePrepare(s);
+  const tampered = [
+    (copy) => (itemOf(copy, "publish:skill:sample-skill").baseBranch = "--upload-pack=x"),
+    (copy) => (itemOf(copy, "publish:skill:sample-skill").remoteRef = "origin/main..x"),
+    (copy) => (itemOf(copy, "publish:skill:sample-skill").location = "skills/demo/sample-other"),
+    (copy) => (itemOf(copy, "pull").remoteRef = "-x"),
+    (copy) => (itemOf(copy, "pull").branch = "main lock"),
+  ];
+  for (const change of tampered) {
+    const copy = structuredClone(plan);
+    change(copy);
+    fs.writeFileSync(s.plan, JSON.stringify(copy));
+    assert.throws(() => sourceApply(s, copy.ids), /invalid item/, String(change));
+  }
+  assert.deepEqual(remoteBranches(s), ["main"]);
+});

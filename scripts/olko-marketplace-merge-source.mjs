@@ -4,8 +4,9 @@
  *
  * - The pull row (`pull`): the checkout is behind the remote branch its current branch tracks. Applying it
  *   fast-forwards the checkout to exactly the remote commit prepare showed (`git merge --ff-only <commit>`), never a
- *   forced or merge-commit pull. A checkout with uncommitted changes, with commits that are not on the remote or that
- *   moved after prepare is refused.
+ *   forced or merge-commit pull. A checkout with uncommitted changes, with untracked files the pull would overwrite,
+ *   with commits that are not on the remote or that moved after prepare is refused; a pull git still fails is reported
+ *   as that row's result. Only the temporary worktree of a publish row is removed; other worktrees are never pruned.
  * - One publish row per `modified` or `local-only` source skill or agent (`publish:<kind>:<name>`). Applying one
  *   puts exactly that artifact's changed files (adapter files excluded) on the remote default branch in a temporary
  *   git worktree, stages them, runs the sanitize gate on the staged commit and on the PR title, body and commit
@@ -43,6 +44,8 @@ const ERROR_TAIL = 300;
 const COMMIT = /^[0-9a-f]{40,64}$/;
 const SOURCE_LOCATION = /^(?:skills\/[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*|agents\/opencode\/[a-z0-9][a-z0-9-]*\.md)$/;
 const GIT_MAX_BUFFER = 256 * 1024 * 1024;
+/** A safe git ref name: no leading dash or slash, no "..", "//", "@{", control characters, spaces or "~^:?*[\\", no trailing "/", "." or ".lock". */
+const REF_NAME = /^(?![-/])(?!.*\.\.)(?!.*\/\/)(?!.*@\{)[A-Za-z0-9._/-]+(?<![/.])(?<!\.lock)$/;
 
 /** True for a plan item of a marketplace source checkout. */
 export function isSourceItem(item) {
@@ -225,17 +228,37 @@ export function sourceItems(project, status) {
 /** A source item of the plan, checked: its id, kind, name, location, branch and commits are what prepare writes. */
 function checkItem(item) {
   if (item.action === PULL) {
-    if (item.id !== PULL || !COMMIT.test(String(item.head)) || !COMMIT.test(String(item.remoteCommit)) || typeof item.branch !== "string" || typeof item.remoteRef !== "string") {
+    if (item.id !== PULL || !COMMIT.test(String(item.head)) || !COMMIT.test(String(item.remoteCommit)) || !isRefName(item.branch) || !isRefName(item.remoteRef)) {
       throw new Error(`The plan holds an invalid item: ${item.id}`);
     }
     return;
   }
   const kindOk = item.kind === "skill" || item.kind === "agent";
   const branchOk = item.branch === `${BRANCH_PREFIX}-${item.kind}-${item.name}-${String(item.branch).slice(-BRANCH_HASH)}` && /^[0-9a-f]+$/.test(String(item.branch).slice(-BRANCH_HASH));
-  const remoteOk = item.remoteCommit === null || (COMMIT.test(String(item.remoteCommit)) && typeof item.baseBranch === "string");
-  if (!kindOk || !isArtifactId(`${item.kind}:${item.name}`) || item.id !== `${PUBLISH}:${item.kind}:${item.name}` || !SOURCE_LOCATION.test(String(item.location)) || !branchOk || !remoteOk) {
+  const remoteOk = item.remoteCommit === null || (COMMIT.test(String(item.remoteCommit)) && isRefName(item.baseBranch) && isRefName(item.remoteRef));
+  if (!kindOk || !isArtifactId(`${item.kind}:${item.name}`) || item.id !== `${PUBLISH}:${item.kind}:${item.name}` || !isLocationOf(item) || !branchOk || !remoteOk) {
     throw new Error(`The plan holds an invalid item: ${item.id}`);
   }
+}
+
+/** True for a string that is a safe git ref name. */
+function isRefName(value) {
+  return typeof value === "string" && REF_NAME.test(value);
+}
+
+/** True when the location of a publish item is the source path of exactly its kind and name. */
+function isLocationOf(item) {
+  const location = String(item.location);
+  if (!SOURCE_LOCATION.test(location)) {
+    return false;
+  }
+  return item.kind === "agent" ? location === `agents/opencode/${item.name}.md` : location.startsWith("skills/") && path.posix.basename(location) === item.name;
+}
+
+/** The untracked files (not ignored) that the commits between `head` and `commit` would write over. */
+function overwrittenUntracked(project, head, commit) {
+  const incoming = new Set(gitNames(project, "diff", "--name-only", "-z", "--no-renames", "--diff-filter=AR", head, commit));
+  return gitNames(project, "ls-files", "-z", "--others", "--exclude-standard").filter((name) => incoming.has(name));
 }
 
 /** Why the pull row may not be applied now, one reason per problem; empty when it may. */
@@ -249,6 +272,10 @@ function pullRefusals(project, item) {
   const dirty = uncommittedFiles(project);
   if (dirty.length > 0) {
     reasons.push(`The checkout has uncommitted changes: ${dirty.join(", ")}`);
+  }
+  const overwritten = head ? overwrittenUntracked(project, head, item.remoteCommit) : [];
+  if (overwritten.length > 0) {
+    reasons.push(`The checkout has untracked files the pull would overwrite: ${overwritten.join(", ")}`);
   }
   const ahead = head ? countBetween(project, item.remoteCommit, head) : 0;
   if (ahead > 0) {
@@ -367,7 +394,7 @@ function publishStaged({ project, worktree, item, texts, files, gh }) {
   return { id: item.id, result: "draft PR opened", upstream: false, branch: item.branch, url: String(created.stdout).trim().split("\n").pop() };
 }
 
-/** Puts one publish row on its branch in a temporary worktree, runs the gate and opens the draft PR; removes the worktree. */
+/** Puts one publish row on its branch in a temporary worktree, runs the gate and opens the draft PR; removes only that worktree. */
 function applyPublish(project, item, { gh, termsFile }) {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-publish-"));
   const worktree = path.join(tempDir, "worktree");
@@ -386,7 +413,6 @@ function applyPublish(project, item, { gh, termsFile }) {
     return publishStaged({ project, worktree, item, texts, files, gh });
   } finally {
     runGit(project, ["worktree", "remove", "--force", worktree]);
-    runGit(project, ["worktree", "prune"]);
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 }
@@ -403,7 +429,16 @@ function runGh(args, { cwd }) {
  */
 export function applySource(project, items, { gh = runGh, termsFile } = {}) {
   const ordered = [...items.filter((item) => item.action === PULL), ...items.filter((item) => item.action === PUBLISH)];
-  return ordered.map((item) => (item.action === PULL ? applyPull(project, item) : publishOrFail(project, item, { gh, termsFile })));
+  return ordered.map((item) => (item.action === PULL ? pullOrFail(project, item) : publishOrFail(project, item, { gh, termsFile })));
+}
+
+/** Applies the pull row; a git failure is reported as that row's result with git's error, never thrown. */
+function pullOrFail(project, item) {
+  try {
+    return applyPull(project, item);
+  } catch (error) {
+    return { id: item.id, result: "failed", upstream: false, reason: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 /** Applies one publish row; a git failure fails that row only and is reported with git's error. */
