@@ -192,7 +192,7 @@
     {
       "name": "olko-memory-layer",
       "category": "ai",
-      "text": "olko-memory-layer ai Manage an OpenCode agent's recurring-learning memory. Use whenever an agent reads, writes, compacts, or defines a memory layer or persistent-memory block. ai agents memory ai ai.agents.memory",
+      "text": "olko-memory-layer ai Manage an OpenCode agent's recurring-learning memory. Use whenever an agent reads, writes, compacts, audits, prunes, or defines a memory layer or persistent-memory block. ai agents memory ai ai.agents.memory",
       "tokens": [
         "olko",
         "memory",
@@ -211,6 +211,8 @@
         "reads",
         "writes",
         "compacts",
+        "audits",
+        "prunes",
         "or",
         "defines",
         "a",
