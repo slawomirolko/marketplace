@@ -7424,10 +7424,28 @@ var listPick = async ({ state, args }) => {
 		output: `${items.length} of ${args.items.length} items picked.`
 	};
 };
+var NODE_PROGRAM = "{{node}}";
+/** The program of `with.command`: `{{node}}` (this Node binary) or a literal name, never a template over state. */
+function execProgram(template) {
+	const text = String(template);
+	if (text === NODE_PROGRAM) return process.execPath;
+	if (text.includes("{{")) throw new Error("with.command[0] must be {{node}} or a literal program");
+	return text;
+}
+/** A rendered value may not turn into an option: it starts with "-" only when its template does. */
+function checkedArgument(template, rendered, index) {
+	if (rendered.startsWith("-") && !String(template).startsWith("-")) throw new Error(`with.command argument ${index} ${JSON.stringify(rendered)} starts with "-" but its template does not`);
+	return rendered;
+}
+function checkedCwd(rendered) {
+	if (!path.isAbsolute(rendered) || !fs.existsSync(rendered) || !fs.statSync(rendered).isDirectory()) throw new Error(`with.cwd ${JSON.stringify(rendered)} is not an absolute existing folder`);
+	return rendered;
+}
 /**
-* Runs one command without a shell. `with.command` is a list of Mustache templates over
-* input, state and answers; `{{node}}` is this Node binary. `with.cwd` sets the directory,
-* `with.okCodes` the accepted exit codes (default [0]) and `with.parse: json` parses stdout.
+* Runs one command without a shell. `with.command` is a list: the program (`{{node}}` for this Node binary,
+* or a literal name) and Mustache templates over input, state and answers for the arguments. A rendered
+* argument may start with "-" only when its template does. `with.cwd` sets the directory (an absolute
+* existing folder), `with.okCodes` the accepted exit codes (default [0]) and `with.parse: json` parses stdout.
 */
 var execCommand = async ({ args, state, input, answers, exec, cwd }) => {
 	if (!Array.isArray(args.command) || args.command.length === 0) throw new Error("with.command must be a non-empty list");
@@ -7441,9 +7459,11 @@ var execCommand = async ({ args, state, input, answers, exec, cwd }) => {
 		node: process.execPath
 	};
 	const render = (template) => mustache.render(String(template), view, {}, { escape: (value) => String(value) });
-	const [command, ...rest] = args.command.map(render);
+	const [programTemplate, ...argumentTemplates] = args.command;
+	const command = execProgram(programTemplate);
+	const rest = argumentTemplates.map((template, index) => checkedArgument(template, render(template), index + 1));
 	const okCodes = Array.isArray(args.okCodes) ? args.okCodes.map(Number) : [0];
-	const result = await exec(command, rest, { cwd: typeof args.cwd === "string" ? render(args.cwd) : cwd });
+	const result = await exec(command, rest, { cwd: typeof args.cwd === "string" ? checkedCwd(render(args.cwd)) : cwd });
 	const stdout = result.stdout.trim();
 	if (!okCodes.includes(Number(result.code))) throw new Error(`command exited ${result.code}: ${result.stderr.trim().slice(-300)}`);
 	const json = args.parse === "json" && stdout ? JSON.parse(stdout) : null;
@@ -15802,7 +15822,15 @@ function claudeAgentsFile(agent, tools = ["read"]) {
 	} }));
 	return file;
 }
-function opencodeConfigDir(agent, tools = ["read"]) {
+/** OpenCode access outside the workspace: denied, except inside the node's extra directories (the same folders the Claude backend passes as --add-dir). */
+function externalDirectoryPermission(dirs) {
+	if (dirs.length === 0) return "deny";
+	return {
+		"*": "deny",
+		...Object.fromEntries(dirs.map((dir) => [path.join(dir, "*"), "allow"]))
+	};
+}
+function opencodeConfigDir(agent, tools = ["read"], dirs = []) {
 	const definition = definitionOf(agent);
 	const dir = freshDir("factory-opencode-");
 	const target = path.join(dir, "agents", `${definition.name}.md`);
@@ -15818,7 +15846,7 @@ function opencodeConfigDir(agent, tools = ["read"]) {
 				task: "deny",
 				webfetch: "deny",
 				websearch: "deny",
-				external_directory: "allow"
+				external_directory: externalDirectoryPermission(dirs)
 			}
 		};
 		fs.writeFileSync(target, `---\n${JSON.stringify(front)}\n---\n\n${definition.prompt}\n`);
@@ -17490,6 +17518,72 @@ function errorMessage(error) {
 function runReport(run) {
 	return Factory.prototype.report.call(Factory.prototype, run);
 }
+// src/win-spawn.ts
+/** Characters cmd.exe treats specially on a command line; each gets a caret so cmd.exe passes it through as text. */
+var CMD_META = /([()\][%!^"`<>&|;, *?])/g;
+var LINE_BREAK = /[\r\n\0]/;
+var SHIM_EXTENSIONS = /* @__PURE__ */ new Set([".cmd", ".bat"]);
+var DEFAULT_PATHEXT = ".COM;.EXE;.BAT;.CMD";
+/**
+* Quotes one argument for a program started through `cmd.exe /d /s /c`: first the Windows C runtime rules
+* (backslashes before a quote are doubled, the quote is escaped, the whole argument is quoted),
+* then a caret before every cmd.exe metacharacter, so `&`, `|`, `%`, `^` and `"` stay plain text.
+*/
+function escapeCmdArgument(argument) {
+	if (LINE_BREAK.test(argument)) throw new Error("a command argument must not contain a line break or a NUL character");
+	return `"${argument.replace(/(\\*)"/g, "$1$1\\\"").replace(/(\\*)$/, "$1$1")}"`.replace(CMD_META, "^$1");
+}
+/**
+* Escapes one argument for a .cmd/.bat shim: cmd.exe parses the line once to start the shim and the shim's `%*`
+* is parsed again, where `\"` does not keep a quote open, so the carets are doubled to survive both passes.
+*/
+function escapeShimArgument(argument) {
+	return escapeCmdArgument(argument).replace(CMD_META, "^$1");
+}
+/** Escapes the program path of a `cmd.exe /d /s /c` command line with carets; it is not quoted. */
+function escapeCmdCommand(command) {
+	if (LINE_BREAK.test(command)) throw new Error("a command path must not contain a line break or a NUL character");
+	return command.replace(CMD_META, "^$1");
+}
+/** Finds a bare command name on PATH the way Windows does (PATHEXT order); returns the name unchanged when it holds a path or is not found. */
+function resolveExecutable(command, env = process.env) {
+	if (command.includes("/") || command.includes("\\")) return command;
+	const directories = (env.PATH ?? env.Path ?? "").split(path.delimiter).filter(Boolean);
+	const extensions = (env.PATHEXT ?? DEFAULT_PATHEXT).split(";").filter(Boolean);
+	for (const directory of directories) for (const extension of extensions) {
+		const candidate = path.join(directory, command + extension.toLowerCase());
+		if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
+	}
+	return command;
+}
+/**
+* Plans a shell-free start of a command-line tool. Off Windows, and for .exe files, the program runs directly.
+* An npm .cmd/.bat shim runs through `cmd.exe /d /s /c` with every argument escaped, so no argument can start a second command.
+*/
+function spawnPlan(command, args, env = process.env, platform = process.platform) {
+	if (platform !== "win32") return {
+		file: command,
+		args,
+		windowsVerbatimArguments: false
+	};
+	const resolved = resolveExecutable(command, env);
+	if (!SHIM_EXTENSIONS.has(path.extname(resolved).toLowerCase())) return {
+		file: resolved,
+		args,
+		windowsVerbatimArguments: false
+	};
+	const commandLine = [escapeCmdCommand(resolved), ...args.map(escapeShimArgument)].join(" ");
+	return {
+		file: env.ComSpec ?? env.COMSPEC ?? "cmd.exe",
+		args: [
+			"/d",
+			"/s",
+			"/c",
+			`"${commandLine}"`
+		],
+		windowsVerbatimArguments: true
+	};
+}
 // src/cli-backend.ts
 var TIMEOUT_MS = 9e5;
 var OPENCODE_IDS = {
@@ -17498,6 +17592,7 @@ var OPENCODE_IDS = {
 	opus: "anthropic/claude-opus-5-5"
 };
 var CLAUDE_DISALLOWED = "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,Agent,Task,NotebookEdit";
+var MODEL_NAME = /^[\w./:-]+$/;
 var CLAUDE_ISOLATION = [
 	"--setting-sources",
 	"project",
@@ -17506,12 +17601,20 @@ var CLAUDE_ISOLATION = [
 ];
 var workDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-cli-"));
 fs.writeFileSync(path.join(workDir, "opencode.json"), "{}\n");
+/** The environment of every child process: no harness variables, no factory token and none of the settings loaded from the factory home's .env. */
 function cleanEnv() {
+	const withheld = /* @__PURE__ */ new Set(["FACTORY_TOKEN", ...homeEnv.loaded]);
 	const env = {};
-	for (const [k, v] of Object.entries(process.env)) if (!/^(CLAUDE|ANTHROPIC)/.test(k)) env[k] = v;
+	for (const [name, value] of Object.entries(process.env)) if (!/^(CLAUDE|ANTHROPIC)/.test(name) && !withheld.has(name)) env[name] = value;
 	return env;
 }
-/** On Windows the CLI runs under a shell, so killing the shell leaves the CLI running; taskkill /T ends the whole tree. */
+/** Why a request cannot start a CLI: a model name outside the model alphabet, or an extra directory that is not an existing absolute folder. */
+function invalidRequest(model, dirs) {
+	if (!MODEL_NAME.test(model)) return `invalid model ${JSON.stringify(model)}`;
+	const badDir = dirs.find((dir) => !path.isAbsolute(dir) || !fs.existsSync(dir) || !fs.statSync(dir).isDirectory());
+	return badDir === void 0 ? null : `extra directory ${JSON.stringify(badDir)} is not an absolute existing folder`;
+}
+/** On Windows an npm .cmd shim runs under cmd.exe, so killing cmd.exe leaves the CLI running; taskkill /T ends the whole tree. */
 function killTree(pid, fallback) {
 	if (process.platform !== "win32" || pid === void 0) return fallback();
 	spawn("taskkill", [
@@ -17524,14 +17627,17 @@ function killTree(pid, fallback) {
 function spawnCli(command, args, stdinText, { cwd = workDir, env = {} } = {}) {
 	return new Promise((resolve) => {
 		const started = Date.now();
-		const child = spawn(command, args, {
+		const childEnv = {
+			...cleanEnv(),
+			PWD: cwd,
+			...env
+		};
+		const plan = spawnPlan(command, args, childEnv);
+		const child = spawn(plan.file, plan.args, {
 			cwd,
-			env: {
-				...cleanEnv(),
-				PWD: cwd,
-				...env
-			},
-			shell: process.platform === "win32"
+			env: childEnv,
+			shell: false,
+			windowsVerbatimArguments: plan.windowsVerbatimArguments
 		});
 		let stdout = "";
 		let stderr = "";
@@ -17542,6 +17648,10 @@ function spawnCli(command, args, stdinText, { cwd = workDir, env = {} } = {}) {
 		}, TIMEOUT_MS);
 		child.stdout.on("data", (d) => stdout += d);
 		child.stderr.on("data", (d) => stderr += d);
+		child.on("error", (error) => {
+			stderr += String(error);
+		});
+		child.stdin.on("error", () => {});
 		child.on("close", (code) => {
 			clearTimeout(timer);
 			resolve({
@@ -17595,6 +17705,11 @@ async function runClaude(model, prompt, { agent: named, definition, cwd, tools =
 	if (agent && !/^[a-z0-9-]+$/.test(agent)) return {
 		ok: false,
 		error: `invalid agent name ${agent}`
+	};
+	const invalid = invalidRequest(model, dirs);
+	if (invalid) return {
+		ok: false,
+		error: invalid
 	};
 	const args = agent ? [
 		"-p",
@@ -17656,12 +17771,17 @@ async function runClaude(model, prompt, { agent: named, definition, cwd, tools =
 		durationMs: res.durationMs
 	};
 }
-async function runOpencode(model, prompt, { agent: named, definition, cwd, configDir, tools = ["read"], env = {} } = {}) {
+async function runOpencode(model, prompt, { agent: named, definition, cwd, configDir, tools = ["read"], dirs = [], env = {} } = {}) {
 	const agent = definition?.name ?? named;
 	const id = OPENCODE_IDS[model] ?? (model.startsWith("claude-") ? `anthropic/${model}` : model);
 	if (agent && !/^[a-z0-9-]+$/.test(agent)) return {
 		ok: false,
 		error: `invalid agent name ${agent}`
+	};
+	const invalid = invalidRequest(model, dirs);
+	if (invalid) return {
+		ok: false,
+		error: invalid
 	};
 	const args = [
 		"run",
@@ -17673,7 +17793,7 @@ async function runOpencode(model, prompt, { agent: named, definition, cwd, confi
 		id,
 		...agent ? ["--agent", agent] : []
 	];
-	const agentDir = configDir ?? (agent ? opencodeConfigDir(definition ?? agent, tools) : void 0);
+	const agentDir = configDir ?? (agent ? opencodeConfigDir(definition ?? agent, tools, dirs) : void 0);
 	const res = await spawnCli("opencode", args, prompt, {
 		cwd: cwd ?? workDir,
 		env: {
@@ -18693,6 +18813,15 @@ function staticFile(viewerDir, relativePath) {
 	if (!fs.existsSync(full) || !fs.statSync(full).isFile()) return null;
 	return full;
 }
+/** Ends a request whose handler threw: a 500 when nothing was sent yet, otherwise the connection is dropped; the process keeps serving. */
+function failRequest(res, error) {
+	console.error(`request failed: ${error instanceof Error ? error.message : String(error)}`);
+	if (res.headersSent) {
+		res.destroy();
+		return;
+	}
+	res.writeHead(500, { "content-type": "application/json" }).end(JSON.stringify({ error: "internal error" }));
+}
 var POST_PATHS = [
 	/^\/viewer\/api\/update$/,
 	/^\/viewer\/api\/projects$/,
@@ -18722,7 +18851,13 @@ function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHost
 			res.writeHead(302, { location: `${PREFIX}/${url.search}` }).end();
 			return true;
 		}
-		const relative = decodeURIComponent(url.pathname.slice(8));
+		let relative;
+		try {
+			relative = decodeURIComponent(url.pathname.slice(8));
+		} catch {
+			res.writeHead(400, { "content-type": "text/plain" }).end("malformed path");
+			return true;
+		}
 		res.setHeader("x-content-type-options", "nosniff");
 		res.setHeader("referrer-policy", "no-referrer");
 		if (relative.startsWith("api/")) {
@@ -18749,4 +18884,4 @@ function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHost
 		return true;
 	};
 }
-export { viewerOptions as C, registerDataSource as S, homeEnvNote as _, projectsAction as a, VIEWER_HEALTH as b, Factory as c, parseCli as d, marketplaceDir as f, mustache as g, require_ajv as h, projectScopedInput as i, errorMessage as l, require_dist as m, viewerHandler as n, cliExecutor as o, loadFactoryConfig as p, viewerUrlFor as r, hostExec as s, allowedHostsFor as t, parseBackend as u, DEFAULT_VIEWER_PORT as v, __toESM as w, defaultDataDir as x, FACTORY_DIR$1 as y };
+export { registerDataSource as C, defaultDataDir as S, __toESM as T, mustache as _, projectScopedInput as a, FACTORY_DIR$1 as b, hostExec as c, parseBackend as d, parseCli as f, require_ajv as g, require_dist as h, viewerUrlFor as i, Factory as l, loadFactoryConfig as m, failRequest as n, projectsAction as o, marketplaceDir as p, viewerHandler as r, cliExecutor as s, allowedHostsFor as t, errorMessage as u, homeEnvNote as v, viewerOptions as w, VIEWER_HEALTH as x, DEFAULT_VIEWER_PORT as y };

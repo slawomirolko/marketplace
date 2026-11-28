@@ -1,4 +1,4 @@
-import { C as viewerOptions, _ as homeEnvNote, b as VIEWER_HEALTH, c as Factory, f as marketplaceDir, g as mustache, n as viewerHandler, o as cliExecutor, p as loadFactoryConfig, s as hostExec, t as allowedHostsFor, x as defaultDataDir } from "./viewer-routes.mjs";
+import { S as defaultDataDir, _ as mustache, c as hostExec, l as Factory, m as loadFactoryConfig, n as failRequest, p as marketplaceDir, r as viewerHandler, s as cliExecutor, t as allowedHostsFor, v as homeEnvNote, w as viewerOptions, x as VIEWER_HEALTH } from "./viewer-routes.mjs";
 import path from "node:path";
 import fs from "node:fs";
 import http from "node:http";
@@ -151,15 +151,19 @@ var viewer = viewerHandler({
 	factory
 });
 http.createServer((req, res) => {
-	if (req.url === "/health") {
-		res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({
-			name: VIEWER_HEALTH,
-			dataDir: path.resolve(dataDir)
-		}));
-		return;
+	try {
+		if (req.url === "/health") {
+			res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({
+				name: VIEWER_HEALTH,
+				dataDir: path.resolve(dataDir)
+			}));
+			return;
+		}
+		if (viewer(req, res)) return;
+		res.writeHead(302, { location: "/viewer/" }).end();
+	} catch (error) {
+		failRequest(res, error);
 	}
-	if (viewer(req, res)) return;
-	res.writeHead(302, { location: "/viewer/" }).end();
 }).listen(port, "127.0.0.1", () => {
 	fs.mkdirSync(dataDir, { recursive: true });
 	fs.writeFileSync(path.join(dataDir, "viewer.pid"), String(process.pid));

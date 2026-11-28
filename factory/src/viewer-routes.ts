@@ -43,6 +43,16 @@ function staticFile(viewerDir: string, relativePath: string): string | null {
   return full;
 }
 
+/** Ends a request whose handler threw: a 500 when nothing was sent yet, otherwise the connection is dropped; the process keeps serving. */
+export function failRequest(res: ServerResponse, error: unknown): void {
+  console.error(`request failed: ${error instanceof Error ? error.message : String(error)}`);
+  if (res.headersSent) {
+    res.destroy();
+    return;
+  }
+  res.writeHead(500, { "content-type": "application/json" }).end(JSON.stringify({ error: "internal error" }));
+}
+
 const POST_PATHS = [/^\/viewer\/api\/update$/, /^\/viewer\/api\/projects$/, /^\/viewer\/api\/runs\/[^/]+\/answer$/];
 
 export function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHosts, factory }: ViewerOptions): (req: IncomingMessage, res: ServerResponse) => boolean {
@@ -64,7 +74,13 @@ export function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allo
       res.writeHead(302, { location: `${PREFIX}/${url.search}` }).end();
       return true;
     }
-    const relative = decodeURIComponent(url.pathname.slice(PREFIX.length + 1));
+    let relative: string;
+    try {
+      relative = decodeURIComponent(url.pathname.slice(PREFIX.length + 1));
+    } catch {
+      res.writeHead(400, { "content-type": "text/plain" }).end("malformed path");
+      return true;
+    }
     res.setHeader("x-content-type-options", "nosniff");
     res.setHeader("referrer-policy", "no-referrer");
     if (relative.startsWith("api/")) {

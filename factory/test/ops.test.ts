@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { operationNamed } from "../src/ops.ts";
 
@@ -62,4 +64,42 @@ test("builtin.streak counts consecutive hits, resets on a miss and starts again 
   assert.deepEqual(two, { count: 2, reached: true });
   assert.deepEqual(await run("fail", two), { count: 1, reached: false }, "the visit after the limit starts again");
   assert.deepEqual(await run("pass", one), { count: 0, reached: false });
+});
+
+const exec = operationNamed("builtin.exec")!;
+
+function recordingExec() {
+  const calls: { command: string; args: string[]; cwd?: string }[] = [];
+  const run = async (command: string, args: string[], options: { cwd?: string } = {}) => {
+    calls.push({ command, args, ...(options.cwd ? { cwd: options.cwd } : {}) });
+    return { code: 0, stdout: "ok", stderr: "" };
+  };
+  return { calls, run };
+}
+
+test("builtin.exec runs {{node}} or a literal program, never a program named by state", async () => {
+  const { calls, run } = recordingExec();
+  await exec({ state: {}, input: {}, answers: {}, args: { command: ["{{node}}", "-e", "1"] }, exec: run } as any);
+  assert.equal(calls[0]?.command, process.execPath);
+  await exec({ state: {}, input: {}, answers: {}, args: { command: ["git", "status"] }, exec: run } as any);
+  assert.equal(calls[1]?.command, "git");
+  await assert.rejects(exec({ state: { tool: "calc" }, input: {}, answers: {}, args: { command: ["{{state.tool}}"] }, exec: run } as any), /command\[0\] must be \{\{node\}\} or a literal program/);
+  assert.equal(calls.length, 2, "the templated program never runs");
+});
+
+test("builtin.exec refuses a rendered argument that turns into an option", async () => {
+  const { calls, run } = recordingExec();
+  await assert.rejects(exec({ state: { name: "--upload-pack=evil" }, input: {}, answers: {}, args: { command: ["git", "clone", "{{state.name}}"] }, exec: run } as any), /argument 2 .* starts with "-"/);
+  assert.equal(calls.length, 0);
+  await exec({ state: { name: "repo" }, input: {}, answers: {}, args: { command: ["git", "--no-pager", "log", "{{state.name}}"] }, exec: run } as any);
+  assert.deepEqual(calls[0]?.args, ["--no-pager", "log", "repo"], "an option written in the template stays allowed");
+});
+
+test("builtin.exec runs only in an existing absolute folder", async () => {
+  const { calls, run } = recordingExec();
+  await assert.rejects(exec({ state: { dir: "relative/dir" }, input: {}, answers: {}, args: { command: ["git"], cwd: "{{state.dir}}" }, exec: run } as any), /cwd .* is not an absolute existing folder/);
+  await assert.rejects(exec({ state: { dir: path.join(os.tmpdir(), "factory-no-such-cwd-probe") }, input: {}, answers: {}, args: { command: ["git"], cwd: "{{state.dir}}" }, exec: run } as any), /not an absolute existing folder/);
+  assert.equal(calls.length, 0);
+  await exec({ state: { dir: os.tmpdir() }, input: {}, answers: {}, args: { command: ["git"], cwd: "{{state.dir}}" }, exec: run } as any);
+  assert.equal(calls[0]?.cwd, os.tmpdir());
 });

@@ -1,6 +1,6 @@
 import { homeEnvNote } from "./home-env.ts";
 import http from "node:http";
-import type { IncomingMessage } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +8,8 @@ import { Factory, errorMessage, parseBackend, parseCli } from "./engine.ts";
 import { cliExecutor, hostExec } from "./cli-backend.ts";
 import type { CliName, Executors } from "./types.ts";
 import type { DefaultBackend } from "./engine.ts";
-import { allowedHostsFor, viewerHandler } from "./viewer-routes.ts";
+import { allowedHostsFor, failRequest, viewerHandler } from "./viewer-routes.ts";
+import { bearerMatches } from "./bearer.ts";
 import { registerDataSource } from "./paths.ts";
 import { createFactoryTools } from "./tools.ts";
 import { loadFactoryConfig } from "./config.ts";
@@ -24,6 +25,9 @@ const TOKEN = process.env.FACTORY_TOKEN;
 const DATA_DIR = process.env.FACTORY_DATA_DIR ?? "/data";
 const FACTORY_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC_URL = process.env.FACTORY_PUBLIC_URL ?? `http://127.0.0.1:${PORT}`;
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
+/** Beyond loopback anyone on the network can reach the viewer, so its POST actions (update, projects, answer) need the bearer token there. */
+const VIEWER_CHANGES_NEED_TOKEN = !LOOPBACK_HOSTS.has(HOST);
 if (!TOKEN) {
   console.error("FACTORY_TOKEN is required");
   process.exit(1);
@@ -67,18 +71,36 @@ function readBody(req: IncomingMessage): Promise<unknown> {
   });
 }
 
-const httpServer = http.createServer(async (req, res) => {
+function isAuthorized(req: IncomingMessage): boolean {
+  return bearerMatches(req.headers.authorization, TOKEN as string);
+}
+
+function isUnauthorizedViewerChange(req: IncomingMessage): boolean {
+  return VIEWER_CHANGES_NEED_TOKEN && req.method === "POST" && (req.url ?? "").startsWith("/viewer/") && !isAuthorized(req);
+}
+
+function sendUnauthorized(res: ServerResponse): void {
+  res.writeHead(401, { "content-type": "application/json" }).end(JSON.stringify({ error: "unauthorized" }));
+}
+
+async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.url === "/health") {
     res.writeHead(200).end("ok");
     return;
   }
-  if (req.url === "/metrics" && req.headers.authorization === `Bearer ${TOKEN}`) {
+  if (req.url === "/metrics" && isAuthorized(req)) {
     res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(tools.metrics()));
     return;
   }
-  if (viewer(req, res)) return;
-  if (req.headers.authorization !== `Bearer ${TOKEN}`) {
-    res.writeHead(401, { "content-type": "application/json" }).end(JSON.stringify({ error: "unauthorized" }));
+  if (isUnauthorizedViewerChange(req)) {
+    sendUnauthorized(res);
+    return;
+  }
+  if (viewer(req, res)) {
+    return;
+  }
+  if (!isAuthorized(req)) {
+    sendUnauthorized(res);
     return;
   }
   if (req.url !== "/mcp") {
@@ -102,6 +124,10 @@ const httpServer = http.createServer(async (req, res) => {
   } catch (error) {
     if (!res.headersSent) res.writeHead(500).end(JSON.stringify({ error: errorMessage(error) }));
   }
+}
+
+const httpServer = http.createServer((req, res) => {
+  handleRequest(req, res).catch((error: unknown) => failRequest(res, error));
 });
 
 httpServer.listen(PORT, HOST, () => console.log(`skill-factory-poc listening on http://${HOST}:${PORT}/mcp, viewer ${PUBLIC_URL}/viewer/`));

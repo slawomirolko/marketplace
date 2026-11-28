@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import Mustache from "mustache";
 import { evaluateWhen, withEach } from "./workflow-yaml.ts";
 import type { Operation } from "./types.ts";
@@ -52,19 +54,51 @@ const listPick: Operation = async ({ state, args }) => {
   return { state: { items, count: items.length }, metrics: { count: items.length }, output: `${items.length} of ${args.items.length} items picked.` };
 };
 
+const NODE_PROGRAM = "{{node}}";
+
+/** The program of `with.command`: `{{node}}` (this Node binary) or a literal name, never a template over state. */
+function execProgram(template: unknown): string {
+  const text = String(template);
+  if (text === NODE_PROGRAM) {
+    return process.execPath;
+  }
+  if (text.includes("{{")) {
+    throw new Error("with.command[0] must be {{node}} or a literal program");
+  }
+  return text;
+}
+
+/** A rendered value may not turn into an option: it starts with "-" only when its template does. */
+function checkedArgument(template: unknown, rendered: string, index: number): string {
+  if (rendered.startsWith("-") && !String(template).startsWith("-")) {
+    throw new Error(`with.command argument ${index} ${JSON.stringify(rendered)} starts with "-" but its template does not`);
+  }
+  return rendered;
+}
+
+function checkedCwd(rendered: string): string {
+  if (!path.isAbsolute(rendered) || !fs.existsSync(rendered) || !fs.statSync(rendered).isDirectory()) {
+    throw new Error(`with.cwd ${JSON.stringify(rendered)} is not an absolute existing folder`);
+  }
+  return rendered;
+}
+
 /**
- * Runs one command without a shell. `with.command` is a list of Mustache templates over
- * input, state and answers; `{{node}}` is this Node binary. `with.cwd` sets the directory,
- * `with.okCodes` the accepted exit codes (default [0]) and `with.parse: json` parses stdout.
+ * Runs one command without a shell. `with.command` is a list: the program (`{{node}}` for this Node binary,
+ * or a literal name) and Mustache templates over input, state and answers for the arguments. A rendered
+ * argument may start with "-" only when its template does. `with.cwd` sets the directory (an absolute
+ * existing folder), `with.okCodes` the accepted exit codes (default [0]) and `with.parse: json` parses stdout.
  */
 const execCommand: Operation = async ({ args, state, input, answers, exec, cwd }) => {
   if (!Array.isArray(args.command) || args.command.length === 0) throw new Error("with.command must be a non-empty list");
   if (!exec) throw new Error("this factory process has no host exec");
   const view = { ...withEach({ state, input, answers }), node: process.execPath };
   const render = (template: unknown) => Mustache.render(String(template), view, {}, { escape: (value: unknown) => String(value) });
-  const [command, ...rest] = args.command.map(render);
+  const [programTemplate, ...argumentTemplates] = args.command;
+  const command = execProgram(programTemplate);
+  const rest = argumentTemplates.map((template, index) => checkedArgument(template, render(template), index + 1));
   const okCodes = Array.isArray(args.okCodes) ? args.okCodes.map(Number) : [0];
-  const result = await exec(command as string, rest, { cwd: typeof args.cwd === "string" ? render(args.cwd) : cwd });
+  const result = await exec(command, rest, { cwd: typeof args.cwd === "string" ? checkedCwd(render(args.cwd)) : cwd });
   const stdout = result.stdout.trim();
   if (!okCodes.includes(Number(result.code))) throw new Error(`command exited ${result.code}: ${result.stderr.trim().slice(-300)}`);
   const json = args.parse === "json" && stdout ? (JSON.parse(stdout) as unknown) : null;

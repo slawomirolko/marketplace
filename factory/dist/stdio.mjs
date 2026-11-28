@@ -1,4 +1,4 @@
-import { S as registerDataSource, _ as homeEnvNote, a as projectsAction, c as Factory, d as parseCli, h as require_ajv, i as projectScopedInput, l as errorMessage, m as require_dist, o as cliExecutor, r as viewerUrlFor, s as hostExec, u as parseBackend, w as __toESM, x as defaultDataDir, y as FACTORY_DIR } from "./viewer-routes.mjs";
+import { C as registerDataSource, S as defaultDataDir, T as __toESM, a as projectScopedInput, b as FACTORY_DIR, c as hostExec, d as parseBackend, f as parseCli, g as require_ajv, h as require_dist, i as viewerUrlFor, l as Factory, o as projectsAction, s as cliExecutor, u as errorMessage, v as homeEnvNote } from "./viewer-routes.mjs";
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";

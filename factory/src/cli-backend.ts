@@ -4,10 +4,14 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import type { AgentTool, CliExecutor, CliName, CliRequest, CliResult, ExecResult, TokenCounts } from "./types.ts";
 import { claudeAgentsFile, claudeTools, opencodeConfigDir } from "./marketplace-agents.ts";
+import { homeEnv } from "./home-env.ts";
+import { spawnPlan } from "./win-spawn.ts";
 
 const TIMEOUT_MS = 900000;
 const OPENCODE_IDS: Record<string, string> = { haiku: "anthropic/claude-haiku-5-5", sonnet: "anthropic/claude-sonnet-5-5", opus: "anthropic/claude-opus-5-5" };
 const CLAUDE_DISALLOWED = "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,Agent,Task,NotebookEdit";
+
+const MODEL_NAME = /^[\w./:-]+$/;
 
 const CLAUDE_ISOLATION = ["--setting-sources", "project", "--disable-slash-commands", "--strict-mcp-config"];
 
@@ -66,13 +70,28 @@ export interface SessionUsage {
 const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-cli-"));
 fs.writeFileSync(path.join(workDir, "opencode.json"), "{}\n");
 
+/** The environment of every child process: no harness variables, no factory token and none of the settings loaded from the factory home's .env. */
 function cleanEnv(): Record<string, string | undefined> {
+  const withheld = new Set(["FACTORY_TOKEN", ...homeEnv.loaded]);
   const env: Record<string, string | undefined> = {};
-  for (const [k, v] of Object.entries(process.env)) if (!/^(CLAUDE|ANTHROPIC)/.test(k)) env[k] = v;
+  for (const [name, value] of Object.entries(process.env)) {
+    if (!/^(CLAUDE|ANTHROPIC)/.test(name) && !withheld.has(name)) {
+      env[name] = value;
+    }
+  }
   return env;
 }
 
-/** On Windows the CLI runs under a shell, so killing the shell leaves the CLI running; taskkill /T ends the whole tree. */
+/** Why a request cannot start a CLI: a model name outside the model alphabet, or an extra directory that is not an existing absolute folder. */
+function invalidRequest(model: string, dirs: string[]): string | null {
+  if (!MODEL_NAME.test(model)) {
+    return `invalid model ${JSON.stringify(model)}`;
+  }
+  const badDir = dirs.find((dir) => !path.isAbsolute(dir) || !fs.existsSync(dir) || !fs.statSync(dir).isDirectory());
+  return badDir === undefined ? null : `extra directory ${JSON.stringify(badDir)} is not an absolute existing folder`;
+}
+
+/** On Windows an npm .cmd shim runs under cmd.exe, so killing cmd.exe leaves the CLI running; taskkill /T ends the whole tree. */
 function killTree(pid: number | undefined, fallback: () => void): void {
   if (process.platform !== "win32" || pid === undefined) return fallback();
   spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" }).on("error", fallback);
@@ -81,7 +100,9 @@ function killTree(pid: number | undefined, fallback: () => void): void {
 function spawnCli(command: string, args: string[], stdinText?: string, { cwd = workDir, env = {} }: { cwd?: string; env?: Record<string, string> } = {}): Promise<SpawnResult> {
   return new Promise((resolve) => {
     const started = Date.now();
-    const child = spawn(command, args, { cwd, env: { ...cleanEnv(), PWD: cwd, ...env }, shell: process.platform === "win32" });
+    const childEnv = { ...cleanEnv(), PWD: cwd, ...env };
+    const plan = spawnPlan(command, args, childEnv);
+    const child = spawn(plan.file, plan.args, { cwd, env: childEnv, shell: false, windowsVerbatimArguments: plan.windowsVerbatimArguments });
     let stdout = "";
     let stderr = "";
     let timedOut = false;
@@ -91,6 +112,10 @@ function spawnCli(command: string, args: string[], stdinText?: string, { cwd = w
     }, TIMEOUT_MS);
     child.stdout.on("data", (d) => (stdout += d));
     child.stderr.on("data", (d) => (stderr += d));
+    child.on("error", (error) => {
+      stderr += String(error);
+    });
+    child.stdin.on("error", () => {});
     child.on("close", (code) => {
       clearTimeout(timer);
       resolve({ code, stdout, stderr, durationMs: Date.now() - started, timedOut });
@@ -127,6 +152,10 @@ function claudeAgentArgs(agent: string, tools: AgentTool[], dirs: string[], defi
 async function runClaude(model: string, prompt: string, { agent: named, definition, cwd, tools = ["read"], dirs = [], env = {} }: AgentRunOptions = {}): Promise<CliResult> {
   const agent = definition?.name ?? named;
   if (agent && !/^[a-z0-9-]+$/.test(agent)) return { ok: false, error: `invalid agent name ${agent}` };
+  const invalid = invalidRequest(model, dirs);
+  if (invalid) {
+    return { ok: false, error: invalid };
+  }
   const args = agent
     ? ["-p", "--model", model, "--output-format", "json", ...CLAUDE_ISOLATION, ...claudeAgentArgs(agent, tools, dirs, definition)]
     : ["-p", "--model", model, "--output-format", "json", ...CLAUDE_ISOLATION, "--max-turns", "2", "--disallowedTools", CLAUDE_DISALLOWED];
@@ -155,12 +184,16 @@ async function runClaude(model: string, prompt: string, { agent: named, definiti
   return { ok: !out.is_error, error: out.is_error ? String(out.result).slice(0, 300) : undefined, text: out.result, turns: out.num_turns, harnessCostUsd: out.total_cost_usd ?? null, usageByModel, durationMs: res.durationMs };
 }
 
-async function runOpencode(model: string, prompt: string, { agent: named, definition, cwd, configDir, tools = ["read"], env = {} }: AgentRunOptions = {}): Promise<CliResult> {
+async function runOpencode(model: string, prompt: string, { agent: named, definition, cwd, configDir, tools = ["read"], dirs = [], env = {} }: AgentRunOptions = {}): Promise<CliResult> {
   const agent = definition?.name ?? named;
   const id = OPENCODE_IDS[model] ?? (model.startsWith("claude-") ? `anthropic/${model}` : model);
   if (agent && !/^[a-z0-9-]+$/.test(agent)) return { ok: false, error: `invalid agent name ${agent}` };
+  const invalid = invalidRequest(model, dirs);
+  if (invalid) {
+    return { ok: false, error: invalid };
+  }
   const args = ["run", "--standalone", "--archived", "--format", "json", "-m", id, ...(agent ? ["--agent", agent] : [])];
-  const agentDir = configDir ?? (agent ? opencodeConfigDir(definition ?? agent, tools) : undefined);
+  const agentDir = configDir ?? (agent ? opencodeConfigDir(definition ?? agent, tools, dirs) : undefined);
   const res = await spawnCli("opencode", args, prompt, { cwd: cwd ?? workDir, env: { ...env, ...(agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {}) } }).finally(() => {
     if (agentDir && !configDir) removeTempDir(agentDir);
   });

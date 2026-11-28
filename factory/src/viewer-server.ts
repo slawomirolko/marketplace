@@ -2,7 +2,7 @@ import { homeEnvNote } from "./home-env.ts";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
-import { allowedHostsFor, viewerHandler } from "./viewer-routes.ts";
+import { allowedHostsFor, failRequest, viewerHandler } from "./viewer-routes.ts";
 import { DEFAULT_VIEWER_PORT, VIEWER_HEALTH, defaultDataDir, viewerOptions } from "./paths.ts";
 import { Factory } from "./engine.ts";
 import { cliExecutor, hostExec } from "./cli-backend.ts";
@@ -28,12 +28,18 @@ const viewer = viewerHandler({ ...viewerOptions(dataDir), allowedHosts: allowedH
 
 http
   .createServer((req, res) => {
-    if (req.url === "/health") {
-      res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ name: VIEWER_HEALTH, dataDir: path.resolve(dataDir) }));
-      return;
+    try {
+      if (req.url === "/health") {
+        res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ name: VIEWER_HEALTH, dataDir: path.resolve(dataDir) }));
+        return;
+      }
+      if (viewer(req, res)) {
+        return;
+      }
+      res.writeHead(302, { location: "/viewer/" }).end();
+    } catch (error) {
+      failRequest(res, error);
     }
-    if (viewer(req, res)) return;
-    res.writeHead(302, { location: "/viewer/" }).end();
   })
   .listen(port, "127.0.0.1", () => {
     fs.mkdirSync(dataDir, { recursive: true });
