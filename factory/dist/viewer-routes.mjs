@@ -16726,6 +16726,10 @@ var ENDED = /* @__PURE__ */ new Set([
 	"cancelled",
 	"failed"
 ]);
+/** The folders an agent with its own permissions may leave its workspace for: set only when the step lists its own directories. */
+function limitDirs(listed, dirs) {
+	return listed.length > 0 ? { limitDirs: dirs } : {};
+}
 function workspace(run) {
 	return run.workspace ?? run.input?.project ?? run.input?.cwd ?? process.env.FACTORY_WORKSPACE ?? process.cwd();
 }
@@ -17217,14 +17221,17 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 	}
 	dirs(run, node, agent) {
 		const marketplace = agent.agentName ? readMarketplaceAgent(agent.agentName).dirs : [];
+		return [.../* @__PURE__ */ new Set([...this.listedDirs(run, node, agent), ...marketplace])];
+	}
+	/** The directories the step itself lists, without the folders of the skills its agent loads. */
+	listedDirs(run, node, agent) {
 		const view = this.view(run, node);
-		const listed = node.dirs?.({
+		return node.dirs?.({
 			goal: run.goal,
 			input: view.input,
 			state: view.state,
 			agent
 		}) ?? [];
-		return [.../* @__PURE__ */ new Set([...listed, ...marketplace])];
 	}
 	storeParsed(run, node, agentId, output) {
 		if (!node.parse) return;
@@ -17610,7 +17617,8 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 			cwd: workspace(run),
 			configDir: run.input?.agentConfigDir,
 			tools: node.tools ?? ["read"],
-			dirs: this.dirs(run, node, agent)
+			dirs: this.dirs(run, node, agent),
+			...limitDirs(this.listedDirs(run, node, agent), this.dirs(run, node, agent))
 		});
 		run.steps += 1;
 		if (!result.ok) {
@@ -17758,7 +17766,12 @@ function claudeAgentsFile(agent, tools = ["read"]) {
 	} }));
 	return file;
 }
-function opencodeConfigDir(agent, tools = ["read"], dirs = []) {
+/**
+* The OpenCode config folder of one agent run. A generated agent may leave its workspace only for `dirs`. A marketplace
+* agent keeps its own front matter; when the step lists its own directories, `limitDirs` (those and the folders of
+* the skills the agent loads) and the temp folder become its `external_directory` allow list, and every other folder is denied.
+*/
+function opencodeConfigDir(agent, tools = ["read"], dirs = [], limitDirs = []) {
 	const definition = agentDefinition(agent);
 	const dir = freshDir("factory-opencode-");
 	const target = path.join(dir, "agents", `${definition.name}.md`);
@@ -17778,8 +17791,21 @@ function opencodeConfigDir(agent, tools = ["read"], dirs = []) {
 			}
 		};
 		fs.writeFileSync(target, `---\n${JSON.stringify(front)}\n---\n\n${definition.prompt}\n`);
-	} else fs.writeFileSync(target, `---\n${definition.frontmatter}\n---\n\n${definition.prompt}\n`);
+	} else if (limitDirs.length > 0) fs.writeFileSync(target, `---\n${JSON.stringify(limitedFrontmatter(definition.frontmatter, limitDirs))}\n---\n\n${definition.prompt}\n`);
+	else fs.writeFileSync(target, `---\n${definition.frontmatter}\n---\n\n${definition.prompt}\n`);
 	return dir;
+}
+/** An agent's front matter with `external_directory` limited to `dirs` and the temp folder; its other fields stay as written. */
+function limitedFrontmatter(frontmatter, dirs) {
+	const front = (0, import_dist.parse)(frontmatter) ?? {};
+	const permission = typeof front.permission === "object" && front.permission !== null ? front.permission : {};
+	return {
+		...front,
+		permission: {
+			...permission,
+			external_directory: externalDirectoryPermission([.../* @__PURE__ */ new Set([...dirs, os.tmpdir()])])
+		}
+	};
 }
 function freshDir(prefix) {
 	return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -18079,7 +18105,7 @@ function opencodeModelId(model) {
 	const full = MODEL_ALIASES[model] ?? model;
 	return full.startsWith("claude-") ? `anthropic/${full}` : full;
 }
-async function runOpencode(model, prompt, { agent: named, definition, cwd, configDir, tools = ["read"], dirs = [], env = {}, signal } = {}) {
+async function runOpencode(model, prompt, { agent: named, definition, cwd, configDir, tools = ["read"], dirs = [], limitDirs, env = {}, signal } = {}) {
 	const agent = definition?.name ?? named;
 	const id = opencodeModelId(model);
 	const invalid = requestError(agent, model, dirs);
@@ -18097,7 +18123,7 @@ async function runOpencode(model, prompt, { agent: named, definition, cwd, confi
 		id,
 		...agent ? ["--agent", agent] : []
 	];
-	const agentDir = configDir ?? (agent ? opencodeConfigDir(definition ?? agent, tools, dirs) : void 0);
+	const agentDir = configDir ?? (agent ? opencodeConfigDir(definition ?? agent, tools, dirs, limitDirs) : void 0);
 	const res = await spawnCli("opencode", args, prompt, {
 		cwd: cwd ?? cliWorkDir(),
 		env: {

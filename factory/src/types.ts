@@ -149,6 +149,8 @@ export interface CliRequest {
   configDir?: string | undefined;
   tools?: AgentTool[] | undefined;
   dirs?: string[] | undefined;
+  /** Set when the step lists its own directories: an agent with its own permissions may then leave its workspace only for these (the step's directories and its skill folders) and the temp folder. */
+  limitDirs?: string[] | undefined;
   /** The agent's own instructions, used instead of looking `agent` up in the marketplace. */
   definition?: { name: string; description: string; prompt: string } | undefined;
   env?: Record<string, string> | undefined;

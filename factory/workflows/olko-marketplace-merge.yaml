@@ -8,12 +8,13 @@ roles:
 entry: prepare
 nodes:
   - id: prepare
-    description: "Runs the merge script's prepare command: per outdated artifact the upstream copy, per modified artifact whose marketplace source moved a git merge-file of base, local copy (adapter excluded) and upstream. Writes only into a fresh work folder named after the run under the factory home."
+    description: "Runs the merge script's prepare command: per outdated artifact the upstream copy, per modified artifact whose marketplace source moved a git merge-file of base, local copy (adapter excluded) and upstream. Writes only into a fresh work folder named after the run under the factory home, which becomes the workspace of the later steps, so the resolve agent works there and not in the project."
     kind: script
     op: builtin.exec
     with:
       command: ["{{node}}", "{{input.marketplace}}/scripts/olko-marketplace-merge.mjs", prepare, --project, "{{input.project}}", --marketplace, "{{input.marketplace}}", --out, "{{home}}/merges/{{runId}}", --json]
       parse: json
+    workspace: "{{state.prepare.json.out}}"
   - id: nothing
     description: "Ends the run normally when no artifact of the project is outdated or modified with a newer marketplace version, with a note. Nothing was written."
     kind: script

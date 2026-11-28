@@ -588,3 +588,16 @@ test("the CLI prints the summary", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout), summary({ out: f.out }));
 });
+
+test("summary unchecks a modified item whose local change is not classified for upstream", () => {
+  const f = fixture();
+  installV1Skill(f, SKILL_DIR, { workflow: "flow ONE\nflow two\nflow three\n" });
+  lockAtV1(f);
+  const item = itemOf(run(f), CONFLICT_ID);
+  assert.equal(item.baseGuessed, false);
+  const unclassified = summaryItem(f);
+  assert.equal(unclassified.checked, false);
+  assert.match(unclassified.detail, /Upstream: not classified yet/);
+  write(item.dir, "resolution.json", JSON.stringify({ hunks: [], upstream: { portable: ["workflow.md: clearer first step"], adapter: [] } }));
+  assert.equal(summaryItem(f).checked, true);
+});

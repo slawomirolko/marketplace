@@ -8,7 +8,7 @@ import type { DriveHandlers } from "./helpers/plan-driver.ts";
 import { tempDir } from "./helpers/temp.ts";
 import { testHomeDir } from "./helpers/isolated-home.ts";
 import { checkWorkflows } from "../src/validate-workflows.ts";
-import type { ExecResult } from "../src/types.ts";
+import type { CliRequest, CliResult, ExecResult } from "../src/types.ts";
 
 const WORKFLOWS = path.join(import.meta.dirname, "..", "workflows");
 const PROJECT = path.join(tempDir("merge-project-"), "sample-app");
@@ -32,7 +32,7 @@ function fakeExec(replies: Replies): { calls: ExecCall[]; exec: (command: string
   return { calls, exec };
 }
 
-function plan(items: { id: string; state: string; conflicts: number }[], out = "/work"): unknown {
+function plan(items: { id: string; state: string; conflicts: number }[], out = tempDir("merge-work-")): unknown {
   return {
     project: PROJECT,
     marketplace: MARKETPLACE,
@@ -87,7 +87,7 @@ test("merge run: no items ends done with a note", async () => {
 });
 
 test("merge run: answer none applies nothing", async () => {
-  const out = path.join(testHomeDir!, "merges", "probe");
+  const out = tempDir("merge-work-");
   const replies = { prepare: plan([{ id: "skill:sample-skill", state: "modified", conflicts: 0 }], out), summary: rows(["skill:sample-skill"]) };
   let questionItems: unknown;
   const result = await startRun("olko-marketplace-merge", MERGE_INPUT, replies, {
@@ -112,7 +112,7 @@ test("merge run: answer none applies nothing", async () => {
 });
 
 test("merge run: the resolve step works only in the work directory with the upstream agent", async () => {
-  const out = path.join(testHomeDir!, "merges", "probe-dirs");
+  const out = tempDir("merge-work-");
   const replies = { prepare: plan([{ id: "skill:sample-skill", state: "outdated", conflicts: 1 }], out), summary: rows(["skill:sample-skill"]) };
   const { Factory } = await import("../src/engine.ts");
   const fake = fakeExec(replies);
@@ -134,13 +134,14 @@ test("merge run: the resolve step works only in the work directory with the upst
 
 test("merge run: selected ids reach apply", async () => {
   const ids = ["agent:sample-agent", "skill:sample-skill"];
-  const replies = { prepare: plan(ids.map((id) => ({ id, state: "outdated", conflicts: 0 }))), summary: rows(ids), apply: { applied: ids, skipped: [], upstream: [] } };
+  const out = tempDir("merge-work-");
+  const replies = { prepare: plan(ids.map((id) => ({ id, state: "outdated", conflicts: 0 })), out), summary: rows(ids), apply: { applied: ids, skipped: [], upstream: [] } };
   const { done, calls, order, asked } = await startRun("olko-marketplace-merge", MERGE_INPUT, replies, { reply: () => undefined, answer: () => "skill:sample-skill,agent:sample-agent" });
   assert.equal(done.status, "done");
   assert.deepEqual(order, [], "nothing to resolve or classify: outdated items without conflicts skip the agent");
   assert.deepEqual(asked, ["q-merge"]);
   assert.equal(flag(callOf(calls, "apply"), "--selected"), "skill:sample-skill,agent:sample-agent");
-  assert.equal(flag(callOf(calls, "apply"), "--out"), "/work");
+  assert.equal(flag(callOf(calls, "apply"), "--out"), out);
 });
 
 const UPSTREAM_INPUT = { project: PROJECT, marketplace: MARKETPLACE, artifact: "skill:sample-skill", contentHash: "abc", base: "1.0.0", files: "workflow.md" };
@@ -164,4 +165,28 @@ test("the merge and upstream workflows pass workflow validation", () => {
   const result = checkWorkflows(WORKFLOWS);
   const ours = result.errors.filter((error) => /olko-marketplace-(merge|upstream)/.test(error));
   assert.deepEqual(ours, []);
+});
+
+test("merge run on a CLI backend: resolve runs in the work directory and may leave it only for the node's directories", async () => {
+  const { Factory } = await import("../src/engine.ts");
+  const out = tempDir("merge-work-");
+  const fake = fakeExec({ prepare: plan([{ id: "skill:sample-skill", state: "modified", conflicts: 1 }], out), summary: rows(["skill:sample-skill"]) });
+  const requests: CliRequest[] = [];
+  const opencode = async (request: CliRequest): Promise<CliResult> => {
+    if (request.agent === "olko-marketplace-upstream") {
+      requests.push(request);
+    }
+    return { ok: true, text: fencedJson({ resolved: 1, unsure: 0, classified: 1 }), turns: 1, usageByModel: [] };
+  };
+  const factory = new Factory(tempDir("merge-workflow-"), { backend: "cli", cli: "opencode", executors: { exec: fake.exec, opencode } });
+  const { run } = factory.start("merge", undefined, { workflow: "olko-marketplace-merge", input: MERGE_INPUT });
+  factory.confirm(run.runId, { backend: { kind: "cli", cli: "opencode" } });
+  const { done } = await driveRun(factory, run.runId, { reply: () => undefined, answer: () => "none" });
+  assert.equal(done.status, "done", JSON.stringify(done.events.at(-1)));
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0]?.agent, "olko-marketplace-upstream");
+  assert.equal(requests[0]?.cwd, out, "the agent works in the work directory, not in the project");
+  assert.equal(requests[0]?.limitDirs?.[0], out, "the step's own directories limit where the agent may go outside its workspace");
+  assert.deepEqual(requests[0]?.limitDirs, requests[0]?.dirs, "besides the work directory only the folders of the skills the agent loads");
+  assert.ok(!requests[0]?.limitDirs?.includes(PROJECT) && !requests[0]?.limitDirs?.includes(MARKETPLACE), "neither the project nor the marketplace checkout");
 });

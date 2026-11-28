@@ -21,7 +21,7 @@
  *
  * `summary` reads the plan and the `resolution.json` an agent wrote per item and prints the rows of the one
  * merge question: `{ ids, items: [{ id, label, detail, checked }] }`. A row is checked by default only when
- * its base is known and every resolved hunk is marked sure.
+ * its base is known, every resolved hunk is marked sure and, for a modified item, its upstream part is classified.
  *
  * Usage:
  *   node scripts/olko-marketplace-merge.mjs prepare --project <dir> --marketplace <dir> --out <dir> [--no-fetch] [--json]
@@ -559,7 +559,8 @@ function summaryRow(plan, out, item) {
     ...conflicts.flatMap((file) => conflictLines(plan, item, file, hunks)),
     ...upstreamLines(item, resolution),
   ];
-  const sure = hunks.every((hunk) => hunk.sure === true);
+  const classified = item.state !== "modified" || (resolution?.upstream !== null && typeof resolution?.upstream === "object");
+  const sure = classified && hunks.every((hunk) => hunk.sure === true);
   return {
     id: item.id,
     label: `${item.kind} ${item.name}${location} (${item.state}) ${versionText(item.versions)}`,
@@ -571,7 +572,7 @@ function summaryRow(plan, out, item) {
 /**
  * The rows of the one merge question for the plan in `out`: per item a label (kind, name, state, versions),
  * a detail (clean files, conflicts with the agent's reason per hunk and the resolution diff, the upstream part)
- * and whether it is checked by default (a known base and every hunk sure). Reads only.
+ * and whether it is checked by default (a known base, every hunk sure and a modified item classified). Reads only.
  */
 export function summary({ out }) {
   const plan = JSON.parse(fs.readFileSync(path.join(out, PLAN_FILE), "utf8"));

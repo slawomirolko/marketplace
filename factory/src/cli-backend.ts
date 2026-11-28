@@ -242,7 +242,7 @@ function opencodeModelId(model: string): string {
   return full.startsWith("claude-") ? `anthropic/${full}` : full;
 }
 
-async function runOpencode(model: string, prompt: string, { agent: named, definition, cwd, configDir, tools = ["read"], dirs = [], env = {}, signal }: AgentRunOptions = {}): Promise<CliResult> {
+async function runOpencode(model: string, prompt: string, { agent: named, definition, cwd, configDir, tools = ["read"], dirs = [], limitDirs, env = {}, signal }: AgentRunOptions = {}): Promise<CliResult> {
   const agent = definition?.name ?? named;
   const id = opencodeModelId(model);
   const invalid = requestError(agent, model, dirs);
@@ -250,7 +250,7 @@ async function runOpencode(model: string, prompt: string, { agent: named, defini
     return { ok: false, error: invalid };
   }
   const args = ["run", "--standalone", "--archived", "--format", "json", "-m", id, ...(agent ? ["--agent", agent] : [])];
-  const agentDir = configDir ?? (agent ? opencodeConfigDir(definition ?? agent, tools, dirs) : undefined);
+  const agentDir = configDir ?? (agent ? opencodeConfigDir(definition ?? agent, tools, dirs, limitDirs) : undefined);
   const res = await spawnCli("opencode", args, prompt, { cwd: cwd ?? cliWorkDir(), env: { ...env, ...(agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {}) }, signal }).finally(() => {
     if (agentDir && !configDir) {
       removeTempDir(agentDir);

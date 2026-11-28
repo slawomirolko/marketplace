@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { parse as parseYaml } from "yaml";
 import { agentDefinition } from "./marketplace-agents.ts";
 import type { AgentDefinition } from "./marketplace-agents.ts";
 import type { AgentTool } from "./types.ts";
@@ -22,7 +23,12 @@ export function claudeAgentsFile(agent: string | AgentDefinition, tools: AgentTo
   return file;
 }
 
-export function opencodeConfigDir(agent: string | AgentDefinition, tools: AgentTool[] = ["read"], dirs: string[] = []): string {
+/**
+ * The OpenCode config folder of one agent run. A generated agent may leave its workspace only for `dirs`. A marketplace
+ * agent keeps its own front matter; when the step lists its own directories, `limitDirs` (those and the folders of
+ * the skills the agent loads) and the temp folder become its `external_directory` allow list, and every other folder is denied.
+ */
+export function opencodeConfigDir(agent: string | AgentDefinition, tools: AgentTool[] = ["read"], dirs: string[] = [], limitDirs: string[] = []): string {
   const definition = agentDefinition(agent);
   const dir = freshDir("factory-opencode-");
   const target = path.join(dir, "agents", `${definition.name}.md`);
@@ -31,10 +37,19 @@ export function opencodeConfigDir(agent: string | AgentDefinition, tools: AgentT
     const allow = (tool: AgentTool) => (tools.includes(tool) ? "allow" : "deny");
     const front = { description: definition.description, mode: "subagent", permission: { edit: allow("edit"), bash: allow("bash"), task: "deny", webfetch: "deny", websearch: "deny", external_directory: externalDirectoryPermission(dirs) } };
     fs.writeFileSync(target, `---\n${JSON.stringify(front)}\n---\n\n${definition.prompt}\n`);
+  } else if (limitDirs.length > 0) {
+    fs.writeFileSync(target, `---\n${JSON.stringify(limitedFrontmatter(definition.frontmatter, limitDirs))}\n---\n\n${definition.prompt}\n`);
   } else {
     fs.writeFileSync(target, `---\n${definition.frontmatter}\n---\n\n${definition.prompt}\n`);
   }
   return dir;
+}
+
+/** An agent's front matter with `external_directory` limited to `dirs` and the temp folder; its other fields stay as written. */
+function limitedFrontmatter(frontmatter: string, dirs: string[]): Record<string, unknown> {
+  const front = (parseYaml(frontmatter) ?? {}) as Record<string, unknown>;
+  const permission = typeof front.permission === "object" && front.permission !== null ? (front.permission as Record<string, unknown>) : {};
+  return { ...front, permission: { ...permission, external_directory: externalDirectoryPermission([...new Set([...dirs, os.tmpdir()])]) } };
 }
 
 function freshDir(prefix: string): string {

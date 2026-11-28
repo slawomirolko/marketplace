@@ -48,6 +48,11 @@ const PARALLEL_AGENTS = 10;
 const BUDGET_PAUSE_QUESTION = "q-budget-pause";
 const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
 
+/** The folders an agent with its own permissions may leave its workspace for: set only when the step lists its own directories. */
+function limitDirs(listed: string[], dirs: string[]): { limitDirs?: string[] } {
+  return listed.length > 0 ? { limitDirs: dirs } : {};
+}
+
 function workspace(run: Run): string {
   return run.workspace ?? run.input?.project ?? run.input?.cwd ?? process.env.FACTORY_WORKSPACE ?? process.cwd();
 }
@@ -515,9 +520,13 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 
   dirs(run: Run, node: WorkflowNode, agent: CurrentAgent): string[] {
     const marketplace = agent.agentName ? readMarketplaceAgent(agent.agentName).dirs : [];
+    return [...new Set([...this.listedDirs(run, node, agent), ...marketplace])];
+  }
+
+  /** The directories the step itself lists, without the folders of the skills its agent loads. */
+  listedDirs(run: Run, node: WorkflowNode, agent: CurrentAgent): string[] {
     const view = this.view(run, node);
-    const listed = node.dirs?.({ goal: run.goal, input: view.input, state: view.state, agent }) ?? [];
-    return [...new Set([...listed, ...marketplace])];
+    return node.dirs?.({ goal: run.goal, input: view.input, state: view.state, agent }) ?? [];
   }
 
   storeParsed(run: Run, node: WorkflowNode, agentId: string, output: string): void {
@@ -819,7 +828,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
     const model = config.tiers[tier];
     this.event(run, "agent_started", { node: node.path, agentId: agent.id, tier });
     this.checkpoint(run);
-    const result = await executor({ model, prompt: this.prompt(run, node, agent), agent: agent.agentName, cwd: workspace(run), configDir: run.input?.agentConfigDir, tools: node.tools ?? ["read"], dirs: this.dirs(run, node, agent) });
+    const result = await executor({ model, prompt: this.prompt(run, node, agent), agent: agent.agentName, cwd: workspace(run), configDir: run.input?.agentConfigDir, tools: node.tools ?? ["read"], dirs: this.dirs(run, node, agent), ...limitDirs(this.listedDirs(run, node, agent), this.dirs(run, node, agent)) });
     run.steps += 1;
     if (!result.ok) {
       failures.push(`${agent.id}: ${result.error}`);

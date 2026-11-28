@@ -136,6 +136,22 @@ test("a generated OpenCode agent may only leave its workspace for the node's ext
   assert.deepEqual(permissionOf(opencodeConfigDir(definition, ["read"], [extra])).external_directory, { "*": "deny", [path.join(extra, "*")]: "allow" });
 });
 
+test("a marketplace agent with its own permissions may leave its workspace only for the node's own directories and the temp folder", async () => {
+  const { readMarketplaceAgent } = await import("../src/marketplace-agents.ts");
+  const agent = readMarketplaceAgent("olko-marketplace-upstream");
+  const frontOf = (dir: string) => {
+    const text = fs.readFileSync(path.join(dir, "agents", `${agent.name}.md`), "utf8");
+    fs.rmSync(dir, { recursive: true, force: true });
+    return text.split("\n---\n")[0]!.replace(/^---\n/, "");
+  };
+  const work = tempDir("factory-merge-work-");
+  const limited = JSON.parse(frontOf(opencodeConfigDir(agent, ["read", "edit", "bash"], [work, ...agent.dirs], [work]))) as { model?: string; permission: Record<string, unknown> };
+  assert.deepEqual(limited.permission.external_directory, { "*": "deny", [path.join(work, "*")]: "allow", [path.join(os.tmpdir(), "*")]: "allow" }, "the project, the marketplace checkout and every other folder are denied");
+  assert.equal(limited.permission.edit, "allow", "the agent's other permissions stay");
+  assert.ok(limited.model, "the agent's other front matter stays");
+  assert.equal(frontOf(opencodeConfigDir(agent, ["read"], agent.dirs)), agent.frontmatter, "a node without its own directories keeps the agent's front matter as written");
+});
+
 test("the shared CLI work folder comes back after the temp cleaner removed it", async () => {
   const first = await cliExecutor("claude")({ model: "sonnet", prompt: "hi" });
   assert.ok(first.ok, first.error ?? "the CLI failed");
