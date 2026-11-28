@@ -335,6 +335,24 @@ test("every entry module loads the factory home's .env before the modules that r
   assert.equal(probe.stdout.trim().split("\n").at(-1), "7", probe.stderr);
 });
 
+test("the start-up note names the loaded settings and never their values", async () => {
+  const { homeEnv, homeEnvNote } = await import("../src/home-env.ts");
+  const loaded = homeEnv.loaded;
+  try {
+    homeEnv.loaded = [];
+    assert.equal(homeEnvNote(), null, "nothing loaded, nothing to say");
+    homeEnv.loaded = ["FACTORY_STATUS_CLI", "FACTORY_TOKEN"];
+    process.env.FACTORY_TOKEN_PROBE = "secret-value";
+    const note = homeEnvNote() ?? "";
+    assert.match(note, /FACTORY_STATUS_CLI, FACTORY_TOKEN$/);
+    assert.ok(note.includes(homeEnv.file));
+    assert.ok(!note.includes("secret-value"));
+  } finally {
+    homeEnv.loaded = loaded;
+    delete process.env.FACTORY_TOKEN_PROBE;
+  }
+});
+
 test("FACTORY_STATUS_CLI from the factory home's .env picks the status backend on this device", () => {
   const settings = projectsOf({ projects: { statusBackend: { kind: "cli", cli: "opencode" } } });
   assert.deepEqual(withStatusCli(settings, undefined).statusBackend, { kind: "cli", cli: "opencode" }, "the config is the default");

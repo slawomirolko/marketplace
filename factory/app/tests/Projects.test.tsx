@@ -151,6 +151,32 @@ describe("Projects", () => {
     expect(screen.getByRole("button", { name: "Check status" })).toBeEnabled();
   });
 
+  test("leaving the page while a finished check reads its status reloads nothing afterwards", async () => {
+    serve([], { "sample-busy": null }, { ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: "r-0000000t", status: null }] });
+    let release = () => {};
+    let statusAsked = false;
+    let listCalls = 0;
+    server.use(
+      http.get("/api/runs/:runId", () => HttpResponse.json({ run: { status: "done" } })),
+      http.get("/api/projects/:id/status", async () => {
+        statusAsked = true;
+        await new Promise<void>((resolve) => (release = resolve));
+        return HttpResponse.json({ error: "none" }, { status: 404 });
+      }),
+      http.get("/api/projects", () => {
+        listCalls += 1;
+        return HttpResponse.json({ ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: "r-0000000t", status: null }] });
+      }),
+    );
+    const { unmount } = render(<Projects onShowRuns={() => {}} pollMs={10} />);
+    await waitFor(() => expect(statusAsked).toBe(true));
+    const callsBefore = listCalls;
+    unmount();
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(listCalls).toBe(callsBefore);
+  });
+
   test("an already running status check is reused, and a start error is shown", async () => {
     const projects = { ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: null, status: null }, { id: "sample-bad", path: "/x", exists: true, runs: 0, analyzing: null, status: null }] };
     serve([], { "sample-busy": null, "sample-bad": null }, projects);
@@ -280,16 +306,13 @@ describe("Projects", () => {
     expect(screen.getByText("New here, not on the remote: commit and push it in a PR.")).toBeInTheDocument();
   });
 
-  test("a failed fetch is shown next to the remote ref", async () => {
-    serve([], { "sample-app": withData({ ref: "origin/main", fetched: false, fetchError: "could not resolve host" }) });
+  test.each([
+    { fetchError: "could not resolve host", shown: /compared with origin\/main 9f8e7d6 \(fetch failed: could not resolve host\)/ },
+    { fetchError: null, shown: /compared with origin\/main 9f8e7d6 \(last fetch\)/ },
+  ])("an unfetched remote ref says why: fetch error $fetchError", async ({ fetchError, shown }) => {
+    serve([], { "sample-app": withData({ ref: "origin/main", fetched: false, fetchError }) });
     render(<Projects onShowRuns={() => {}} />);
-    expect(await screen.findByText(/compared with origin\/main 9f8e7d6 \(fetch failed: could not resolve host\)/)).toBeInTheDocument();
-  });
-
-  test("an unfetched remote ref says the comparison uses the last fetch", async () => {
-    serve([], { "sample-app": withData({ ref: "origin/main", fetched: false, fetchError: null }) });
-    render(<Projects onShowRuns={() => {}} />);
-    expect(await screen.findByText(/compared with origin\/main 9f8e7d6 \(last fetch\)/)).toBeInTheDocument();
+    expect(await screen.findByText(shown)).toBeInTheDocument();
   });
 
   test("a project in sync gets a green verdict", async () => {
