@@ -193,9 +193,9 @@
     }
   },
   "olko-marketplace-merge": {
-    "commit": "d04ff8caf53435c03c5e88c3836f0686116b5b5f",
+    "commit": "ac88b19d6e45f45ccf5ebcfa219bb2baf8f9b340",
     "files": {
-      "agents/opencode/olko-marketplace-upstream.md": "1a6f09aea56089bb",
+      "agents/opencode/olko-marketplace-upstream.md": "9ac31a52d8f318dd",
       "skills/marketplace/olko-marketplace-upstream/SKILL.md": "f2700dce0b840589"
     }
   },
@@ -206,9 +206,9 @@
     }
   },
   "olko-marketplace-upstream": {
-    "commit": "d04ff8caf53435c03c5e88c3836f0686116b5b5f",
+    "commit": "ac88b19d6e45f45ccf5ebcfa219bb2baf8f9b340",
     "files": {
-      "agents/opencode/olko-marketplace-upstream.md": "1a6f09aea56089bb"
+      "agents/opencode/olko-marketplace-upstream.md": "9ac31a52d8f318dd"
     }
   },
   "olko-obsidian-knowledge": {
