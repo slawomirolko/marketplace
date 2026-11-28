@@ -75,13 +75,17 @@ HARD RULE — NO UNBOUNDED LOOPS (owner directive):
 - ❌ NEVER write `while (true)` or any loop whose termination is not provable from its own update clause. A cursor loop that "usually advances" is a defect.
 - ✅ Use `for (var page = 0; page < MaxPageCount; page++)` with a named constant, or `while (condition)` whose condition changes in the body; log when the safety bound is hit.
 
-HARD RULE — MAPPING VIA EXTENSION METHODS (owner directive):
-- ✅ Convert an accumulator/domain/read-model object into another type with an EXTENSION METHOD on a dedicated `<Thing>Extensions` type (e.g. `aggregate.ToWeatherMemoryFeedback(evaluatedAtUtc)`). NEVER keep a private static/instance `Build…`/`Create…` mapper inside a service that only forwards arguments to a factory.
-- ✅ The extension returns the production factory's result (`ErrorOr<T>`); the service only logs the errors and filters.
+HARD RULE — MAPPING VIA C# 14 EXTENSION BLOCKS (owner directive):
+- ✅ Convert an accumulator/domain/read-model object into another type with an EXTENSION BLOCK on a dedicated `<Thing>Extensions` static class:
+  `extension(FeedbackAggregate aggregate) { public ErrorOr<WeatherMemoryFeedback> ToWeatherMemoryFeedback(DateTime evaluatedAtUtc) => WeatherMemoryFeedback.Create(...); }`.
+- ❌ NEVER use the classic `this` extension-method parameter form (`public static X ToY(this Source source, ...)`). The owner prohibits it: extension blocks are more performant, and the evaluator rule `classic-extension-method` fails the build.
+- ❌ NEVER keep a private static/instance `Build…`/`Create…` mapper inside a service that only forwards arguments to a factory.
+- ✅ The extension block returns the production factory's result (`ErrorOr<T>`); the service only logs the errors and filters.
 
-HARD RULE — RUN THE SOURCE-RULE EVALUATOR BEFORE REPORTING (owner directive):
-- ✅ Run the project's source-rule checker on EVERY changed or new `.cs` file before reporting, when the project ships one (`node scripts/evals/dotnet-implementation-rules/check.ts <file>`, adding `--test` under a test project). A non-zero exit is a failed gate: fix the source, never re-run with an exemption.
-- ✅ Report the checker's `PASS <file>` lines in the handoff; a report without them is incomplete.
+HARD RULE — RUN THE MARKETPLACE SOURCE-RULE EVALUATOR BEFORE REPORTING (owner directive):
+- ✅ Apply this rule set by inspection to EVERY changed or new `.cs` file before reporting. This project ships NO local copy of the checker; the rules live in the marketplace agent and skill inputs.
+- ✅ When the marketplace checkout that provides `scripts/dotnet-implementation-rules.mjs` is reachable, run `node scripts/dotnet-implementation-rules.mjs <file> [--test]` over every changed file and report its `PASS <file>` lines. A non-zero exit is a failed gate: fix the source, never re-run with an exemption.
+- ❌ NEVER add a project-local copy of the checker or claim it ran when it was not reachable; report "rules applied manually" instead.
 
 HARD RULE — TESTS USE PRODUCTION TYPES AND SHARED BUILDERS:
 - ✅ Assert on the real response DTO / contract record the host emits, including internal production types reachable through `InternalsVisibleTo`. NEVER re-declare a local record, class, or constant that mirrors a production wire type or contract value.

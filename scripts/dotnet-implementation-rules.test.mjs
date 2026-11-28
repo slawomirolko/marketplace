@@ -146,13 +146,79 @@ test("accepts a bounded for loop with a named cap", () => {
   assert.deepEqual(validateDotnetSource(source, { file: "Service.cs" }), []);
 });
 
+test("flags a classic this-extension method", () => {
+  const source = [
+    "internal static class FeedbackAggregateExtensions",
+    "{",
+    "    public static ErrorOr<WeatherMemoryFeedback> ToWeatherMemoryFeedback(this FeedbackAggregate aggregate, DateTime evaluatedAtUtc) =>",
+    "        WeatherMemoryFeedback.Create(aggregate.Commodity);",
+    "}",
+  ].join("\n");
+  const violations = validateDotnetSource(source, {
+    file: "FeedbackAggregateExtensions.cs",
+  });
+  assert.deepEqual(
+    violations.map((v) => v.rule),
+    ["classic-extension-method"],
+  );
+  assert.equal(violations[0].line, 3);
+});
+
+test("flags a classic this-extension method split across lines", () => {
+  const source = [
+    "internal static class FeedbackAggregateExtensions",
+    "{",
+    "    public static ErrorOr<WeatherMemoryFeedback> ToWeatherMemoryFeedback(",
+    "        this FeedbackAggregate aggregate,",
+    "        DateTime evaluatedAtUtc)",
+    "    {",
+    "        return WeatherMemoryFeedback.Create(aggregate.Commodity);",
+    "    }",
+    "}",
+  ].join("\n");
+  const violations = validateDotnetSource(source, {
+    file: "FeedbackAggregateExtensions.cs",
+  });
+  assert.deepEqual(
+    violations.map((v) => v.rule),
+    ["classic-extension-method"],
+  );
+});
+
+test("accepts a C# 14 extension block", () => {
+  const source = [
+    "internal static class FeedbackAggregateExtensions",
+    "{",
+    "    extension(FeedbackAggregate aggregate)",
+    "    {",
+    "        public ErrorOr<WeatherMemoryFeedback> ToWeatherMemoryFeedback(DateTime evaluatedAtUtc) =>",
+    "            WeatherMemoryFeedback.Create(aggregate.Commodity);",
+    "    }",
+    "}",
+  ].join("\n");
+  assert.deepEqual(
+    validateDotnetSource(source, { file: "FeedbackAggregateExtensions.cs" }),
+    [],
+  );
+});
+
+test("accepts a plain static helper that is not an extension", () => {
+  const source = [
+    "internal static class MathHelpers",
+    "{",
+    "    public static int Add(int left, int right) => left + right;",
+    "}",
+  ].join("\n");
+  assert.deepEqual(validateDotnetSource(source, { file: "MathHelpers.cs" }), []);
+});
+
 test("implementer carries all structural hard rules exactly once", () => {
   for (const heading of [
     "HARD RULE — ONE TYPE PER FILE, NO NESTED TYPES",
     "HARD RULE — ZERO COMMENTS, INCLUDING XML DOCS",
     "HARD RULE — NO UNBOUNDED LOOPS",
-    "HARD RULE — MAPPING VIA EXTENSION METHODS",
-    "HARD RULE — RUN THE SOURCE-RULE EVALUATOR BEFORE REPORTING",
+    "HARD RULE — MAPPING VIA C# 14 EXTENSION BLOCKS",
+    "HARD RULE — RUN THE MARKETPLACE SOURCE-RULE EVALUATOR BEFORE REPORTING",
     "HARD RULE — TESTS USE PRODUCTION TYPES AND SHARED BUILDERS",
   ]) {
     assertContainsExactlyOnce(implementer, heading, "olko-dotnet-implementer.md");
@@ -160,6 +226,9 @@ test("implementer carries all structural hard rules exactly once", () => {
   assert.match(implementer, /not a nested `private sealed` helper/);
   assert.match(implementer, /`WeatherMemoryFeedbackTestBuilder\.Create\(/);
   assert.match(implementer, /NEVER declare a `private static` factory\/helper/);
+  assert.match(implementer, /C# 14 EXTENSION BLOCK/);
+  assert.match(implementer, /NEVER use the classic `this` extension-method parameter form/);
+  assert.doesNotMatch(implementer, /scripts\/evals\/dotnet-implementation-rules/);
 });
 
 test("implementer no longer permits comments or tiny nested helpers", () => {
@@ -176,9 +245,10 @@ test("auditor reports nested types, unbounded loops, private mappers and builder
   );
   assert.match(auditor, /Flag ANY second type declaration in one file/);
   assert.match(auditor, /Flag `while \(true\)`/);
-  assert.match(auditor, /extension method on a `<Thing>Extensions` type/);
+  assert.match(auditor, /C# 14 extension block on a `<Thing>Extensions` static class/);
   assert.match(auditor, /`private static` helper in a test class/);
   assert.match(auditor, /Flag any added XML-doc\/parameter-doc block/);
+  assert.match(auditor, /Flag the classic `this` extension-method parameter form/);
 });
 
 test("test runner reports builder, naming and comment violations read-only", () => {
@@ -200,6 +270,7 @@ test("planning orchestrator forbids plans that prescribe structural defects", ()
   );
   assert.match(planOrchestrator, /a second type in one file/);
   assert.match(planOrchestrator, /`while \(true\)` or any loop without a provable/);
+  assert.match(planOrchestrator, /instead of a C# 14 extension block/);
   assert.match(planOrchestrator, /instead of a `<Type>TestBuilder`/);
   assert.match(planOrchestrator, /never plan to preserve it/);
 });
@@ -210,7 +281,7 @@ test("implementation orchestrator runs the evaluator before every commit", () =>
     "HARD RULE — SOURCE-RULE EVALUATOR BEFORE COMMIT",
     "olko-implementation-orchestrator.md",
   );
-  assert.match(implementationOrchestrator, /check\.ts <file> \[--test\]/);
+  assert.match(implementationOrchestrator, /dotnet-implementation-rules\.mjs <file> \[--test\]/);
   assert.match(implementationOrchestrator, /check_file_size\.py --all/);
   assert.match(implementationOrchestrator, /PASS <file>/);
   assert.match(implementationOrchestrator, /green CI is never evidence instead/);
@@ -223,6 +294,8 @@ test("style skill carries the one-type, bounded-loop, zero-comment and mapper ru
   assert.match(styleWorkflow, /a changed C# file carries ZERO comments/);
   assert.match(styleWorkflow, /A private `Build\*`\/`Create\*`\/`Map\*` method/);
   assert.doesNotMatch(styleWorkflow, /unless a tiny helper type is tightly bound/);
+  assert.match(styleWorkflow, /C# 14 extension block/);
+  assert.match(styleWorkflow, /extension blocks are required/);
 });
 
 test("testing skill requires shared builders and bans private static factories", () => {

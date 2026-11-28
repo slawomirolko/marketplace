@@ -160,7 +160,8 @@ Owner directives; they apply to every project that uses this skill.
 
 ### Mappers, endpoints, instrumentation
 - Put transport-to-domain and domain-to-read-model conversion in extension methods on a dedicated `<Thing>MappingExtensions` or `<Thing>ReadModelExtensions` type. Never inline a mapping lambda, projection, or DTO construction block in an endpoint, handler, or service body.
-- A private `Build*`/`Create*`/`Map*` method that only forwards arguments to a production factory is a mapper defect: convert it into an extension method on a `<Thing>Extensions` type that returns the factory's `ErrorOr<T>` result.
+- A private `Build*`/`Create*`/`Map*` method that only forwards arguments to a production factory is a mapper defect: convert it into a C# 14 extension block on a `<Thing>Extensions` static class (`extension(FeedbackAggregate aggregate) { public ErrorOr<WeatherMemoryFeedback> ToWeatherMemoryFeedback(DateTime evaluatedAtUtc) => ... }`) that returns the factory's `ErrorOr<T>` result.
+- Never use the classic `this` extension-method parameter form; extension blocks are required.
 - Keep a host endpoint file to routing, authorization, parameter parsing, and delegation. A non-trivial read composition goes to an `I<Thing>ReadService` registered in host DI. Never place repository or unit-of-work access, mapping, formatting, ordering, or state-name selection in an endpoint.
 - Extract a group of `activity?.SetTag(...)` calls into a private `Setup<Operation>Instrumentation` method and call it once per operation.
 - Give a recurring invalid-input rule that must surface as a specific transport failure code its own exception type (for gRPC, an `RpcException` subtype) instead of repeating a generic error conversion at several call sites.

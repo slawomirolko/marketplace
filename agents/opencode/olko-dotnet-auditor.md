@@ -30,7 +30,7 @@ STRUCTURAL AND TEST-STYLE FINDINGS — ALWAYS REPORT (owner directive):
 - ✅ Flag every `partial` type outside the sanctioned exemptions (top-level-statement `Program.cs`, source-generated `JsonSerializerContext`, EF-generated migrations/designers, a project-documented pre-existing set awaiting refactor). It must be split into separate types.
 - ✅ Flag a class implementing more than one unit-of-work interface; one unit of work per responsibility, with `SaveChangesAsync` in a single non-partial base.
 - ✅ Flag a repository that reads-then-inserts, keeps a `ResolveRace*` helper, catches a unique-violation exception outside `UnitOfWorkBase` to report success, manipulates EF entity state (`Entry(...).State`, `ChangeTracker`), reaches a table through a table-name string, or writes raw `INSERT … ON CONFLICT`. It must stage through the mapped `DbSet<TEntity>` and let the unit of work save; the unique index is the guard and `SaveChangesAsync` translates the violation once.
-- ✅ Flag mapping, DTO, or read-model construction inline in an endpoint, handler, or service; it must be an extension method on a `<Thing>MappingExtensions` / `<Thing>ReadModelExtensions` type.
+- ✅ Flag mapping, DTO, or read-model construction inline in an endpoint, handler, or service; it must be a C# 14 extension block on a `<Thing>MappingExtensions` / `<Thing>ReadModelExtensions` static class.
 - ✅ Flag repository or unit-of-work access, mapping, formatting, ordering, or state-name selection inside an endpoint file; an endpoint declares routes, authorization, parsing, and delegation only.
 - ✅ Flag an `activity?.SetTag(...)` block left inline in an operation body; it belongs in a private `Setup<Operation>Instrumentation` method.
 - ✅ Flag a closed domain value set modelled as loose `string` constants, a plain enum stored by name, or an open string column; it must be a smart enum persisted via `HasConversion(x => x.Name, name => T.FromName(name))` with a matching `HasMaxLength`.
@@ -50,7 +50,8 @@ COMMENTS ARE RARE — FLAG NEW/UNNECESSARY ONES:
 STRUCTURE FINDINGS — ALWAYS REPORT (owner directive):
 - ✅ Flag ANY second type declaration in one file — top-level or nested (`private sealed` helper, nested record, interface member record). One file = one type. Extract it into its own file.
 - ✅ Flag `while (true)` or any loop whose termination is not provable from its own update clause; require a bounded `for` with a named page cap.
-- ✅ Flag a `private static`/`private` `Build*`/`Create*` method that only forwards arguments to a production factory; it must be an extension method on a `<Thing>Extensions` type.
+- ✅ Flag a `private static`/`private` `Build*`/`Create*` method that only forwards arguments to a production factory; it must be a C# 14 extension block on a `<Thing>Extensions` static class.
+- ✅ Flag the classic `this` extension-method parameter form; extension blocks are mandatory (more performant, owner directive).
 - ✅ Flag a `private static` helper in a test class that constructs an entity or DTO (`BuildFeedback`, `BuildEvent`, `Snapshot`, `Computed`); require the shared `<Type>TestBuilder` and deletion of the helper.
 - ✅ Flag any added XML-doc/parameter-doc block; the project disables the missing-parameter-doc warning, so docs are never the fix.
 Load the `olko-dotnet-architecture`, `olko-dotnet-style`, and

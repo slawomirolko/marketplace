@@ -1,6 +1,8 @@
 const AAA_MARKER = /^\s*\/\/\s*(Arrange|Act|Assert)\s*$/;
 const COMMENT = /^\s*\/\//;
 const WHILE_TRUE = /\bwhile\s*\(\s*true\s*\)/;
+const CLASSIC_EXTENSION =
+  /\bstatic\b[^;{}]*\bthis\s+[A-Za-z_][\w<>.?\[\],\n ]*\s+[A-Za-z_]\w*\s*[,)]/;
 const TYPE_DECL =
   /^\s*(?:(?:public|internal|private|protected|file|sealed|static|abstract|partial|readonly|unsafe|new)\s+)*(?:class|record|interface|struct|enum)\s+\w/;
 
@@ -31,6 +33,15 @@ export function validateDotnetSource(source, context) {
       });
     }
 
+    if (CLASSIC_EXTENSION.test(line)) {
+      violations.push({
+        rule: "classic-extension-method",
+        line: lineNumber,
+        detail:
+          "classic `this` extension method; use a C# 14 extension block: extension(Type value) { ... }",
+      });
+    }
+
     if (!TYPE_DECL.test(line)) {
       continue;
     }
@@ -54,6 +65,23 @@ export function validateDotnetSource(source, context) {
       rule: "multiple-types",
       line: lineNumber,
       detail: `second top-level type in ${context.file} (first at line ${firstTypeLine})`,
+    });
+  }
+
+  const reportedLines = new Set(
+    violations.filter((v) => v.rule === "classic-extension-method").map((v) => v.line),
+  );
+  const multiline = new RegExp(CLASSIC_EXTENSION.source, "g");
+  for (const match of source.matchAll(multiline)) {
+    const line = source.slice(0, match.index).split(/\r?\n/).length;
+    if (reportedLines.has(line)) {
+      continue;
+    }
+    violations.push({
+      rule: "classic-extension-method",
+      line: line,
+      detail:
+        "classic `this` extension method; use a C# 14 extension block: extension(Type value) { ... }",
     });
   }
 
