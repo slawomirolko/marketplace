@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -8,11 +7,8 @@ import type { Factory } from "./engine.ts";
 import { viewerUrlFor } from "./viewer-routes.ts";
 import { HARNESSES, installGuide } from "./install-guide.ts";
 import { projectScopedInput, projectsAction } from "./projects.ts";
-
-function longPath(p: string): string {
-  const resolved = path.resolve(p);
-  return fs.existsSync(resolved) ? fs.realpathSync.native(resolved) : resolved;
-}
+import { longPath } from "./paths.ts";
+import { definedFields } from "./fields.ts";
 
 export interface ToolMetrics {
   statusCalls: number;
@@ -27,7 +23,10 @@ export interface FactoryTools {
   metrics(): ToolMetrics;
 }
 
-const MIN_STATUS_INTERVAL_MS = Number(process.env.FACTORY_MIN_STATUS_INTERVAL_MS ?? 500);
+const DEFAULT_MIN_STATUS_INTERVAL_MS = 500;
+const MIN_STATUS_INTERVAL_MS = Number(process.env.FACTORY_MIN_STATUS_INTERVAL_MS ?? DEFAULT_MIN_STATUS_INTERVAL_MS);
+/** The longest free text a run input field (criteria, idea) takes. */
+const MAX_TEXT_INPUT_CHARS = 20_000;
 const DEFAULT_WAIT_SEC = 20;
 const MAX_WAIT_SEC = 50;
 
@@ -95,14 +94,23 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
         inputSchema: {
           goal: z.string().min(1),
           workflow: z.string().regex(/^[a-z][a-z0-9-]*$/).optional(),
-          input: z.object({ repo: z.string().regex(/^[\w.-]+\/[\w.-]+$/).optional(), pr: z.number().int().positive().optional(), fresh: z.boolean().optional(), plan: z.string().regex(/^[\w./-]+$/).optional(), criteria: z.string().max(20000).optional(), project: z.string().min(1).optional(), marketplace: z.string().min(1).optional(), artifacts: z.array(z.string().regex(/^[a-z0-9-]+$/)).min(1).optional(), target: z.string().min(1).optional(), targetName: z.string().regex(/^[a-z0-9-]+$/).optional(), olko: z.string().min(1).optional(), user: z.string().min(1).optional(), stateDir: z.string().min(1).optional(), switches: z.record(z.string().regex(/^[a-z][a-z0-9-]*$/), z.boolean()).optional(), idea: z.string().max(20000).optional(), route: z.enum(["discovery", "planning", "both"]).optional(), featureId: z.string().regex(/^[a-z0-9-]+$/).optional(), base: z.string().regex(/^[\w./-]+$/).optional(), taskId: z.string().regex(/^[\w.-]+$/).optional(), adopt: z.boolean().optional(), workflowsDir: z.string().min(1).optional() }).strict().optional(),
+          input: z.object({ repo: z.string().regex(/^[\w.-]+\/[\w.-]+$/).optional(), pr: z.number().int().positive().optional(), fresh: z.boolean().optional(), plan: z.string().regex(/^[\w./-]+$/).optional(), criteria: z.string().max(MAX_TEXT_INPUT_CHARS).optional(), project: z.string().min(1).optional(), marketplace: z.string().min(1).optional(), artifacts: z.array(z.string().regex(/^[a-z0-9-]+$/)).min(1).optional(), target: z.string().min(1).optional(), targetName: z.string().regex(/^[a-z0-9-]+$/).optional(), olko: z.string().min(1).optional(), user: z.string().min(1).optional(), stateDir: z.string().min(1).optional(), switches: z.record(z.string().regex(/^[a-z][a-z0-9-]*$/), z.boolean()).optional(), idea: z.string().max(MAX_TEXT_INPUT_CHARS).optional(), route: z.enum(["discovery", "planning", "both"]).optional(), featureId: z.string().regex(/^[a-z0-9-]+$/).optional(), base: z.string().regex(/^[\w./-]+$/).optional(), taskId: z.string().regex(/^[\w.-]+$/).optional(), adopt: z.boolean().optional(), workflowsDir: z.string().min(1).optional() }).strict().optional(),
           projectId: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).optional(),
           idempotencyKey: z.string().optional(),
         },
       },
       guarded("factory_start", ({ goal, workflow, input, projectId, idempotencyKey }) => {
-        const runInput = { ...(input?.repo ? { repo: input.repo } : {}), ...(input?.pr ? { pr: input.pr } : {}), ...(input?.fresh ? { fresh: true } : {}), ...(input?.plan ? { plan: input.plan } : {}), ...(input?.criteria ? { criteria: input.criteria } : {}), ...(input?.project ? { project: longPath(input.project) } : {}), ...(input?.marketplace ? { marketplace: longPath(input.marketplace) } : {}), ...(input?.artifacts ? { artifacts: input.artifacts } : {}), ...(input?.target ? { target: longPath(input.target) } : {}), ...(input?.targetName ? { targetName: input.targetName } : {}), ...(input?.olko ? { olko: longPath(input.olko) } : {}), ...(input?.user ? { user: longPath(input.user) } : {}), ...(input?.stateDir ? { stateDir: path.resolve(input.stateDir) } : {}), ...(input?.switches ? { switches: input.switches } : {}), ...(input?.idea ? { idea: input.idea } : {}), ...(input?.route ? { route: input.route } : {}), ...(input?.featureId ? { featureId: input.featureId } : {}), ...(input?.base ? { base: input.base } : {}), ...(input?.taskId ? { taskId: input.taskId } : {}), ...(input?.adopt ? { adopt: true } : {}), ...(input?.workflowsDir ? { workflowsDir: longPath(input.workflowsDir) } : {}) };
-        const { run, reused } = factory.start(goal, idempotencyKey, { ...(workflow ? { workflow } : {}), input: projectScopedInput(projectId, runInput) });
+        const runInput = definedFields({
+          ...input,
+          project: input?.project && longPath(input.project),
+          marketplace: input?.marketplace && longPath(input.marketplace),
+          target: input?.target && longPath(input.target),
+          olko: input?.olko && longPath(input.olko),
+          user: input?.user && longPath(input.user),
+          stateDir: input?.stateDir && path.resolve(input.stateDir),
+          workflowsDir: input?.workflowsDir && longPath(input.workflowsDir),
+        });
+        const { run, reused } = factory.start(goal, idempotencyKey, { ...definedFields({ workflow }), input: projectScopedInput(projectId, runInput) });
         return { ...factory.status(run), reused, next: "Show the proposal to the user. After the user replies, call factory_confirm." };
       }),
     );
@@ -240,7 +248,7 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
           marketplace: z.string().min(1).optional(),
         },
       },
-      guarded("factory_projects", ({ action, path: dir, id, marketplace }) => projectsAction({ action, ...(dir ? { path: dir } : {}), ...(id ? { id } : {}), ...(marketplace ? { marketplace } : {}) })),
+      guarded("factory_projects", ({ action, path: dir, id, marketplace }) => projectsAction({ action, ...definedFields({ path: dir, id, marketplace }) })),
     );
 
     server.registerTool(

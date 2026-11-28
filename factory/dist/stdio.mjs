@@ -1,6 +1,5 @@
-import { D as __toESM, S as FACTORY_DIR, T as registerDataSource, _ as require_dist, b as homeEnvNote, c as cliExecutor, d as errorMessage, f as loadedWorkflows, i as viewerUrlFor, l as hostExec, m as parseCli, o as projectScopedInput, p as parseBackend, s as projectsAction, u as Factory, v as require_ajv, w as defaultDataDir } from "./viewer-routes.mjs";
+import { A as __toESM, C as FACTORY_DIR, D as registerDataSource, E as longPath, T as defaultDataDir, c as definedFields, d as Factory, f as errorMessage, h as parseCli, i as viewerUrlFor, l as cliExecutor, m as parseBackend, o as projectScopedInput, p as loadedWorkflows, s as projectsAction, u as hostExec, v as require_dist, x as homeEnvNote, y as require_ajv } from "./viewer-routes.mjs";
 import path from "node:path";
-import fs from "node:fs";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
@@ -15032,11 +15031,9 @@ function installGuide(requested, clientName) {
 	};
 }
 // src/tools.ts
-function longPath(p) {
-	const resolved = path.resolve(p);
-	return fs.existsSync(resolved) ? fs.realpathSync.native(resolved) : resolved;
-}
 var MIN_STATUS_INTERVAL_MS = Number(process.env.FACTORY_MIN_STATUS_INTERVAL_MS ?? 500);
+/** The longest free text a run input field (criteria, idea) takes. */
+var MAX_TEXT_INPUT_CHARS = 2e4;
 var DEFAULT_WAIT_SEC = 20;
 var MAX_WAIT_SEC = 50;
 var START_DESCRIPTION = "Create a factory run for a goal. workflow names a factory workflow; input holds its parameters, listed below for each workflow that declares them. projectId names a registered project (see factory_projects): the factory sets input.project to its folder and keeps the id on the run. The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.";
@@ -15112,7 +15109,7 @@ function createFactoryTools(factory, publicUrl) {
 					pr: number().int().positive().optional(),
 					fresh: boolean().optional(),
 					plan: string().regex(/^[\w./-]+$/).optional(),
-					criteria: string().max(2e4).optional(),
+					criteria: string().max(MAX_TEXT_INPUT_CHARS).optional(),
 					project: string().min(1).optional(),
 					marketplace: string().min(1).optional(),
 					artifacts: array(string().regex(/^[a-z0-9-]+$/)).min(1).optional(),
@@ -15122,7 +15119,7 @@ function createFactoryTools(factory, publicUrl) {
 					user: string().min(1).optional(),
 					stateDir: string().min(1).optional(),
 					switches: record(string().regex(/^[a-z][a-z0-9-]*$/), boolean()).optional(),
-					idea: string().max(2e4).optional(),
+					idea: string().max(MAX_TEXT_INPUT_CHARS).optional(),
 					route: _enum([
 						"discovery",
 						"planning",
@@ -15138,31 +15135,18 @@ function createFactoryTools(factory, publicUrl) {
 				idempotencyKey: string().optional()
 			}
 		}, guarded("factory_start", ({ goal, workflow, input, projectId, idempotencyKey }) => {
-			const runInput = {
-				...input?.repo ? { repo: input.repo } : {},
-				...input?.pr ? { pr: input.pr } : {},
-				...input?.fresh ? { fresh: true } : {},
-				...input?.plan ? { plan: input.plan } : {},
-				...input?.criteria ? { criteria: input.criteria } : {},
-				...input?.project ? { project: longPath(input.project) } : {},
-				...input?.marketplace ? { marketplace: longPath(input.marketplace) } : {},
-				...input?.artifacts ? { artifacts: input.artifacts } : {},
-				...input?.target ? { target: longPath(input.target) } : {},
-				...input?.targetName ? { targetName: input.targetName } : {},
-				...input?.olko ? { olko: longPath(input.olko) } : {},
-				...input?.user ? { user: longPath(input.user) } : {},
-				...input?.stateDir ? { stateDir: path.resolve(input.stateDir) } : {},
-				...input?.switches ? { switches: input.switches } : {},
-				...input?.idea ? { idea: input.idea } : {},
-				...input?.route ? { route: input.route } : {},
-				...input?.featureId ? { featureId: input.featureId } : {},
-				...input?.base ? { base: input.base } : {},
-				...input?.taskId ? { taskId: input.taskId } : {},
-				...input?.adopt ? { adopt: true } : {},
-				...input?.workflowsDir ? { workflowsDir: longPath(input.workflowsDir) } : {}
-			};
+			const runInput = definedFields({
+				...input,
+				project: input?.project && longPath(input.project),
+				marketplace: input?.marketplace && longPath(input.marketplace),
+				target: input?.target && longPath(input.target),
+				olko: input?.olko && longPath(input.olko),
+				user: input?.user && longPath(input.user),
+				stateDir: input?.stateDir && path.resolve(input.stateDir),
+				workflowsDir: input?.workflowsDir && longPath(input.workflowsDir)
+			});
 			const { run, reused } = factory.start(goal, idempotencyKey, {
-				...workflow ? { workflow } : {},
+				...definedFields({ workflow }),
 				input: projectScopedInput(projectId, runInput)
 			});
 			return {
@@ -15301,9 +15285,11 @@ function createFactoryTools(factory, publicUrl) {
 			}
 		}, guarded("factory_projects", ({ action, path: dir, id, marketplace }) => projectsAction({
 			action,
-			...dir ? { path: dir } : {},
-			...id ? { id } : {},
-			...marketplace ? { marketplace } : {}
+			...definedFields({
+				path: dir,
+				id,
+				marketplace
+			})
 		})));
 		server.registerTool("factory_cancel", {
 			description: "Cancel a factory run. Call this tool when the user asks to stop the run.",

@@ -4,7 +4,8 @@ import crypto from "node:crypto";
 import { priceUsage } from "./prices.ts";
 import { evaluateWhen, readPath, withEach } from "./when.ts";
 import { loadWorkflowDir } from "./workflow-yaml.ts";
-import { FACTORY_DIR } from "./paths.ts";
+import { FACTORY_DIR, writeFileAtomic } from "./paths.ts";
+import { DEFAULT_TIER_MODELS, FAKE_TIER_MODELS } from "./models.ts";
 import { loadFactoryConfig } from "./config.ts";
 import { readMarketplaceAgent } from "./marketplace-agents.ts";
 import { recordAnswer, recordQuestion } from "./questions.ts";
@@ -42,21 +43,6 @@ import type {
   WorkflowNode,
 } from "./types.ts";
 
-const LOCKED_FILE_CODES = new Set(["EPERM", "EBUSY", "EACCES"]);
-
-/** Renames a file, retrying for a short time while Windows holds the target open for a reader. The wait between attempts is synchronous (Atomics.wait) and blocks the event loop, at most about a second in all. */
-function renameWithRetry(from: string, to: string, attempts = 10): void {
-  for (let attempt = 1; ; attempt++) {
-    try {
-      fs.renameSync(from, to);
-      return;
-    } catch (error) {
-      if (attempt >= attempts || !LOCKED_FILE_CODES.has((error as NodeJS.ErrnoException).code ?? "")) throw error;
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20 * attempt);
-    }
-  }
-}
-
 /** Prices per million tokens for the fake backend only: fixed test numbers that make fake runs cost something, not real model prices. */
 const FAKE_PRICE_PER_MTOK: Record<Tier, { input: number; output: number }> = {
   low: { input: 0.8, output: 4 },
@@ -67,6 +53,10 @@ const FAKE_PRICE_PER_MTOK: Record<Tier, { input: number; output: number }> = {
 const PARALLEL_AGENTS = 10;
 
 const SUPERVISOR_ID = "supervisor";
+/** The question a run asks when its cost reaches the pause ratio of its budget. */
+const BUDGET_PAUSE_QUESTION = "q-budget-pause";
+/** How much of an agent's or a script's output an event or a ledger preview keeps. */
+const OUTPUT_PREVIEW_CHARS = 200;
 const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
 
 function workspace(run: Run): string {
@@ -75,7 +65,7 @@ function workspace(run: Run): string {
 
 function defaultConfig(kind: "fake" | "delegate" | "cli", cli?: CliName): RunConfig {
   const file = loadFactoryConfig();
-  const tiers = kind === "fake" ? { low: "fake-low", medium: "fake-medium", high: "fake-high" } : { low: "claude-haiku-5-5", medium: "claude-haiku-5-5", high: "claude-haiku-5-5" };
+  const tiers = { ...(kind === "fake" ? FAKE_TIER_MODELS : DEFAULT_TIER_MODELS) };
   const backend = kind === "cli" ? { kind: "cli" as const, cli: cli as CliName } : { kind };
   return { roles: file.roles, tiers, backend, budget: file.budget };
 }
@@ -153,7 +143,6 @@ interface CurrentAgent {
   id: string;
   role: string | undefined;
   agentName: string | undefined;
-  paths?: string[];
 }
 
 export class Factory {
@@ -198,10 +187,7 @@ export class Factory {
 
   checkpoint(run: Run): void {
     if (ENDED.has(run.status) && run.supervisor?.status === "pending") this.supervise(run);
-    const file = path.join(this.dataDir, "runs", `${run.runId}.json`);
-    const temp = `${file}.${process.pid}.tmp`;
-    fs.writeFileSync(temp, JSON.stringify(run, null, 2));
-    renameWithRetry(temp, file);
+    writeFileAtomic(path.join(this.dataDir, "runs", `${run.runId}.json`), JSON.stringify(run, null, 2));
     if (run.status !== "running") this.notify(run);
   }
 
@@ -441,14 +427,12 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
   }
 
   totals(run: Pick<Run, "ledger" | "steps">) {
-    const costUsd = run.ledger.reduce((s, r) => s + (r.costUsd ?? 0), 0);
-    const tokens = run.ledger.reduce((s, r) => s + (r.inputTokens ?? 0) + (r.outputTokens ?? 0) + (r.inputTokens == null ? (r.totalTokens ?? 0) : 0), 0);
-    return { costUsd, tokens, steps: run.steps };
+    return runTotals(run);
   }
 
   checkBudget(run: Run): boolean {
     const { maxCostUsd, infoRatio, pauseRatio } = configOf(run).budget;
-    const ratio = this.totals(run).costUsd / maxCostUsd;
+    const ratio = runTotals(run).costUsd / maxCostUsd;
     if (ratio >= 1) {
       run.status = "stopped";
       this.event(run, "budget_exceeded", { ratio });
@@ -460,7 +444,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
     }
     if (ratio >= pauseRatio && !run.thresholdsHit.includes("pause")) {
       run.thresholdsHit.push("pause");
-      this.askUser(run, { id: "q-budget-pause", text: `The factory run has used ${Math.round(ratio * 100)}% of its budget. Continue or stop?`, allowed: ["continue", "stop"] }, []);
+      this.askUser(run, { id: BUDGET_PAUSE_QUESTION, text: `The factory run has used ${Math.round(ratio * 100)}% of its budget. Continue or stop?`, allowed: ["continue", "stop"] }, []);
       this.event(run, "budget_threshold", { level: "pause", ratio });
       return false;
     }
@@ -560,7 +544,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
   }
 
   async step(run: Run): Promise<void> {
-    if (run.answers["q-budget-pause"] === "stop") {
+    if (run.answers[BUDGET_PAUSE_QUESTION] === "stop") {
       run.status = "stopped";
       return;
     }
@@ -568,7 +552,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
     const node = run.cursor < 0 ? undefined : workflowOf(run).nodes[run.cursor];
     if (!node) {
       run.status = "done";
-      this.event(run, "run_completed", this.totals(run));
+      this.event(run, "run_completed", runTotals(run));
       return;
     }
     const visit = run.visits?.[node.id] ?? 1;
@@ -610,7 +594,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
         this.moveWorkspace(run, node, result.workspace);
       }
       this.appendLedger(run, { nodePath: node.path, agentId: node.id, kind: "script", tier: null, model: null, backend: "script", turn: 1, inputTokens: 0, outputTokens: 0, costUsd: 0, costSource: "measured", durationMs: Date.now() - started, output: result.output ?? null });
-      this.event(run, "node_completed", { node: node.path, result: (String(result.output ?? "").split(/\r?\n/)[0] ?? "").slice(0, 200), ...(result.metrics ? { metrics: result.metrics } : {}) });
+      this.event(run, "node_completed", { node: node.path, result: (String(result.output ?? "").split(/\r?\n/)[0] ?? "").slice(0, OUTPUT_PREVIEW_CHARS), ...(result.metrics ? { metrics: result.metrics } : {}) });
       this.advance(run, node);
       return;
     }
@@ -816,20 +800,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
   }
 
   footer(run: Pick<Run, "config" | "proposal" | "ledger" | "steps" | "thresholdsHit"> & { events?: Run["events"] }): CostFooter {
-    const t = this.totals(run);
-    const max = run.config?.budget.maxCostUsd ?? run.proposal.budget.maxCostUsd;
-    const perNode: Record<string, number> = {};
-    for (const r of run.ledger) perNode[r.nodePath] = round((perNode[r.nodePath] ?? 0) + (r.costUsd ?? 0));
-    return {
-      costUsd: round(t.costUsd),
-      budgetUsd: max,
-      budgetRatio: round(t.costUsd / max),
-      tokens: t.tokens,
-      steps: t.steps,
-      perNode,
-      source: costSourceSummary(run.ledger),
-      warnings: [...run.thresholdsHit.map((h) => `budget threshold: ${h}`), ...(run.events ?? []).filter((e) => e.type === "node_completed" && String(e.result ?? "").includes("required step switched off")).map((e) => `required step switched off: ${String(e.node)}`)],
-    };
+    return costFooter(run);
   }
 
   status(run: Run): RunStatusView {
@@ -852,86 +823,11 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
   }
 
   report(run: Run): Report {
-    const byNode: Record<string, NodeCost> = {};
-    const byTier: Record<string, number> = {};
-    const byModel: Record<string, number> = {};
-    const byCostSource: Record<string, number> = {};
-    let harnessCostUsd = 0;
-    let cacheTokens = 0;
-    const coverage: Report["coverage"] = { run: { llmSteps: 0, unknownSteps: 0 }, byTier: {}, byModel: {} };
-    const count = (target: Coverage) => {
-      target.llmSteps += 1;
-    };
-    const countUnknown = (target: Coverage) => {
-      target.unknownSteps += 1;
-    };
-    for (const r of run.ledger) {
-      const cache = (r.cacheReadTokens ?? 0) + (r.cacheWrite5mTokens ?? 0) + (r.cacheWrite1hTokens ?? 0);
-      cacheTokens += cache;
-      const nodeEntry = (byNode[r.nodePath] ??= { steps: 0, llmSteps: 0, unknownSteps: 0, tokens: 0, cacheTokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null, byAgent: {}, costSource: "" });
-      nodeEntry.cacheTokens += cache;
-      const agentKey = r.agentId ?? r.nodePath.split("/").at(-1) ?? r.nodePath;
-      const agentEntry = (nodeEntry.byAgent[agentKey] ??= { steps: 0, llmSteps: 0, unknownSteps: 0, tokens: 0, cacheTokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null, agentName: r.agentName ?? null, costSource: "", sources: [] });
-      agentEntry.cacheTokens += cache;
-      agentEntry.steps += 1;
-      agentEntry.tokens += (r.inputTokens ?? 0) + (r.outputTokens ?? 0);
-      agentEntry.costUsd += r.costUsd ?? 0;
-      agentEntry.sources?.push(r.costSource);
-      nodeEntry.steps += 1;
-      nodeEntry.tokens += (r.inputTokens ?? 0) + (r.outputTokens ?? 0);
-      nodeEntry.costUsd += r.costUsd ?? 0;
-      const tierKey = r.tier ?? "script";
-      byTier[tierKey] = (byTier[tierKey] ?? 0) + (r.costUsd ?? 0);
-      if (r.kind === "llm") {
-        const modelKey = r.model ?? "unknown";
-        byModel[modelKey] = (byModel[modelKey] ?? 0) + (r.costUsd ?? 0);
-        byCostSource[r.costSource] = (byCostSource[r.costSource] ?? 0) + 1;
-        const targets = [
-          coverage.run,
-          (coverage.byTier[tierKey] ??= { llmSteps: 0, unknownSteps: 0 }),
-          (coverage.byModel[modelKey] ??= { llmSteps: 0, unknownSteps: 0 }),
-          nodeEntry,
-          agentEntry,
-        ];
-        targets.forEach(count);
-        if (r.costSource === "unknown") targets.forEach(countUnknown);
-      }
-      harnessCostUsd += r.harnessCostUsd ?? 0;
-    }
-    for (const [nodePath, entry] of Object.entries(byNode)) {
-      entry.costUsd = round(entry.costUsd);
-      const agentTiers = new Set(Object.values(entry.byAgent).map((x) => x.tier));
-      if (agentTiers.size > 1) Object.assign(entry, { tier: "mixed", model: "mixed" });
-      for (const agentEntry of Object.values(entry.byAgent)) {
-        agentEntry.costUsd = round(agentEntry.costUsd);
-        agentEntry.costSource = singleOrMixed(new Set(agentEntry.sources));
-        delete agentEntry.sources;
-      }
-      entry.costSource = singleOrMixed(new Set(run.ledger.filter((r) => r.nodePath === nodePath).map((r) => r.costSource)));
-    }
-    for (const totals of [byTier, byModel]) for (const [key, value] of Object.entries(totals)) totals[key] = round(value);
-    return {
-      runId: run.runId,
-      status: run.status,
-      workflow: workflowLabel(run),
-      backend: run.config?.backend,
-      tierModels: run.config?.tiers,
-      synthetic: (run.config ?? run.proposal).backend?.kind === "fake",
-      byNode,
-      byTier,
-      byModel,
-      byCostSource,
-      coverage,
-      cacheTokens,
-      harnessCostUsd: round(harnessCostUsd),
-      result: [...run.ledger].reverse().find((r) => typeof r.output === "string" && r.nodePath !== SUPERVISOR_PATH)?.output ?? null,
-      cost: this.footer(run),
-      ...(run.supervisor ? { supervisor: supervisorView(run.supervisor) } : {}),
-    };
+    return runReport(run);
   }
 
   trace(run: Run): string {
-    const lines = [`run ${run.runId} [${run.status}] ${workflowLabel(run)}  $${round(this.totals(run).costUsd)}`];
+    const lines = [`run ${run.runId} [${run.status}] ${workflowLabel(run)}  $${round(runTotals(run).costUsd)}`];
     let lastNode: string | null = null;
     for (const r of run.ledger) {
       if (r.nodePath !== lastNode) {
@@ -1006,7 +902,7 @@ function delegateEntry(work: PendingWork, output: string, usage: SubmitUsage): L
     childSessionId: usage.childSessionId ?? null,
     costUsd: priced.costUsd,
     costSource: hasSplit ? "reported" : "unknown",
-    outputPreview: String(output ?? "").slice(0, 200),
+    outputPreview: String(output ?? "").slice(0, OUTPUT_PREVIEW_CHARS),
     agentName: work.agentName ?? null,
   };
 }
@@ -1043,7 +939,7 @@ function cliEntries(result: CliResult, context: CliEntryContext): LedgerEntry[] 
       costSource: priced.costSource,
       harnessCostUsd: u.harnessCostUsd,
       durationMs: result.durationMs,
-      outputPreview: String(result.text ?? "").slice(0, 200),
+      outputPreview: String(result.text ?? "").slice(0, OUTPUT_PREVIEW_CHARS),
       output: context.keepOutput ? (result.text ?? null) : null,
       agentName: context.agentName,
     };
@@ -1119,6 +1015,107 @@ export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** The cost, tokens and steps of a run so far. */
+export function runTotals(run: Pick<Run, "ledger" | "steps">) {
+  const costUsd = run.ledger.reduce((s, r) => s + (r.costUsd ?? 0), 0);
+  const tokens = run.ledger.reduce((s, r) => s + (r.inputTokens ?? 0) + (r.outputTokens ?? 0) + (r.inputTokens == null ? (r.totalTokens ?? 0) : 0), 0);
+  return { costUsd, tokens, steps: run.steps };
+}
+
+/** The cost footer of a run: totals against the budget, cost per node and the warnings. */
+export function costFooter(run: Pick<Run, "config" | "proposal" | "ledger" | "steps" | "thresholdsHit"> & { events?: Run["events"] }): CostFooter {
+  const t = runTotals(run);
+  const max = run.config?.budget.maxCostUsd ?? run.proposal.budget.maxCostUsd;
+  const perNode: Record<string, number> = {};
+  for (const r of run.ledger) perNode[r.nodePath] = round((perNode[r.nodePath] ?? 0) + (r.costUsd ?? 0));
+  return {
+    costUsd: round(t.costUsd),
+    budgetUsd: max,
+    budgetRatio: round(t.costUsd / max),
+    tokens: t.tokens,
+    steps: t.steps,
+    perNode,
+    source: costSourceSummary(run.ledger),
+    warnings: [...run.thresholdsHit.map((h) => `budget threshold: ${h}`), ...(run.events ?? []).filter((e) => e.type === "node_completed" && String(e.result ?? "").includes("required step switched off")).map((e) => `required step switched off: ${String(e.node)}`)],
+  };
+}
+
+/** The cost report of a run by node, agent, tier and model. It only reads the run, so the viewer uses it without a factory. */
 export function runReport(run: Run): Report {
-  return Factory.prototype.report.call(Factory.prototype, run);
+  const byNode: Record<string, NodeCost> = {};
+  const byTier: Record<string, number> = {};
+  const byModel: Record<string, number> = {};
+  const byCostSource: Record<string, number> = {};
+  let harnessCostUsd = 0;
+  let cacheTokens = 0;
+  const coverage: Report["coverage"] = { run: { llmSteps: 0, unknownSteps: 0 }, byTier: {}, byModel: {} };
+  const count = (target: Coverage) => {
+    target.llmSteps += 1;
+  };
+  const countUnknown = (target: Coverage) => {
+    target.unknownSteps += 1;
+  };
+  for (const r of run.ledger) {
+    const cache = (r.cacheReadTokens ?? 0) + (r.cacheWrite5mTokens ?? 0) + (r.cacheWrite1hTokens ?? 0);
+    cacheTokens += cache;
+    const nodeEntry = (byNode[r.nodePath] ??= { steps: 0, llmSteps: 0, unknownSteps: 0, tokens: 0, cacheTokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null, byAgent: {}, costSource: "" });
+    nodeEntry.cacheTokens += cache;
+    const agentKey = r.agentId ?? r.nodePath.split("/").at(-1) ?? r.nodePath;
+    const agentEntry = (nodeEntry.byAgent[agentKey] ??= { steps: 0, llmSteps: 0, unknownSteps: 0, tokens: 0, cacheTokens: 0, costUsd: 0, tier: r.tier, model: r.model ?? null, agentName: r.agentName ?? null, costSource: "", sources: [] });
+    agentEntry.cacheTokens += cache;
+    agentEntry.steps += 1;
+    agentEntry.tokens += (r.inputTokens ?? 0) + (r.outputTokens ?? 0);
+    agentEntry.costUsd += r.costUsd ?? 0;
+    agentEntry.sources?.push(r.costSource);
+    nodeEntry.steps += 1;
+    nodeEntry.tokens += (r.inputTokens ?? 0) + (r.outputTokens ?? 0);
+    nodeEntry.costUsd += r.costUsd ?? 0;
+    const tierKey = r.tier ?? "script";
+    byTier[tierKey] = (byTier[tierKey] ?? 0) + (r.costUsd ?? 0);
+    if (r.kind === "llm") {
+      const modelKey = r.model ?? "unknown";
+      byModel[modelKey] = (byModel[modelKey] ?? 0) + (r.costUsd ?? 0);
+      byCostSource[r.costSource] = (byCostSource[r.costSource] ?? 0) + 1;
+      const targets = [
+        coverage.run,
+        (coverage.byTier[tierKey] ??= { llmSteps: 0, unknownSteps: 0 }),
+        (coverage.byModel[modelKey] ??= { llmSteps: 0, unknownSteps: 0 }),
+        nodeEntry,
+        agentEntry,
+      ];
+      targets.forEach(count);
+      if (r.costSource === "unknown") targets.forEach(countUnknown);
+    }
+    harnessCostUsd += r.harnessCostUsd ?? 0;
+  }
+  for (const [nodePath, entry] of Object.entries(byNode)) {
+    entry.costUsd = round(entry.costUsd);
+    const agentTiers = new Set(Object.values(entry.byAgent).map((x) => x.tier));
+    if (agentTiers.size > 1) Object.assign(entry, { tier: "mixed", model: "mixed" });
+    for (const agentEntry of Object.values(entry.byAgent)) {
+      agentEntry.costUsd = round(agentEntry.costUsd);
+      agentEntry.costSource = singleOrMixed(new Set(agentEntry.sources));
+      delete agentEntry.sources;
+    }
+    entry.costSource = singleOrMixed(new Set(run.ledger.filter((r) => r.nodePath === nodePath).map((r) => r.costSource)));
+  }
+  for (const totals of [byTier, byModel]) for (const [key, value] of Object.entries(totals)) totals[key] = round(value);
+  return {
+    runId: run.runId,
+    status: run.status,
+    workflow: workflowLabel(run),
+    backend: run.config?.backend,
+    tierModels: run.config?.tiers,
+    synthetic: (run.config ?? run.proposal).backend?.kind === "fake",
+    byNode,
+    byTier,
+    byModel,
+    byCostSource,
+    coverage,
+    cacheTokens,
+    harnessCostUsd: round(harnessCostUsd),
+    result: [...run.ledger].reverse().find((r) => typeof r.output === "string" && r.nodePath !== SUPERVISOR_PATH)?.output ?? null,
+    cost: costFooter(run),
+    ...(run.supervisor ? { supervisor: supervisorView(run.supervisor) } : {}),
+  };
 }

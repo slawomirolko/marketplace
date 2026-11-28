@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadFactoryConfig } from "./config.ts";
-import { homeDataDir, readJsonFile } from "./paths.ts";
+import { homeDataDir, longPath, readJsonFile, writeFileAtomic } from "./paths.ts";
+import { definedFields } from "./fields.ts";
 import type { ProjectsConfig, RunInput } from "./types.ts";
 
 /** A local project that uses the marketplace. Only the id and the folder are stored; everything else is read from the folder when needed. */
@@ -46,10 +47,7 @@ export function readRegistry(file = projectsFile()): ProjectRegistry {
 }
 
 function writeRegistry(registry: ProjectRegistry, file = projectsFile()): ProjectRegistry {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const temp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(temp, `${JSON.stringify(registry, null, 2)}\n`);
-  fs.renameSync(temp, file);
+  writeFileAtomic(file, `${JSON.stringify(registry, null, 2)}\n`);
   return registry;
 }
 
@@ -167,12 +165,7 @@ export function discoverProjects(settings: Required<Pick<ProjectsConfig, "marker
 export function projectInput(id: string, file = projectsFile()): { project: string; projectId: string; marketplace?: string } {
   const project = projectById(id, file);
   if (!fs.existsSync(project.path)) throw new Error(`project ${id}: folder ${project.path} does not exist`);
-  return { project: project.path, projectId: project.id, ...(project.marketplace ? { marketplace: project.marketplace } : {}) };
-}
-
-function longPath(p: string): string {
-  const resolved = path.resolve(p);
-  return fs.existsSync(resolved) ? fs.realpathSync.native(resolved) : resolved;
+  return { project: project.path, projectId: project.id, ...definedFields({ marketplace: project.marketplace }) };
 }
 
 /** The run input of a run started for a registered project: its folder as `project`, its id, and its marketplace unless the input names one. */
@@ -180,7 +173,7 @@ export function projectScopedInput(projectId: string | undefined, input: RunInpu
   if (!projectId) return input;
   const scoped = projectInput(projectId);
   if (input.project && longPath(input.project) !== longPath(scoped.project)) throw new Error(`input.project is not the folder of project ${projectId}; pass one of them`);
-  return { ...(scoped.marketplace ? { marketplace: scoped.marketplace } : {}), ...input, project: scoped.project, projectId: scoped.projectId };
+  return { ...definedFields({ marketplace: scoped.marketplace }), ...input, project: scoped.project, projectId: scoped.projectId };
 }
 
 export interface ProjectsActionRequest {
@@ -193,7 +186,7 @@ export interface ProjectsActionRequest {
 /** One project registry action, shared by the MCP tool and the viewer. */
 export function projectsAction({ action, path: dir, id, marketplace }: ProjectsActionRequest): object {
   if (action === "list") return readRegistry();
-  if (action === "add") return { project: addProject({ path: dir ?? "", ...(id ? { id } : {}), ...(marketplace ? { marketplace } : {}) }) };
+  if (action === "add") return { project: addProject({ path: dir ?? "", ...definedFields({ id, marketplace }) }) };
   if (action === "remove") return { project: removeProject(id ?? "") };
   if (action === "add_root") return { roots: addRoot(dir ?? "") };
   if (action === "remove_root") return { roots: removeRoot(dir ?? "") };
@@ -215,7 +208,7 @@ export function projectsCli(argv: string[], file = projectsFile()): unknown {
     case "list":
       return readRegistry(file);
     case "add":
-      return addProject({ path: positional[0] ?? "", ...(flag("id") ? { id: flag("id") } : {}), ...(flag("marketplace") ? { marketplace: flag("marketplace") } : {}) }, file);
+      return addProject({ path: positional[0] ?? "", ...definedFields({ id: flag("id"), marketplace: flag("marketplace") }) }, file);
     case "remove":
       return removeProject(positional[0] ?? "", file);
     case "roots":

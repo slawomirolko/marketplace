@@ -13,6 +13,7 @@ import path from "node:path";
 import Mustache from "mustache";
 import { loadFactoryConfig } from "./config.ts";
 import { listProjects } from "./projects.ts";
+import { writeFileAtomic } from "./paths.ts";
 import type { ExecResult, RunInput, WatchSpec } from "./types.ts";
 import type { Factory } from "./engine.ts";
 
@@ -44,10 +45,7 @@ function readJson<T>(file: string, fallback: T): T {
 }
 
 function writeJson(file: string, value: unknown): void {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const temp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(temp, `${JSON.stringify(value, null, 2)}\n`);
-  fs.renameSync(temp, file);
+  writeFileAtomic(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 /** The older list of watched folders, `{ "dirs": [...] }` in the data directory. Registered projects live in the project registry (projects.ts projectsFile()). */

@@ -1,4 +1,4 @@
-import { C as VIEWER_HEALTH, E as viewerOptions, a as listProjects, b as homeEnvNote, c as cliExecutor, g as loadFactoryConfig, h as marketplaceDir, l as hostExec, n as failRequest, r as viewerHandler, t as allowedHostsFor, u as Factory, w as defaultDataDir, y as mustache } from "./viewer-routes.mjs";
+import { O as viewerOptions, T as defaultDataDir, _ as loadFactoryConfig, a as listProjects, b as mustache, d as Factory, g as marketplaceDir, k as writeFileAtomic, l as cliExecutor, n as failRequest, r as viewerHandler, t as allowedHostsFor, u as hostExec, w as VIEWER_HEALTH, x as homeEnvNote } from "./viewer-routes.mjs";
 import path from "node:path";
 import fs from "node:fs";
 import http from "node:http";
@@ -25,10 +25,7 @@ function readJson(file, fallback) {
 	}
 }
 function writeJson(file, value) {
-	fs.mkdirSync(path.dirname(file), { recursive: true });
-	const temp = `${file}.${process.pid}.tmp`;
-	fs.writeFileSync(temp, `${JSON.stringify(value, null, 2)}\n`);
-	fs.renameSync(temp, file);
+	writeFileAtomic(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 /** The older list of watched folders, `{ "dirs": [...] }` in the data directory. Registered projects live in the project registry (projects.ts projectsFile()). */
 function knownProjectsFile(dataDir) {

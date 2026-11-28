@@ -5,11 +5,18 @@ import { spawn } from "node:child_process";
 import type { AgentTool, CliExecutor, CliName, CliRequest, CliResult, ExecResult, TokenCounts } from "./types.ts";
 import { claudeAgentsFile, claudeTools, opencodeConfigDir } from "./cli-agents.ts";
 import { homeEnv } from "./home-env.ts";
+import { AGENT_NAME } from "./marketplace-agents.ts";
+import { MODEL_ALIASES } from "./models.ts";
 import { spawnPlan } from "./win-spawn.ts";
 
 const TIMEOUT_MS = 900000;
-const OPENCODE_IDS: Record<string, string> = { haiku: "anthropic/claude-haiku-5-5", sonnet: "anthropic/claude-sonnet-5-5", opus: "anthropic/claude-opus-5-5" };
-const CLAUDE_DISALLOWED = "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,Agent,Task,NotebookEdit";
+/** A prompt without an agent gets no tool at all. */
+const CLAUDE_DISALLOWED = claudeTools([]).disallowed.join(",");
+/** The turn limit of a Claude Code run with an agent, and of a plain prompt without one. */
+const AGENT_MAX_TURNS = "40";
+const PROMPT_MAX_TURNS = "2";
+/** How much of a failing CLI's message or output an error keeps. */
+const ERROR_TEXT_CHARS = 300;
 
 const MODEL_NAME = /^[\w./:-]+$/;
 
@@ -155,22 +162,29 @@ function removeTempDir(dir: string): void {
   if (path.dirname(path.resolve(dir)) === path.resolve(os.tmpdir())) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
 }
 
+/** Why a request cannot start a CLI, or null: an agent name outside the agent alphabet, or an invalid model or extra directory. */
+function requestError(agent: string | undefined, model: string, dirs: string[]): string | null {
+  if (agent && !AGENT_NAME.test(agent)) {
+    return `invalid agent name ${agent}`;
+  }
+  return invalidRequest(model, dirs);
+}
+
 function claudeAgentArgs(agent: string, tools: AgentTool[], dirs: string[], definition: CliRequest["definition"]): string[] {
   const { allowed, disallowed } = claudeTools(tools);
   const permission = tools.includes("edit") ? ["--permission-mode", "acceptEdits"] : [];
-  return ["--agents", claudeAgentsFile(definition ?? agent, tools), "--agent", agent, "--max-turns", "40", "--allowedTools", allowed.join(","), "--disallowedTools", disallowed.join(","), ...permission, ...dirs.flatMap((d) => ["--add-dir", d])];
+  return ["--agents", claudeAgentsFile(definition ?? agent, tools), "--agent", agent, "--max-turns", AGENT_MAX_TURNS, "--allowedTools", allowed.join(","), "--disallowedTools", disallowed.join(","), ...permission, ...dirs.flatMap((d) => ["--add-dir", d])];
 }
 
 async function runClaude(model: string, prompt: string, { agent: named, definition, cwd, tools = ["read"], dirs = [], env = {} }: AgentRunOptions = {}): Promise<CliResult> {
   const agent = definition?.name ?? named;
-  if (agent && !/^[a-z0-9-]+$/.test(agent)) return { ok: false, error: `invalid agent name ${agent}` };
-  const invalid = invalidRequest(model, dirs);
+  const invalid = requestError(agent, model, dirs);
   if (invalid) {
     return { ok: false, error: invalid };
   }
   const args = agent
     ? ["-p", "--model", model, "--output-format", "json", ...CLAUDE_ISOLATION, ...claudeAgentArgs(agent, tools, dirs, definition)]
-    : ["-p", "--model", model, "--output-format", "json", ...CLAUDE_ISOLATION, "--max-turns", "2", "--disallowedTools", CLAUDE_DISALLOWED];
+    : ["-p", "--model", model, "--output-format", "json", ...CLAUDE_ISOLATION, "--max-turns", PROMPT_MAX_TURNS, "--disallowedTools", CLAUDE_DISALLOWED];
   const agentFile = args[args.indexOf("--agents") + 1];
   const res = await spawnCli("claude", args, prompt, { cwd: cwd ?? cliWorkDir(), env }).finally(() => {
     if (agent && agentFile) removeTempDir(path.dirname(agentFile));
@@ -179,7 +193,7 @@ async function runClaude(model: string, prompt: string, { agent: named, definiti
   try {
     out = JSON.parse(res.stdout) as ClaudeOutput;
   } catch {
-    return { ok: false, error: `claude exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${(res.stderr || res.stdout).slice(-300)}`, durationMs: res.durationMs, timedOut: res.timedOut };
+    return { ok: false, error: `claude exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${(res.stderr || res.stdout).slice(-ERROR_TEXT_CHARS)}`, durationMs: res.durationMs, timedOut: res.timedOut };
   }
   const usageByModel = Object.entries(out.modelUsage ?? {}).map(([id, u]) => ({
     model: id,
@@ -193,14 +207,19 @@ async function runClaude(model: string, prompt: string, { agent: named, definiti
     cacheWriteTtlKnown: true,
     harnessCostUsd: u.costUSD ?? null,
   }));
-  return { ok: !out.is_error, error: out.is_error ? String(out.result).slice(0, 300) : undefined, text: out.result, turns: out.num_turns, harnessCostUsd: out.total_cost_usd ?? null, usageByModel, durationMs: res.durationMs };
+  return { ok: !out.is_error, error: out.is_error ? String(out.result).slice(0, ERROR_TEXT_CHARS) : undefined, text: out.result, turns: out.num_turns, harnessCostUsd: out.total_cost_usd ?? null, usageByModel, durationMs: res.durationMs };
+}
+
+/** The OpenCode model id: a short alias or a full Claude model id gets the anthropic/ provider prefix; any other id passes as it is. */
+function opencodeModelId(model: string): string {
+  const full = MODEL_ALIASES[model] ?? model;
+  return full.startsWith("claude-") ? `anthropic/${full}` : full;
 }
 
 async function runOpencode(model: string, prompt: string, { agent: named, definition, cwd, configDir, tools = ["read"], dirs = [], env = {} }: AgentRunOptions = {}): Promise<CliResult> {
   const agent = definition?.name ?? named;
-  const id = OPENCODE_IDS[model] ?? (model.startsWith("claude-") ? `anthropic/${model}` : model);
-  if (agent && !/^[a-z0-9-]+$/.test(agent)) return { ok: false, error: `invalid agent name ${agent}` };
-  const invalid = invalidRequest(model, dirs);
+  const id = opencodeModelId(model);
+  const invalid = requestError(agent, model, dirs);
   if (invalid) {
     return { ok: false, error: invalid };
   }
@@ -231,7 +250,7 @@ async function runOpencode(model: string, prompt: string, { agent: named, defini
   }
   const dropped = malformedLines > 0 ? { malformedLines } : {};
   if (error || steps === 0) {
-    const reason = error ? JSON.stringify(error.error ?? error).slice(0, 300) : `opencode exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${res.stderr.slice(-300)}`;
+    const reason = error ? JSON.stringify(error.error ?? error).slice(0, ERROR_TEXT_CHARS) : `opencode exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${res.stderr.slice(-ERROR_TEXT_CHARS)}`;
     return { ok: false, error: malformedLines > 0 ? `${reason} (${malformedLines} malformed output lines dropped)` : reason, durationMs: res.durationMs, timedOut: res.timedOut, ...dropped };
   }
   const sessionId = events.find((e) => e.sessionID)?.sessionID ?? null;
@@ -252,7 +271,7 @@ export async function opencodeSessionUsage(sessionId: string): Promise<SessionUs
       harnessCostUsd: s.info?.cost ?? null,
     };
   } catch {
-    return { ok: false, error: `export failed: ${res.stderr.slice(-300)}` };
+    return { ok: false, error: `export failed: ${res.stderr.slice(-ERROR_TEXT_CHARS)}` };
   }
 }
 

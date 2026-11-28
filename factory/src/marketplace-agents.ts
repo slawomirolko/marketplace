@@ -4,7 +4,8 @@ import { parse as parseYaml } from "yaml";
 import { DEFAULT_MEMORY_LAYER } from "./config.ts";
 import { FACTORY_DIR } from "./paths.ts";
 
-const AGENT_NAME = /^[a-z0-9-]+$/;
+/** The alphabet of agent and skill names; a name is also a file name and a CLI argument. */
+export const AGENT_NAME = /^[a-z0-9-]+$/;
 
 export interface MarketplaceSkill {
   name: string;
@@ -83,29 +84,28 @@ function skillsSection(skills: MarketplaceSkill[], missing: string[], pluginRoot
   return `${root}\n\nSkills: when these instructions load a skill or say a skill is preloaded, read its SKILL.md from the marketplace path below and follow it, not through the Skill tool and not from an installed copy. Files a skill names are next to its SKILL.md.\n${lines.join("\n")}${absent}`;
 }
 
+/** The skills found in the marketplace for the given names, and the names that were not found. */
+function resolveSkills(names: string[], find: (name: string) => string | undefined): { skills: MarketplaceSkill[]; missing: string[] } {
+  const skills = names.flatMap((name) => {
+    const found = find(name);
+    return found ? [{ name, file: found }] : [];
+  });
+  return { skills, missing: names.filter((name) => !skills.some((skill) => skill.name === name)) };
+}
+
 export function readMarketplaceAgent(name: string): MarketplaceAgent {
   if (!AGENT_NAME.test(name)) throw new Error(`invalid agent name ${name}`);
   const file = path.join(marketplaceDir(), "agents", "opencode", `${name}.md`);
   if (fs.existsSync(file)) {
     const { front, raw, body } = readFrontmatter(file);
-    const names = declaredSkills(name, front);
-    const skills = names.flatMap((skill) => {
-      const found = findSkill(skill);
-      return found ? [{ name: skill, file: found }] : [];
-    });
-    const missing = names.filter((skill) => !skills.some((s) => s.name === skill));
+    const { skills, missing } = resolveSkills(declaredSkills(name, front), findSkill);
     return { name, description: front.description ?? name, prompt: body + skillsSection(skills, missing), file, frontmatter: raw, skills, dirs: skills.map((s) => path.dirname(s.file)) };
   }
   const pluginFile = findPluginAgent(name);
   if (pluginFile) {
     const pluginRoot = path.dirname(path.dirname(pluginFile));
     const { front, raw, body } = readFrontmatter(pluginFile);
-    const refs = front.skills ?? [];
-    const skills = refs.flatMap((ref) => {
-      const found = findPluginSkill(ref, pluginRoot);
-      return found ? [{ name: ref, file: found }] : [];
-    });
-    const missing = refs.filter((ref) => !skills.some((s) => s.name === ref));
+    const { skills, missing } = resolveSkills(front.skills ?? [], (ref) => findPluginSkill(ref, pluginRoot));
     return { name, description: front.description ?? name, prompt: withPluginRoot(body, pluginRoot) + skillsSection(skills, missing, pluginRoot), file: pluginFile, frontmatter: raw, skills, dirs: [pluginRoot, ...skills.map((s) => path.dirname(s.file))], pluginRoot };
   }
   const skillFile = findSkill(name);

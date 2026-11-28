@@ -117,7 +117,16 @@ export function mainAgents(marketplace: string): MainAgent[] {
   return found.sort((a, b) => a.agent.localeCompare(b.agent));
 }
 
-export function scanMarketplace(specs: WorkflowSpec[], lock: SourcesLock, marketplace: string, head: string, exists: (name: string) => boolean): MarketplaceScan {
+export interface ScanOptions {
+  specs: WorkflowSpec[];
+  lock: SourcesLock;
+  marketplace: string;
+  head: string;
+  /** Whether the marketplace has an agent or skill of that name. */
+  exists: (name: string) => boolean;
+}
+
+export function scanMarketplace({ specs, lock, marketplace, head, exists }: ScanOptions): MarketplaceScan {
   const mapped = new Set(specs.flatMap((s) => sourceFiles(s, marketplace)));
   const broken = specs.flatMap((s) =>
     s.nodes.flatMap((n) => {
@@ -159,7 +168,18 @@ export async function updateMarketplace(exec: HostExec, marketplace: string): Pr
   return { marketplace, before, after, changedFiles };
 }
 
-export function lockWorkflows(workflows: string, marketplace: string, commit: string, names: string[], sources: string[]): string[] {
+export interface LockWorkflowsOptions {
+  /** The workflows folder; the lock file sits next to it. */
+  workflows: string;
+  marketplace: string;
+  commit: string;
+  /** Workflows to lock by name. */
+  names: string[];
+  /** Marketplace files whose workflows are locked too. */
+  sources: string[];
+}
+
+export function lockWorkflows({ workflows, marketplace, commit, names, sources }: LockWorkflowsOptions): string[] {
   const specs = loadWorkflowSpecs(workflows);
   const accepted = new Set(names);
   for (const spec of specs) if (sourceFiles(spec, marketplace).some((f) => sources.includes(f))) accepted.add(spec.name);
@@ -189,9 +209,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const head = () => execFileSync("git", ["-C", marketplace, "rev-parse", "HEAD"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   if (command === "scan") {
     const lock = readLock(path.join(path.dirname(workflows), "workflows.lock.json"));
-    console.log(JSON.stringify(scanMarketplace(loadWorkflowSpecs(workflows), lock, marketplace, head(), (name) => describeAgent(name) !== null)));
+    console.log(JSON.stringify(scanMarketplace({ specs: loadWorkflowSpecs(workflows), lock, marketplace, head: head(), exists: (name) => describeAgent(name) !== null })));
   } else if (command === "lock") {
-    console.log(JSON.stringify({ locked: lockWorkflows(workflows, marketplace, flag(args, "commit") ?? head(), list(flag(args, "names")), list(flag(args, "sources"))) }));
+    console.log(JSON.stringify({ locked: lockWorkflows({ workflows, marketplace, commit: flag(args, "commit") ?? head(), names: list(flag(args, "names")), sources: list(flag(args, "sources")) }) }));
   } else {
     const commit = command ?? head();
     const lock = buildLock(loadWorkflowSpecs(workflows), marketplace, commit);

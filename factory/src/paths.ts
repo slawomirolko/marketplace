@@ -8,6 +8,37 @@ export const FACTORY_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)
 export const VIEWER_HEALTH = "skill-factory-viewer";
 export const DEFAULT_VIEWER_PORT = 7340;
 
+const LOCKED_FILE_CODES = new Set(["EPERM", "EBUSY", "EACCES"]);
+
+/** Renames a file, retrying for a short time while Windows holds the target open for a reader. The wait between attempts is synchronous (Atomics.wait) and blocks the event loop, at most about a second in all. */
+function renameWithRetry(from: string, to: string, attempts = 10): void {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      fs.renameSync(from, to);
+      return;
+    } catch (error) {
+      if (attempt >= attempts || !LOCKED_FILE_CODES.has((error as NodeJS.ErrnoException).code ?? "")) {
+        throw error;
+      }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20 * attempt);
+    }
+  }
+}
+
+/** Writes a file through a temp file and a rename, so a reader never sees half a file. Creates the parent folder when needed. */
+export function writeFileAtomic(file: string, text: string): void {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const temp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(temp, text);
+  renameWithRetry(temp, file);
+}
+
+/** The real, long form of a path (no 8.3 short names on Windows) when it exists, else the resolved path. */
+export function longPath(file: string): string {
+  const resolved = path.resolve(file);
+  return fs.existsSync(resolved) ? fs.realpathSync.native(resolved) : resolved;
+}
+
 export function defaultDataDir(): string {
   return process.env.FACTORY_DATA_DIR ?? homeDataDir();
 }
@@ -62,8 +93,7 @@ export function registerDataSource(dataDir: string): void {
   if (dir === path.resolve(homeDataDir())) return;
   const dirs = readSources().filter((d) => fs.existsSync(d));
   if (!dirs.includes(dir)) dirs.push(dir);
-  fs.mkdirSync(homeDataDir(), { recursive: true });
-  fs.writeFileSync(sourcesFile(), `${JSON.stringify({ dirs }, null, 2)}\n`);
+  writeFileAtomic(sourcesFile(), `${JSON.stringify({ dirs }, null, 2)}\n`);
 }
 
 export function viewerOptions(dataDir: string) {

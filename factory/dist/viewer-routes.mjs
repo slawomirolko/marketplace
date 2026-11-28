@@ -52,6 +52,33 @@ var __require = /* #__PURE__ */ (() => createRequire(import.meta.url))();
 var FACTORY_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 var VIEWER_HEALTH = "skill-factory-viewer";
 var DEFAULT_VIEWER_PORT = 7340;
+var LOCKED_FILE_CODES = /* @__PURE__ */ new Set([
+	"EPERM",
+	"EBUSY",
+	"EACCES"
+]);
+/** Renames a file, retrying for a short time while Windows holds the target open for a reader. The wait between attempts is synchronous (Atomics.wait) and blocks the event loop, at most about a second in all. */
+function renameWithRetry(from, to, attempts = 10) {
+	for (let attempt = 1;; attempt++) try {
+		fs.renameSync(from, to);
+		return;
+	} catch (error) {
+		if (attempt >= attempts || !LOCKED_FILE_CODES.has(error.code ?? "")) throw error;
+		Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20 * attempt);
+	}
+}
+/** Writes a file through a temp file and a rename, so a reader never sees half a file. Creates the parent folder when needed. */
+function writeFileAtomic(file, text) {
+	fs.mkdirSync(path.dirname(file), { recursive: true });
+	const temp = `${file}.${process.pid}.tmp`;
+	fs.writeFileSync(temp, text);
+	renameWithRetry(temp, file);
+}
+/** The real, long form of a path (no 8.3 short names on Windows) when it exists, else the resolved path. */
+function longPath(file) {
+	const resolved = path.resolve(file);
+	return fs.existsSync(resolved) ? fs.realpathSync.native(resolved) : resolved;
+}
 function defaultDataDir() {
 	return process.env.FACTORY_DATA_DIR ?? homeDataDir();
 }
@@ -94,8 +121,7 @@ function registerDataSource(dataDir) {
 	if (dir === path.resolve(homeDataDir())) return;
 	const dirs = readSources().filter((d) => fs.existsSync(d));
 	if (!dirs.includes(dir)) dirs.push(dir);
-	fs.mkdirSync(homeDataDir(), { recursive: true });
-	fs.writeFileSync(sourcesFile(), `${JSON.stringify({ dirs }, null, 2)}\n`);
+	writeFileAtomic(sourcesFile(), `${JSON.stringify({ dirs }, null, 2)}\n`);
 }
 function viewerOptions(dataDir) {
 	return {
@@ -118,9 +144,33 @@ var homeEnv = {
 function homeEnvNote() {
 	return homeEnv.loaded.length ? `factory settings from ${homeEnv.file}: ${homeEnv.loaded.join(", ")}` : null;
 }
+// src/models.ts
+/** The model ids the factory knows by name: the short aliases a harness accepts and the default tier models. */
+var HAIKU_MODEL = "claude-haiku-5-5";
+var SONNET_MODEL = "claude-sonnet-5-5";
+var OPUS_MODEL = "claude-opus-5-5";
+/** The short model names and the full model id each one stands for. */
+var MODEL_ALIASES = {
+	haiku: HAIKU_MODEL,
+	sonnet: SONNET_MODEL,
+	opus: OPUS_MODEL
+};
+/** The proposed model of every tier for a real backend; the user can change each one at confirmation. */
+var DEFAULT_TIER_MODELS = {
+	low: HAIKU_MODEL,
+	medium: HAIKU_MODEL,
+	high: HAIKU_MODEL
+};
+/** The model names of the fake backend, one per tier. */
+var FAKE_TIER_MODELS = {
+	low: "fake-low",
+	medium: "fake-medium",
+	high: "fake-high"
+};
 // src/prices.ts
+/** USD per million tokens, from https://platform.claude.com/docs/en/about-claude/pricing (read 2026-11-10); opencode/deepseek-v4.1-flash-free is OpenCode's free model (cost 0). */
 var PER_MTOK = {
-	"claude-haiku-5-5": {
+	[HAIKU_MODEL]: {
 		input: .1,
 		output: .5,
 		cacheRead: .01,
@@ -131,12 +181,12 @@ var PER_MTOK = {
 			cacheRead: .05
 		}
 	},
-	"claude-sonnet-5-5": {
+	[SONNET_MODEL]: {
 		input: 2,
 		output: 10,
 		cacheRead: .1
 	},
-	"claude-opus-5-5": {
+	[OPUS_MODEL]: {
 		input: 4,
 		output: 20,
 		cacheRead: .2
@@ -147,17 +197,12 @@ var PER_MTOK = {
 		cacheRead: 0
 	}
 };
-var ALIASES = {
-	haiku: "claude-haiku-5-5",
-	sonnet: "claude-sonnet-5-5",
-	opus: "claude-opus-5-5"
-};
 var CACHE_WRITE_5M = 1.25;
 var CACHE_WRITE_1H = 2;
 function canonicalModel(model) {
 	if (!model) return null;
 	const bare = String(model).replace(/^anthropic\//, "");
-	return ALIASES[bare] ?? bare;
+	return MODEL_ALIASES[bare] ?? bare;
 }
 function priceUsage(model, tokens, cacheWriteTtlKnown) {
 	const canonical = canonicalModel(model);
@@ -15620,6 +15665,7 @@ function loadFactoryConfig(file = configFile()) {
 	};
 }
 // src/marketplace-agents.ts
+/** The alphabet of agent and skill names; a name is also a file name and a CLI argument. */
 var AGENT_NAME = /^[a-z0-9-]+$/;
 function marketplaceDir() {
 	return process.env.FACTORY_MARKETPLACE_DIR ?? path.join(FACTORY_DIR, "..");
@@ -15670,20 +15716,26 @@ function skillsSection(skills, missing, pluginRoot) {
 	const absent = missing.length ? `\nNot in the marketplace, so not available in this run: ${missing.join(", ")}.` : "";
 	return `${root}\n\nSkills: when these instructions load a skill or say a skill is preloaded, read its SKILL.md from the marketplace path below and follow it, not through the Skill tool and not from an installed copy. Files a skill names are next to its SKILL.md.\n${lines.join("\n")}${absent}`;
 }
+/** The skills found in the marketplace for the given names, and the names that were not found. */
+function resolveSkills(names, find) {
+	const skills = names.flatMap((name) => {
+		const found = find(name);
+		return found ? [{
+			name,
+			file: found
+		}] : [];
+	});
+	return {
+		skills,
+		missing: names.filter((name) => !skills.some((skill) => skill.name === name))
+	};
+}
 function readMarketplaceAgent(name) {
 	if (!AGENT_NAME.test(name)) throw new Error(`invalid agent name ${name}`);
 	const file = path.join(marketplaceDir(), "agents", "opencode", `${name}.md`);
 	if (fs.existsSync(file)) {
 		const { front, raw, body } = readFrontmatter(file);
-		const names = declaredSkills(name, front);
-		const skills = names.flatMap((skill) => {
-			const found = findSkill(skill);
-			return found ? [{
-				name: skill,
-				file: found
-			}] : [];
-		});
-		const missing = names.filter((skill) => !skills.some((s) => s.name === skill));
+		const { skills, missing } = resolveSkills(declaredSkills(name, front), findSkill);
 		return {
 			name,
 			description: front.description ?? name,
@@ -15698,15 +15750,7 @@ function readMarketplaceAgent(name) {
 	if (pluginFile) {
 		const pluginRoot = path.dirname(path.dirname(pluginFile));
 		const { front, raw, body } = readFrontmatter(pluginFile);
-		const refs = front.skills ?? [];
-		const skills = refs.flatMap((ref) => {
-			const found = findPluginSkill(ref, pluginRoot);
-			return found ? [{
-				name: ref,
-				file: found
-			}] : [];
-		});
-		const missing = refs.filter((ref) => !skills.some((s) => s.name === ref));
+		const { skills, missing } = resolveSkills(front.skills ?? [], (ref) => findPluginSkill(ref, pluginRoot));
 		return {
 			name,
 			description: front.description ?? name,
@@ -16076,21 +16120,6 @@ function startsVerdictLine(line, prefix) {
 	return head.startsWith(prefix) && head.slice(prefix.length).trimStart().startsWith("|");
 }
 // src/engine.ts
-var LOCKED_FILE_CODES = /* @__PURE__ */ new Set([
-	"EPERM",
-	"EBUSY",
-	"EACCES"
-]);
-/** Renames a file, retrying for a short time while Windows holds the target open for a reader. The wait between attempts is synchronous (Atomics.wait) and blocks the event loop, at most about a second in all. */
-function renameWithRetry(from, to, attempts = 10) {
-	for (let attempt = 1;; attempt++) try {
-		fs.renameSync(from, to);
-		return;
-	} catch (error) {
-		if (attempt >= attempts || !LOCKED_FILE_CODES.has(error.code ?? "")) throw error;
-		Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20 * attempt);
-	}
-}
 /** Prices per million tokens for the fake backend only: fixed test numbers that make fake runs cost something, not real model prices. */
 var FAKE_PRICE_PER_MTOK = {
 	low: {
@@ -16108,6 +16137,10 @@ var FAKE_PRICE_PER_MTOK = {
 };
 var PARALLEL_AGENTS = 10;
 var SUPERVISOR_ID = "supervisor";
+/** The question a run asks when its cost reaches the pause ratio of its budget. */
+var BUDGET_PAUSE_QUESTION = "q-budget-pause";
+/** How much of an agent's or a script's output an event or a ledger preview keeps. */
+var OUTPUT_PREVIEW_CHARS = 200;
 var ENDED = /* @__PURE__ */ new Set([
 	"done",
 	"stopped",
@@ -16119,15 +16152,7 @@ function workspace(run) {
 }
 function defaultConfig(kind, cli) {
 	const file = loadFactoryConfig();
-	const tiers = kind === "fake" ? {
-		low: "fake-low",
-		medium: "fake-medium",
-		high: "fake-high"
-	} : {
-		low: "claude-haiku-5-5",
-		medium: "claude-haiku-5-5",
-		high: "claude-haiku-5-5"
-	};
+	const tiers = { ...kind === "fake" ? FAKE_TIER_MODELS : DEFAULT_TIER_MODELS };
 	const backend = kind === "cli" ? {
 		kind: "cli",
 		cli
@@ -16229,10 +16254,7 @@ var Factory = class {
 	}
 	checkpoint(run) {
 		if (ENDED.has(run.status) && run.supervisor?.status === "pending") this.supervise(run);
-		const file = path.join(this.dataDir, "runs", `${run.runId}.json`);
-		const temp = `${file}.${process.pid}.tmp`;
-		fs.writeFileSync(temp, JSON.stringify(run, null, 2));
-		renameWithRetry(temp, file);
+		writeFileAtomic(path.join(this.dataDir, "runs", `${run.runId}.json`), JSON.stringify(run, null, 2));
 		if (run.status !== "running") this.notify(run);
 	}
 	notify(run) {
@@ -16546,15 +16568,11 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 		this.timers.set(run.runId, setTimeout(tick, TURN_DELAY_MS));
 	}
 	totals(run) {
-		return {
-			costUsd: run.ledger.reduce((s, r) => s + (r.costUsd ?? 0), 0),
-			tokens: run.ledger.reduce((s, r) => s + (r.inputTokens ?? 0) + (r.outputTokens ?? 0) + (r.inputTokens == null ? r.totalTokens ?? 0 : 0), 0),
-			steps: run.steps
-		};
+		return runTotals(run);
 	}
 	checkBudget(run) {
 		const { maxCostUsd, infoRatio, pauseRatio } = configOf(run).budget;
-		const ratio = this.totals(run).costUsd / maxCostUsd;
+		const ratio = runTotals(run).costUsd / maxCostUsd;
 		if (ratio >= 1) {
 			run.status = "stopped";
 			this.event(run, "budget_exceeded", { ratio });
@@ -16570,7 +16588,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 		if (ratio >= pauseRatio && !run.thresholdsHit.includes("pause")) {
 			run.thresholdsHit.push("pause");
 			this.askUser(run, {
-				id: "q-budget-pause",
+				id: BUDGET_PAUSE_QUESTION,
 				text: `The factory run has used ${Math.round(ratio * 100)}% of its budget. Continue or stop?`,
 				allowed: ["continue", "stop"]
 			}, []);
@@ -16729,7 +16747,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 		});
 	}
 	async step(run) {
-		if (run.answers["q-budget-pause"] === "stop") {
+		if (run.answers[BUDGET_PAUSE_QUESTION] === "stop") {
 			run.status = "stopped";
 			return;
 		}
@@ -16737,7 +16755,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 		const node = run.cursor < 0 ? void 0 : workflowOf(run).nodes[run.cursor];
 		if (!node) {
 			run.status = "done";
-			this.event(run, "run_completed", this.totals(run));
+			this.event(run, "run_completed", runTotals(run));
 			return;
 		}
 		const visit = run.visits?.[node.id] ?? 1;
@@ -16819,7 +16837,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 			});
 			this.event(run, "node_completed", {
 				node: node.path,
-				result: (String(result.output ?? "").split(/\r?\n/)[0] ?? "").slice(0, 200),
+				result: (String(result.output ?? "").split(/\r?\n/)[0] ?? "").slice(0, OUTPUT_PREVIEW_CHARS),
 				...result.metrics ? { metrics: result.metrics } : {}
 			});
 			this.advance(run, node);
@@ -17170,20 +17188,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 		});
 	}
 	footer(run) {
-		const t = this.totals(run);
-		const max = run.config?.budget.maxCostUsd ?? run.proposal.budget.maxCostUsd;
-		const perNode = {};
-		for (const r of run.ledger) perNode[r.nodePath] = round((perNode[r.nodePath] ?? 0) + (r.costUsd ?? 0));
-		return {
-			costUsd: round(t.costUsd),
-			budgetUsd: max,
-			budgetRatio: round(t.costUsd / max),
-			tokens: t.tokens,
-			steps: t.steps,
-			perNode,
-			source: costSourceSummary(run.ledger),
-			warnings: [...run.thresholdsHit.map((h) => `budget threshold: ${h}`), ...(run.events ?? []).filter((e) => e.type === "node_completed" && String(e.result ?? "").includes("required step switched off")).map((e) => `required step switched off: ${String(e.node)}`)]
-		};
+		return costFooter(run);
 	}
 	status(run) {
 		const node = run.cursor < 0 ? void 0 : workflowOf(run).nodes[run.cursor];
@@ -17210,123 +17215,10 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 		};
 	}
 	report(run) {
-		const byNode = {};
-		const byTier = {};
-		const byModel = {};
-		const byCostSource = {};
-		let harnessCostUsd = 0;
-		let cacheTokens = 0;
-		const coverage = {
-			run: {
-				llmSteps: 0,
-				unknownSteps: 0
-			},
-			byTier: {},
-			byModel: {}
-		};
-		const count = (target) => {
-			target.llmSteps += 1;
-		};
-		const countUnknown = (target) => {
-			target.unknownSteps += 1;
-		};
-		for (const r of run.ledger) {
-			const cache = (r.cacheReadTokens ?? 0) + (r.cacheWrite5mTokens ?? 0) + (r.cacheWrite1hTokens ?? 0);
-			cacheTokens += cache;
-			const nodeEntry = byNode[r.nodePath] ??= {
-				steps: 0,
-				llmSteps: 0,
-				unknownSteps: 0,
-				tokens: 0,
-				cacheTokens: 0,
-				costUsd: 0,
-				tier: r.tier,
-				model: r.model ?? null,
-				byAgent: {},
-				costSource: ""
-			};
-			nodeEntry.cacheTokens += cache;
-			const agentKey = r.agentId ?? r.nodePath.split("/").at(-1) ?? r.nodePath;
-			const agentEntry = nodeEntry.byAgent[agentKey] ??= {
-				steps: 0,
-				llmSteps: 0,
-				unknownSteps: 0,
-				tokens: 0,
-				cacheTokens: 0,
-				costUsd: 0,
-				tier: r.tier,
-				model: r.model ?? null,
-				agentName: r.agentName ?? null,
-				costSource: "",
-				sources: []
-			};
-			agentEntry.cacheTokens += cache;
-			agentEntry.steps += 1;
-			agentEntry.tokens += (r.inputTokens ?? 0) + (r.outputTokens ?? 0);
-			agentEntry.costUsd += r.costUsd ?? 0;
-			agentEntry.sources?.push(r.costSource);
-			nodeEntry.steps += 1;
-			nodeEntry.tokens += (r.inputTokens ?? 0) + (r.outputTokens ?? 0);
-			nodeEntry.costUsd += r.costUsd ?? 0;
-			const tierKey = r.tier ?? "script";
-			byTier[tierKey] = (byTier[tierKey] ?? 0) + (r.costUsd ?? 0);
-			if (r.kind === "llm") {
-				const modelKey = r.model ?? "unknown";
-				byModel[modelKey] = (byModel[modelKey] ?? 0) + (r.costUsd ?? 0);
-				byCostSource[r.costSource] = (byCostSource[r.costSource] ?? 0) + 1;
-				const targets = [
-					coverage.run,
-					coverage.byTier[tierKey] ??= {
-						llmSteps: 0,
-						unknownSteps: 0
-					},
-					coverage.byModel[modelKey] ??= {
-						llmSteps: 0,
-						unknownSteps: 0
-					},
-					nodeEntry,
-					agentEntry
-				];
-				targets.forEach(count);
-				if (r.costSource === "unknown") targets.forEach(countUnknown);
-			}
-			harnessCostUsd += r.harnessCostUsd ?? 0;
-		}
-		for (const [nodePath, entry] of Object.entries(byNode)) {
-			entry.costUsd = round(entry.costUsd);
-			if (new Set(Object.values(entry.byAgent).map((x) => x.tier)).size > 1) Object.assign(entry, {
-				tier: "mixed",
-				model: "mixed"
-			});
-			for (const agentEntry of Object.values(entry.byAgent)) {
-				agentEntry.costUsd = round(agentEntry.costUsd);
-				agentEntry.costSource = singleOrMixed(new Set(agentEntry.sources));
-				delete agentEntry.sources;
-			}
-			entry.costSource = singleOrMixed(new Set(run.ledger.filter((r) => r.nodePath === nodePath).map((r) => r.costSource)));
-		}
-		for (const totals of [byTier, byModel]) for (const [key, value] of Object.entries(totals)) totals[key] = round(value);
-		return {
-			runId: run.runId,
-			status: run.status,
-			workflow: workflowLabel(run),
-			backend: run.config?.backend,
-			tierModels: run.config?.tiers,
-			synthetic: (run.config ?? run.proposal).backend?.kind === "fake",
-			byNode,
-			byTier,
-			byModel,
-			byCostSource,
-			coverage,
-			cacheTokens,
-			harnessCostUsd: round(harnessCostUsd),
-			result: [...run.ledger].reverse().find((r) => typeof r.output === "string" && r.nodePath !== "@supervisor")?.output ?? null,
-			cost: this.footer(run),
-			...run.supervisor ? { supervisor: supervisorView(run.supervisor) } : {}
-		};
+		return runReport(run);
 	}
 	trace(run) {
-		const lines = [`run ${run.runId} [${run.status}] ${workflowLabel(run)}  $${round(this.totals(run).costUsd)}`];
+		const lines = [`run ${run.runId} [${run.status}] ${workflowLabel(run)}  $${round(runTotals(run).costUsd)}`];
 		let lastNode = null;
 		for (const r of run.ledger) {
 			if (r.nodePath !== lastNode) {
@@ -17396,7 +17288,7 @@ function delegateEntry(work, output, usage) {
 		childSessionId: usage.childSessionId ?? null,
 		costUsd: priced.costUsd,
 		costSource: hasSplit ? "reported" : "unknown",
-		outputPreview: String(output ?? "").slice(0, 200),
+		outputPreview: String(output ?? "").slice(0, OUTPUT_PREVIEW_CHARS),
 		agentName: work.agentName ?? null
 	};
 }
@@ -17422,7 +17314,7 @@ function cliEntries(result, context) {
 			costSource: priced.costSource,
 			harnessCostUsd: u.harnessCostUsd,
 			durationMs: result.durationMs,
-			outputPreview: String(result.text ?? "").slice(0, 200),
+			outputPreview: String(result.text ?? "").slice(0, OUTPUT_PREVIEW_CHARS),
 			output: context.keepOutput ? result.text ?? null : null,
 			agentName: context.agentName
 		};
@@ -17489,8 +17381,147 @@ function round(v) {
 function errorMessage(error) {
 	return error instanceof Error ? error.message : String(error);
 }
+/** The cost, tokens and steps of a run so far. */
+function runTotals(run) {
+	return {
+		costUsd: run.ledger.reduce((s, r) => s + (r.costUsd ?? 0), 0),
+		tokens: run.ledger.reduce((s, r) => s + (r.inputTokens ?? 0) + (r.outputTokens ?? 0) + (r.inputTokens == null ? r.totalTokens ?? 0 : 0), 0),
+		steps: run.steps
+	};
+}
+/** The cost footer of a run: totals against the budget, cost per node and the warnings. */
+function costFooter(run) {
+	const t = runTotals(run);
+	const max = run.config?.budget.maxCostUsd ?? run.proposal.budget.maxCostUsd;
+	const perNode = {};
+	for (const r of run.ledger) perNode[r.nodePath] = round((perNode[r.nodePath] ?? 0) + (r.costUsd ?? 0));
+	return {
+		costUsd: round(t.costUsd),
+		budgetUsd: max,
+		budgetRatio: round(t.costUsd / max),
+		tokens: t.tokens,
+		steps: t.steps,
+		perNode,
+		source: costSourceSummary(run.ledger),
+		warnings: [...run.thresholdsHit.map((h) => `budget threshold: ${h}`), ...(run.events ?? []).filter((e) => e.type === "node_completed" && String(e.result ?? "").includes("required step switched off")).map((e) => `required step switched off: ${String(e.node)}`)]
+	};
+}
+/** The cost report of a run by node, agent, tier and model. It only reads the run, so the viewer uses it without a factory. */
 function runReport(run) {
-	return Factory.prototype.report.call(Factory.prototype, run);
+	const byNode = {};
+	const byTier = {};
+	const byModel = {};
+	const byCostSource = {};
+	let harnessCostUsd = 0;
+	let cacheTokens = 0;
+	const coverage = {
+		run: {
+			llmSteps: 0,
+			unknownSteps: 0
+		},
+		byTier: {},
+		byModel: {}
+	};
+	const count = (target) => {
+		target.llmSteps += 1;
+	};
+	const countUnknown = (target) => {
+		target.unknownSteps += 1;
+	};
+	for (const r of run.ledger) {
+		const cache = (r.cacheReadTokens ?? 0) + (r.cacheWrite5mTokens ?? 0) + (r.cacheWrite1hTokens ?? 0);
+		cacheTokens += cache;
+		const nodeEntry = byNode[r.nodePath] ??= {
+			steps: 0,
+			llmSteps: 0,
+			unknownSteps: 0,
+			tokens: 0,
+			cacheTokens: 0,
+			costUsd: 0,
+			tier: r.tier,
+			model: r.model ?? null,
+			byAgent: {},
+			costSource: ""
+		};
+		nodeEntry.cacheTokens += cache;
+		const agentKey = r.agentId ?? r.nodePath.split("/").at(-1) ?? r.nodePath;
+		const agentEntry = nodeEntry.byAgent[agentKey] ??= {
+			steps: 0,
+			llmSteps: 0,
+			unknownSteps: 0,
+			tokens: 0,
+			cacheTokens: 0,
+			costUsd: 0,
+			tier: r.tier,
+			model: r.model ?? null,
+			agentName: r.agentName ?? null,
+			costSource: "",
+			sources: []
+		};
+		agentEntry.cacheTokens += cache;
+		agentEntry.steps += 1;
+		agentEntry.tokens += (r.inputTokens ?? 0) + (r.outputTokens ?? 0);
+		agentEntry.costUsd += r.costUsd ?? 0;
+		agentEntry.sources?.push(r.costSource);
+		nodeEntry.steps += 1;
+		nodeEntry.tokens += (r.inputTokens ?? 0) + (r.outputTokens ?? 0);
+		nodeEntry.costUsd += r.costUsd ?? 0;
+		const tierKey = r.tier ?? "script";
+		byTier[tierKey] = (byTier[tierKey] ?? 0) + (r.costUsd ?? 0);
+		if (r.kind === "llm") {
+			const modelKey = r.model ?? "unknown";
+			byModel[modelKey] = (byModel[modelKey] ?? 0) + (r.costUsd ?? 0);
+			byCostSource[r.costSource] = (byCostSource[r.costSource] ?? 0) + 1;
+			const targets = [
+				coverage.run,
+				coverage.byTier[tierKey] ??= {
+					llmSteps: 0,
+					unknownSteps: 0
+				},
+				coverage.byModel[modelKey] ??= {
+					llmSteps: 0,
+					unknownSteps: 0
+				},
+				nodeEntry,
+				agentEntry
+			];
+			targets.forEach(count);
+			if (r.costSource === "unknown") targets.forEach(countUnknown);
+		}
+		harnessCostUsd += r.harnessCostUsd ?? 0;
+	}
+	for (const [nodePath, entry] of Object.entries(byNode)) {
+		entry.costUsd = round(entry.costUsd);
+		if (new Set(Object.values(entry.byAgent).map((x) => x.tier)).size > 1) Object.assign(entry, {
+			tier: "mixed",
+			model: "mixed"
+		});
+		for (const agentEntry of Object.values(entry.byAgent)) {
+			agentEntry.costUsd = round(agentEntry.costUsd);
+			agentEntry.costSource = singleOrMixed(new Set(agentEntry.sources));
+			delete agentEntry.sources;
+		}
+		entry.costSource = singleOrMixed(new Set(run.ledger.filter((r) => r.nodePath === nodePath).map((r) => r.costSource)));
+	}
+	for (const totals of [byTier, byModel]) for (const [key, value] of Object.entries(totals)) totals[key] = round(value);
+	return {
+		runId: run.runId,
+		status: run.status,
+		workflow: workflowLabel(run),
+		backend: run.config?.backend,
+		tierModels: run.config?.tiers,
+		synthetic: (run.config ?? run.proposal).backend?.kind === "fake",
+		byNode,
+		byTier,
+		byModel,
+		byCostSource,
+		coverage,
+		cacheTokens,
+		harnessCostUsd: round(harnessCostUsd),
+		result: [...run.ledger].reverse().find((r) => typeof r.output === "string" && r.nodePath !== "@supervisor")?.output ?? null,
+		cost: costFooter(run),
+		...run.supervisor ? { supervisor: supervisorView(run.supervisor) } : {}
+	};
 }
 // src/cli-agents.ts
 /** How each agent CLI receives a neutral agent definition: Claude Code as an --agents JSON file, OpenCode as an agent Markdown file in its own config folder. */
@@ -17637,12 +17668,13 @@ function spawnPlan(command, args, env = process.env, platform = process.platform
 }
 // src/cli-backend.ts
 var TIMEOUT_MS = 9e5;
-var OPENCODE_IDS = {
-	haiku: "anthropic/claude-haiku-5-5",
-	sonnet: "anthropic/claude-sonnet-5-5",
-	opus: "anthropic/claude-opus-5-5"
-};
-var CLAUDE_DISALLOWED = "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,Agent,Task,NotebookEdit";
+/** A prompt without an agent gets no tool at all. */
+var CLAUDE_DISALLOWED = claudeTools([]).disallowed.join(",");
+/** The turn limit of a Claude Code run with an agent, and of a plain prompt without one. */
+var AGENT_MAX_TURNS = "40";
+var PROMPT_MAX_TURNS = "2";
+/** How much of a failing CLI's message or output an error keeps. */
+var ERROR_TEXT_CHARS = 300;
 var MODEL_NAME = /^[\w./:-]+$/;
 var CLAUDE_ISOLATION = [
 	"--setting-sources",
@@ -17745,6 +17777,11 @@ function removeTempDir(dir) {
 		maxRetries: 3
 	});
 }
+/** Why a request cannot start a CLI, or null: an agent name outside the agent alphabet, or an invalid model or extra directory. */
+function requestError(agent, model, dirs) {
+	if (agent && !AGENT_NAME.test(agent)) return `invalid agent name ${agent}`;
+	return invalidRequest(model, dirs);
+}
 function claudeAgentArgs(agent, tools, dirs, definition) {
 	const { allowed, disallowed } = claudeTools(tools);
 	const permission = tools.includes("edit") ? ["--permission-mode", "acceptEdits"] : [];
@@ -17754,7 +17791,7 @@ function claudeAgentArgs(agent, tools, dirs, definition) {
 		"--agent",
 		agent,
 		"--max-turns",
-		"40",
+		AGENT_MAX_TURNS,
 		"--allowedTools",
 		allowed.join(","),
 		"--disallowedTools",
@@ -17765,11 +17802,7 @@ function claudeAgentArgs(agent, tools, dirs, definition) {
 }
 async function runClaude(model, prompt, { agent: named, definition, cwd, tools = ["read"], dirs = [], env = {} } = {}) {
 	const agent = definition?.name ?? named;
-	if (agent && !/^[a-z0-9-]+$/.test(agent)) return {
-		ok: false,
-		error: `invalid agent name ${agent}`
-	};
-	const invalid = invalidRequest(model, dirs);
+	const invalid = requestError(agent, model, dirs);
 	if (invalid) return {
 		ok: false,
 		error: invalid
@@ -17790,7 +17823,7 @@ async function runClaude(model, prompt, { agent: named, definition, cwd, tools =
 		"json",
 		...CLAUDE_ISOLATION,
 		"--max-turns",
-		"2",
+		PROMPT_MAX_TURNS,
 		"--disallowedTools",
 		CLAUDE_DISALLOWED
 	];
@@ -17826,7 +17859,7 @@ async function runClaude(model, prompt, { agent: named, definition, cwd, tools =
 	}));
 	return {
 		ok: !out.is_error,
-		error: out.is_error ? String(out.result).slice(0, 300) : void 0,
+		error: out.is_error ? String(out.result).slice(0, ERROR_TEXT_CHARS) : void 0,
 		text: out.result,
 		turns: out.num_turns,
 		harnessCostUsd: out.total_cost_usd ?? null,
@@ -17834,14 +17867,15 @@ async function runClaude(model, prompt, { agent: named, definition, cwd, tools =
 		durationMs: res.durationMs
 	};
 }
+/** The OpenCode model id: a short alias or a full Claude model id gets the anthropic/ provider prefix; any other id passes as it is. */
+function opencodeModelId(model) {
+	const full = MODEL_ALIASES[model] ?? model;
+	return full.startsWith("claude-") ? `anthropic/${full}` : full;
+}
 async function runOpencode(model, prompt, { agent: named, definition, cwd, configDir, tools = ["read"], dirs = [], env = {} } = {}) {
 	const agent = definition?.name ?? named;
-	const id = OPENCODE_IDS[model] ?? (model.startsWith("claude-") ? `anthropic/${model}` : model);
-	if (agent && !/^[a-z0-9-]+$/.test(agent)) return {
-		ok: false,
-		error: `invalid agent name ${agent}`
-	};
-	const invalid = invalidRequest(model, dirs);
+	const id = opencodeModelId(model);
+	const invalid = requestError(agent, model, dirs);
 	if (invalid) return {
 		ok: false,
 		error: invalid
@@ -17895,7 +17929,7 @@ async function runOpencode(model, prompt, { agent: named, definition, cwd, confi
 	}
 	const dropped = malformedLines > 0 ? { malformedLines } : {};
 	if (error || steps === 0) {
-		const reason = error ? JSON.stringify(error.error ?? error).slice(0, 300) : `opencode exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${res.stderr.slice(-300)}`;
+		const reason = error ? JSON.stringify(error.error ?? error).slice(0, ERROR_TEXT_CHARS) : `opencode exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${res.stderr.slice(-300)}`;
 		return {
 			ok: false,
 			error: malformedLines > 0 ? `${reason} (${malformedLines} malformed output lines dropped)` : reason,
@@ -17987,6 +18021,11 @@ function cspMiddleware({ nonceFactory = createNonce } = {}) {
 		next();
 	};
 }
+// src/fields.ts
+/** The given fields without the empty ones (undefined, null, false, 0 or ""), for optional fields that are left out instead of set to nothing. */
+function definedFields(fields) {
+	return Object.fromEntries(Object.entries(fields).filter(([, value]) => Boolean(value)));
+}
 // src/projects.ts
 var ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
 var SKIP = /* @__PURE__ */ new Set([
@@ -18020,10 +18059,7 @@ function readRegistry(file = projectsFile()) {
 	};
 }
 function writeRegistry(registry, file = projectsFile()) {
-	fs.mkdirSync(path.dirname(file), { recursive: true });
-	const temp = `${file}.${process.pid}.tmp`;
-	fs.writeFileSync(temp, `${JSON.stringify(registry, null, 2)}\n`);
-	fs.renameSync(temp, file);
+	writeFileAtomic(file, `${JSON.stringify(registry, null, 2)}\n`);
 	return registry;
 }
 function sameFolder(a, b) {
@@ -18152,12 +18188,8 @@ function projectInput(id, file = projectsFile()) {
 	return {
 		project: project.path,
 		projectId: project.id,
-		...project.marketplace ? { marketplace: project.marketplace } : {}
+		...definedFields({ marketplace: project.marketplace })
 	};
-}
-function longPath(p) {
-	const resolved = path.resolve(p);
-	return fs.existsSync(resolved) ? fs.realpathSync.native(resolved) : resolved;
 }
 /** The run input of a run started for a registered project: its folder as `project`, its id, and its marketplace unless the input names one. */
 function projectScopedInput(projectId, input) {
@@ -18165,7 +18197,7 @@ function projectScopedInput(projectId, input) {
 	const scoped = projectInput(projectId);
 	if (input.project && longPath(input.project) !== longPath(scoped.project)) throw new Error(`input.project is not the folder of project ${projectId}; pass one of them`);
 	return {
-		...scoped.marketplace ? { marketplace: scoped.marketplace } : {},
+		...definedFields({ marketplace: scoped.marketplace }),
 		...input,
 		project: scoped.project,
 		projectId: scoped.projectId
@@ -18176,8 +18208,10 @@ function projectsAction({ action, path: dir, id, marketplace }) {
 	if (action === "list") return readRegistry();
 	if (action === "add") return { project: addProject({
 		path: dir ?? "",
-		...id ? { id } : {},
-		...marketplace ? { marketplace } : {}
+		...definedFields({
+			id,
+			marketplace
+		})
 	}) };
 	if (action === "remove") return { project: removeProject(id ?? "") };
 	if (action === "add_root") return { roots: addRoot(dir ?? "") };
@@ -18198,8 +18232,10 @@ function projectsCli(argv, file = projectsFile()) {
 		case "list": return readRegistry(file);
 		case "add": return addProject({
 			path: positional[0] ?? "",
-			...flag("id") ? { id: flag("id") } : {},
-			...flag("marketplace") ? { marketplace: flag("marketplace") } : {}
+			...definedFields({
+				id: flag("id"),
+				marketplace: flag("marketplace")
+			})
 		}, file);
 		case "remove": return removeProject(positional[0] ?? "", file);
 		case "roots":
@@ -18348,7 +18384,7 @@ function mainAgents(marketplace) {
 	}
 	return found.sort((a, b) => a.agent.localeCompare(b.agent));
 }
-function scanMarketplace(specs, lock, marketplace, head, exists) {
+function scanMarketplace({ specs, lock, marketplace, head, exists }) {
 	const mapped = new Set(specs.flatMap((s) => sourceFiles(s, marketplace)));
 	const broken = specs.flatMap((s) => s.nodes.flatMap((n) => {
 		return [
@@ -18394,7 +18430,7 @@ async function updateMarketplace(exec, marketplace) {
 		changedFiles: before === after ? [] : (await git("diff", "--name-only", before, after)).split(/\r?\n/).filter(Boolean)
 	};
 }
-function lockWorkflows(workflows, marketplace, commit, names, sources) {
+function lockWorkflows({ workflows, marketplace, commit, names, sources }) {
 	const specs = loadWorkflowSpecs(workflows);
 	const accepted = new Set(names);
 	for (const spec of specs) if (sourceFiles(spec, marketplace).some((f) => sources.includes(f))) accepted.add(spec.name);
@@ -18433,8 +18469,20 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 	}).trim();
 	if (command === "scan") {
 		const lock = readLock(path.join(path.dirname(workflows), "workflows.lock.json"));
-		console.log(JSON.stringify(scanMarketplace(loadWorkflowSpecs(workflows), lock, marketplace, head(), (name) => describeAgent(name) !== null)));
-	} else if (command === "lock") console.log(JSON.stringify({ locked: lockWorkflows(workflows, marketplace, flag(args, "commit") ?? head(), list(flag(args, "names")), list(flag(args, "sources"))) }));
+		console.log(JSON.stringify(scanMarketplace({
+			specs: loadWorkflowSpecs(workflows),
+			lock,
+			marketplace,
+			head: head(),
+			exists: (name) => describeAgent(name) !== null
+		})));
+	} else if (command === "lock") console.log(JSON.stringify({ locked: lockWorkflows({
+		workflows,
+		marketplace,
+		commit: flag(args, "commit") ?? head(),
+		names: list(flag(args, "names")),
+		sources: list(flag(args, "sources"))
+	}) }));
 	else {
 		const commit = command ?? head();
 		const lock = buildLock(loadWorkflowSpecs(workflows), marketplace, commit);
@@ -18493,9 +18541,11 @@ function parseProjectsAction(body) {
 	const marketplace = text("marketplace");
 	return {
 		action: b.action,
-		...dir ? { path: dir } : {},
-		...id ? { id } : {},
-		...marketplace ? { marketplace } : {}
+		...definedFields({
+			path: dir,
+			id,
+			marketplace
+		})
 	};
 }
 /** The status file named in a status run's state; only JSON files in the factory home's project-status folder. */
@@ -18794,7 +18844,13 @@ function scan(factoryDir) {
 	} catch {
 		head = "";
 	}
-	return scanMarketplace(loadWorkflowSpecs(path.join(factoryDir, "workflows")), readLock(), marketplace, head, (name) => describeAgent(name) !== null);
+	return scanMarketplace({
+		specs: loadWorkflowSpecs(path.join(factoryDir, "workflows")),
+		lock: readLock(),
+		marketplace,
+		head,
+		exists: (name) => describeAgent(name) !== null
+	});
 }
 function apiMiddleware(api) {
 	return async (req, res, next) => {
@@ -18953,4 +19009,4 @@ function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHost
 		return true;
 	};
 }
-export { VIEWER_HEALTH as C, __toESM as D, viewerOptions as E, FACTORY_DIR as S, registerDataSource as T, require_dist as _, listProjects as a, homeEnvNote as b, cliExecutor as c, errorMessage as d, loadedWorkflows as f, loadFactoryConfig as g, marketplaceDir as h, viewerUrlFor as i, hostExec as l, parseCli as m, failRequest as n, projectScopedInput as o, parseBackend as p, viewerHandler as r, projectsAction as s, allowedHostsFor as t, Factory as u, require_ajv as v, defaultDataDir as w, DEFAULT_VIEWER_PORT as x, mustache as y };
+export { __toESM as A, FACTORY_DIR as C, registerDataSource as D, longPath as E, viewerOptions as O, DEFAULT_VIEWER_PORT as S, defaultDataDir as T, loadFactoryConfig as _, listProjects as a, mustache as b, definedFields as c, Factory as d, errorMessage as f, marketplaceDir as g, parseCli as h, viewerUrlFor as i, writeFileAtomic as k, cliExecutor as l, parseBackend as m, failRequest as n, projectScopedInput as o, loadedWorkflows as p, viewerHandler as r, projectsAction as s, allowedHostsFor as t, hostExec as u, require_dist as v, VIEWER_HEALTH as w, homeEnvNote as x, require_ajv as y };

@@ -12,6 +12,7 @@ import { projectScopedInput, projectsAction, readRegistry } from "./projects.ts"
 import type { Project, ProjectsActionRequest } from "./projects.ts";
 import { standaloneNames, workflowsThatRan } from "./standalone.ts";
 import { readLock, scanMarketplace, updateMarketplace } from "./sources-lock.ts";
+import { definedFields } from "./fields.ts";
 import type { MarketplaceScan, UpdateResult } from "./sources-lock.ts";
 import { execFileSync } from "node:child_process";
 import { hostExec } from "./cli-backend.ts";
@@ -142,7 +143,7 @@ export function parseProjectsAction(body: unknown): ViewerProjectsRequest {
   const dir = text("path");
   const id = text("id");
   const marketplace = text("marketplace");
-  return { action: b.action as ViewerProjectsRequest["action"], ...(dir ? { path: dir } : {}), ...(id ? { id } : {}), ...(marketplace ? { marketplace } : {}) };
+  return { action: b.action as ViewerProjectsRequest["action"], ...definedFields({ path: dir, id, marketplace }) };
 }
 
 /** The status file named in a status run's state; only JSON files in the factory home's project-status folder. */
@@ -407,7 +408,7 @@ function scan(factoryDir: string): MarketplaceScan {
     head = "";
   }
   const specs = loadWorkflowSpecs(path.join(factoryDir, "workflows"));
-  return scanMarketplace(specs, readLock(), marketplace, head, (name) => describeAgent(name) !== null);
+  return scanMarketplace({ specs, lock: readLock(), marketplace, head, exists: (name) => describeAgent(name) !== null });
 }
 
 export function apiMiddleware(api: DataApi) {
