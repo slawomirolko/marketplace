@@ -14,6 +14,12 @@
 ## Only adapter hunks
 - Every hunk is `adapter`: the staged copy equals the base. The plan skips it. Report that the change is project-specific and belongs in `project.md`.
 
+## Resolve: deleted file
+- A conflicted file was deleted on one side. Keep it when the other side changed it on purpose and nothing replaces it; delete it only when the removal clearly wins. Either way, mark the hunk `sure: false` so the person decides.
+
+## Resolve: no way to keep both
+- The local change and the upstream change contradict each other. Keep the upstream text, describe the dropped local intent in `reason`, and mark it `sure: false`.
+
 ## Failed command
 - Report the command and its last error lines. Remove a worktree you created. Do not retry with other flags.
 

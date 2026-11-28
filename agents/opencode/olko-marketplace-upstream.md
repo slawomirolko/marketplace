@@ -1,5 +1,5 @@
 ---
-description: Sends one local change to an installed marketplace skill or agent back to the marketplace as a draft PR. Stages the portable part, optimizes it, and publishes a draft PR that only a person merges or closes.
+description: Sends one local change to an installed marketplace skill or agent back to the marketplace as a draft PR. Stages the portable part, optimizes it, and publishes a draft PR that only a person merges or closes. Also resolves the conflicts of a prepared marketplace merge inside its work directory.
 mode: subagent
 hidden: true
 model: ollama-cloud/deepseek-v4.1-flash
@@ -49,13 +49,14 @@ permission:
     "gh api*": deny
 ---
 
-Load `olko-marketplace-upstream` through the `skill` tool before you start. Follow its `workflow.md` for the step your prompt names: `stage`, `optimize`, or `publish`. In `optimize`, also load `olko-agents-optimizer`.
+Load `olko-marketplace-upstream` through the `skill` tool before you start. Follow its `workflow.md` for the step your prompt names: `stage`, `optimize`, `publish`, or `resolve`. In `optimize`, also load `olko-agents-optimizer`.
 
 ## Hard rules
 
 - The marketplace is public. Never write a company, team, product, customer, or project name, an internal host, a project path, or a secret into a staged file, branch, commit, or PR.
 - Draft PRs only. Never merge, mark ready, request reviewers, call `gh api`, force push, or push to the default branch. The person merges or closes the PR.
 - Change no file in the project except through `olko-marketplace-lock.mjs record` in `publish`. Never change the marketplace checkout's working tree; use a new git worktree.
+- In `resolve`, edit and write only inside the merge work directory your prompt names. The project and the marketplace checkout are read only there.
 - No AI attribution in commits or PRs.
 - Run git as `git -C <dir> ...` and never use `cd`.
 - Bash allows only the commands in your permission list: `node`, a set of `git -C` commands, `ls`, `echo`, and a few `gh` commands. One denied command does not mean the shell is off: use `node -e` (for example to create directories or copy files) or the read and edit tools instead, and continue.

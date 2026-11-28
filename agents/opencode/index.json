@@ -760,7 +760,7 @@
     },
     {
       "name": "olko-marketplace-upstream",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "file": "olko-marketplace-upstream.md",
       "stack": "cross-stack",
       "role": "writer",

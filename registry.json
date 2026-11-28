@@ -1047,8 +1047,8 @@
     {
       "name": "olko-marketplace-upstream",
       "category": "marketplace",
-      "version": "1.0.3",
-      "description": "Send one local change to an installed marketplace skill or agent back to the marketplace as a draft PR. Stage the change without the project adapter, keep project-specific hunks out, optimize the staged copy, and publish a draft PR that only a person merges or closes. Use when the factory marketplace-upstream watch or the person asks to upstream a changed artifact. Triggers: 'upstream this skill change', 'send local change to marketplace', 'olko-marketplace-upstream'.",
+      "version": "1.1.0",
+      "description": "Send one local change to an installed marketplace skill or agent back to the marketplace as a draft PR. Stage the change without the project adapter, keep project-specific hunks out, optimize the staged copy, and publish a draft PR that only a person merges or closes. Also resolves the conflicts of a prepared marketplace merge in its work directory. Use when the factory marketplace-upstream watch, the marketplace merge workflow, or the person asks to upstream a changed artifact. Triggers: 'upstream this skill change', 'send local change to marketplace', 'resolve marketplace merge', 'olko-marketplace-upstream'.",
       "tags": [
         "marketplace",
         "upstream",
