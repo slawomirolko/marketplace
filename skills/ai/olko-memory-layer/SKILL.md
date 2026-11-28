@@ -1,6 +1,6 @@
 ---
 name: olko-memory-layer
-description: Manage an OpenCode agent's recurring-learning memory. Use whenever an agent reads, writes, compacts, or defines a memory layer or persistent-memory block.
+description: Manage an OpenCode agent's recurring-learning memory. Use whenever an agent reads, writes, compacts, audits, prunes, or defines a memory layer or persistent-memory block.
 ---
 
 # Olko Memory Layer
