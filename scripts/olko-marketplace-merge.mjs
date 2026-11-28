@@ -14,8 +14,14 @@
  * This is a marketplace gate: it runs from a marketplace checkout (`<marketplace>/scripts/`), never from an
  * installed skill. See "Script ownership" in docs/project-change-upstream.md.
  *
+ * `apply` then writes the proposed copies of the selected items, and only those, into every location of the
+ * project that holds the item, leaves the adapter (`project.md`, `*.local.*`, the agent `model:` line) alone,
+ * removes the files the merge removed, and records the new base and the approved content hash in the project's
+ * marketplace lock. It refuses to write anything while a selected item still holds conflict markers.
+ *
  * Usage:
  *   node scripts/olko-marketplace-merge.mjs prepare --project <dir> --marketplace <dir> --out <dir> [--no-fetch] [--json]
+ *   node scripts/olko-marketplace-merge.mjs apply --out <dir> --selected <id,id,...|none> [--json]
  */
 
 import { spawnSync } from "node:child_process";
@@ -25,18 +31,30 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   DEFAULT_DEPTH,
+  HASH_PREFIX,
+  copyAt,
+  copyAtLocation,
   git,
+  hashFiles,
   installedArtifacts,
+  isAdapterFile,
   marketplaceVersions,
   normalizeText,
+  portableText,
 } from "../skills/software-factory/olko-factory-project/scripts/installed-artifacts.mjs";
 import { projectStatus } from "../skills/software-factory/olko-factory-project/scripts/project-scan.mjs";
-import { readLock } from "./olko-marketplace-lock.mjs";
+import { isArtifactId, readLock, record } from "./olko-marketplace-lock.mjs";
 import { parseFlags } from "./lib/cli.mjs";
 
 const SOURCE_HARNESS = "source";
 const FRONT_MATTER_FENCE = "---\n";
 const PREPARE = "prepare";
+const APPLY = "apply";
+const PLAN_FILE = "plan.json";
+/** The file an agent step may write into an item folder; it describes the resolution and is never installed. */
+const RESOLUTION_FILE = "resolution.json";
+const CONFLICT_MARKER = /^(<<<<<<< local|>>>>>>> upstream)\s*$/m;
+const NONE = "none";
 const MERGE_LABELS = ["-L", "local", "-L", "base", "-L", "upstream"];
 const MAX_CONFLICT_STATUS = 127;
 
@@ -257,8 +275,155 @@ export function prepare({ project, marketplace, out, fetch = true }) {
     conflicts: items.reduce((sum, item) => sum + item.files.filter((file) => file.result === "conflict").length, 0),
     items,
   };
-  fs.writeFileSync(path.join(out, "plan.json"), `${JSON.stringify(plan, null, 2)}\n`);
+  fs.writeFileSync(path.join(out, PLAN_FILE), `${JSON.stringify(plan, null, 2)}\n`);
   return plan;
+}
+
+/** The relative paths of every file under `root`, in path order, with `/` separators. */
+function listFiles(root, base = root) {
+  const files = [];
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    const full = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listFiles(full, base));
+    } else if (entry.isFile()) {
+      files.push(path.relative(base, full).split(path.sep).join("/"));
+    }
+  }
+  return files.sort();
+}
+
+/** True when `target` is `root` or inside it. */
+function isInside(root, target) {
+  const resolvedRoot = path.resolve(root);
+  const resolved = path.resolve(target);
+  return resolved === resolvedRoot || resolved.startsWith(`${resolvedRoot}${path.sep}`);
+}
+
+/** The text of the proposed files of an item folder: no adapter files and no `resolution.json`; an agent has its one file. */
+function proposedFiles(item) {
+  const files = new Map();
+  for (const name of listFiles(item.dir)) {
+    if (!isAdapterFile(name) && name !== RESOLUTION_FILE) {
+      files.set(name, fs.readFileSync(path.join(item.dir, name), "utf8"));
+    }
+  }
+  if (item.kind === "agent") {
+    const file = `${item.name}.md`;
+    if (!files.has(file)) {
+      throw new Error(`The proposed copy of ${item.id} has no ${file}`);
+    }
+    return new Map([[file, files.get(file)]]);
+  }
+  return files;
+}
+
+/** An item of the plan, checked: its kind, name, locations and folder cannot reach outside the project or the work directory. */
+function loadItem(plan, out, item) {
+  const kindOk = item.kind === "skill" || item.kind === "agent";
+  if (!kindOk || !isArtifactId(`${item.kind}:${item.name}`) || !item.id.startsWith(`${item.kind}:${item.name}`)) {
+    throw new Error(`The plan holds an invalid item: ${item.id}`);
+  }
+  if (typeof item.dir !== "string" || !isInside(out, item.dir) || path.resolve(item.dir) === path.resolve(out)) {
+    throw new Error(`The folder of ${item.id} is outside the work directory`);
+  }
+  const locations = Array.isArray(item.locations) ? item.locations : [];
+  const targets = locations.map((location) => (typeof location === "string" ? copyAtLocation(plan.project, item.kind, item.name, location)?.target : undefined));
+  if (targets.length === 0 || targets.some((target) => target === undefined)) {
+    throw new Error(`The plan holds an invalid location for ${item.id}`);
+  }
+  const files = proposedFiles(item);
+  const portable = new Map([...files].map(([name, text]) => [name, portableText(item.kind, text)]));
+  return { item, lockId: `${item.kind}:${item.name}`, files, hash: hashFiles(portable).hash, targets: locations.map((location, index) => ({ location, target: targets[index] })) };
+}
+
+/** The conflicted files of an item that still hold the markers `prepare` wrote. */
+function unresolvedFiles(loaded) {
+  return loaded.item.files.filter((file) => file.result === "conflict" && CONFLICT_MARKER.test(loaded.files.get(file.path) ?? "")).map((file) => file.path);
+}
+
+/** True when the project and the lock already hold the proposed result of an item. */
+function isApplied(lock, loaded) {
+  const { item, lockId, hash } = loaded;
+  const entry = lock && Object.hasOwn(lock, lockId) ? lock[lockId] : null;
+  const recorded = entry?.sourceCommit === item.versions.upstreamCommit && `${HASH_PREFIX}${entry.approved}` === hash;
+  const written = loaded.targets.every(({ location, target }) => fs.existsSync(target) && copyAt(item.kind, item.name, null, location, target).contentHash === hash);
+  return recorded && written;
+}
+
+/** Removes `directory` and its parents up to `root` while they are empty. */
+function pruneEmpty(directory, root) {
+  let current = directory;
+  while (current !== path.resolve(root) && isInside(root, current) && fs.readdirSync(current).length === 0) {
+    fs.rmdirSync(current);
+    current = path.dirname(current);
+  }
+}
+
+/** Writes the proposed files into one installed copy and removes the portable files the merge removed. */
+function writeCopy(loaded, target) {
+  if (loaded.item.kind === "agent") {
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, loaded.files.get(`${loaded.item.name}.md`));
+    return;
+  }
+  for (const [name, text] of loaded.files) {
+    const file = path.resolve(target, name);
+    if (!isInside(target, file)) {
+      throw new Error(`An artifact file path leaves its folder: ${name}`);
+    }
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, text);
+  }
+  for (const name of listFiles(target)) {
+    if (!loaded.files.has(name) && !isAdapterFile(name)) {
+      fs.rmSync(path.join(target, name));
+      pruneEmpty(path.dirname(path.join(target, name)), target);
+    }
+  }
+}
+
+/** Records the new base and the approved hash of a written item; returns true when the result still differs from upstream. */
+function recordApplied(plan, loaded) {
+  const { item, lockId, hash } = loaded;
+  const lock = readLock(plan.project);
+  const previous = lock && Object.hasOwn(lock, lockId) ? lock[lockId] : null;
+  const location = item.locations.includes(previous?.location) ? previous.location : item.locations[0];
+  const approved = hash.slice(HASH_PREFIX.length);
+  const entry = record(plan.project, lockId, { marketplace: plan.marketplace, baseCommit: item.versions.upstreamCommit, approved, location });
+  return entry.hash !== hash;
+}
+
+/**
+ * Applies the selected items of the plan in `out` to the project and records their new base in the lock.
+ * Refuses, before writing anything, an unknown id and an item that still holds conflict markers.
+ * `applied` lists the items written or recorded, `skipped` every other item of the plan (not selected, or
+ * already applied), and `upstream` the applied items whose result still differs from the marketplace.
+ */
+export function apply({ out, selected }) {
+  const plan = JSON.parse(fs.readFileSync(path.join(out, PLAN_FILE), "utf8"));
+  const unknown = selected.filter((id) => !plan.ids.includes(id));
+  if (unknown.length > 0) {
+    throw new Error(`Not in the plan: ${unknown.join(", ")}`);
+  }
+  const loadedItems = plan.items.filter((item) => selected.includes(item.id)).map((item) => loadItem(plan, out, item));
+  const unresolved = loadedItems.map((loaded) => ({ id: loaded.item.id, files: unresolvedFiles(loaded) })).filter((entry) => entry.files.length > 0);
+  if (unresolved.length > 0) {
+    throw new Error(`Conflict markers remain: ${unresolved.map((entry) => `${entry.id} (${entry.files.join(", ")})`).join("; ")}`);
+  }
+  const lock = readLock(plan.project);
+  const applied = [];
+  const upstream = [];
+  for (const loaded of loadedItems.filter((candidate) => !isApplied(lock, candidate))) {
+    for (const { target } of loaded.targets) {
+      writeCopy(loaded, target);
+    }
+    applied.push(loaded.item.id);
+    if (recordApplied(plan, loaded)) {
+      upstream.push(loaded.item.id);
+    }
+  }
+  return { applied, skipped: plan.ids.filter((id) => !applied.includes(id)), upstream };
 }
 
 function requireFlag(options, key, flag) {
@@ -268,11 +433,7 @@ function requireFlag(options, key, flag) {
   return path.resolve(options[key]);
 }
 
-function main() {
-  const [command, ...rest] = process.argv.slice(2);
-  if (command !== PREPARE) {
-    throw new Error(`Unknown command: ${command}. Use ${PREPARE}.`);
-  }
+function runPrepare(rest) {
   const options = parseFlags(rest, { values: { "--project": "project", "--marketplace": "marketplace", "--out": "out" }, switches: { "--no-fetch": "noFetch", "--json": "json" } });
   const plan = prepare({
     project: requireFlag(options, "project", "--project"),
@@ -280,7 +441,26 @@ function main() {
     out: requireFlag(options, "out", "--out"),
     fetch: !options.noFetch,
   });
-  console.log(options.json ? JSON.stringify(plan, null, 2) : JSON.stringify(plan));
+  return { result: plan, json: options.json };
+}
+
+function runApply(rest) {
+  const options = parseFlags(rest, { values: { "--out": "out", "--selected": "selected" }, switches: { "--json": "json" } });
+  if (!options.selected) {
+    throw new Error("Missing --selected <id,id,...|none>");
+  }
+  const selected = options.selected === NONE ? [] : [...new Set(options.selected.split(",").filter(Boolean))];
+  return { result: apply({ out: requireFlag(options, "out", "--out"), selected }), json: options.json };
+}
+
+function main() {
+  const [command, ...rest] = process.argv.slice(2);
+  const commands = { [PREPARE]: runPrepare, [APPLY]: runApply };
+  if (!Object.hasOwn(commands, command ?? "")) {
+    throw new Error(`Unknown command: ${command}. Use ${PREPARE} or ${APPLY}.`);
+  }
+  const { result, json } = commands[command](rest);
+  console.log(json ? JSON.stringify(result, null, 2) : JSON.stringify(result));
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

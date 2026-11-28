@@ -16,7 +16,8 @@
  *   node scripts/olko-marketplace-lock.mjs init   --project <dir> --marketplace <dir> [--depth <n>] [--json]
  *   node scripts/olko-marketplace-lock.mjs status --project <dir> --marketplace <dir> [--depth <n>] [--json]
  *   node scripts/olko-marketplace-lock.mjs record --project <dir> --artifact <skill:x|agent:x>
- *        (--pending-pr <n> --content-hash <sha256> | --clear-pending | --rejected <sha256>) [--json]
+ *        (--pending-pr <n> --content-hash <sha256> | --clear-pending | --rejected <sha256>
+ *        | --marketplace <dir> --base-commit <sha> [--approved <sha256>] | --approved <sha256>) [--json]
  */
 
 import fs from "node:fs";
@@ -34,6 +35,7 @@ import {
   installedArtifacts as installedCopies,
   marketplacePath,
   marketplaceVersions,
+  git,
 } from "../skills/software-factory/olko-factory-project/scripts/installed-artifacts.mjs";
 import { parseFlags, readJson } from "./lib/cli.mjs";
 
@@ -49,6 +51,10 @@ const SCHEMA_KEY = "schemaVersion";
 const BARE_HASH = /^[0-9a-f]{64}$/;
 const POSITIVE_INTEGER = /^[1-9][0-9]*$/;
 const COMMANDS = ["init", "status", "record"];
+/** A commit given by hex, short or full. */
+const COMMIT_ID = /^[0-9a-f]{7,64}$/;
+/** Lock entry fields that only describe a copy whose base was guessed or unknown. */
+const GUESSED_BASE_FIELDS = ["state", "baseGuessed", "base", "nearestVersion", "nearestCommit"];
 
 /** A skill, agent or category name, or an agent file name: no path separators, no leading dot or underscore. */
 export const NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
@@ -240,6 +246,7 @@ function describeChange(marketplace, artifact, entry, current, files) {
     latestVersion: latest?.version ?? null,
     pending: entry.pending ?? null,
     rejected: (entry.rejected ?? []).includes(contentHash),
+    approved: entry.approved === contentHash,
   };
 }
 
@@ -278,13 +285,67 @@ export function status(project, marketplace) {
   return { changed, missing, untracked };
 }
 
-/** Records a pending PR, clears it, or records a rejected content hash (which also clears a matching pending PR). */
+/** The full commit id of a marketplace commit; throws when `commit` is not one. */
+function resolveCommit(marketplace, commit) {
+  if (typeof commit !== "string" || !COMMIT_ID.test(commit)) {
+    throw new Error("--base-commit needs a marketplace commit id");
+  }
+  try {
+    return git(marketplace, "rev-parse", "--verify", "--quiet", `${commit}^{commit}`);
+  } catch {
+    throw new Error(`The marketplace has no commit ${commit}`);
+  }
+}
+
+/**
+ * The lock entry of `artifact` moved to the marketplace commit `options.baseCommit`: version, source commit,
+ * hash and files are the marketplace version at that commit. Creates the entry when the lock has none; its
+ * location is `options.location`, the old entry's, or the first installed copy.
+ */
+function entryAtCommit(project, lock, artifact, options) {
+  if (!options.marketplace) {
+    throw new Error("--base-commit needs --marketplace <dir>");
+  }
+  const commit = resolveCommit(options.marketplace, options.baseCommit);
+  const [kind, name] = artifact.split(":");
+  const previous = Object.hasOwn(lock, artifact) ? lock[artifact] : {};
+  const copies = installedCopies(project).filter((copy) => copy.kind === kind && copy.name === name);
+  const location = options.location ?? previous.location ?? copies[0]?.location;
+  if (location !== undefined && !copyAtLocation(project, kind, name, location)) {
+    throw new Error("The artifact location is not an installed location");
+  }
+  const harness = copies.find((copy) => copy.location === location)?.harness ?? null;
+  const found = marketplacePath(options.marketplace, { kind, name, harness }, commit);
+  const version = found?.present ? marketplaceVersions(options.marketplace, kind, found.path, 1, commit).versions[0] : null;
+  if (!version) {
+    throw new Error(`The marketplace has no ${artifact} at ${commit}`);
+  }
+  const entry = { ...previous, kind, source: found.path, ...(location === undefined ? {} : { location }), version: version.version, sourceCommit: commit, hash: version.contentHash, files: version.files, pending: previous.pending ?? null, rejected: previous.rejected ?? [] };
+  for (const field of GUESSED_BASE_FIELDS) {
+    delete entry[field];
+  }
+  return entry;
+}
+
+/**
+ * Records a pending PR, clears it, records a rejected content hash (which also clears a matching pending PR),
+ * moves the base to a marketplace commit (`baseCommit`, with `marketplace`), or stores the approved content hash.
+ */
 export function record(project, artifact, options) {
-  const lock = readLock(project);
-  if (!isArtifactId(artifact) || !lock || !Object.hasOwn(lock, artifact)) {
+  const lock = readLock(project) ?? (options.baseCommit ? { schemaVersion: LOCK_SCHEMA_VERSION } : null);
+  if (!isArtifactId(artifact) || !lock || (!options.baseCommit && !Object.hasOwn(lock, artifact))) {
     throw new Error(`The artifact is not in ${LOCK_PATH}`);
   }
+  if (options.approved !== undefined && !BARE_HASH.test(options.approved)) {
+    throw new Error("--approved needs a sha256 content hash");
+  }
+  if (options.baseCommit) {
+    lock[artifact] = entryAtCommit(project, lock, artifact, options);
+  }
   const entry = lock[artifact];
+  if (options.approved !== undefined) {
+    entry.approved = options.approved;
+  }
   if (options.clearPending) {
     entry.pending = null;
   }
@@ -311,7 +372,7 @@ export function record(project, artifact, options) {
 }
 
 const FLAGS = {
-  values: { "--project": "project", "--marketplace": "marketplace", "--artifact": "artifact", "--pending-pr": "pendingPr", "--content-hash": "contentHash", "--rejected": "rejected", "--depth": "depth" },
+  values: { "--project": "project", "--marketplace": "marketplace", "--artifact": "artifact", "--pending-pr": "pendingPr", "--content-hash": "contentHash", "--rejected": "rejected", "--base-commit": "baseCommit", "--approved": "approved", "--depth": "depth" },
   switches: { "--json": "json", "--clear-pending": "clearPending" },
 };
 
@@ -321,7 +382,7 @@ function parseArgs(argv) {
   if (!options.project) {
     throw new Error("Missing --project <dir>");
   }
-  if (command !== "record" && !options.marketplace) {
+  if ((command !== "record" || options.baseCommit) && !options.marketplace) {
     throw new Error("Missing --marketplace <dir>");
   }
   if (options.depth !== undefined && !POSITIVE_INTEGER.test(options.depth)) {
@@ -344,7 +405,7 @@ function main() {
   const run = {
     init: () => init(project, marketplace, { depth: options.depth ? Number(options.depth) : DEFAULT_DEPTH }),
     status: () => status(project, marketplace),
-    record: () => record(project, options.artifact, options),
+    record: () => record(project, options.artifact, { ...options, marketplace }),
   };
   print(run[options.command](), options.json);
 }

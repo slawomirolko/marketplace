@@ -5,7 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { prepare } from "./olko-marketplace-merge.mjs";
+import { apply, prepare } from "./olko-marketplace-merge.mjs";
+import { status as lockStatus } from "./olko-marketplace-lock.mjs";
 
 const scriptPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "olko-marketplace-merge.mjs");
 const SKILL_DIR = ".agents/skills/sample-skill";
@@ -294,4 +295,183 @@ test("agent model line stays at its line position in the front matter", () => {
   assert.equal(lines[1], "description: a");
   assert.equal(lines[3], "mode: primary");
   assert.ok(lines.includes("line four"));
+});
+
+const CONFLICT_ID = "skill:sample-skill";
+
+function conflictFixture() {
+  const f = fixture({
+    changeV2: (dir) => {
+      write(dir, "skills/demo/sample-skill/SKILL.md", skillFile("1.1.0", "step one\nstep two"));
+      write(dir, "skills/demo/sample-skill/workflow.md", "flow UPSTREAM\nflow two\nflow three\n");
+      write(dir, "agents/opencode/sample-agent.md", AGENT_V2);
+    },
+  });
+  installV1Skill(f, SKILL_DIR, { workflow: "flow LOCAL\nflow two\nflow three\n" });
+  return f;
+}
+
+function applyRun(f, selected) {
+  return apply({ out: f.out, selected });
+}
+
+function lockEntry(f, id = "skill:sample-skill") {
+  return JSON.parse(read(f.project, ".agents/marketplace.lock.json"))[id];
+}
+
+function snapshot(root) {
+  return fs.readdirSync(root, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => {
+    const full = path.join(entry.parentPath, entry.name);
+    return `${path.relative(root, full)}\0${fs.readFileSync(full, "utf8")}`;
+  }).sort();
+}
+
+test("apply writes only selected items, to every location, adapter untouched", () => {
+  const f = fixture();
+  installV1Skill(f);
+  installV1Skill(f, ".claude/skills/sample-skill");
+  write(f.project, `${SKILL_DIR}/project.md`, "lintCommand: make lint\n");
+  write(f.project, `${SKILL_DIR}/notes.local.md`, "mine\n");
+  write(f.project, AGENT_FILE, agentFile("provider/project", "line one\nline two\nline three"));
+  const plan = run(f);
+  const agentBefore = read(f.project, AGENT_FILE);
+  const result = applyRun(f, ["skill:sample-skill"]);
+  assert.deepEqual(result, { applied: ["skill:sample-skill"], skipped: ["agent:sample-agent"], upstream: [] });
+  for (const dir of [SKILL_DIR, ".claude/skills/sample-skill"]) {
+    assert.equal(read(f.project, `${dir}/SKILL.md`), skillFile("1.1.0", "step one\nstep two"));
+  }
+  assert.equal(read(f.project, `${SKILL_DIR}/project.md`), "lintCommand: make lint\n");
+  assert.equal(read(f.project, `${SKILL_DIR}/notes.local.md`), "mine\n");
+  assert.equal(fs.existsSync(path.join(f.project, ".claude/skills/sample-skill/project.md")), false);
+  assert.equal(read(f.project, AGENT_FILE), agentBefore);
+  assert.equal(plan.ids.length, 2);
+});
+
+test("apply keeps the agent model line and removes files the merge removed", () => {
+  const f = fixture({
+    changeV2: (dir) => {
+      fs.rmSync(path.join(dir, "skills/demo/sample-skill/workflow.md"));
+      write(dir, "agents/opencode/sample-agent.md", AGENT_V2);
+    },
+  });
+  installV1Skill(f);
+  write(f.project, `${SKILL_DIR}/project.md`, "adapter\n");
+  write(f.project, AGENT_FILE, agentFile("provider/project", "line one\nline two\nline three"));
+  run(f);
+  const result = applyRun(f, ["agent:sample-agent", "skill:sample-skill"]);
+  assert.deepEqual(result.applied, ["agent:sample-agent", "skill:sample-skill"]);
+  assert.equal(read(f.project, AGENT_FILE), agentFile("provider/project", "line one\nline two\nline three\nline four"));
+  assert.equal(fs.existsSync(path.join(f.project, SKILL_DIR, "workflow.md")), false);
+  assert.equal(read(f.project, `${SKILL_DIR}/project.md`), "adapter\n");
+});
+
+test("apply refuses an item whose dir still holds conflict markers", () => {
+  const f = conflictFixture();
+  write(f.project, AGENT_FILE, agentFile("provider/project", "line one\nline two\nline three"));
+  run(f);
+  const before = snapshot(f.project);
+  assert.throws(() => applyRun(f, ["agent:sample-agent", CONFLICT_ID]), /Conflict markers remain/);
+  assert.deepEqual(snapshot(f.project), before);
+  assert.equal(fs.existsSync(path.join(f.project, ".agents/marketplace.lock.json")), false);
+});
+
+test("apply accepts an item whose conflict was resolved, and ignores resolution.json", () => {
+  const f = conflictFixture();
+  const plan = run(f);
+  const item = itemOf(plan, CONFLICT_ID);
+  write(item.dir, "workflow.md", "flow RESOLVED\nflow two\nflow three\n");
+  write(item.dir, "resolution.json", "{}\n");
+  const result = applyRun(f, [CONFLICT_ID]);
+  assert.deepEqual(result.applied, [CONFLICT_ID]);
+  assert.equal(read(f.project, `${SKILL_DIR}/workflow.md`), "flow RESOLVED\nflow two\nflow three\n");
+  assert.equal(fs.existsSync(path.join(f.project, SKILL_DIR, "resolution.json")), false);
+  assert.deepEqual(result.upstream, [CONFLICT_ID]);
+});
+
+test("apply records the new base and the approved hash; lock status reports approved", () => {
+  const f = fixture();
+  installV1Skill(f, SKILL_DIR, { workflow: "flow ONE\nflow two\nflow three\n" });
+  write(f.project, `${SKILL_DIR}/project.md`, "adapter\n");
+  run(f);
+  const result = applyRun(f, [CONFLICT_ID]);
+  assert.deepEqual(result.upstream, [CONFLICT_ID]);
+  const entry = lockEntry(f);
+  assert.equal(entry.sourceCommit, f.v2);
+  assert.equal(entry.version, "1.1.0");
+  assert.equal(entry.location, SKILL_DIR);
+  assert.match(entry.approved, /^[0-9a-f]{64}$/);
+  const report = lockStatus(f.project, f.market);
+  assert.equal(report.changed.length, 1);
+  assert.equal(report.changed[0].approved, true);
+  assert.equal(report.changed[0].contentHash, entry.approved);
+  assert.equal(report.changed[0].upstreamMoved, false);
+  assert.deepEqual(report.changed[0].files, ["workflow.md"]);
+});
+
+test("apply of an outdated copy leaves nothing to send upstream", () => {
+  const f = fixture();
+  installV1Skill(f);
+  run(f);
+  const result = applyRun(f, [CONFLICT_ID]);
+  assert.deepEqual(result, { applied: [CONFLICT_ID], skipped: [], upstream: [] });
+  assert.equal(lockEntry(f).sourceCommit, f.v2);
+  assert.deepEqual(lockStatus(f.project, f.market).changed, []);
+});
+
+test("apply with none writes nothing", () => {
+  const f = fixture();
+  installV1Skill(f);
+  run(f);
+  const before = snapshot(f.project);
+  assert.deepEqual(applyRun(f, []), { applied: [], skipped: [CONFLICT_ID], upstream: [] });
+  assert.deepEqual(snapshot(f.project), before);
+});
+
+test("apply twice with the same answer writes and records nothing new", () => {
+  const f = fixture();
+  installV1Skill(f, SKILL_DIR, { workflow: "flow ONE\nflow two\nflow three\n" });
+  run(f);
+  assert.deepEqual(applyRun(f, [CONFLICT_ID]).applied, [CONFLICT_ID]);
+  const before = snapshot(f.project);
+  const again = applyRun(f, [CONFLICT_ID]);
+  assert.deepEqual(again, { applied: [], skipped: [CONFLICT_ID], upstream: [] });
+  assert.deepEqual(snapshot(f.project), before);
+});
+
+test("apply refuses an unknown id and writes nothing", () => {
+  const f = fixture();
+  installV1Skill(f);
+  run(f);
+  const before = snapshot(f.project);
+  assert.throws(() => applyRun(f, [CONFLICT_ID, "skill:other"]), /Not in the plan/);
+  assert.deepEqual(snapshot(f.project), before);
+});
+
+test("apply refuses a plan whose item leaves the project or the work directory", () => {
+  const f = fixture();
+  installV1Skill(f);
+  const plan = run(f);
+  const planPath = path.join(f.out, "plan.json");
+  const tampered = structuredClone(plan);
+  tampered.items[0].locations = ["../outside/sample-skill"];
+  fs.writeFileSync(planPath, JSON.stringify(tampered));
+  assert.throws(() => applyRun(f, [CONFLICT_ID]), /location/);
+  const moved = structuredClone(plan);
+  moved.items[0].dir = path.join(f.root, "elsewhere");
+  fs.writeFileSync(planPath, JSON.stringify(moved));
+  assert.throws(() => applyRun(f, [CONFLICT_ID]), /work directory/);
+});
+
+test("the CLI applies the selected ids and none", () => {
+  const f = fixture();
+  installV1Skill(f);
+  run(f);
+  const cli = (selected) => spawnSync(process.execPath, [scriptPath, "apply", "--out", f.out, "--selected", selected, "--json"], { encoding: "utf8" });
+  const none = cli("none");
+  assert.equal(none.status, 0, none.stderr);
+  assert.deepEqual(JSON.parse(none.stdout), { applied: [], skipped: [CONFLICT_ID], upstream: [] });
+  const some = cli(CONFLICT_ID);
+  assert.equal(some.status, 0, some.stderr);
+  assert.deepEqual(JSON.parse(some.stdout).applied, [CONFLICT_ID]);
+  assert.equal(cli("").status, 1);
 });

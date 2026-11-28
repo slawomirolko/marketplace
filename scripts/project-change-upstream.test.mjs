@@ -539,3 +539,34 @@ test("lock record refuses a pending PR number that is not a positive integer", (
   }
   assert.equal(fs.readFileSync(lockFile, "utf8"), before);
 });
+
+test("record --base-commit creates or moves the base", () => {
+  const market = fixtureMarketplace();
+  const { root, skillDir } = fixtureProject();
+  const lockFile = path.join(root, ".agents", "marketplace.lock.json");
+  const record = (...args) => node(lockScript, ["record", "--project", root, "--marketplace", market.root, "--artifact", "skill:sample-skill", "--json", ...args]);
+  const readEntry = () => JSON.parse(fs.readFileSync(lockFile, "utf8"))["skill:sample-skill"];
+
+  assert.equal(record("--base-commit", "not-a-commit").status, 1, "an unknown commit is refused");
+  assert.equal(fs.existsSync(lockFile), false, "a refused record writes no lock");
+
+  json(record("--base-commit", market.v1));
+  assert.equal(readEntry().version, "1.0.0");
+  assert.equal(readEntry().sourceCommit, market.v1);
+  assert.equal(readEntry().source, "skills/marketplace/sample-skill");
+
+  const moved = json(record("--base-commit", market.v11, "--approved", "a".repeat(64)));
+  assert.equal(moved.version, "1.1.0");
+  assert.equal(moved.sourceCommit, market.v11);
+  assert.equal(moved.approved, "a".repeat(64));
+  assert.deepEqual(Object.keys(moved.files).sort(), ["SKILL.md", "workflow.md"]);
+
+  assert.equal(record("--approved", "nope").status, 1, "a malformed approved hash is refused");
+  assert.equal(node(lockScript, ["record", "--project", root, "--artifact", "skill:sample-skill", "--base-commit", market.v1]).status, 1, "--base-commit needs --marketplace");
+
+  fs.writeFileSync(path.join(skillDir, "workflow.md"), `${skillV11["workflow.md"]}4. Local step.\n`);
+  const copy = json(lock(root, market.root, "status")).changed[0];
+  assert.equal(copy.approved, false);
+  json(record("--approved", copy.contentHash));
+  assert.equal(json(lock(root, market.root, "status")).changed[0].approved, true);
+});

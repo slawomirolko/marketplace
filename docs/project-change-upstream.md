@@ -9,7 +9,7 @@ after a person says so. A person always merges or closes the PR.
 | Part | Role |
 |------|------|
 | `.agents/marketplace.lock.json` (in the project) | Provenance per installed artifact: marketplace version, source commit, content hash without the project adapter (`project.md`, `*.local.*`, the agent `model:` line). Commit it with the project. |
-| `scripts/olko-marketplace-lock.mjs` | `init` writes the lock (finds the base version in marketplace history), `status` lists changed artifacts, `record` stores a pending PR or a rejected content hash. Reads installed copies through the shared model, see [Installed-artifact model](#installed-artifact-model). |
+| `scripts/olko-marketplace-lock.mjs` | `init` writes the lock (finds the base version in marketplace history), `status` lists changed artifacts, `record` stores a pending PR or a rejected content hash, moves the base (`--marketplace <dir> --base-commit <sha>` sets version, source commit, hash and files from that marketplace commit and creates a missing entry) and stores an approved content hash (`--approved <sha256>`; `status` reports `approved` when it equals the copy's `contentHash`). Reads installed copies through the shared model, see [Installed-artifact model](#installed-artifact-model). |
 | `scripts/olko-sanitize.mjs` | Blocking gate, see [Sanitize gate](#sanitize-gate). Exit 0 clean, 2 blocked, 1 failed. |
 | `scripts/olko-upstream-plan.mjs` | Deterministic PR plan: `open`, `append` (open draft PR on the same base) or `skip` (duplicate, rejected, adapter-only). |
 | `olko-marketplace-upstream` (agent and skill) | `stage`, `optimize` and `publish` steps. Draft PRs only; deny rules for merge, ready, reviewers and `gh api`. |
