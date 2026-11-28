@@ -216,3 +216,4 @@ table.artifacts th { color: var(--muted); font-weight: 600; }
 .pending-actions { display: flex; gap: 8px; }
 .pending-error { color: var(--unknown); }
 .pending button.link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; }
+.load-notes p { margin: 0; padding: 4px 16px; }

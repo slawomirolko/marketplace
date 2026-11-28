@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useViewer } from "./context.ts";
-import { costOf, failureOf, formatAmount, formatDuration, formatTokens, formatUsd, itemPasses, ledgerOf, runFailure, tierOf, timeSpent } from "./tree.ts";
+import { costOf, failureOf, formatAmount, formatDuration, formatTokens, formatUsd, itemPasses, ledgerOf, rawFailureOf, runFailure, tierOf, timeSpent } from "./tree.ts";
 import type { Item, LedgerRecord, TeamItem, Workflow, WorkflowAgent, WorkflowItem } from "./types.ts";
 
 function kindLabel(item: WorkflowItem): string {
@@ -276,7 +276,7 @@ function RunSummary() {
 }
 
 export function Details({ item }: { item: Item | null }) {
-  const { run, report, config } = useViewer();
+  const { run, report, config, workflows } = useViewer();
   if (!item || item.kind === "terminal") return <RunSummary />;
   const cost = costOf(item, report);
   const tier = tierOf(item, config, report);
@@ -286,7 +286,6 @@ export function Details({ item }: { item: Item | null }) {
   const harnessAgent = records.find((r) => r.agentName)?.agentName ?? item.node.agent;
   const role = item.kind === "agent" ? (item.agent.role ?? item.node.role) : item.node.role;
   const failure = failureOf(item, run);
-  const { workflows } = useViewer();
   const groupDescription = item.kind === "subgraph" && item.node.workflow ? (workflows.find((w) => w.name === item.node.workflow)?.description ?? null) : null;
   const agentNames = item.kind === "agent" ? [item.agent.agentName ?? item.node.agent].filter((n): n is string => Boolean(n)) : [item.node.agent, item.node.skill, ...(item.node.agents ?? []).map((a) => a.agent)].filter((n): n is string => Boolean(n));
   const switchedOff = run?.events.find((e) => e.type === "node_completed" && typeof e.result === "string" && e.result.includes("skipped: switch off") && (item.key === e.node || item.key.startsWith(`${e.node}/`)))?.result ?? null;
@@ -313,7 +312,11 @@ export function Details({ item }: { item: Item | null }) {
       {role && <Row label="Role" value={role} />}
       {tier && <Row label="Tier" value={tier} />}
       {cost?.model && <Row label="Model" value={cost.model} />}
-      {failure && <p className="cost-unknown">Failed: {failure}</p>}
+      {failure && (
+        <p className="cost-unknown" title={rawFailureOf(item, run) ?? undefined}>
+          Failed: {failure}
+        </p>
+      )}
       {report && <Row label="Cost" value={formatUsd(cost)} />}
       {cost && <Row label="Tokens (in + out)" value={num(cost.tokens)} />}
       {cost && <Row label="Cache tokens (read + write)" value={num(cost.cacheTokens ?? 0)} />}

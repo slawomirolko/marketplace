@@ -2,7 +2,7 @@ import { http, HttpResponse } from "msw";
 import { App } from "../src/App.tsx";
 import { Projects, actionOf, countsText, fetchNoteOf, remoteNameOf, verdictOf, versionText } from "../src/Projects.tsx";
 import type { ProjectArtifact, ProjectList, ProjectStatusView } from "../src/Projects.tsx";
-import { render, screen, server, userEvent, waitFor, within } from "./testUtils/index.ts";
+import { fireEvent, render, screen, server, userEvent, waitFor, within } from "./testUtils/index.ts";
 
 const artifact = (extra: Partial<ProjectArtifact>): ProjectArtifact => ({ id: "skill:sample-skill", kind: "skill", name: "sample-skill", harness: "agents", location: ".agents/skills/sample-skill", state: "current", installed: "1.0.0", current: "1.0.0", files: [], workflows: [], ...extra });
 
@@ -355,7 +355,42 @@ describe("Projects", () => {
       http.get("/api/projects/:id/status", () => HttpResponse.json({ error: "broken" }, { status: 500 })),
     );
     render(<Projects onShowRuns={() => {}} pollMs={10} />);
-    expect(await screen.findByText("Status check of sample-app finished (run r-0000000u).")).toBeInTheDocument();
+    expect(await screen.findByText("Status check of sample-app finished (run r-0000000u); its status could not be read: /projects/sample-app/status: 500 (broken).")).toBeInTheDocument();
+  });
+
+  test("a project action that fails with an HTML page shows its status", async () => {
+    serve();
+    server.use(http.post("/api/projects", () => new HttpResponse("<html>bad gateway</html>", { status: 502 })));
+    const user = userEvent.setup();
+    render(<Projects onShowRuns={() => {}} />);
+
+    await user.click(await screen.findByRole("button", { name: "Discover" }));
+
+    expect(await screen.findByText("projects failed: 502")).toBeInTheDocument();
+  });
+
+  test("an action between two polls of a running check keeps the poll that is under way", async () => {
+    const analyzing = { ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: "r-0000000t", status: null }] };
+    serve([], { "sample-busy": null }, analyzing);
+    let polls = 0;
+    let pollStarted = () => {};
+    const started = new Promise<void>((resolve) => (pollStarted = resolve));
+    server.use(
+      http.get("/api/runs/:runId", async () => {
+        polls += 1;
+        pollStarted();
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        return HttpResponse.json({ run: { status: "failed" } });
+      }),
+    );
+    render(<Projects onShowRuns={() => {}} pollMs={10} />);
+    await started;
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Root folder" }), { target: { value: "/more" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add root" }));
+
+    expect(await screen.findByText("Status check of sample-busy failed (run r-0000000t).")).toBeInTheDocument();
+    expect(polls).toBe(1);
   });
 
   test("a missing status file is reported", async () => {
@@ -367,7 +402,7 @@ describe("Projects", () => {
   test("a failed project list load is shown", async () => {
     server.use(http.get("/api/projects", () => HttpResponse.json({ error: "x" }, { status: 500 })));
     render(<Projects onShowRuns={() => {}} />);
-    expect(await screen.findByText("/projects: 500")).toBeInTheDocument();
+    expect(await screen.findByText("/projects: 500 (x)")).toBeInTheDocument();
   });
 
   test("version and count texts", () => {

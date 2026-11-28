@@ -11,6 +11,7 @@ import { QuestionsList } from "./Questions.tsx";
 import { Projects } from "./Projects.tsx";
 import type { ProjectList } from "./Projects.tsx";
 import { PendingDecisions } from "./Pending.tsx";
+import { API, getJson, messageOf, postAction } from "./api.ts";
 import { SupervisorRing, ringBounds } from "./SupervisorRing.tsx";
 import { layoutGraph, scriptsHeight } from "./layout.ts";
 import { agentsOnly } from "./agents-only.ts";
@@ -19,7 +20,6 @@ import { buildLevel, buildRunIndex, formatAmount, formatTokens, isUnknownCost, d
 import type { StaleWorkflow } from "./types.ts";
 import type { AgentInfo, Bounds, FactoryConfig, FlowEdge, FlowNode, Item, Level, RunDetail, RunIndex, RunListItem, Workflow } from "./types.ts";
 
-const API = `${import.meta.env.BASE_URL}api`;
 const LIVE_REFRESH_MS = 15_000;
 const SHOW_COUNTS_KEY = "factory-viewer.show-numbers";
 const AGENTS_ONLY_KEY = "factory-viewer.agents-only";
@@ -38,16 +38,6 @@ function writeFlag(key: string, value: boolean): void {
   } catch {
     return;
   }
-}
-
-async function getJson<T>(url: string): Promise<T> {
-  const response = await fetch(`${API}${url}`);
-  if (!response.ok) throw new Error(`${url}: ${response.status}`);
-  return (await response.json()) as T;
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function FitToBounds({ bounds }: { bounds: Bounds | null }) {
@@ -98,6 +88,19 @@ function Viewer() {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [selected, setSelected] = useState<Item | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [loadNotes, setLoadNotes] = useState<Record<string, string>>({});
+  const noteLoad = useCallback((topic: string, note: string | null) => {
+    setLoadNotes((current) => {
+      if (note !== null) {
+        return { ...current, [topic]: note };
+      }
+      if (!(topic in current)) {
+        return current;
+      }
+      return Object.fromEntries(Object.entries(current).filter(([key]) => key !== topic));
+    });
+  }, []);
   const [stale, setStale] = useState<Record<string, StaleWorkflow>>({});
   const [marketplace, setMarketplace] = useState("");
   const [updating, setUpdating] = useState(false);
@@ -115,20 +118,22 @@ function Viewer() {
   }, []);
   const loadStale = useCallback(() => {
     getJson<{ marketplace: string; stale: StaleWorkflow[] }>("/stale")
-      .then((r) => {
-        setMarketplace(r.marketplace);
-        setStale(Object.fromEntries(r.stale.map((s) => [s.workflow, s])));
+      .then((result) => {
+        setMarketplace(result.marketplace);
+        setStale(Object.fromEntries(result.stale.map((entry) => [entry.workflow, entry])));
+        noteLoad("stale", null);
       })
-      .catch(() => setStale({}));
-  }, []);
+      .catch((loadError: unknown) => {
+        setStale({});
+        noteLoad("stale", `Could not check changed sources: ${messageOf(loadError)}`);
+      });
+  }, [noteLoad]);
   useEffect(loadStale, [loadStale]);
   const update = useCallback(async () => {
     setUpdating(true);
     setUpdateNote(null);
     try {
-      const response = await fetch(`${API}/update`, { method: "POST", headers: { "x-factory-action": "update" } });
-      const body = (await response.json()) as { error?: string; before?: string; after?: string; changedFiles?: string[]; stale?: StaleWorkflow[] };
-      if (!response.ok) throw new Error(body.error ?? `update failed: ${response.status}`);
+      const body = await postAction<{ before?: string; after?: string; changedFiles?: string[]; stale?: StaleWorkflow[] }>(`${API}/update`, "update");
       const [workflowList, agentList] = await Promise.all([getJson<Workflow[]>("/workflows"), getJson<Record<string, AgentInfo>>("/agents")]);
       setWorkflows(workflowList);
       setAgents(agentList);
@@ -149,14 +154,30 @@ function Viewer() {
         setConfig(factoryConfig);
       })
       .catch((loadError: unknown) => setError(messageOf(loadError)));
-    getJson<Record<string, AgentInfo>>("/agents").then(setAgents).catch(() => setAgents({}));
-  }, []);
+    getJson<Record<string, AgentInfo>>("/agents")
+      .then((agentList) => {
+        setAgents(agentList);
+        noteLoad("agents", null);
+      })
+      .catch((loadError: unknown) => {
+        setAgents({});
+        noteLoad("agents", `Could not load agents: ${messageOf(loadError)}`);
+      });
+  }, [noteLoad]);
   useEffect(() => {
-    if (mode !== "runs") return;
+    if (mode !== "runs") {
+      return;
+    }
     getJson<ProjectList>("/projects")
-      .then((r) => setProjectIds(r.projects.map((p) => p.id)))
-      .catch(() => setProjectIds([]));
-  }, [mode]);
+      .then((projectList) => {
+        setProjectIds(projectList.projects.map((project) => project.id));
+        noteLoad("projects", null);
+      })
+      .catch((loadError: unknown) => {
+        setProjectIds([]);
+        noteLoad("projects", `Could not load projects: ${messageOf(loadError)}`);
+      });
+  }, [mode, noteLoad]);
   const showProjectRuns = useCallback((projectId: string) => {
     setProjectFilter(projectId);
     setMode("runs");
@@ -171,7 +192,7 @@ function Viewer() {
         setRuns(runList);
         setRunId(requestedRun !== null && runList.some((r) => r.runId === requestedRun) ? requestedRun : (runList[0]?.runId ?? ""));
       })
-      .catch((loadError: unknown) => setError(messageOf(loadError)));
+      .catch((loadError: unknown) => setRunError(messageOf(loadError)));
   }, [mode, runsLoaded, requestedRun]);
 
   useEffect(() => {
@@ -180,6 +201,23 @@ function Viewer() {
     url.search = query.size ? `?${query.toString()}` : "";
     window.history.replaceState(null, "", url);
   }, [mode, workflowName, runId, runFilter, onlyRan, projectFilter]);
+
+  /** Opens a run from a pending decision: the filters are cleared so it stays shown, and the one-time run-list load is marked done so it cannot pick another run. */
+  const openRun = useCallback((id: string) => {
+    setProjectFilter("");
+    setRunFilter("");
+    setRunsLoaded(true);
+    setMode("runs");
+    getJson<RunListItem[]>("/runs")
+      .then((runList) => {
+        setRuns(runList);
+        setRunId(id);
+      })
+      .catch((loadError: unknown) => {
+        setRunError(messageOf(loadError));
+        setRunId(id);
+      });
+  }, []);
 
   const shownRuns = useMemo(() => {
     const ofProject = projectFilter ? runs.filter((r) => r.projectId === projectFilter) : runs;
@@ -192,19 +230,27 @@ function Viewer() {
     setRunId(shownRuns[0]?.runId ?? "");
   }, [mode, runsLoaded, shownRuns, runId]);
 
+  const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   useEffect(() => {
     setSelected(null);
+    setDetail(null);
+    setRunError(null);
+    setRefreshError(null);
     if (!runId || mode === "workflows") {
-      setDetail(null);
       return undefined;
     }
     let current = true;
-    getJson<RunDetail>(`/runs/${runId}`)
+    getJson<RunDetail>(`/runs/${encodeURIComponent(runId)}`)
       .then((runDetail) => {
-        if (current) setDetail(runDetail);
+        if (current) {
+          setDetail(runDetail);
+        }
       })
       .catch((loadError: unknown) => {
-        if (current) setError(messageOf(loadError));
+        if (current) {
+          setRunError(messageOf(loadError));
+        }
       });
     return () => {
       current = false;
@@ -212,24 +258,47 @@ function Viewer() {
   }, [runId, mode]);
 
   const runStatus = mode === "runs" ? (detail?.run.status ?? null) : null;
-  const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
   useEffect(() => {
-    if (!runId || runStatus === null || !LIVE_STATUSES.includes(runStatus)) return undefined;
-    const id = setInterval(() => {
-      getJson<RunDetail>(`/runs/${runId}`)
+    if (!runId || runStatus === null || !LIVE_STATUSES.includes(runStatus)) {
+      return undefined;
+    }
+    let current = true;
+    const failed = (refreshFailure: unknown) => {
+      if (current) {
+        setRefreshError(`refresh failed: ${messageOf(refreshFailure)}`);
+      }
+    };
+    const timer = setInterval(() => {
+      getJson<RunDetail>(`/runs/${encodeURIComponent(runId)}`)
         .then((runDetail) => {
+          if (!current) {
+            return;
+          }
           setDetail(runDetail);
           setRefreshedAt(new Date());
+          setRefreshError(null);
         })
-        .catch(() => undefined);
-      getJson<RunListItem[]>("/runs").then(setRuns).catch(() => undefined);
+        .catch(failed);
+      getJson<RunListItem[]>("/runs")
+        .then((runList) => {
+          if (current) {
+            setRuns(runList);
+          }
+        })
+        .catch(failed);
     }, LIVE_REFRESH_MS);
-    return () => clearInterval(id);
+    return () => {
+      current = false;
+      clearInterval(timer);
+    };
   }, [runId, runStatus]);
 
-  const rootName = mode === "workflows" ? workflowName : (detail?.report.workflow.split("@")[0] ?? "hello");
+  const runRoot = detail?.report.workflow.split("@")[0] ?? (runId ? null : runFilter || null);
+  const rootName = mode === "workflows" ? workflowName : runRoot;
   const built = useMemo((): { level?: Level; error?: string } | null => {
-    if (!workflows) return null;
+    if (!workflows || !rootName) {
+      return null;
+    }
     try {
       return { level: buildLevel(workflows, rootName, rootName, [rootName], detail?.report ?? null) };
     } catch (e) {
@@ -374,6 +443,11 @@ function Viewer() {
               Total <strong className={isUnknownCost(detail.report.coverage?.run) ? "cost-unknown" : ""}>{formatAmount(total.costUsd, detail.report.coverage?.run)}</strong> of ${total.budgetUsd.toFixed(2)} · {formatTokens(total.tokens, detail.report.cacheTokens)} · {total.steps} steps · {total.source}
             </span>
           )}
+          {mode === "runs" && runError && (
+            <span className="error" role="alert">
+              Could not load the runs: {runError}
+            </span>
+          )}
           {mode === "runs" && detail && LIVE_STATUSES.includes(detail.run.status) && (
             <span className="live-bar" role="status">
               <span className="live-dot" aria-hidden="true" />
@@ -381,6 +455,7 @@ function Viewer() {
               {live.node ? ` · now: ${live.node.split("/").slice(1).join("/") || live.node}` : ""}
               {live.agents.length ? ` · ${live.agents.length} agent${live.agents.length === 1 ? "" : "s"} working` : ""}
               {` · refreshes every ${LIVE_REFRESH_MS / 1000} s${refreshedAt ? `, last ${refreshedAt.toLocaleTimeString()}` : ""}`}
+              {refreshError && <span className="pending-error">{refreshError}</span>}
               <button type="button" onClick={showCurrent}>Show current step</button>
             </span>
           )}
@@ -392,18 +467,16 @@ function Viewer() {
             {updateNote && <span className="muted" role="status"> {updateNote}</span>}
           </span>
         </header>
-        <PendingDecisions
-          api={API}
-          onOpenRun={(id) => {
-            setMode("runs");
-            getJson<RunListItem[]>("/runs")
-              .then((list) => {
-                setRuns(list);
-                setRunId(id);
-              })
-              .catch(() => setRunId(id));
-          }}
-        />
+        {Object.keys(loadNotes).length > 0 && (
+          <div className="load-notes">
+            {Object.entries(loadNotes).map(([topic, note]) => (
+              <p key={topic} className="error" role="status">
+                {note}
+              </p>
+            ))}
+          </div>
+        )}
+        <PendingDecisions api={API} onOpenRun={openRun} />
         {mode === "projects" ? (
           <Projects onShowRuns={showProjectRuns} />
         ) : (
@@ -411,6 +484,8 @@ function Viewer() {
           <div className="canvas">
             {built?.error ? (
               <p className="error" role="alert">Could not draw this run: {built.error}</p>
+            ) : !built && mode === "runs" ? (
+              runError ? null : <p className="muted pad">{runId ? "Loading run…" : "No run selected. Pick a run, or a workflow in the filter to see its structure."}</p>
             ) : (
             <ReactFlow<FlowNode, FlowEdge>
               nodes={nodes}

@@ -299,13 +299,49 @@ export function humanLabel(icon: HumanIcon): string {
   return [asked.length ? `Asks you: ${asked.join(", ")}` : null, icon.permission ? `May ask you itself (${icon.permission})` : null].filter(Boolean).join(". ") + ". Click to see the questions and your answers in this run";
 }
 
-export function ranIn(item: Item, run: RunData | null): boolean {
-  if (!run || item.kind === "terminal") return false;
-  if (item.kind === "agent") {
-    return run.ledger.some((r) => r.nodePath === item.nodePath && r.agentId === item.agent.id) || run.events.some((e) => e.type === "agent_started" && e.node === item.nodePath && e.agentId === item.agent.id);
+interface RanIndex {
+  /** Every started node path and each of its parent paths. */
+  paths: Set<string>;
+  /** `nodePath`, a NUL and `agentId` of every agent with a ledger record or an agent_started event. */
+  agents: Set<string>;
+}
+
+const ranByRun = new WeakMap<RunData, RanIndex>();
+
+function agentRef(nodePath: string | undefined, agentId: string | null | undefined): string {
+  return `${nodePath ?? ""}\u0000${agentId ?? ""}`;
+}
+
+/** What ran in a run, indexed once per run so each graph node is a set lookup instead of a scan of all events. */
+function ranIndex(run: RunData): RanIndex {
+  const known = ranByRun.get(run);
+  if (known) {
+    return known;
   }
-  const keys = [item.key, ...descendantKeys(item)];
-  return run.events.some((e) => e.type === "node_started" && typeof e.node === "string" && keys.some((k) => e.node === k || e.node!.startsWith(`${k}/`)));
+  const index: RanIndex = { paths: new Set(), agents: new Set(run.ledger.map((r) => agentRef(r.nodePath, r.agentId))) };
+  for (const e of run.events) {
+    if (e.type === "agent_started") {
+      index.agents.add(agentRef(e.node, e.agentId));
+    } else if (e.type === "node_started" && typeof e.node === "string") {
+      const parts = e.node.split("/");
+      for (let i = 1; i <= parts.length; i++) {
+        index.paths.add(parts.slice(0, i).join("/"));
+      }
+    }
+  }
+  ranByRun.set(run, index);
+  return index;
+}
+
+export function ranIn(item: Item, run: RunData | null): boolean {
+  if (!run || item.kind === "terminal") {
+    return false;
+  }
+  const index = ranIndex(run);
+  if (item.kind === "agent") {
+    return index.agents.has(agentRef(item.nodePath, item.agent.id));
+  }
+  return [item.key, ...descendantKeys(item)].some((key) => index.paths.has(key));
 }
 
 export function tierOf(item: Item, config: FactoryConfig | null, report: RunReport | null): string | null {
@@ -341,15 +377,26 @@ function errorMessage(error: unknown): string {
     const first = (pattern: RegExp) => text.match(pattern)?.[1] ?? null;
     if (text.startsWith("{")) parsed = { type: first(/^\{"type":"([^"]+)"/), status: first(/"status":(\d+)/), message: first(/"message":"([^"]*)"/) };
   }
-  if (!parsed) return text;
-  return [parsed.type, parsed.status].filter(Boolean).join(" ") + (parsed.message ? `: ${parsed.message}` : "");
+  if (!parsed || typeof parsed !== "object") {
+    return text;
+  }
+  const formatted = [parsed.type, parsed.status].filter(Boolean).join(" ") + (parsed.message ? `: ${parsed.message}` : "");
+  return formatted || text;
+}
+
+/** The error text of the node_failed event behind a graph node, as the run recorded it. */
+export function rawFailureOf(item: Item, run: RunData | null): string | null {
+  if (!run || item.kind === "terminal") {
+    return null;
+  }
+  const key = item.kind === "agent" ? item.nodePath : item.key;
+  const event = run.events.find((e) => e.type === "node_failed" && (e.node === key || (item.kind === "subgraph" && e.node?.startsWith(`${key}/`))));
+  return event ? String(event.error ?? "failed") : null;
 }
 
 export function failureOf(item: Item, run: RunData | null): string | null {
-  if (!run || item.kind === "terminal") return null;
-  const key = item.kind === "agent" ? item.nodePath : item.key;
-  const event = run.events.find((e) => e.type === "node_failed" && (e.node === key || (item.kind === "subgraph" && e.node?.startsWith(`${key}/`))));
-  return event ? errorMessage(event.error) : null;
+  const raw = rawFailureOf(item, run);
+  return raw === null ? null : errorMessage(raw);
 }
 
 export function runFailure(run: RunData | null): string | null {
@@ -499,8 +546,24 @@ function summed(records: LedgerRecord[]): { costUsd: number | null; durationMs: 
 
 const PASS_END = new Set(["node_completed", "node_failed", "node_skipped", "supervisor_completed", "supervisor_failed"]);
 
+/** Passes and calls depend only on the run object, so each is worked out once per run and shared by every graph node. */
+const passesByRun = new WeakMap<RunData, RunPass[]>();
+const callsByRun = new WeakMap<RunData, RunCall[]>();
+
 export function runPasses(run: RunData | null): RunPass[] {
-  if (!run) return [];
+  if (!run) {
+    return [];
+  }
+  const known = passesByRun.get(run);
+  if (known) {
+    return known;
+  }
+  const passes = computePasses(run);
+  passesByRun.set(run, passes);
+  return passes;
+}
+
+function computePasses(run: RunData): RunPass[] {
   const passes: RunPass[] = [];
   const open = new Map<string, RunPass>();
   for (const e of run.events) {
@@ -538,7 +601,19 @@ export function runPasses(run: RunData | null): RunPass[] {
 }
 
 export function runCalls(run: RunData | null): RunCall[] {
-  if (!run) return [];
+  if (!run) {
+    return [];
+  }
+  const known = callsByRun.get(run);
+  if (known) {
+    return known;
+  }
+  const calls = computeCalls(run);
+  callsByRun.set(run, calls);
+  return calls;
+}
+
+function computeCalls(run: RunData): RunCall[] {
   const unfinished = LIVE_STATUSES.includes(run.status) ? "running" : "unfinished";
   return runPasses(run).flatMap((pass): RunCall[] => {
     const status = (s: string) => (s === "running" ? unfinished : s);

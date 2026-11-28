@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-const API = `${import.meta.env.BASE_URL}api`;
+import { API, getJson, messageOf, postAction } from "./api.ts";
 
 export interface ProjectSummary {
   id: string;
@@ -86,21 +85,8 @@ const STATE_HELP: Record<string, string> = {
   "local-only": "The marketplace never had it.",
 };
 
-async function getJson<T>(url: string): Promise<T> {
-  const response = await fetch(`${API}${url}`);
-  if (!response.ok) throw new Error(`${url}: ${response.status}`);
-  return (await response.json()) as T;
-}
-
-async function postProjects<T>(body: Record<string, string>): Promise<T> {
-  const response = await fetch(`${API}/projects`, { method: "POST", headers: { "content-type": "application/json", "x-factory-action": "projects" }, body: JSON.stringify(body) });
-  const result = (await response.json()) as T & { error?: string };
-  if (!response.ok) throw new Error(result.error ?? `projects: ${response.status}`);
-  return result;
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+function postProjects<T>(body: Record<string, string>): Promise<T> {
+  return postAction<T>(`${API}/projects`, "projects", body);
 }
 
 function checkNote(projectId: string, text: string): string {
@@ -114,8 +100,8 @@ async function finishNote(projectId: string, runId: string, runStatus: string): 
   try {
     const view = await getJson<ProjectStatusView>(`/projects/${encodeURIComponent(projectId)}/status`);
     return checkNote(projectId, `finished: ${verdictOf(view.data?.counts, view.data?.ref).title}`);
-  } catch {
-    return checkNote(projectId, `finished (run ${runId}).`);
+  } catch (error) {
+    return checkNote(projectId, `finished (run ${runId}); its status could not be read: ${messageOf(error)}.`);
   }
 }
 
@@ -277,7 +263,10 @@ export function Projects({ onShowRuns, pollMs = POLL_MS }: { onShowRuns: (projec
     try {
       const result = await getJson<ProjectList>("/projects");
       setList(result);
-      setAnalyzing((current) => ({ ...Object.fromEntries(result.projects.flatMap((p) => (p.analyzing && !finishedRuns.current.has(p.analyzing) ? [[p.id, p.analyzing]] : []))), ...current }));
+      setAnalyzing((current) => {
+        const started = result.projects.flatMap((project) => (project.analyzing && !finishedRuns.current.has(project.analyzing) && !(project.id in current) ? [[project.id, project.analyzing]] : []));
+        return started.length ? { ...Object.fromEntries(started), ...current } : current;
+      });
       setSelectedId((current) => (current && result.projects.some((p) => p.id === current) ? current : (result.projects[0]?.id ?? null)));
     } catch (error) {
       setNote(messageOf(error));
@@ -347,11 +336,11 @@ export function Projects({ onShowRuns, pollMs = POLL_MS }: { onShowRuns: (projec
   }, [analyzing, pollTick, load, pollMs]);
 
   const act = useCallback(
-    async (body: Record<string, string>, done: (result: never) => string | null) => {
+    async <T,>(body: Record<string, string>, done: (result: T) => string | null) => {
       setBusy(true);
       setNote(null);
       try {
-        const result = await postProjects<never>(body);
+        const result = await postProjects<T>(body);
         setNote(done(result));
         await load();
       } catch (error) {

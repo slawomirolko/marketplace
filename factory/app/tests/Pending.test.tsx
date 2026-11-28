@@ -1,5 +1,6 @@
 import { http, HttpResponse } from "msw";
 import { PendingDecisions } from "../src/Pending.tsx";
+import { READ_ONLY_NOTE } from "../src/api.ts";
 import type { PendingDecision } from "../src/Pending.tsx";
 import { render, screen, server, userEvent, waitFor } from "./testUtils/index.ts";
 
@@ -56,6 +57,39 @@ describe("PendingDecisions", () => {
 
     expect(await screen.findByText("answer it in the session that owns it")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ok" })).toBeInTheDocument();
+  });
+
+  test("an answer that fails with an HTML page shows its status", async () => {
+    server.use(
+      http.get("/api/pending", () => HttpResponse.json([decision])),
+      http.post(`/api/runs/${decision.runId}/answer`, () => new HttpResponse("<html>bad gateway</html>", { status: 502 })),
+    );
+    const user = userEvent.setup();
+    render(<PendingDecisions api="/api" onOpenRun={() => undefined} />);
+
+    await user.click(await screen.findByRole("button", { name: "ok" }));
+
+    expect(await screen.findByText("answer failed: 502")).toBeInTheDocument();
+  });
+
+  test("an answer refused for the missing token says that the viewer is read-only", async () => {
+    server.use(
+      http.get("/api/pending", () => HttpResponse.json([decision])),
+      http.post(`/api/runs/${decision.runId}/answer`, () => HttpResponse.json({ error: "unauthorized" }, { status: 401 })),
+    );
+    const user = userEvent.setup();
+    render(<PendingDecisions api="/api" onOpenRun={() => undefined} />);
+
+    await user.click(await screen.findByRole("button", { name: "ok" }));
+
+    expect(await screen.findByText(READ_ONLY_NOTE)).toBeInTheDocument();
+  });
+
+  test("a failing pending list is named instead of looking like no question", async () => {
+    server.use(http.get("/api/pending", () => HttpResponse.json({ error: "runs folder unreadable" }, { status: 500 })));
+    render(<PendingDecisions api="/api" onOpenRun={() => undefined} />);
+
+    expect(await screen.findByText("Could not load the pending decisions: /pending: 500 (runs folder unreadable)")).toBeInTheDocument();
   });
 
   test("opens the run when its id is clicked", async () => {

@@ -1,7 +1,7 @@
 import { Details } from "../src/Details.tsx";
 import { buildLevel, findItem } from "../src/tree.ts";
 import type { Item } from "../src/types.ts";
-import { mainWorkflow, renderWithViewer, screen, within } from "./testUtils/index.ts";
+import { mainWorkflow, renderWithViewer, run, screen, within } from "./testUtils/index.ts";
 
 function item(key: string): Item {
   const found = findItem(buildLevel([mainWorkflow], "main"), key);
@@ -17,6 +17,13 @@ function row(label: string): HTMLElement {
 }
 
 describe("Details", () => {
+  test("keeps the raw error text of a failed step next to its short form", () => {
+    const raw = '{"type":"http","status":429,"message":"rate limited","retryAfter":30}';
+    renderWithViewer(<Details item={item("main/run")} />, { mode: "runs", run: { ...run, status: "failed", events: [...run.events, { at: run.events[0]!.at, type: "node_failed", node: "main/run", error: raw }] } });
+
+    expect(screen.getByText("Failed: http 429: rate limited")).toHaveAttribute("title", raw);
+  });
+
   test("names a script step an engine script and shows its operation", () => {
     renderWithViewer(<Details item={item("main/stop")} />);
 

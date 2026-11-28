@@ -148,3 +148,14 @@ test("the full level keeps every step and draws no dashed edge", () => {
   assert.deepEqual(keys(level), [START_KEY, "main/a", "main/s", END_KEY]);
   assert.ok(level.edges.every((e) => !e.dashed));
 });
+
+test("a loop through two switchable subgraphs ends", () => {
+  const switchable = { enabledWhen: "input.on" };
+  const workflows = [
+    wf("main", "a", [llm("a"), sub("one", "inner-one", switchable), sub("two", "inner-two", switchable)], [{ from: "a", to: "one" }, { from: "one", to: "two" }, { from: "two", to: "one" }, { from: "two", to: "END" }]),
+    wf("inner-one", "q", [ask("q")], [{ from: "q", to: "END" }]),
+    wf("inner-two", "r", [ask("r")], [{ from: "r", to: "END" }]),
+  ];
+  const level = reduced(workflows);
+  assert.ok(links(level).includes(`main/a --> ${END_KEY}`), links(level).join(", "));
+});

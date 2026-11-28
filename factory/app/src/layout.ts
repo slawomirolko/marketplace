@@ -1,7 +1,7 @@
 import { MarkerType } from "@xyflow/react";
 import dagre from "@dagrejs/dagre";
 import { isGroup } from "./tree.ts";
-import type { Bounds, FlowEdge, FlowNode, Item, Level } from "./types.ts";
+import type { Bounds, FlowEdge, FlowNode, Item, Level, LevelEdge } from "./types.ts";
 
 const STEP = { width: 270, height: 112 };
 const TERMINAL = { width: 90, height: 40 };
@@ -43,6 +43,22 @@ function sizeOf(item: Item, extra: (item: Item) => number): { width: number; hei
   return { width: base.width, height: base.height + extra(item) };
 }
 
+/** Joins edges between the same pair of nodes into one: dagre keeps one edge per pair and React Flow needs unique ids, so the labels are merged and the edge is dashed only when every merged edge is. */
+function mergeParallel(edges: LevelEdge[]): LevelEdge[] {
+  const byPair = new Map<string, LevelEdge>();
+  for (const edge of edges) {
+    const pair = `${edge.from}->${edge.to}`;
+    const prior = byPair.get(pair);
+    if (!prior) {
+      byPair.set(pair, edge);
+      continue;
+    }
+    const labels = [prior.label, edge.label].filter((label): label is string => Boolean(label));
+    byPair.set(pair, { ...prior, label: labels.length ? labels.join(" | ") : null, dashed: Boolean(prior.dashed) && Boolean(edge.dashed) });
+  }
+  return [...byPair.values()];
+}
+
 function layoutLevel(level: Level, expanded: Set<string>, parentKey: string | null, extra: (item: Item) => number): LevelLayout {
   const sized = level.items.map((item): Box => {
     if (isGroup(item) && expanded.has(item.key)) {
@@ -55,8 +71,9 @@ function layoutLevel(level: Level, expanded: Set<string>, parentKey: string | nu
   const graph = new dagre.graphlib.Graph();
   graph.setGraph({ rankdir: "TB", nodesep: 36, ranksep: 56, marginx: 0, marginy: 0 });
   graph.setDefaultEdgeLabel(() => ({}));
+  const levelEdges = mergeParallel(level.edges);
   for (const entry of sized) graph.setNode(entry.item.key, { width: entry.width, height: entry.height });
-  for (const edge of level.edges) graph.setEdge(edge.from, edge.to, edge.label ? { label: edge.label, width: Math.min(240, edge.label.length * 6.5), height: 18 } : {});
+  for (const edge of levelEdges) graph.setEdge(edge.from, edge.to, edge.label ? { label: edge.label, width: Math.min(240, edge.label.length * 6.5), height: 18 } : {});
   dagre.layout(graph);
 
   const placed = sized.map((entry) => {
@@ -86,7 +103,7 @@ function layoutLevel(level: Level, expanded: Set<string>, parentKey: string | nu
     }
   }
   const edges: FlowEdge[] = [
-    ...level.edges.map((edge) => ({ id: `${edge.from}->${edge.to}`, source: edge.from, target: edge.to, label: edge.label ?? undefined, type: "smoothstep", ...(edge.dashed ? { style: { strokeDasharray: "6 4" }, className: "optional" } : {}), markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 } })),
+    ...levelEdges.map((edge) => ({ id: `${edge.from}->${edge.to}`, source: edge.from, target: edge.to, label: edge.label ?? undefined, type: "smoothstep", ...(edge.dashed ? { style: { strokeDasharray: "6 4" }, className: "optional" } : {}), markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 } })),
     ...placed.flatMap((box) => box.inner?.edges ?? []),
   ];
   return {

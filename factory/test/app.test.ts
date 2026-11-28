@@ -9,7 +9,7 @@ import type { DataApi } from "../src/viewer-data.ts";
 import type { Run } from "../src/types.ts";
 import type { Cost, Item, Level, RunData } from "../app/src/types.ts";
 import { supervisorRing } from "../app/src/supervisor.ts";
-import { agentScripts, allItems, buildLevel, costOf, failureOf, formatTokens, hasMemoryLayer, humanIcons, humanLabel, isEngineScript, questionsFor, ledgerOf, formatUsd, END_KEY, START_KEY } from "../app/src/tree.ts";
+import { agentScripts, allItems, buildLevel, costOf, failureOf, rawFailureOf, runCalls, runPasses, formatTokens, hasMemoryLayer, humanIcons, humanLabel, isEngineScript, questionsFor, ledgerOf, formatUsd, END_KEY, START_KEY } from "../app/src/tree.ts";
 import { agentsOnly } from "../app/src/agents-only.ts";
 import { layoutGraph, scriptsHeight } from "../app/src/layout.ts";
 
@@ -161,6 +161,37 @@ test("a JSON error from the run is shown as type, status and message", () => {
   assert.equal(failureOf(item, run('{"type":"http","status":429,"message":"rate limited"}')), "http 429: rate limited");
   assert.equal(failureOf(item, run('{"type":"http","status":500')), "http 500", "truncated JSON keeps type and status");
   assert.equal(failureOf(item, run("boom")), "boom", "plain text is shown as is");
+});
+
+test("an error text that parses to no type, status or message is shown as it is", () => {
+  const item: Item = { kind: "step", key: "hello/build", node: { id: "build", kind: "subgraph" } };
+  const run = (error: string) => runWithEvents([{ at: "", type: "node_failed", node: "hello/build", error }]);
+  assert.equal(failureOf(item, run("404")), "404");
+  assert.equal(failureOf(item, run("true")), "true");
+  assert.equal(failureOf(item, run('{"code":"E_LIMIT"}')), '{"code":"E_LIMIT"}');
+  assert.equal(rawFailureOf(item, run('{"type":"http","status":429,"message":"rate limited","retry":3}')), '{"type":"http","status":429,"message":"rate limited","retry":3}', "the raw text stays available");
+});
+
+test("passes and calls of a run are worked out once per run", () => {
+  const run = runWithEvents([{ at: "2026-11-17T10:00:00.000Z", type: "node_started", node: "hello/a", visit: 1 }, { at: "2026-11-17T10:00:05.000Z", type: "node_completed", node: "hello/a" }]);
+  assert.equal(runPasses(run), runPasses(run));
+  assert.equal(runCalls(run), runCalls(run));
+});
+
+test("two edges between the same pair of nodes are drawn once with both labels", () => {
+  const level: Level = {
+    items: [
+      { kind: "step", key: "main/a", node: { id: "a", kind: "llm" } },
+      { kind: "step", key: "main/b", node: { id: "b", kind: "llm" } },
+    ],
+    edges: [
+      { from: "main/a", to: "main/b", label: "when x" },
+      { from: "main/a", to: "main/b", label: "when y", dashed: true },
+    ],
+  };
+  const { edges } = layoutGraph(level, new Set());
+  assert.equal(new Set(edges.map((edge) => edge.id)).size, edges.length, "edge ids are unique");
+  assert.deepEqual(edges.map((edge) => edge.label), ["when x | when y"]);
 });
 
 test("a group shows a failure of any node inside it", () => {

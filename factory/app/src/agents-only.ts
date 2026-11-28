@@ -43,25 +43,48 @@ export function agentsOnly(root: Level): Level {
   const isFinish = (key: string) => items.get(key)?.kind === "terminal" && key !== START_KEY && key !== END_KEY;
   const kept = (key: string) => key === START_KEY || key === END_KEY || isShown(items.get(key)!);
 
-  const target = (key: string, optional: boolean, out: Hop[]): void => {
+  /** Each subgraph is entered or left once per hop search, so a loop through switchable subgraphs ends. */
+  const target = (key: string, optional: boolean, out: Hop[], visited: Set<string>): void => {
     const item = items.get(key);
     if (item?.kind !== "subgraph") {
       if (!isFinish(key)) out.push({ to: key, optional });
       else if (hasEnd) out.push({ to: END_KEY, optional });
       return;
     }
+    const entered = `enter:${key}:${optional}`;
+    if (visited.has(entered)) {
+      return;
+    }
+    visited.add(entered);
     const skippable = isSwitchable(item);
-    if (item.inner.entry) target(item.inner.entry, optional || skippable, out);
-    if (skippable) leave(item.key, true, out);
+    if (item.inner.entry) {
+      target(item.inner.entry, optional || skippable, out, visited);
+    }
+    if (skippable) {
+      leave(item.key, true, out, visited);
+    }
   };
-  const leave = (key: string, optional: boolean, out: Hop[]): void => {
+  const leave = (key: string, optional: boolean, out: Hop[], visited: Set<string>): void => {
+    const left = `leave:${key}:${optional}`;
+    if (visited.has(left)) {
+      return;
+    }
+    visited.add(left);
     const place = places.get(key)!;
-    for (const edge of place.level.edges) if (edge.from === key) target(edge.to, optional || Boolean(edge.optional), out);
-    for (const exit of place.level.exits ?? []) if (exit.from === key && place.container) leave(place.container.key, optional || exit.optional, out);
+    for (const edge of place.level.edges) {
+      if (edge.from === key) {
+        target(edge.to, optional || Boolean(edge.optional), out, visited);
+      }
+    }
+    for (const exit of place.level.exits ?? []) {
+      if (exit.from === key && place.container) {
+        leave(place.container.key, optional || exit.optional, out, visited);
+      }
+    }
   };
   const hops = (key: string): Hop[] => {
     const out: Hop[] = [];
-    leave(key, false, out);
+    leave(key, false, out, new Set());
     return out;
   };
 
