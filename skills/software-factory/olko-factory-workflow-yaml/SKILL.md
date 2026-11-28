@@ -1,6 +1,6 @@
 ---
 name: olko-factory-workflow-yaml
-version: 0.2.0
+version: 0.2.1
 description: "Rules for the Software Factory workflow YAML in factory/workflows: how an Olko agent's steps map to phase groups, nodes, edges and conditions, which engine operations exist, how a workflow names its sources, and how to validate it. Use when you write, update or verify a factory workflow from an Olko agent or skill. Triggers: 'factory workflow', 'map agent to yaml', 'update factory yaml', 'verify factory workflow', 'olko-factory-workflow-yaml'."
 ---
 
@@ -56,7 +56,7 @@ The current marketplace text of the agent or skill is the decision; the YAML fol
 2. Change the smallest part that covers the diff; keep node ids stable so run history still matches.
 3. A new main agent with no workflow: write the root workflow plus one group file per phase.
 4. A removed agent or skill: remove or replace every node that names it.
-5. Validate: `node factory/src/validate-workflows.ts [dir]` must print `workflows ok`.
+5. Validate: `pnpm --dir factory workflows:validate [dir]` must print `workflows ok`.
 
 ## Verifying
 Compare the YAML with the CURRENT agent text, step by step: every hard rule, gate, question and loop of the text has a node or edge; nothing in the YAML contradicts the text; branch descriptions match their conditions. Report each gap with the agent line and the YAML node, and mark it `yaml:` (fixable with what exists) or `engine:` (needs a new operation, parser or node kind). Only `yaml:` gaps fail the check; `engine:` gaps go to the user as engine work.
