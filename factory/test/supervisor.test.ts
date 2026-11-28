@@ -1,3 +1,4 @@
+import "./helpers/no-turn-delay.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -7,7 +8,6 @@ import { tempDir } from "./helpers/temp.ts";
 import { SUPERVISOR_PATH, parseSupervisorLine, summarizeRun } from "../src/run-summary.ts";
 import type { CliRequest, CliResult, LedgerRecord, Run, RunEvent } from "../src/types.ts";
 
-process.env.FACTORY_TURN_DELAY_MS = "0";
 const { Factory } = await import("../src/engine.ts");
 const { loadFactoryConfig } = await import("../src/config.ts");
 const SUPERVISOR_AGENT = loadFactoryConfig().supervisor?.agent;

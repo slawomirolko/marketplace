@@ -1,6 +1,6 @@
 import { actionOf, countsText, fetchNoteOf, remoteNameOf, verdictOf, versionText } from "../../src/projects/status-text.ts";
 import type { ProjectArtifact, ProjectStatusData } from "../../src/types.ts";
-import { artifact, CURRENT_COMMIT, INSTALLED_COMMIT, REMOTE_REF } from "../testUtils/projects.ts";
+import { artifact, CURRENT_COMMIT, INSTALLED_COMMIT, REMOTE_REF } from "../test-utils/projects.ts";
 
 test.each<{ name: string; counts: Record<string, number> | null; ref?: string; verdict: Partial<ReturnType<typeof verdictOf>> }>([
   { name: "nothing installed", counts: null, verdict: { level: "empty", title: "No marketplace skill or agent is installed in this project.", badge: "nothing installed" } },

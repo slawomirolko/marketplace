@@ -1,4 +1,5 @@
 import "./helpers/isolated-home.ts";
+import "./helpers/no-turn-delay.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import http from "node:http";
@@ -74,8 +75,7 @@ test("a question passed on from several steps keeps all of them; one step stays 
 });
 
 test("a run stores every question with its rendered text, the step that asks it, and the answer", async () => {
-  process.env.FACTORY_TURN_DELAY_MS = "0";
-  const { Factory } = await import("../src/engine.ts");
+    const { Factory } = await import("../src/engine.ts");
   const { createDataApi } = await import("../src/viewer-data.ts");
   const dataDir = tempDir("factory-questions-");
   const factory = new Factory(dataDir, { backend: "fake" });

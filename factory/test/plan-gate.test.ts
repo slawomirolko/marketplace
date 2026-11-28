@@ -1,8 +1,7 @@
+import "./helpers/no-turn-delay.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { driveWorkflow } from "./helpers/plan-driver.ts";
-
-process.env.FACTORY_TURN_DELAY_MS = "0";
 
 const GATE = "olko-plan-gate";
 

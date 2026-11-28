@@ -1,4 +1,5 @@
 import "./helpers/isolated-home.ts";
+import "./helpers/no-turn-delay.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -7,9 +8,9 @@ import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { runSubagent } from "./delegate-subagent.ts";
 import { FENCE } from "./helpers/plan-driver.ts";
+import { POLL_INTERVAL_MS, sleep } from "./helpers/poll.ts";
 import { tempDir } from "./helpers/temp.ts";
 
-process.env.FACTORY_TURN_DELAY_MS = "0";
 const { Factory } = await import("../src/engine.ts");
 
 const factoryDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -41,6 +42,9 @@ function fixture(name: string): string {
   return `Draft.\n${FENCE}json\n${body}\n${FENCE}`;
 }
 
+/** Status reads before the driver gives up on reaching the target node: with POLL_INTERVAL_MS between idle reads it bounds a stuck run. */
+const MAX_STATUS_READS = 2000;
+
 /** Drives the discovery workflow with scripted replies up to `target`, runs that one node on the real model, and returns its parsed state and raw reply. */
 async function contract(target: string, scripted: Scripted): Promise<{ parsed: any; output: string; retried: boolean }> {
   const project = contractProject();
@@ -48,13 +52,13 @@ async function contract(target: string, scripted: Scripted): Promise<{ parsed: a
   const { run } = factory.start("plan discovery contract", undefined, { workflow: "olko-plan-discovery", input: { project, idea: IDEA, switches: { tracker: false } } });
   factory.confirm(run.runId, { tierModels: { low: MODEL, medium: MODEL, high: MODEL } });
   try {
-    for (let i = 0; i < 2000; i++) {
+    for (let read = 0; read < MAX_STATUS_READS; read++) {
       const view = factory.status(factory.get(run.runId));
       assert.equal(view.status === "waiting_for_user", false, `the run asked the user before it reached ${target}`);
       assert.notEqual(view.status, "failed", JSON.stringify(factory.get(run.runId).events.at(-1)));
       const work = view.status === "waiting_for_client" ? view.pendingWorkItems?.[0] : undefined;
       if (!work) {
-        await new Promise((r) => setTimeout(r, 5));
+        await sleep(POLL_INTERVAL_MS);
         continue;
       }
       const step = work.nodePath.split("/").pop()!;

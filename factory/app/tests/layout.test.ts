@@ -1,7 +1,7 @@
 import { layoutGraph, scriptsHeight } from "../src/layout.ts";
 import { agentScripts, buildLevel } from "../src/tree.ts";
 import type { Level } from "../src/types.ts";
-import { agents, mainWorkflow } from "./testUtils/data.ts";
+import { agents, mainWorkflow } from "./test-utils/data.ts";
 
 test("two edges between the same pair of nodes are drawn once with both labels", () => {
   const level: Level = {

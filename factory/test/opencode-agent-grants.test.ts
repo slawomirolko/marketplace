@@ -1,8 +1,10 @@
-// Every OpenCode agent's manifest entry (agents/opencode/index.json) declares
-// exactly the delegates and skills its frontmatter permission allows, and every
-// declared skill is registered. Frontmatter is parsed structurally with the
-// `yaml` package: a line-regex parser silently drops the last entry of a
-// permission map.
+/**
+ * Every OpenCode agent's manifest entry (agents/opencode/index.json) declares
+ * exactly the delegates and skills its frontmatter permission allows, and every
+ * declared skill is registered. Frontmatter is parsed structurally with the
+ * `yaml` package: a line-regex parser silently drops the last entry of a
+ * permission map.
+ */
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -46,8 +48,10 @@ function grant(permission: Record<string, unknown>, key: string): Grant {
 function compare(agent: ManifestAgent, key: "task" | "skill", declared: string[]): void {
   const permission = (frontmatter(path.join(agentsRoot, agent.file)).permission ?? {}) as Record<string, unknown>;
   const allowedGrant = grant(permission, key);
-  // A whole-map `allow` string cannot enumerate names, so there is no set to compare.
-  if (allowedGrant.form === "allow") return;
+  /** A whole-map `allow` string cannot enumerate names, so there is no set to compare. */
+  if (allowedGrant.form === "allow") {
+    return;
+  }
   const allowed = new Set(allowedGrant.names);
   const declaredSet = new Set(declared);
   const missing = [...allowed].filter((name) => !declaredSet.has(name)).sort();

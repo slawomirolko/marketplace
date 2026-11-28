@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { ALLOWED_HOSTS, ALLOWED_ORIGIN, callerFor } from "./helpers/data-api.ts";
 import { withEnv } from "./helpers/env.ts";
+import { runReaches } from "./helpers/poll.ts";
 import { tempDir } from "./helpers/temp.ts";
 
 const home = tempDir("factory-projects-home-");
@@ -290,8 +291,7 @@ test("the viewer's analyze action starts the status workflow for a project once,
   assert.deepEqual([again.runId, again.reused], [started.runId, true], "a running analysis is reused");
 
   release();
-  for (let i = 0; i < 500 && factory.get(started.runId).status === "running"; i++) await new Promise((r) => setTimeout(r, 10));
-  assert.equal(factory.get(started.runId).status, "done");
+  assert.equal((await runReaches(factory, started.runId, ["done", "failed", "stopped", "cancelled"])).status, "done");
   assert.match(prompts[0] ?? "", /--id sample-app/);
   assert.equal(data.projects().projects[0]?.analyzing, null);
   assert.equal(data.projectStatus("sample-app")?.runId, started.runId);

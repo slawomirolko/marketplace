@@ -1,6 +1,6 @@
 import { agentScripts, buildLevel, containedWorkflows, END_KEY, hasMemoryLayer, isEngineScript, START_KEY } from "../src/tree.ts";
 import type { Item, Level, Workflow } from "../src/types.ts";
-import { agentInfo } from "./testUtils/data.ts";
+import { agentInfo } from "./test-utils/data.ts";
 
 function itemAt(level: Level, key: string): Item {
   const item = level.items.find((candidate) => candidate.key === key);

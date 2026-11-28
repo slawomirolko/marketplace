@@ -1,10 +1,10 @@
+import "./helpers/no-turn-delay.ts";
 import assert from "node:assert/strict";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { driveWorkflow, fencedJson, stoppedBy, type PlanRun } from "./helpers/plan-driver.ts";
 
-process.env.FACTORY_TURN_DELAY_MS = "0";
 const { loadWorkflowDir } = await import("../src/workflow-yaml.ts");
 
 const json = (body: unknown): string => fencedJson(body, "Done.");

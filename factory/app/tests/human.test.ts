@@ -3,7 +3,7 @@ import { humanIcons, humanLabel, questionsFor } from "../src/human.ts";
 import type { HumanIcon } from "../src/human.ts";
 import { allItems, buildLevel } from "../src/tree.ts";
 import type { AskedQuestion, Workflow } from "../src/types.ts";
-import { agentInfo } from "./testUtils/data.ts";
+import { agentInfo } from "./test-utils/data.ts";
 
 const CLICK_HINT = "Click to see the questions and your answers in this run";
 

@@ -1,6 +1,6 @@
 import { isLive, liveState } from "../src/live.ts";
 import type { Item, RunData } from "../src/types.ts";
-import { runWith } from "./testUtils/data.ts";
+import { runWith } from "./test-utils/data.ts";
 
 const at = "2026-11-12T00:00:00Z";
 

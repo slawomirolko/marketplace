@@ -1,4 +1,5 @@
 import "./helpers/isolated-home.ts";
+import "./helpers/no-turn-delay.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -39,8 +40,6 @@ const YAML = [
 const workflowsDir = tempDir("yaml-only-workflows-");
 fs.writeFileSync(path.join(workflowsDir, "yaml-only-agents.yaml"), YAML);
 process.env.FACTORY_WORKFLOWS_DIR = workflowsDir;
-process.env.FACTORY_TURN_DELAY_MS = "0";
-
 const { Factory } = await import("../src/engine.ts");
 const { cliExecutor } = await import("../src/cli-backend.ts");
 

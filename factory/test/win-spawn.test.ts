@@ -1,5 +1,7 @@
-// Shell-free start of the agent CLIs: Windows npm .cmd shims run through cmd.exe with every
-// argument escaped, so paths with spaces stay one argument and metacharacters stay text.
+/**
+ * Shell-free start of the agent CLIs: Windows npm .cmd shims run through cmd.exe with every
+ * argument escaped, so paths with spaces stay one argument and metacharacters stay text.
+ */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";

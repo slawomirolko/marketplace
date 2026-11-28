@@ -1,3 +1,4 @@
+import "./helpers/no-turn-delay.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -5,7 +6,6 @@ import test from "node:test";
 import { tempDir } from "./helpers/temp.ts";
 import { driveWorkflow, fencedJson, type PlanRun } from "./helpers/plan-driver.ts";
 
-process.env.FACTORY_TURN_DELAY_MS = "0";
 const { loadedWorkflows } = await import("../src/engine.ts");
 const { loadWorkflowDir } = await import("../src/workflow-yaml.ts");
 const { missingEdges, SCENARIOS_FILTERED } = await import("./edge-coverage.ts");

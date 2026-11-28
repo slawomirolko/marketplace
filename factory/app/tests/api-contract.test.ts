@@ -3,7 +3,7 @@ import { supervisorRing } from "../src/supervisor.ts";
 import { humanIcons } from "../src/human.ts";
 import { allItems, ancestorKeys, buildLevel, END_KEY, findItem, START_KEY } from "../src/tree.ts";
 import type { Item, Level } from "../src/types.ts";
-import { assertRunDetail, servedDemo } from "./testUtils/served-api.ts";
+import { assertRunDetail, servedDemo } from "./test-utils/served-api.ts";
 
 /**
  * The API contract between the backend data API and the viewer: the JSON apiMiddleware serves is checked against

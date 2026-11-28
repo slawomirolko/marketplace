@@ -1,3 +1,4 @@
+import "./helpers/no-turn-delay.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -38,8 +39,7 @@ edges:
 process.env.FACTORY_WORKFLOWS_DIR = dir;
 
 test("a call runs another workflow once per loop item with its own input, state and question ids", async () => {
-  process.env.FACTORY_TURN_DELAY_MS = "0";
-  const { Factory } = await import("../src/engine.ts");
+    const { Factory } = await import("../src/engine.ts");
   const factory = new Factory(tempDir("factory-call-"), { backend: "delegate" });
   const { run } = factory.start("call twice", undefined, { workflow: "parent" });
   factory.confirm(run.runId);

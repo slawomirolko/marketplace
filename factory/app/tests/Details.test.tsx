@@ -1,7 +1,7 @@
 import { Details } from "../src/Details.tsx";
 import { buildLevel, findItem } from "../src/tree.ts";
 import type { Item, Workflow } from "../src/types.ts";
-import { mainWorkflow, renderWithViewer, report, run, screen, within } from "./testUtils/index.ts";
+import { mainWorkflow, renderWithViewer, report, run, screen, within } from "./test-utils/index.ts";
 
 const wrapperWorkflow: Workflow = { name: "wrap", version: "1.0.0", entry: "inner", nodes: [{ id: "inner", kind: "subgraph", workflow: "main" }], edges: [{ from: "inner", to: "END" }] };
 

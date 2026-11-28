@@ -1,5 +1,8 @@
-// The run loop of the engine: parallel CLI agents, cancelling a run during a step and a script that moves the workspace.
-// Hermetic: a temp workflow folder, a stub CLI executor and a test operation. No model, no network.
+/**
+ * The run loop of the engine: parallel CLI agents, cancelling a run during a step and a script that moves the workspace.
+ * Hermetic: a temp workflow folder, a stub CLI executor and a test operation. No model, no network.
+ */
+import "./helpers/no-turn-delay.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -65,8 +68,6 @@ edges:
 `,
 );
 process.env.FACTORY_WORKFLOWS_DIR = workflows;
-process.env.FACTORY_TURN_DELAY_MS = "0";
-
 const { Factory } = await import("../src/engine.ts");
 const SUPERVISOR_AGENT = (await import("../src/config.ts")).loadFactoryConfig().supervisor?.agent;
 const { OPERATIONS } = await import("../src/ops.ts");

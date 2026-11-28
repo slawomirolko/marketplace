@@ -1,7 +1,7 @@
 import { costOf, failureOf, itemPasses, ranIn, rawFailureOf, runCalls, runCount, runPasses, timeSpent } from "../src/run-facts.ts";
 import { buildLevel, START_KEY } from "../src/tree.ts";
 import type { Item, Workflow } from "../src/types.ts";
-import { report as sampleReport, reportWith, runWith, timedCall, timedPass } from "./testUtils/data.ts";
+import { report as sampleReport, reportWith, runWith, timedCall, timedPass } from "./test-utils/data.ts";
 
 function step(key: string, kind = "llm"): Item {
   return { key, kind: "step", node: { id: key.split("/").at(-1) ?? key, kind } };

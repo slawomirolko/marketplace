@@ -1,5 +1,5 @@
 import { ReactFlow } from "@xyflow/react";
-import { render, screen, userEvent } from "./testUtils/index.ts";
+import { render, screen, userEvent } from "./test-utils/index.ts";
 import { RING_GAP } from "../src/supervisor.ts";
 import { SupervisorRing } from "../src/SupervisorRing.tsx";
 import type { SupervisorData } from "../src/types.ts";

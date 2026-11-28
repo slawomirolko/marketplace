@@ -1,8 +1,8 @@
+import "./helpers/no-turn-delay.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { driveWorkflow, fencedJson, type PlanRun } from "./helpers/plan-driver.ts";
 
-process.env.FACTORY_TURN_DELAY_MS = "0";
 const { missingEdges, SCENARIOS_FILTERED } = await import("./edge-coverage.ts");
 
 const AUDIT = "olko-plan-audit";

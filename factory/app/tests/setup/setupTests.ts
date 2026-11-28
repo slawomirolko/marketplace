@@ -1,8 +1,8 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { FLOW_HEIGHT, FLOW_WIDTH } from "../testUtils/flow-size.ts";
-import { recordUnhandledRequest, resetNetwork } from "../testUtils/network.ts";
-import { server } from "../testUtils/server.ts";
+import { FLOW_HEIGHT, FLOW_WIDTH } from "../test-utils/flow-size.ts";
+import { recordUnhandledRequest, resetNetwork } from "../test-utils/network.ts";
+import { server } from "../test-utils/server.ts";
 
 class ResizeObserverStub {
   private readonly callback: ResizeObserverCallback;

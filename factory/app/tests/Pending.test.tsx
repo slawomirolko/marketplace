@@ -2,7 +2,7 @@ import { http, HttpResponse } from "msw";
 import { PendingDecisions } from "../src/Pending.tsx";
 import { READ_ONLY_NOTE } from "../src/api.ts";
 import type { PendingDecision } from "../src/types.ts";
-import { API, render, screen, server, settleNetwork, userEvent, waitFor } from "./testUtils/index.ts";
+import { API, render, screen, server, settleNetwork, userEvent, waitFor } from "./test-utils/index.ts";
 
 const decision: PendingDecision = {
   runId: "r-0000abcd",

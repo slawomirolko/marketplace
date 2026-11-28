@@ -1,4 +1,4 @@
-// The MCP tool descriptions promise only what the factory does.
+/** The MCP tool descriptions promise only what the factory does. */
 import "./helpers/isolated-home.ts";
 import assert from "node:assert/strict";
 import test from "node:test";

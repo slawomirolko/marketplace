@@ -3,7 +3,7 @@ import type { HttpResponseResolver } from "msw";
 import { App } from "../src/App.tsx";
 import { Projects } from "../src/Projects.tsx";
 import type { ProjectOverview, ProjectStatusView } from "../src/types.ts";
-import { API, artifact, deferred, fireEvent, listOf, projectList as list, projectStatus as status, REMOTE_REF as remoteRef, render, screen, server, settleNetwork, STATUS_WORKFLOW, uncheckedProject, userEvent, waitFor, within, withData } from "./testUtils/index.ts";
+import { API, artifact, deferred, fireEvent, listOf, projectList as list, projectStatus as status, REMOTE_REF as remoteRef, render, screen, server, settleNetwork, STATUS_WORKFLOW, uncheckedProject, userEvent, waitFor, within, withData } from "./test-utils/index.ts";
 
 type Posted = Record<string, string>;
 

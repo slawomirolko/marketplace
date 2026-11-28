@@ -1,7 +1,7 @@
 import { QuestionsList } from "../src/Questions.tsx";
 import { buildLevel, findItem } from "../src/tree.ts";
 import type { Item } from "../src/types.ts";
-import { mainWorkflow, questions, renderWithViewer, run, screen, within } from "./testUtils/index.ts";
+import { mainWorkflow, questions, renderWithViewer, run, screen, within } from "./test-utils/index.ts";
 
 function item(key: string): Item {
   return findItem(buildLevel([mainWorkflow], "main"), key)!;

@@ -1,6 +1,8 @@
-// Sends repository content and the user store below to the model provider. The user store comes from
-// test/fixtures/user-store; FACTORY_CLAUDE_SYNC_REAL_STORE=1 copies the real ~/.claude skills and agents instead,
-// and then needs leak terms (targets.json leakTerms or FACTORY_LEAK_TERMS) or the test fails before it copies anything.
+/**
+ * Sends repository content and the user store below to the model provider. The user store comes from
+ * test/fixtures/user-store; FACTORY_CLAUDE_SYNC_REAL_STORE=1 copies the real ~/.claude skills and agents instead,
+ * and then needs leak terms (targets.json leakTerms or FACTORY_LEAK_TERMS) or the test fails before it copies anything.
+ */
 import "./helpers/isolated-home.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";

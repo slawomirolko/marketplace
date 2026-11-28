@@ -1,5 +1,5 @@
 import { CallsList } from "../src/Calls.tsx";
-import { fireEvent, renderWithViewer, report, run, screen, within } from "./testUtils/index.ts";
+import { fireEvent, renderWithViewer, report, run, screen, within } from "./test-utils/index.ts";
 
 const teamNodes = new Set(["main/team"]);
 

@@ -1,16 +1,22 @@
 import "./helpers/isolated-home.ts";
+import "./helpers/no-turn-delay.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { POLL_INTERVAL_MS, sleep } from "./helpers/poll.ts";
 import { removeDir, tempDir } from "./helpers/temp.ts";
 import { runSubagent } from "./delegate-subagent.ts";
 
-process.env.FACTORY_TURN_DELAY_MS = "0";
 const { Factory } = await import("../src/engine.ts");
 
 const MODEL = process.env.FACTORY_TEST_MODEL ?? "claude-haiku-5-5";
+/**
+ * The local smoke budget: a one-Task idea on the low-cost test model normally ends well inside 40 minutes and $2, so
+ * a run past either limit means a loop or a stuck step, not a slow model. Override them with FACTORY_SMOKE_LIMIT_MIN
+ * and FACTORY_SMOKE_BUDGET_USD for a slower machine or a larger model.
+ */
 const LIMIT_MIN = Number(process.env.FACTORY_SMOKE_LIMIT_MIN ?? 40);
 const BUDGET_USD = Number(process.env.FACTORY_SMOKE_BUDGET_USD ?? 2);
 const MAX_DRAFTS = 3;
@@ -84,7 +90,7 @@ test(`the plan documentation of a one-Task idea ends done within ${LIMIT_MIN} mi
         const question = view.pendingQuestion as Payload;
         factory.answer(run.runId, question.id, answerOf(question));
       } else {
-        await new Promise((r) => setTimeout(r, 5));
+        await sleep(POLL_INTERVAL_MS);
       }
       view = factory.status(factory.get(run.runId));
     }

@@ -98,7 +98,8 @@ function usageOf(result: CliResult): SubagentResult["usage"] {
 }
 
 /**
- * Runs one pendingWorkItems entry as an isolated subagent of TEST_HARNESS, with the engine's per-call timeout and one retry.
+ * Runs one pendingWorkItems entry as an isolated subagent of TEST_HARNESS, with one retry. The request passes no timeout, so
+ * each attempt ends at the CLI backend's own process limit (TIMEOUT_MS in src/cli-backend.ts) or when `signal` aborts.
  * The agent runs in sandboxEnv() unless `env` is given; `network: "github-read"` is the explicit opt-in for GitHub reads.
  */
 export async function runSubagent(work: Payload, { cwd, env, tools, network = "none", signal }: { cwd: string; env?: Record<string, string>; tools?: AgentTool[]; network?: SubagentNetwork; signal?: AbortSignal }): Promise<SubagentResult> {

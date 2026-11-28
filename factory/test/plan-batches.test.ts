@@ -1,3 +1,4 @@
+import "./helpers/no-turn-delay.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -5,7 +6,6 @@ import test from "node:test";
 import { tempDir } from "./helpers/temp.ts";
 import { FENCE, applied, driveWorkflow, questions } from "./helpers/plan-driver.ts";
 
-process.env.FACTORY_TURN_DELAY_MS = "0";
 const { loadedWorkflows } = await import("../src/engine.ts");
 const { loadWorkflowDir } = await import("../src/workflow-yaml.ts");
 
@@ -61,8 +61,10 @@ test("re-validation runs only the workers whose area the applied answers changed
   assert.ok(done.events.some((e: any) => e.type === "node_skipped" && String(e.node).endsWith("/revalidate")), "the second round skips re-validation");
 });
 
-// olko-plan-readiness runs as a group inside olko-plan-documentation and reads the Feature (featureDir, taskIds)
-// that olko-plan-entry put in the shared state. This wrapper supplies that Feature state for one Task.
+/**
+ * olko-plan-readiness runs as a group inside olko-plan-documentation and reads the Feature (featureDir, taskIds)
+ * that olko-plan-entry put in the shared state. This wrapper supplies that Feature state for one Task.
+ */
 function withFeatureWrapper(): string {
   const dir = tempDir("factory-plan-readiness-wrapper-");
   const source = path.join(import.meta.dirname, "..", "workflows");

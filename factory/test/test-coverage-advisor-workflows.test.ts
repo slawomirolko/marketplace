@@ -10,7 +10,7 @@ const specs = new Map(loadWorkflowSpecs(path.join(import.meta.dirname, "..", "wo
 const ADVISOR = "olko-test-coverage-advisor";
 const CHANGED = ["olko-skill-sync-compare", "olko-skill-sync-decide", "olko-marketplace-skill-sync", "olko-skill-sync-apply", "olko-skill-sync-publish", "olko-skill-optimizer-propose", "olko-skill-optimizer-apply"];
 const ADVISOR_NODES: [string, string][] = [["olko-skill-sync-compare", "tests"], ["olko-marketplace-skill-sync", "tests-apply"], ["olko-skill-optimizer-propose", "advise"], ["olko-skill-optimizer-apply", "tests-apply"]];
-// The optimizer's testsRoot: the person's answer when asked, else the resolved marketplace checkout.
+/** The optimizer's testsRoot: the person's answer when asked, else the resolved marketplace checkout. */
 const TESTS_ROOT = "{{#state.ask-tests-root.answer}}{{state.ask-tests-root.answer}}{{/state.ask-tests-root.answer}}{{^state.ask-tests-root.answer}}{{state.tests-root.tests-root}}{{/state.ask-tests-root.answer}}";
 
 function spec(name: string): WorkflowSpec {
@@ -111,7 +111,7 @@ test("sync runs advisor apply after the artifact changes and before publish", ()
   assert.deepEqual(apply.tools, ["read", "edit", "bash"]);
   assert.match(apply.prompt ?? "", /apply/);
   assert.match(apply.prompt ?? "", /\{\{#each\.state\.tests\}\}[\s\S]*\{\{value\}\}/);
-  // A group exit cannot carry a condition when the group's own last edge has one, so a pass gate routes after apply-phase.
+  /** A group exit cannot carry a condition when the group's own last edge has one, so a pass gate routes after apply-phase. */
   assert.equal(node(sync, "tests-gate").op, "builtin.pass");
   assert.deepEqual(edges(sync, "apply-phase", "tests-gate").map((e) => e.when), [undefined]);
   assert.equal(edges(sync, "apply-phase", "publish-phase").length, 0);
@@ -160,7 +160,7 @@ test("optimizer propose adds advice to the draft, apply runs advisor apply befor
   assert.equal(edges(propose, "wording", "advise").length, 0);
   assert.equal(edges(propose, "advise", "draft").length, 1);
   assert.equal(edges(propose, "wording", "draft").length, 0);
-  // A text parse stores the reply as a string, so the draft reads `state.advise.advise` itself.
+  /** A text parse stores the reply as a string, so the draft reads `state.advise.advise` itself. */
   assert.match(node(propose, "draft").prompt ?? "", /\{\{state\.advise\.advise\}\}/);
 
   const applyFlow = spec("olko-skill-optimizer-apply");
@@ -170,7 +170,7 @@ test("optimizer propose adds advice to the draft, apply runs advisor apply befor
   assert.match(apply.prompt ?? "", /every suggestion id/);
   assert.match(apply.prompt ?? "", /\{\{state\.draft\.draft\}\}/);
   assert.match(apply.prompt ?? "", /no suggestion ids[^.]*write nothing/i, "no ids: the advisor does nothing");
-  // No JSON-parsed step reports the suggestion count, so tests-apply always runs and does nothing when there are no ids.
+  /** No JSON-parsed step reports the suggestion count, so tests-apply always runs and does nothing when there are no ids. */
   assert.deepEqual(edges(applyFlow, "apply", "tests-apply").map((e) => e.when), [undefined]);
   assert.equal(edges(applyFlow, "apply", "repo-tests").length, 0);
   assert.deepEqual(edges(applyFlow, "tests-apply", "repo-tests").map((e) => e.when), [undefined]);

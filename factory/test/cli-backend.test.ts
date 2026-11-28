@@ -1,5 +1,7 @@
-// The agent CLIs start without a shell: a fake `claude`/`opencode` on PATH records the arguments
-// and the environment it receives, so quoting, validation and the child environment are checked hermetically.
+/**
+ * The agent CLIs start without a shell: a fake `claude`/`opencode` on PATH records the arguments
+ * and the environment it receives, so quoting, validation and the child environment are checked hermetically.
+ */
 import "./helpers/isolated-home.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -46,6 +48,11 @@ fs.writeFileSync(
     "",
   ].join("\n"),
 );
+/**
+ * The fake CLIs are installed the way npm installs the real ones: on Windows a `.cmd` shim, which the backend must
+ * start through cmd.exe with escaped arguments (the case src/win-spawn.ts exists for); elsewhere an executable
+ * shell script. Both hand every argument on to fake-cli.js unchanged. The folder name has spaces on purpose.
+ */
 for (const cli of ["claude", "opencode"]) {
   if (process.platform === "win32") {
     fs.writeFileSync(path.join(fakeDir, `${cli}.cmd`), `@ECHO off\r\n"${process.execPath}" "%~dp0\\fake-cli.js" %*\r\n`);
@@ -54,6 +61,10 @@ for (const cli of ["claude", "opencode"]) {
   }
 }
 
+/**
+ * The backend finds the CLIs on PATH, so the fake folder goes first for the whole file: every test spawns through it,
+ * and a per-test withEnv would only repeat the same value. test.after puts the original PATH back.
+ */
 const originalPath = process.env.PATH;
 process.env.PATH = `${fakeDir}${path.delimiter}${originalPath ?? ""}`;
 test.after(() => {

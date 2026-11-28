@@ -185,7 +185,7 @@ Viewer render tests (Vitest, jsdom, Testing Library, MSW for the `/api` calls) r
 pnpm --dir factory test:viewer
 ```
 
-They live in `app/tests`, mirror `app/src`, and render through `tests/testUtils` (`renderFlow` draws a workflow through the viewer's own layout into React Flow; `renderWithViewer` wraps one component in the viewer context).
+They live in `app/tests`, mirror `app/src`, and render through `tests/test-utils` (`renderFlow` draws a workflow through the viewer's own layout into React Flow; `renderWithViewer` wraps one component in the viewer context).
 
 ## Verified so far
 
