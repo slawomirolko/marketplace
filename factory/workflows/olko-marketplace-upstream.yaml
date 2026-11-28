@@ -61,7 +61,7 @@ nodes:
       End with one ```json block:
       {"changed": <true or false>, "summary": "<one line: what you changed, or why nothing>"}
   - id: sanitize
-    description: "The sanitize gate: blocks when the staged copy names the project, its owner, a configured leak term or a forbidden word. Exit 2 means blocked."
+    description: "The first sanitize gate, on the staged copy: blocks when it names the project, its owner or repository, a private leak or forbidden term, or holds a secret, a binary file or a symlink. Exit 2 means blocked; exit 1 (no git remote or no private terms configured) fails the run. The publish step runs the gate again on the whole staged commit, the commit message and the PR title and body before it pushes."
     kind: script
     op: builtin.exec
     with:
@@ -97,6 +97,8 @@ nodes:
       Project: {{input.project}}
       Content hash: {{input.contentHash}}
       Follow the publish step of the olko-marketplace-upstream skill exactly.
+      Run its publish gate (scripts/olko-sanitize.mjs --staged with the commit message and PR body as --text) before any push, PR or comment.
+      When the gate exits non-zero: push nothing, remove the worktree, report only the exit code and hit numbers, and end without a json block.
 
       End with one ```json block:
       {"pr": <PR number>, "url": "<PR URL>"}

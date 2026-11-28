@@ -43,6 +43,8 @@ after a person says so. A person always merges or closes the PR.
 
 Matching folds Unicode (NFKC), drops zero-width characters and ignores case and the separators `-`, `_`, `.` and whitespace, so `BillingPortal`, `billing_portal` and `billing portal` all match, also inside longer words. A derived term shorter than four characters is not checked; the gate prints a warning with the count.
 
+The workflow runs the gate twice. The `sanitize` node scans the stage directory (`--path`). The publish step stages the commit in a fresh marketplace worktree, then runs the gate on everything the draft PR publishes, before any push or `gh pr create`: the whole staged commit (`--staged <worktree>`: every added line, regenerated `registry.json` and index files included) and the commit message, PR title and PR body (`--text <file>`, reported as `text#n`). The PR body lists only file names found in the stage directory.
+
 The gate fails closed (exit 1) when the project has no usable git remote or no private term is configured; `--allow-no-config` scans without them. Output never holds a value: a term is `#n`, a secret `#secret:<label>`, an error a fixed code such as `E_NO_TERMS`, and a file whose name holds a hit `#file<n>`.
 
 ## Forbidden terms

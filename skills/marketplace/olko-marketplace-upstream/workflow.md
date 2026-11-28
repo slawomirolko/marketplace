@@ -30,10 +30,12 @@ The plan's `action` is `open` or `append` (a `skip` never reaches this step).
    - `append`: `git -C <marketplace> fetch origin <plan.branch>`, then `git -C <marketplace> worktree add -B <plan.branch> <wt> origin/<plan.branch>`.
 3. Mirror the stage directory into `<wt>/<source>`: replace every file, and delete a file only when the project deleted it.
 4. Bump the version by patch from the version in `<wt>` (not from the base): skill in `SKILL.md` frontmatter and its `registry.json` entry; agent in its `agents/opencode/index.json` entry. Run `node scripts/registry.mjs --fix` in `<wt>`, then `node --test scripts/registry.test.mjs`.
-5. Run `node <wt>/scripts/olko-sanitize.mjs --path <wt>/<source> --project <project> --json`. Exit 2 means stop: remove the worktree, publish nothing, report the hit numbers.
-6. `git -C <wt> add` only the files that changed among `<source>`, `registry.json`, `skills/*/index.json`, `agents/opencode/index.json`, `search-index.json` and `capability-graph.json`. Commit with the plan's `title` as the subject.
-7. `git -C <wt> push -u origin <plan.branch>`.
-8. `open`: write the plan's `body` to a temp file, make sure the `upstream-candidate` label exists (`gh label list --search upstream-candidate`, else `gh label create upstream-candidate`), then `gh pr create --draft --base <default> --head <plan.branch> --title "<plan.title>" --body-file <file> --label upstream-candidate`. `append`: `gh pr comment <plan.pr> --body-file <file>`.
-9. Record the PR in the project's lock: `node <marketplace>/scripts/olko-marketplace-lock.mjs record --project <project> --artifact <artifact> --pending-pr <number> --content-hash <content hash>`.
-10. `git -C <marketplace> worktree remove <wt>`.
-11. Reply with the PR number and URL. The person merges or closes it.
+5. `git -C <wt> add` only the files that changed among `<source>`, `registry.json`, `skills/*/index.json`, `agents/opencode/index.json`, `search-index.json` and `capability-graph.json`.
+6. In a new temp directory `<text>` (outside `<wt>`), write the plan's `title` to `<text>/message.txt` and the plan's `body` to `<text>/body.md`.
+7. Publish gate. Run `node <marketplace>/scripts/olko-sanitize.mjs --project <project> --staged <wt> --text <text>/message.txt --text <text>/body.md --json`. It scans the whole staged commit (every added line, regenerated registry and index files included), the commit message, the PR title and the PR body. Any exit other than 0 means stop: remove the worktree, publish nothing, report the exit code and the hit numbers (never the matched text). Do not stage, edit or write anything for the PR after this step.
+8. `git -C <wt> commit -F <text>/message.txt`.
+9. `git -C <wt> push -u origin <plan.branch>`.
+10. `open`: make sure the `upstream-candidate` label exists (`gh label list --search upstream-candidate`, else `gh label create upstream-candidate`), then `gh pr create --draft --base <default> --head <plan.branch> --title "<plan.title>" --body-file <text>/body.md --label upstream-candidate`. `append`: `gh pr comment <plan.pr> --body-file <text>/body.md`.
+11. Record the PR in the project's lock: `node <marketplace>/scripts/olko-marketplace-lock.mjs record --project <project> --artifact <artifact> --pending-pr <number> --content-hash <content hash>`.
+12. `git -C <marketplace> worktree remove <wt>`.
+13. Reply with the PR number and URL. The person merges or closes it.

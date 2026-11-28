@@ -9,7 +9,8 @@
 //   node scripts/olko-upstream-plan.mjs --artifact <skill:x|agent:x> --stage <dir>
 //        --classification <json> --open-prs <json> (--lock-entry <json> | --project <dir>) [--json]
 //
-// classification: { hunks: [{ file, kind: "portable" | "adapter", text }] }
+// classification: { hunks: [{ file, kind: "portable" | "adapter", text }] }; the PR body
+//                 lists only staged file names (from the stage directory) that have a portable hunk
 // open PRs:       [{ number, branch, contentHash, base, artifact? }], or the output of
 //                 `gh pr list --json number,headRefName,body` (read from the PR body);
 //                 `--open-prs gh:<repo dir>` lists the open `upstream-candidate` PRs with gh
@@ -46,8 +47,7 @@ function baseOf(lockEntry) {
   return lockEntry.version ?? lockEntry.nearestVersion ?? "unknown";
 }
 
-function body({ artifact, base, portable, adapterCount, contentHash }) {
-  const files = [...new Set(portable.map((hunk) => hunk.file))].sort();
+function body({ artifact, base, files, portable, adapterCount, contentHash }) {
   return [
     `Upstream candidate for \`${artifact}\`, found in a project that uses the marketplace.`,
     "",
@@ -80,7 +80,10 @@ export function plan({ artifact, stage, classification, openPrs, lockEntry }) {
   const hunks = classification.hunks ?? [];
   const portable = hunks.filter((hunk) => hunk.kind === "portable");
   const localAdapter = hunks.filter((hunk) => hunk.kind === "adapter").map(({ file, text }) => ({ file, text }));
-  const contentHash = hashFiles(stagedFiles(stage)).hash.slice("sha256:".length);
+  const staged = stagedFiles(stage);
+  const contentHash = hashFiles(staged).hash.slice("sha256:".length);
+  const portableFiles = new Set(portable.map((hunk) => hunk.file));
+  const files = [...staged.keys()].filter((file) => portableFiles.has(file)).sort();
   const base = baseOf(lockEntry);
   const branchPrefix = `feature/upstream-${slug(name)}-`;
   const prs = openPrs.map(normalizePr).filter((pr) => pr.artifact === artifact || pr.branch?.startsWith(branchPrefix));
@@ -93,7 +96,7 @@ export function plan({ artifact, stage, classification, openPrs, lockEntry }) {
   if (portable.length === 0) return { ...common, action: "skip", reason: "adapter-only" };
 
   const title = `feat(${kind}s): upstream change to ${name}`;
-  const text = body({ artifact, base, portable, adapterCount: localAdapter.length, contentHash });
+  const text = body({ artifact, base, files, portable, adapterCount: localAdapter.length, contentHash });
   const sameBase = prs.find((pr) => pr.base === base);
   if (sameBase) {
     return { ...common, action: "append", pr: sameBase.number, branch: sameBase.branch, title, body: text };

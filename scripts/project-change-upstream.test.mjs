@@ -409,3 +409,11 @@ test("AC6: plan reads open PRs in gh's shape (headRefName and body)", () => {
   assert.equal(again.action, "skip");
   assert.equal(again.reason, "duplicate");
 });
+
+test("plan lists in the PR body only file names that exist in the stage directory", () => {
+  const change = stagedChange();
+  change.classification.hunks.push({ file: "../zebraproject-notes.md", kind: "portable", text: "3. Validate the input first." });
+  const result = json(plan(change));
+  assert.match(result.body, /Changed files: `workflow\.md`\n/);
+  assert.equal(result.body.includes("zebraproject"), false);
+});

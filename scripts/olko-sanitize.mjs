@@ -18,8 +18,13 @@
 // reported by its number (#n), a secret by its label, an error by a fixed code,
 // and a file whose name holds a hit by its index (#file<n>).
 //
+// It scans everything that is published: a stage directory (--path), the staged
+// commit of a git worktree (--staged: every added or changed path and its added
+// lines, regenerated registry and index files included) and text files such as
+// the PR title, body and commit message (--text, repeatable, reported as text#n).
+//
 // Usage:
-//   node scripts/olko-sanitize.mjs --path <stage-dir> --project <dir>
+//   node scripts/olko-sanitize.mjs --project <dir> (--path <stage-dir> | --staged <worktree> | --text <file>)...
 //        [--terms-file <json>] [--allow-no-config] [--json]
 // Exit codes: 0 clean, 2 blocked by a leak, 1 the script failed.
 
@@ -337,26 +342,34 @@ function stagedEntries(stage) {
   return entries.sort((left, right) => left.name.localeCompare(right.name));
 }
 
-/** Hits of one item's content (lines from 1); a null buffer is a non-regular entry. */
-function contentHits(terms, buffer) {
-  if (buffer === null) {
+function textLines(text) {
+  return text.replace(/\r\n/g, "\n").split("\n").map((line, index) => ({ line: index + 1, text: line }));
+}
+
+/** Hits of one item's content: its `lines`, or the decoded `buffer`; `nonRegular` and binary items block as such. */
+function contentHits(terms, item) {
+  if (item.nonRegular) {
     return [{ line: 0, term: "#non-regular" }];
   }
-  const text = decodeText(buffer);
-  if (text === null) {
-    return [{ line: 0, term: "#binary" }];
+  let lines = item.lines;
+  if (!lines) {
+    const text = decodeText(item.buffer);
+    if (text === null) {
+      return [{ line: 0, term: "#binary" }];
+    }
+    lines = textLines(text);
   }
   const hits = [];
-  text.replace(/\r\n/g, "\n").split("\n").forEach((line, index) => {
-    for (const term of lineHits(terms, line)) {
-      hits.push({ line: index + 1, term });
+  for (const { line, text } of lines) {
+    for (const term of lineHits(terms, text)) {
+      hits.push({ line, term });
     }
-  });
+  }
   return hits;
 }
 
 /**
- * Hits of named items: { name, buffer } scans the name (line 0) and the content.
+ * Hits of named items ({ name, buffer | lines | nonRegular }): the name is line 0.
  * An item whose name holds a hit is reported as #file<n>, never by its name.
  */
 export function report(items, terms) {
@@ -364,43 +377,133 @@ export function report(items, terms) {
   items.forEach((item, index) => {
     const nameHits = lineHits(terms, item.name).map((term) => ({ line: 0, term }));
     const file = nameHits.length > 0 ? `#file${index + 1}` : item.name;
-    for (const hit of [...nameHits, ...contentHits(terms, item.buffer)]) {
+    for (const hit of [...nameHits, ...contentHits(terms, item)]) {
       hits.push({ file, line: hit.line, term: hit.term });
     }
   });
   return { clean: hits.length === 0, hits };
 }
 
-export function scan(stage, project, termsFile, options = {}) {
-  const { terms, warnings } = collectTerms(project, termsFile, options);
-  const items = stagedEntries(stage).map((entry) => ({ name: entry.name, buffer: entry.regular ? fs.readFileSync(entry.absolute) : null }));
+function stageItems(stage) {
+  return stagedEntries(stage).map((entry) => (entry.regular ? { name: entry.name, buffer: fs.readFileSync(entry.absolute) } : { name: entry.name, nonRegular: true }));
+}
+
+function gitOutput(cwd, args) {
+  const result = spawnSync("git", ["--literal-pathspecs", "-c", "core.quotepath=false", ...args], { cwd, maxBuffer: 256 * 1024 * 1024 });
+  if (result.status !== 0) {
+    throw new GateError("E_GIT");
+  }
+  return result.stdout;
+}
+
+/** Added lines of one staged file, numbered as in the staged version. */
+function addedLines(worktree, file) {
+  const diff = gitOutput(worktree, ["diff", "--cached", "--no-color", "--no-ext-diff", "--no-renames", "--unified=0", "--text", "--", file]).toString("utf8");
+  const lines = [];
+  let next = 0;
+  let inHunk = false;
+  for (const line of diff.split("\n")) {
+    const header = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    if (header) {
+      next = Number(header[1]);
+      inHunk = true;
+    } else if (inHunk && line.startsWith("+")) {
+      lines.push({ line: next, text: line.slice(1).replace(/\r$/, "") });
+      next += 1;
+    }
+  }
+  return lines;
+}
+
+/**
+ * The staged commit of a git worktree: every added or changed path (name and added lines).
+ * Symlinks and submodules are non-regular; binary blobs block; UTF-16 blobs are scanned whole.
+ */
+function stagedCommitItems(worktree) {
+  const raw = gitOutput(worktree, ["diff", "--cached", "--raw", "-z", "--no-renames", "--no-abbrev", "--diff-filter=d"]).toString("utf8").split("\0");
+  const items = [];
+  for (let index = 0; index + 1 < raw.length && raw[index].startsWith(":"); index += 2) {
+    const [, newMode, , newBlob] = raw[index].slice(1).split(" ");
+    const file = raw[index + 1];
+    const name = `staged:${file}`;
+    if (!newMode.startsWith("100")) {
+      items.push({ name, nonRegular: true });
+      continue;
+    }
+    const blob = gitOutput(worktree, ["cat-file", "blob", newBlob]);
+    const text = decodeText(blob);
+    const utf16 = (blob[0] === 0xff && blob[1] === 0xfe) || (blob[0] === 0xfe && blob[1] === 0xff);
+    if (text === null) {
+      items.push({ name, buffer: blob });
+    } else if (utf16) {
+      items.push({ name, lines: textLines(text) });
+    } else {
+      items.push({ name, lines: addedLines(worktree, file) });
+    }
+  }
+  return items;
+}
+
+/** Text that is published but is no file, such as a PR title, body or commit message: reported as text#<n>. */
+function textItems(files) {
+  return files.map((file, index) => {
+    try {
+      return { name: `text#${index + 1}`, buffer: fs.readFileSync(file) };
+    } catch {
+      throw new GateError("E_TEXT_UNREADABLE");
+    }
+  });
+}
+
+/**
+ * Scans everything that is published: a stage directory (`stage`), the staged commit of a
+ * git worktree (`staged`) and text files (`texts`), against the terms of `project`.
+ */
+export function scan({ stage, staged, texts = [], project, termsFile, allowNoConfig = false }) {
+  const { terms, warnings } = collectTerms(project, termsFile, { allowNoConfig });
+  const items = [
+    ...(stage ? stageItems(stage) : []),
+    ...(staged ? stagedCommitItems(staged) : []),
+    ...textItems(texts),
+  ];
   return { ...report(items, terms), warnings };
 }
 
+const USAGE = "--project <dir> (--path <stage-dir> | --staged <git worktree> | --text <file>)... [--terms-file <json>] [--allow-no-config] [--json]";
+
 function parseArgs(argv) {
-  const options = {};
-  const flags = { "--path": "stage", "--project": "project", "--terms-file": "termsFile" };
+  const options = { texts: [] };
+  const flags = { "--path": "stage", "--project": "project", "--terms-file": "termsFile", "--staged": "staged" };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--json") {
       options.json = true;
     } else if (argument === "--allow-no-config") {
       options.allowNoConfig = true;
+    } else if (argument === "--text" && index + 1 < argv.length) {
+      options.texts.push(argv[++index]);
     } else if (flags[argument] && index + 1 < argv.length) {
       options[flags[argument]] = argv[++index];
     } else {
-      throw new GateError("E_USAGE", "--path <stage-dir> --project <dir> [--terms-file <json>] [--allow-no-config] [--json]");
+      throw new GateError("E_USAGE", USAGE);
     }
   }
-  if (!options.stage || !options.project) {
-    throw new GateError("E_USAGE", "--path <stage-dir> --project <dir> [--terms-file <json>] [--allow-no-config] [--json]");
+  if (!options.project || (!options.stage && !options.staged && options.texts.length === 0)) {
+    throw new GateError("E_USAGE", USAGE);
   }
   return options;
 }
 
 function main() {
   const options = parseArgs(process.argv.slice(2));
-  const result = scan(path.resolve(options.stage), path.resolve(options.project), options.termsFile, { allowNoConfig: options.allowNoConfig });
+  const result = scan({
+    stage: options.stage && path.resolve(options.stage),
+    staged: options.staged && path.resolve(options.staged),
+    texts: options.texts.map((file) => path.resolve(file)),
+    project: path.resolve(options.project),
+    termsFile: options.termsFile,
+    allowNoConfig: options.allowNoConfig,
+  });
   for (const warning of result.warnings) {
     console.error(`warning: ${warning}`);
   }

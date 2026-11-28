@@ -230,3 +230,64 @@ test("the JSON report indexes a file whose name holds a hit instead of printing 
   const hits = JSON.parse(result.stdout).hits;
   assert.deepEqual([...new Set(hits.map((hit) => `${hit.file}:${hit.line}`))], ["#file1:0", "#file1:2"]);
 });
+
+/** A marketplace-like worktree with one commit; `change` edits it, then everything is staged. */
+function stagedWorktree(change) {
+  const root = path.join(tmp("worktree"), "market");
+  fs.mkdirSync(root);
+  git(root, "init", "-q", "-b", "main");
+  write(path.join(root, "registry.json"), '{\n  "skills": [],\n  "note": "old billing-portal line"\n}\n');
+  git(root, "add", "-A");
+  git(root, "commit", "-q", "-m", "init");
+  change(root);
+  git(root, "add", "-A");
+  return root;
+}
+
+function stagedGate(worktree, projectDir, extra = []) {
+  return run(["--staged", worktree, "--project", projectDir, "--terms-file", termsFile(), "--json", ...extra]);
+}
+
+test("scans the added lines of the staged commit, including regenerated files", () => {
+  const root = project();
+  const dirty = stagedWorktree((worktree) => {
+    write(path.join(worktree, "registry.json"), '{\n  "skills": ["Owned by BillingPortal"],\n  "note": "old billing-portal line"\n}\n');
+  });
+  const result = stagedGate(dirty, root);
+  assert.equal(result.status, BLOCKED, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout).hits.map((hit) => [hit.file, hit.line]), [["staged:registry.json", 2]]);
+});
+
+test("passes a staged commit that only removes a line holding a term", () => {
+  const clean = stagedWorktree((worktree) => {
+    write(path.join(worktree, "registry.json"), '{\n  "skills": []\n}\n');
+  });
+  const result = stagedGate(clean, project());
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+test("blocks staged binary files and staged symlinks", () => {
+  const binary = stagedWorktree((worktree) => {
+    write(path.join(worktree, "logo.bin"), Buffer.from([0x89, 0x00, 0x01]));
+  });
+  assert.deepEqual(JSON.parse(stagedGate(binary, project()).stdout).hits.map((hit) => hit.term), ["#binary"]);
+
+  const linked = stagedWorktree(() => {});
+  const blob = git(linked, "hash-object", "-w", "--stdin");
+  git(linked, "update-index", "--add", "--cacheinfo", `120000,${blob},linked`);
+  assert.deepEqual(JSON.parse(stagedGate(linked, project()).stdout).hits.map((hit) => hit.term), ["#non-regular"]);
+});
+
+test("scans the PR title, body and commit message without printing their file paths", () => {
+  const root = project();
+  const clean = stagedWorktree((worktree) => {
+    write(path.join(worktree, "notes.md"), "Clean text.\n");
+  });
+  const textDir = tmp("quokkatext");
+  write(path.join(textDir, "title.txt"), "feat(skills): upstream change\n");
+  write(path.join(textDir, "body.md"), "Found in the billing portal project.\n");
+  const result = stagedGate(clean, root, ["--text", path.join(textDir, "title.txt"), "--text", path.join(textDir, "body.md")]);
+  assert.equal(result.status, BLOCKED);
+  assert.deepEqual(JSON.parse(result.stdout).hits.map((hit) => [hit.file, hit.line]), [["text#2", 1]]);
+  assert.equal(output(result).includes("quokkatext"), false);
+});
