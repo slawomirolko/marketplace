@@ -134,29 +134,81 @@ export function loadStore(project, options = {}) {
   return store;
 }
 
-export function globToRegExp(glob) {
-  let re = "";
+const REGEXP_SPECIAL = /[.+^$()|[\]\\]/g;
+
+/** Finds the `}` that closes the brace opened at `open`, or -1 when it is unbalanced. */
+function closingBrace(glob, open) {
+  let depth = 0;
+  for (let i = open; i < glob.length; i++) {
+    if (glob[i] === "{") {
+      depth++;
+    } else if (glob[i] === "}") {
+      depth--;
+      if (depth === 0) {
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+
+/** Splits brace content on commas that are not inside a nested brace. */
+function braceAlternatives(content) {
+  const alternatives = [];
+  let depth = 0;
+  let current = "";
+  for (const character of content) {
+    if (character === "," && depth === 0) {
+      alternatives.push(current);
+      current = "";
+      continue;
+    }
+    if (character === "{") {
+      depth++;
+    } else if (character === "}") {
+      depth--;
+    }
+    current += character;
+  }
+  alternatives.push(current);
+  return alternatives;
+}
+
+function globSource(glob) {
+  let source = "";
   for (let i = 0; i < glob.length; i++) {
-    const c = glob[i];
-    if (c === "*") {
+    const character = glob[i];
+    if (character === "*") {
       if (glob[i + 1] === "*") {
         i++;
         if (glob[i + 1] === "/") {
           i++;
-          re += "(?:.*/)?";
-        } else re += ".*";
-      } else re += "[^/]*";
-    } else if (c === "?") re += "[^/]";
-    else if (c === "{") {
-      const close = glob.indexOf("}", i);
-      if (close === -1) re += "\\{";
-      else {
-        re += `(?:${glob.slice(i + 1, close).split(",").map((p) => p.replace(/[.+^$()|[\]\\]/g, "\\$&")).join("|")})`;
+          source += "(?:.*/)?";
+        } else {
+          source += ".*";
+        }
+      } else {
+        source += "[^/]*";
+      }
+    } else if (character === "?") {
+      source += "[^/]";
+    } else if (character === "{") {
+      const close = closingBrace(glob, i);
+      if (close === -1) {
+        source += "\\{";
+      } else {
+        source += `(?:${braceAlternatives(glob.slice(i + 1, close)).map(globSource).join("|")})`;
         i = close;
       }
-    } else re += c.replace(/[.+^$()|[\]\\]/g, "\\$&");
+    } else {
+      source += character.replace(REGEXP_SPECIAL, "\\$&");
+    }
   }
-  return new RegExp(`^${re}$`);
+  return source;
+}
+
+export function globToRegExp(glob) {
+  return new RegExp(`^${globSource(glob)}$`);
 }
 
 export function matches(globs, file) {
@@ -169,18 +221,41 @@ function literalPrefix(glob) {
   return i === -1 ? glob : glob.slice(0, i);
 }
 
-// Approximate: two globs overlap when one literal prefix starts with the other.
+const WILDCARD = /[*?{[]/;
+
+/**
+ * Whether paths matched by `glob` (literal prefix `prefix`) can start with the literal prefix `other`.
+ * Prefixes are compared on `/` segment boundaries: a single-segment wildcard cannot reach into a deeper directory.
+ */
+function prefixReaches(glob, prefix, other) {
+  if (!other.startsWith(prefix)) {
+    return false;
+  }
+  const rest = other.slice(prefix.length);
+  if (prefix === "" || prefix.endsWith("/") || rest === "") {
+    return true;
+  }
+  if (glob.length === prefix.length) {
+    return rest.startsWith("/");
+  }
+  if (glob.startsWith("**", prefix.length) || glob[prefix.length] === "{" || glob[prefix.length] === "[") {
+    return true;
+  }
+  return !rest.includes("/");
+}
+
+/** Approximate: two globs overlap when one literal prefix extends the other on a segment boundary. */
 export function globsOverlap(a, b) {
   return a.some((x) => b.some((y) => {
     const px = literalPrefix(x);
     const py = literalPrefix(y);
-    return px.startsWith(py) || py.startsWith(px);
+    return prefixReaches(x, px, py) || prefixReaches(y, py, px);
   }));
 }
 
-// Approximate: `broad` covers `narrow` when every narrow glob starts with the literal prefix of a broad glob that has a wildcard.
+/** Approximate: `broad` covers `narrow` when every narrow glob extends the literal prefix of a broad glob that has a wildcard. */
 export function globsCover(broad, narrow) {
-  return narrow.every((n) => broad.some((b) => /[*?{[]/.test(b) && literalPrefix(n).startsWith(literalPrefix(b))));
+  return narrow.every((n) => broad.some((b) => WILDCARD.test(b) && prefixReaches(b, literalPrefix(b), literalPrefix(n))));
 }
 
 function scopeOf(adr) {
@@ -377,4 +452,6 @@ function main(argv) {
   return result.errors.length ? 1 : 0;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exit(main(process.argv.slice(2)));
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  process.exitCode = main(process.argv.slice(2));
+}

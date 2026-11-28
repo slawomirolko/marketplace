@@ -253,11 +253,11 @@ function treeFiles(marketplace, ref) {
   if (!trees.has(key)) {
     let listing = "";
     try {
-      listing = git(marketplace, "ls-tree", "-r", "--name-only", "--full-tree", ref);
+      listing = git(marketplace, "ls-tree", "-r", "-z", "--name-only", "--full-tree", ref);
     } catch {
       listing = "";
     }
-    trees.set(key, listing ? listing.split("\n") : []);
+    trees.set(key, listing.split("\0").filter(Boolean));
   }
   return trees.get(key);
 }
@@ -267,7 +267,7 @@ const FETCH_TIMEOUT_MS = 120000;
 /** Fetches origin; returns the first line of the error when the fetch fails, else null. */
 function fetchOrigin(marketplace) {
   try {
-    execFileSync("git", ["-C", marketplace, "fetch", "--quiet", "origin"], { stdio: ["ignore", "pipe", "pipe"], timeout: FETCH_TIMEOUT_MS });
+    execFileSync("git", ["-C", marketplace, "fetch", "--quiet", "origin"], { stdio: ["ignore", "pipe", "pipe"], timeout: FETCH_TIMEOUT_MS, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } });
     return null;
   } catch (error) {
     return String(error instanceof Error && "stderr" in error ? error.stderr : error).trim().split("\n")[0] || "fetch failed";
@@ -380,20 +380,25 @@ function readBlobs(marketplace, ids) {
   return blobs;
 }
 
-/** The last `depth` marketplace versions of a path: commit, date, front matter version (null without one) and portable file hashes. */
+/**
+ * The last `depth` marketplace versions of a path: commit, date, front matter version (null without one) and portable file hashes.
+ * `truncated` is true when the path has older commits than the ones compared.
+ */
 export function marketplaceVersions(marketplace, kind, source, depth = DEFAULT_DEPTH, ref = LOCAL_REF) {
-  const log = git(marketplace, "log", ref, "-n", String(depth), "--format=%H %cs", "--", source);
-  const commits = log ? log.split("\n").map((line) => ({ commit: line.split(" ")[0], date: line.split(" ")[1] })) : [];
+  const log = git(marketplace, "log", ref, "-n", String(depth + 1), "--format=%H %cs", "--", source);
+  const allCommits = log ? log.split("\n").map((line) => ({ commit: line.split(" ")[0], date: line.split(" ")[1] })) : [];
+  const truncated = allCommits.length > depth;
+  const commits = allCommits.slice(0, depth);
   const trees = commits.map((c) => {
-    const listing = git(marketplace, "ls-tree", "-r", "--full-tree", c.commit, "--", source);
-    const entries = listing ? listing.split("\n").map((line) => {
+    const listing = git(marketplace, "ls-tree", "-r", "-z", "--full-tree", c.commit, "--", source);
+    const entries = listing.split("\0").filter(Boolean).map((line) => {
       const [meta, file] = line.split("\t");
       return { blob: meta.split(" ")[2], rel: kind === "skill" ? path.posix.relative(source, file) : path.posix.basename(file) };
-    }) : [];
+    });
     return { ...c, entries };
   });
   const blobs = readBlobs(marketplace, trees.flatMap((t) => t.entries.map((e) => e.blob)));
-  return trees
+  const versions = trees
     .filter((t) => t.entries.length > 0)
     .map((t) => {
       const files = {};
@@ -408,6 +413,7 @@ export function marketplaceVersions(marketplace, kind, source, depth = DEFAULT_D
       }
       return { commit: t.commit, date: t.date, version, files, model };
     });
+  return { versions, truncated };
 }
 
 function differingFiles(a, b) {
@@ -416,8 +422,11 @@ function differingFiles(a, b) {
 
 const short = (v) => v.commit.slice(0, 7);
 
-/** Compares one installed copy with the marketplace history of its source. Versions come from front matter; commits only tell versions apart. */
-export function classify(artifact, versions, present) {
+/**
+ * Compares one installed copy with the marketplace history of its source. Versions come from front matter; commits only tell versions apart.
+ * When the compared history is `truncated` and no version matches exactly, the base may be older than the history: it is reported as such.
+ */
+export function classify(artifact, versions, present, { truncated = false } = {}) {
   if (!versions.length) {
     return { state: "local-only", installed: null, current: null, files: [] };
   }
@@ -436,9 +445,13 @@ export function classify(artifact, versions, present) {
   }
   const ranked = versions.map((v) => ({ v, diff: differingFiles(artifact.files, v.files) })).sort((a, b) => a.diff.length - b.diff.length);
   const nearest = ranked[0];
+  const unknownBase = { state: "unknown-base", installed: null, ...atHead, nearestVersion: nearest.v.version, nearestCommit: short(nearest.v), files: nearest.diff };
+  if (truncated) {
+    return { ...unknownBase, baseOlderThanDepth: true };
+  }
   const shared = Object.keys(artifact.files).some((f) => artifact.files[f] === nearest.v.files[f]);
   if (!shared) {
-    return { state: "unknown-base", installed: null, ...atHead, nearestVersion: nearest.v.version, nearestCommit: short(nearest.v), files: nearest.diff };
+    return unknownBase;
   }
   return { state: "modified", installed: nearest.v.version, installedCommit: short(nearest.v), ...atHead, base: nearest.v.commit, upstreamMoved: nearest.v.commit !== head.commit, files: nearest.diff };
 }
@@ -469,6 +482,9 @@ function headOf(marketplace, ref) {
 
 /** The full status of one project, compared with the marketplace remote. */
 export function projectStatus({ project, marketplace, factory, depth = DEFAULT_DEPTH, fetch = true }) {
+  if (!Number.isInteger(depth) || depth < 1) {
+    throw new Error("--depth must be a positive integer");
+  }
   if (!fs.existsSync(project) || !fs.statSync(project).isDirectory()) {
     throw new Error(`project ${project} is not a folder`);
   }
@@ -478,8 +494,8 @@ export function projectStatus({ project, marketplace, factory, depth = DEFAULT_D
   const installed = [...sources, ...installedArtifacts(project)];
   const artifacts = installed.map((artifact) => {
     const source = marketplacePath(marketplace, artifact, ref);
-    const versions = source ? marketplaceVersions(marketplace, artifact.kind, source.path, depth, ref) : [];
-    const result = classify(artifact, versions, source?.present ?? false);
+    const { versions, truncated } = source ? marketplaceVersions(marketplace, artifact.kind, source.path, depth, ref) : { versions: [], truncated: false };
+    const result = classify(artifact, versions, source?.present ?? false, { truncated });
     return { id: `${artifact.kind}:${artifact.name}`, kind: artifact.kind, name: artifact.name, harness: artifact.harness, location: artifact.location, source: source?.path ?? null, ...result, workflows: workflows.get(artifact.name) ?? [] };
   });
   const have = new Set(installed.map((a) => `${a.kind}:${a.name}`));
@@ -515,6 +531,17 @@ export function projectStatus({ project, marketplace, factory, depth = DEFAULT_D
   return { project, marketplace, ref, fetched, fetchError, head: headOf(marketplace, ref), harnesses: detectHarnesses(project), marketplaceSource, artifacts, counts, workflows: runnable, summary };
 }
 
+/** The `--depth` flag as a positive integer; DEFAULT_DEPTH when it is not given. */
+export function depthOf(value) {
+  if (value === undefined) {
+    return DEFAULT_DEPTH;
+  }
+  if (!/^[1-9][0-9]*$/.test(value)) {
+    throw new Error("--depth must be a positive integer");
+  }
+  return Number(value);
+}
+
 export function defaultOutDir() {
   return path.join(process.env.FACTORY_HOME_DIR ?? path.join(os.homedir(), ".skill-factory"), "project-status");
 }
@@ -534,7 +561,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     if (command !== "status") fail(`unknown command ${command ?? ""}; use: status --project <folder> [--id <name>] [--marketplace <checkout>] [--factory <folder>] [--out-dir <folder>] [--depth <n>] [--no-fetch] [--print]`);
     if (!flags.project || flags.project === "true") fail("--project <folder> is required");
     const marketplace = path.resolve(flags.marketplace ?? process.env.FACTORY_MARKETPLACE_DIR ?? CHECKOUT);
-    const status = projectStatus({ project: path.resolve(flags.project), marketplace, factory: path.resolve(flags.factory ?? process.env.FACTORY_DIR ?? path.join(marketplace, "factory")), depth: Number(flags.depth ?? DEFAULT_DEPTH), fetch: flags["no-fetch"] !== "true" });
+    const status = projectStatus({ project: path.resolve(flags.project), marketplace, factory: path.resolve(flags.factory ?? process.env.FACTORY_DIR ?? path.join(marketplace, "factory")), depth: depthOf(flags.depth), fetch: flags["no-fetch"] !== "true" });
     const result = flags.print === "true" ? status : writeStatus(status, { ...(flags["out-dir"] ? { outDir: path.resolve(flags["out-dir"]) } : {}), id: flags.id });
     process.stdout.write(`${JSON.stringify(result)}\n`);
   } catch (error) {

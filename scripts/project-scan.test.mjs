@@ -220,3 +220,33 @@ test("front matter, portable text and helpers", () => {
   const out = writeStatus({ head: null, counts: {}, harnesses: [], workflows: [], summary: "" }, { outDir: fs.mkdtempSync(path.join(os.tmpdir(), "project-scan-out-")), id: "Bad Id" });
   assert.match(path.basename(out.file), /^project-/);
 });
+
+test("a copy older than the compared history is reported as beyond the depth, not as modified", () => {
+  const f = fixture();
+  write(f.project, ".agents/skills/sample-skill/SKILL.md", skill("1.0.0", "step one"));
+  write(f.project, ".agents/skills/sample-skill/workflow.md", "flow v1\n");
+  const entry = byId(projectStatus({ project: f.project, marketplace: f.market, factory: path.join(f.market, "factory"), depth: 1 }), "skill:sample-skill");
+  assert.equal(entry.state, "unknown-base");
+  assert.equal(entry.baseOlderThanDepth, true);
+  assert.equal(byId(statusOf(f), "skill:sample-skill").baseOlderThanDepth, undefined);
+});
+
+test("skill files with non-ASCII names are compared with their marketplace copies", () => {
+  const f = fixture();
+  write(f.market, "skills/demo/sample-skill/notes-\u00fc.md", "Notes.\n");
+  git(f.market, "add", "-A");
+  git(f.market, "commit", "-q", "-m", "notes");
+  write(f.project, ".agents/skills/sample-skill/SKILL.md", skill("1.1.0", "step one\nstep two"));
+  write(f.project, ".agents/skills/sample-skill/workflow.md", "flow v1\n");
+  write(f.project, ".agents/skills/sample-skill/notes-\u00fc.md", "Notes.\n");
+  assert.equal(byId(statusOf(f), "skill:sample-skill").state, "current");
+});
+
+test("the CLI refuses a --depth that is not a positive integer", () => {
+  const f = fixture();
+  for (const depth of [[], ["0"], ["abc"], ["2.5"]]) {
+    const result = spawnSync(process.execPath, [scriptPath, "status", "--project", f.project, "--marketplace", f.market, "--print", "--depth", ...depth], { encoding: "utf8" });
+    assert.equal(result.status, 2, `--depth ${depth.join(" ")}`);
+    assert.match(result.stderr, /--depth/);
+  }
+});

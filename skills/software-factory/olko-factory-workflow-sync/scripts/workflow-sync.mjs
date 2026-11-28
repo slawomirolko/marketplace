@@ -142,6 +142,8 @@ function scan(flags) {
   for (const agent of found.unmapped) raw.push({ kind: "new", source: agent.file, commit: found.head, workflows: [], diff: fs.readFileSync(path.join(marketplace, agent.file), "utf8") });
   const only = flags.only ? new Set(flags.only.flatMap((v) => v.split(",")).map((v) => v.trim()).filter(Boolean)) : null;
   const selected = only ? raw.filter((item) => only.has(artifactName(item.source))) : raw;
+  fs.rmSync(path.join(stateDir, "items"), { recursive: true, force: true });
+  fs.rmSync(path.join(stateDir, "snapshot"), { recursive: true, force: true });
   fs.mkdirSync(path.join(stateDir, "items"), { recursive: true });
   const items = selected.map((item, index) => {
     const n = index + 1;
@@ -191,7 +193,11 @@ function yamlDiff(sync, stateDir, stat) {
     execFileSync("git", ["-c", "core.autocrlf=false", "diff", "--no-index", ...(stat ? ["--stat"] : []), path.join(stateDir, "snapshot"), sync.workflows], { encoding: "utf8", maxBuffer: 32 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
     return "";
   } catch (error) {
-    return String(error.stdout ?? "");
+    const output = String(error.stdout ?? "");
+    if (error.status === 1 && output.trim()) {
+      return output;
+    }
+    throw error;
   }
 }
 
@@ -221,10 +227,17 @@ function finish(flags) {
   if (!["approve", "revert", "none"].includes(decision)) fail("--decision must be approve, revert or none");
   const passed = Object.entries(sync.results).filter(([, r]) => r.verdict === "pass").map(([source]) => source);
   let locked = [];
+  let names = [];
   if (decision === "approve") {
-    const names = [...sync.unlocked, ...passed.flatMap((source) => sync.items.filter((i) => i.source === source).flatMap((i) => readJson(i.itemFile).yamlFiles.map((f) => path.basename(f, ".yaml"))))];
-    const out = factoryCli(sync.factory, "sources-lock.ts", ["lock", "--workflows", sync.workflows, "--marketplace", sync.marketplace, "--commit", sync.head, "--names", [...new Set(names)].join(","), "--sources", passed.join(",")]);
-    locked = JSON.parse(out).locked;
+    const check = validate(sync);
+    if (!check.valid) {
+      fail(`approve refused: the workflows are invalid\n${check.errors.join("\n")}`);
+    }
+    names = [...new Set([...sync.unlocked, ...passed.flatMap((source) => sync.items.filter((item) => item.source === source).flatMap((item) => readJson(item.itemFile).yamlFiles.map((file) => path.basename(file, ".yaml"))))])];
+    if (names.length) {
+      const out = factoryCli(sync.factory, "sources-lock.ts", ["lock", "--workflows", sync.workflows, "--marketplace", sync.marketplace, "--commit", sync.head, "--names", names.join(","), "--sources", passed.join(",")]);
+      locked = JSON.parse(out).locked;
+    }
   }
   if (decision === "revert") restore(sync, flags["state-dir"]);
   const lines = [
@@ -236,7 +249,7 @@ function finish(flags) {
       const work = [...r.needsOp, ...(r.engineGaps ? [`${r.engineGaps} engine gaps`] : [])];
       return `${i.source}: ${r.verdict}${work.length ? `; needs engine work: ${work.join(" | ")}` : ""}`;
     }),
-    decision === "approve" ? `Lock updated: ${locked.join(", ") || "none"}` : decision === "revert" ? "Reverted: no YAML or lock change kept" : "Lock unchanged",
+    decision === "approve" ? (names.length ? `Lock updated: ${locked.join(", ") || "none"}` : "Lock unchanged: no source has a pass verdict and no workflow is missing from the lock") : decision === "revert" ? "Reverted: no YAML or lock change kept" : "Lock unchanged",
   ];
   return { decision, locked, report: lines.join("\n") };
 }

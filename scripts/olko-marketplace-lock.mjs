@@ -152,8 +152,8 @@ function filesAtCommit(marketplace, commit, artifact) {
     if (result.status === 0) files.set(path.basename(artifact.local), normalizeAgent(result.stdout));
     return files;
   }
-  const listed = git(marketplace, ["ls-tree", "-r", "--name-only", commit, "--", `${artifact.source}/`]);
-  for (const file of listed.split("\n").filter(Boolean)) {
+  const listed = git(marketplace, ["ls-tree", "-r", "-z", "--name-only", commit, "--", `${artifact.source}/`]);
+  for (const file of listed.split("\0").filter(Boolean)) {
     const relative = file.slice(artifact.source.length + 1);
     if (isAdapterFile(relative)) continue;
     files.set(relative, normalize(git(marketplace, ["show", `${commit}:${file}`])));
@@ -307,6 +307,9 @@ export function record(project, artifact, options) {
   if (options.clearPending) entry.pending = null;
   if (options.pendingPr) {
     if (!/^[0-9a-f]{64}$/.test(options.contentHash ?? "")) throw new Error("--pending-pr needs --content-hash <sha256>");
+    if (!/^[1-9][0-9]*$/.test(options.pendingPr)) {
+      throw new Error("--pending-pr needs a positive PR number");
+    }
     entry.pending = { pr: Number(options.pendingPr), contentHash: options.contentHash };
   }
   if (options.rejected) {

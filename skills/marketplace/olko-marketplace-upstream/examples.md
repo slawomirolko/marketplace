@@ -19,5 +19,5 @@ The second hunk names a project command. It is reverted in the staged copy and s
 
 ### Draft PR
 ```bash
-gh pr create --draft --base main --head feature/upstream-sample-skill-1a2b3c4d --title "feat(skills): upstream change to sample-skill" --body-file /tmp/olko-upstream-x/body.md --label upstream-candidate
+gh pr create --draft --base main --head feature/upstream-skill-sample-skill-1a2b3c4d --title "feat(skills): upstream change to sample-skill" --body-file /tmp/olko-upstream-x/body.md --label upstream-candidate
 ```

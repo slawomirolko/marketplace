@@ -18,7 +18,7 @@ Deterministic commands for the factory workflow sync loop. Run each command as `
 - `diff --state-dir <dir> [--last-verdict <pass|fail>] [--last-engine-gaps <n>]`
   Records the last verifier verdict, then compares the YAML with the copy from `scan`. Output: `stat` (`no YAML changed` when nothing changed), `changed` (the number of changed files), `diffFile` (the full diff), `needsOp`, `open` (sources whose last verdict was not pass). `needsOp` and `open` are text with one entry per line, or `none`.
 - `finish --state-dir <dir> --decision <approve|revert|none>`
-  `approve` locks the workflows of every source whose last verdict was pass, plus the workflows missing from the lock, at the marketplace commit of `scan`. `revert` puts every YAML file back from the copy and removes new ones; the lock is unchanged. `none` (the default) changes no file. Output: `decision`, `locked`, `report`.
+  `approve` locks the workflows of every source whose last verdict was pass, plus the workflows missing from the lock, at the marketplace commit of `scan`. It validates the workflows first and refuses (exit 2) when they are invalid; with nothing to lock it leaves the lock unchanged. `revert` puts every YAML file back from the copy and removes new ones; the lock is unchanged. `none` (the default) changes no file. Output: `decision`, `locked`, `report`.
 
 ## Rules
 - Pass the `--last-*` flags exactly as the caller gives them; never invent a verdict.

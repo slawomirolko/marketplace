@@ -157,3 +157,30 @@ test("CLI exit codes: 0 for a valid store, 1 for errors, 2 for usage; --digest p
   const json = JSON.parse(run([invalid, "--json"]).out);
   assert.ok(json.errors.some((e) => e.includes("the ADR log is missing")));
 });
+
+test("brace alternatives use the same glob rules as the rest of the pattern", () => {
+  assert.ok(globToRegExp("src/{*.ts,*.js}").test("src/a.ts"));
+  assert.ok(globToRegExp("src/{*.ts,*.js}").test("src/b.js"));
+  assert.ok(!globToRegExp("src/{*.ts,*.js}").test("src/deep/b.js"));
+  assert.ok(globToRegExp("{src,web}/**/x?.cs").test("web/a/b/x1.cs"));
+  assert.ok(globToRegExp("src/{a,{b,c}}/*.ts").test("src/c/x.ts"));
+  assert.ok(!globToRegExp("src/{a,{b,c}}/*.ts").test("src/d/x.ts"));
+});
+
+test("scope overlap and cover compare on path segment boundaries", () => {
+  assert.ok(!globsOverlap(["src/api"], ["src/apidocs/**"]));
+  assert.ok(!globsOverlap(["src/api*"], ["src/apidocs/**"]));
+  assert.ok(globsOverlap(["src/api*"], ["src/apidocs.md"]));
+  assert.ok(globsOverlap(["src/api**"], ["src/apidocs/**"]));
+  assert.ok(!globsCover(["src/api*"], ["src/apidocs/**"]));
+  assert.ok(!globsCover(["src/api/**"], ["src/apidocs/**"]));
+  assert.ok(globsCover(["src/api/**"], ["src/api/v1/**"]));
+});
+
+test("the CLI does not cut off a large digest", () => {
+  const files = { "docs/adr/README.md": `${LOG_HEADER}| 0001 | A | Accepted | a.b | \`src/**\` |\n` };
+  files["docs/adr/0001-a.md"] = adr({ topic: "a.b", scope: ["src/**"], decision: "A.", consequences: Array.from({ length: 4000 }, (_, index) => `Code MUST follow consequence number ${index} with a long explanatory sentence.`) });
+  const dir = project(files);
+  const out = execFileSync(process.execPath, [script, dir, "--digest", ...Array.from({ length: 5 }, (_, index) => `src/F${index}.cs`)], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  assert.equal(JSON.parse(out).digest.filter((entry) => entry.line.includes("consequence number")).length, 4000);
+});

@@ -23,6 +23,7 @@ import { pathToFileURL } from "node:url";
 import { hashFiles, isAdapterFile, isArtifactId, readLock } from "./olko-marketplace-lock.mjs";
 
 export const LABEL = "upstream-candidate";
+export const PR_LIST_LIMIT = 1000;
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
@@ -41,6 +42,15 @@ function stagedFiles(stage) {
 
 function slug(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+/** A PR belongs to the artifact named in its body; only a PR without one is matched by its branch name. */
+function belongsTo(pr, artifact, branchPrefix) {
+  if (pr.artifact) {
+    return pr.artifact === artifact;
+  }
+  const rest = pr.branch?.startsWith(branchPrefix) ? pr.branch.slice(branchPrefix.length) : "";
+  return /^[0-9a-f]{8}(?:-\d+)?$/.test(rest);
 }
 
 function baseOf(lockEntry) {
@@ -85,8 +95,8 @@ export function plan({ artifact, stage, classification, openPrs, lockEntry }) {
   const portableFiles = new Set(portable.map((hunk) => hunk.file));
   const files = [...staged.keys()].filter((file) => portableFiles.has(file)).sort();
   const base = baseOf(lockEntry);
-  const branchPrefix = `feature/upstream-${slug(name)}-`;
-  const prs = openPrs.map(normalizePr).filter((pr) => pr.artifact === artifact || pr.branch?.startsWith(branchPrefix));
+  const branchPrefix = `feature/upstream-${kind}-${slug(name)}-`;
+  const prs = openPrs.map(normalizePr).filter((pr) => belongsTo(pr, artifact, branchPrefix));
 
   const common = { artifact, base, contentHash, localAdapter, draft: true, labels: [LABEL] };
   if ((lockEntry.rejected ?? []).includes(contentHash)) return { ...common, action: "skip", reason: "rejected" };
@@ -129,12 +139,21 @@ export function resolveGh({ platform = process.platform, env = process.env, cwd 
   throw new Error("gh.exe was not found in an absolute PATH folder");
 }
 
+/** Parses `gh pr list` output and refuses a list that reached the limit, since it may be cut off. */
+export function parsePrList(stdout, limit = PR_LIST_LIMIT) {
+  const prs = JSON.parse(stdout);
+  if (prs.length >= limit) {
+    throw new Error(`gh pr list returned ${prs.length} open PRs, its limit; the list may be cut off`);
+  }
+  return prs;
+}
+
 function openPrsOf(source) {
   if (!source.startsWith("gh:")) return readJson(source);
-  const args = ["pr", "list", "--state", "open", "--label", LABEL, "--json", "number,headRefName,body", "--limit", "100"];
+  const args = ["pr", "list", "--state", "open", "--label", LABEL, "--json", "number,headRefName,body", "--limit", String(PR_LIST_LIMIT)];
   const result = spawnSync(resolveGh(), args, { cwd: source.slice(3), encoding: "utf8", shell: false });
   if (result.status !== 0) throw new Error(`gh pr list failed: ${result.stderr.trim().slice(-300)}`);
-  return JSON.parse(result.stdout);
+  return parsePrList(result.stdout);
 }
 
 function lockEntryOf(project, artifact) {

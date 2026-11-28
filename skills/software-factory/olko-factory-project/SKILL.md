@@ -11,7 +11,7 @@ One deterministic command. Run it as `node <this skill>/scripts/project-scan.mjs
 
 ## Command
 - `status --project <folder> [--id <name>] [--marketplace <checkout>] [--factory <folder>] [--out-dir <folder>] [--depth <n>] [--print]`
-  Without `--marketplace`, it uses `FACTORY_MARKETPLACE_DIR` or the marketplace checkout that contains this skill. Without `--factory`, it uses `FACTORY_DIR` or `<marketplace>/factory`. `--depth` limits how many marketplace commits per artifact it compares (default 40).
+  Without `--marketplace`, it uses `FACTORY_MARKETPLACE_DIR` or the marketplace checkout that contains this skill. Without `--factory`, it uses `FACTORY_DIR` or `<marketplace>/factory`. `--depth` limits how many marketplace commits per artifact it compares (a positive integer, default 40). When an artifact has older commits than that and its copy matches none of the compared ones, it is `unknown-base` with `baseOlderThanDepth: true`; run again with a larger `--depth`.
   It writes the full status to `<out dir>/<id>-<time>.json` (default out dir: `~/.skill-factory/project-status`) and prints a short result: `file`, `head`, `counts` (one number per state), `harnesses`, `workflows` (the factory workflows that run an installed artifact) and `summary`. With `--print`, it prints the full status instead and writes no file.
 
 ## What it reads

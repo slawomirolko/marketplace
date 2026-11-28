@@ -131,3 +131,52 @@ test("the family of a workflow is every workflow of the roots that contain it", 
   fs.writeFileSync(path.join(dir, "other.yaml"), "name: other\nnodes:\n  - { id: c, kind: call, workflow: shared }\n");
   assert.deepEqual(workflowFamily(workflowGraph(dir), ["part"]), ["part", "root", "shared"]);
 });
+
+function runStatus(env, ...args) {
+  return spawnSync(process.execPath, [scriptPath, ...args], { encoding: "utf8", env });
+}
+
+test("a scan into an existing state dir drops the items and snapshot of the earlier scan", () => {
+  const ctx = setup();
+  const { stateDir } = scan(ctx);
+  fs.writeFileSync(path.join(stateDir, "items", "99.json"), "{}");
+  fs.writeFileSync(path.join(stateDir, "snapshot", "old.yaml"), workflowYaml("old", "agents/opencode/olko-a.md"));
+  scan(ctx);
+  assert.ok(!fs.existsSync(path.join(stateDir, "items", "99.json")));
+  assert.ok(!fs.existsSync(path.join(stateDir, "snapshot", "old.yaml")));
+  run(ctx.env, "finish", "--state-dir", stateDir, "--decision", "revert");
+  assert.ok(!fs.existsSync(path.join(ctx.workflows, "old.yaml")));
+});
+
+test("diff fails when git diff fails instead of reporting no change", () => {
+  const ctx = setup();
+  const { stateDir } = scan(ctx);
+  fs.rmSync(path.join(stateDir, "snapshot"), { recursive: true, force: true });
+  const result = runStatus(ctx.env, "diff", "--state-dir", stateDir);
+  assert.notEqual(result.status, 0);
+});
+
+test("finish approve refuses invalid YAML and keeps the lock", () => {
+  const ctx = setup();
+  const { stateDir } = scan(ctx);
+  run(ctx.env, "round", "--state-dir", stateDir, "--source", "agents/opencode/olko-a.md");
+  fs.writeFileSync(path.join(ctx.workflows, "wf-a.yaml"), workflowYaml("wf-a", "agents/opencode/olko-a.md (step one)").replace("to: END", "to: nowhere"));
+  run(ctx.env, "diff", "--state-dir", stateDir, "--last-verdict", "pass");
+  const lock = fs.readFileSync(ctx.lockFile, "utf8");
+  const result = runStatus(ctx.env, "finish", "--state-dir", stateDir, "--decision", "approve");
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /invalid/i);
+  assert.equal(fs.readFileSync(ctx.lockFile, "utf8"), lock);
+});
+
+test("finish approve without a pass verdict does not call the lock and changes nothing", () => {
+  const ctx = setup();
+  const { stateDir } = scan(ctx);
+  run(ctx.env, "round", "--state-dir", stateDir, "--source", "agents/opencode/olko-a.md");
+  run(ctx.env, "diff", "--state-dir", stateDir, "--last-verdict", "fail");
+  const lock = fs.readFileSync(ctx.lockFile, "utf8");
+  const done = run(ctx.env, "finish", "--state-dir", stateDir, "--decision", "approve");
+  assert.deepEqual(done.locked, []);
+  assert.equal(fs.readFileSync(ctx.lockFile, "utf8"), lock);
+  assert.match(done.report, /no source has a pass verdict/);
+});

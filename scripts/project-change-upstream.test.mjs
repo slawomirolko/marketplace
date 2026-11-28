@@ -333,7 +333,7 @@ test("AC3+AC5: plan opens one draft PR per artifact, keeps adapter hunks local, 
   const result = json(plan(stagedChange()));
   assert.equal(result.action, "open");
   assert.equal(result.draft, true);
-  assert.match(result.branch, /^feature\/upstream-sample-skill-[0-9a-f]{8}$/);
+  assert.match(result.branch, /^feature\/upstream-skill-sample-skill-[0-9a-f]{8}$/);
   assert.ok(result.labels.includes("upstream-candidate"));
   assert.match(result.body, /1\.0\.0/);
   assert.deepEqual(result.localAdapter, [{ file: "workflow.md", text: "testCommand: make ci-fast" }]);
@@ -468,4 +468,51 @@ test("lock status refuses lock ids that leave the project", () => {
   content["skill:../../escape"] = { ...content["skill:sample-skill"] };
   fs.writeFileSync(lockFile, JSON.stringify(content));
   assert.equal(lock(root, market.root, "status").status, 1);
+});
+
+test("plan never matches the open PR of another artifact", () => {
+  const change = stagedChange();
+  const other = "0".repeat(64);
+  const longerName = [{ number: 10, branch: "feature/upstream-sample-skill-extra-1a2b3c4d", contentHash: other, base: "1.0.0" }, { number: 11, branch: "feature/upstream-skill-sample-skill-extra-1a2b3c4d", contentHash: other, base: "1.0.0" }];
+  assert.equal(json(plan({ ...change, openPrs: longerName })).action, "open");
+  const otherKind = [{ number: 12, branch: "feature/upstream-agent-sample-skill-1a2b3c4d", contentHash: other, base: "1.0.0" }];
+  assert.equal(json(plan({ ...change, openPrs: otherKind })).action, "open");
+  const otherArtifact = [{ number: 13, branch: "feature/upstream-sample-skill-1a2b3c4d", contentHash: other, base: "1.0.0", artifact: "skill:other" }];
+  assert.equal(json(plan({ ...change, openPrs: otherArtifact })).action, "open");
+  const sameArtifact = [{ number: 14, branch: "feature/some-branch", contentHash: other, base: "1.0.0", artifact: "skill:sample-skill" }];
+  assert.equal(json(plan({ ...change, openPrs: sameArtifact })).pr, 14);
+});
+
+test("plan refuses a gh pr list that may be cut off at its limit", async () => {
+  const { parsePrList } = await import("./olko-upstream-plan.mjs");
+  assert.deepEqual(parsePrList(JSON.stringify([{ number: 1 }]), 2), [{ number: 1 }]);
+  assert.throws(() => parsePrList(JSON.stringify([{ number: 1 }, { number: 2 }]), 2), /limit/);
+});
+
+test("lock init reads skill files with non-ASCII names from marketplace history", () => {
+  const files = { ...skillV1, "notes-\u00fc.md": "Notes.\n" };
+  const root = tmp("marketplace");
+  git(root, "init", "-q", "-b", "main");
+  for (const [file, content] of Object.entries(files)) write(path.join(root, "skills", "marketplace", "sample-skill", file), content);
+  write(path.join(root, "registry.json"), JSON.stringify({ skills: [{ name: "sample-skill", category: "marketplace", version: "1.0.0" }] }));
+  write(path.join(root, "agents", "opencode", "sample-agent.md"), agentV1);
+  write(path.join(root, "agents", "opencode", "index.json"), JSON.stringify({ agents: [{ name: "sample-agent", file: "sample-agent.md", version: "1.0.0" }] }));
+  git(root, "add", "-A");
+  git(root, "commit", "-q", "-m", "sample-skill 1.0.0");
+  const project = fixtureProject(files);
+  const entry = json(lock(project.root, root, "init"))["skill:sample-skill"];
+  assert.equal(entry.version, "1.0.0");
+});
+
+test("lock record refuses a pending PR number that is not a positive integer", () => {
+  const market = fixtureMarketplace();
+  const { root } = fixtureProject();
+  json(lock(root, market.root, "init"));
+  const lockFile = path.join(root, ".agents", "marketplace.lock.json");
+  const before = fs.readFileSync(lockFile, "utf8");
+  for (const value of ["abc", "0", "1.5"]) {
+    const result = node(lockScript, ["record", "--project", root, "--artifact", "skill:sample-skill", "--pending-pr", value, "--content-hash", "a".repeat(64)]);
+    assert.equal(result.status, 1, `--pending-pr ${value} is refused`);
+  }
+  assert.equal(fs.readFileSync(lockFile, "utf8"), before);
 });
