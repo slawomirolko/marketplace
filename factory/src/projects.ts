@@ -132,20 +132,24 @@ function isLinkedWorktree(dir: string): boolean {
  */
 export function discoverProjects(settings: Required<Pick<ProjectsConfig, "markers" | "maxDepth">>, roots?: string[], file = projectsFile()): ProjectCandidate[] {
   const registry = readRegistry(file);
-  const searched = (roots ?? registry.roots).filter((r) => fs.existsSync(r));
-  const taken = registry.projects.map((p) => p.id);
+  const searched = (roots ?? registry.roots).filter((root) => fs.existsSync(root));
+  const taken = registry.projects.map((project) => project.id);
   const found: ProjectCandidate[] = [];
   const visit = (dir: string, depth: number) => {
-    if (isLinkedWorktree(dir)) return;
-    const markers = settings.markers.filter((m) => fs.existsSync(path.join(dir, m)));
+    if (isLinkedWorktree(dir)) {
+      return;
+    }
+    const markers = settings.markers.filter((marker) => fs.existsSync(path.join(dir, marker)));
     if (markers.length) {
-      if (!registry.projects.some((p) => sameFolder(p.path, dir)) && !found.some((c) => sameFolder(c.path, dir))) {
-        const suggestedId = suggestId(dir, [...taken, ...found.map((c) => c.suggestedId)]);
+      if (!registry.projects.some((project) => sameFolder(project.path, dir)) && !found.some((candidate) => sameFolder(candidate.path, dir))) {
+        const suggestedId = suggestId(dir, [...taken, ...found.map((candidate) => candidate.suggestedId)]);
         found.push({ path: dir, suggestedId, markers });
       }
       return;
     }
-    if (depth >= settings.maxDepth) return;
+    if (depth >= settings.maxDepth) {
+      return;
+    }
     let entries: fs.Dirent[] = [];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -153,12 +157,16 @@ export function discoverProjects(settings: Required<Pick<ProjectsConfig, "marker
       return;
     }
     for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name.startsWith(".") || SKIP.has(entry.name)) continue;
+      if (!entry.isDirectory() || entry.name.startsWith(".") || SKIP.has(entry.name)) {
+        continue;
+      }
       visit(path.join(dir, entry.name), depth + 1);
     }
   };
-  for (const root of searched) visit(path.resolve(root), 0);
-  return found.sort((a, b) => a.path.localeCompare(b.path));
+  for (const root of searched) {
+    visit(path.resolve(root), 0);
+  }
+  return found.sort((first, second) => first.path.localeCompare(second.path));
 }
 
 /** The run input for a registered project: its folder, its id and, when set, its marketplace. */

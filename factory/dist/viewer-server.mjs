@@ -13,7 +13,9 @@ import http from "node:http";
 * user answers it. The watch knows no agent or workflow: everything specific lives
 * in config/factory.yaml and in the workflow.
 */
-var RENDER = (template, view) => mustache.render(template, view, {}, { escape: (value) => String(value) });
+function render(template, view) {
+	return mustache.render(template, view, {}, { escape: (value) => String(value) });
+}
 function loadWatches() {
 	return loadFactoryConfig().watches;
 }
@@ -35,10 +37,10 @@ function knownProjectsFile(dataDir) {
 function knownProjects(dataDir) {
 	const file = readJson(knownProjectsFile(dataDir), {});
 	const listed = [...listProjects().map((project) => project.path), ...Array.isArray(file.dirs) ? file.dirs : []];
-	const dirs = new Set(listed.filter((d) => typeof d === "string").map((d) => path.resolve(d)));
+	const dirs = new Set(listed.filter((dir) => typeof dir === "string").map((dir) => path.resolve(dir)));
 	const runsDir = path.join(dataDir, "runs");
-	if (fs.existsSync(runsDir)) for (const file of fs.readdirSync(runsDir).filter((f) => f.endsWith(".json"))) {
-		const project = readJson(path.join(runsDir, file), {}).input?.project;
+	if (fs.existsSync(runsDir)) for (const runFile of fs.readdirSync(runsDir).filter((name) => name.endsWith(".json"))) {
+		const project = readJson(path.join(runsDir, runFile), {}).input?.project;
 		if (typeof project === "string" && project.length > 0) dirs.add(path.resolve(project));
 	}
 	return [...dirs].sort();
@@ -66,7 +68,7 @@ async function checkWatch(watch, context) {
 			marketplace,
 			node: process.execPath
 		};
-		const [command, ...args] = watch.command.map((part) => RENDER(part, view));
+		const [command, ...args] = watch.command.map((part) => render(part, view));
 		if (!command) continue;
 		const result = await exec(command, args, { cwd: project });
 		if (result.code !== 0) {
@@ -89,11 +91,11 @@ async function checkWatch(watch, context) {
 					files: Array.isArray(item.files) ? item.files.join(", ") : item.files
 				}
 			};
-			const key = `${project}::${RENDER(watch.key, itemView)}`;
+			const key = `${project}::${render(watch.key, itemView)}`;
 			seen[key] = (previous.seen[key] ?? 0) + 1;
 			if (seen[key] < watch.stableChecks) continue;
-			const input = Object.fromEntries(Object.entries(watch.input).map(([name, template]) => [name, RENDER(template, itemView)]));
-			const { run, reused } = factory.start(RENDER(watch.goal, itemView), `watch:${watch.id}:${key}`, {
+			const input = Object.fromEntries(Object.entries(watch.input).map(([name, template]) => [name, render(template, itemView)]));
+			const { run, reused } = factory.start(render(watch.goal, itemView), `watch:${watch.id}:${key}`, {
 				workflow: watch.workflow,
 				input
 			});
@@ -149,14 +151,14 @@ function startWatches(watches, context) {
 // src/viewer-server.ts
 var settingsNote = homeEnvNote();
 if (settingsNote) console.error(settingsNote);
-var port = Number(process.env.FACTORY_VIEWER_PORT ?? 7340);
-var publicUrl = `http://127.0.0.1:${port}`;
-var dataDir = defaultDataDir();
+var PORT = Number(process.env.FACTORY_VIEWER_PORT ?? 7340);
+var PUBLIC_URL = `http://127.0.0.1:${PORT}`;
+var DATA_DIR = defaultDataDir();
 /** The viewer process outlives the harness sessions, so it owns the interval watches and the runs they start; their questions are answered on the run page. */
-var watches = process.env.FACTORY_WATCHES === "off" ? [] : loadWatches();
+var WATCHES = process.env.FACTORY_WATCHES === "off" ? [] : loadWatches();
 var statusBackend = loadFactoryConfig().projects.statusBackend;
-var executors = Object.fromEntries([...watches.map((watch) => watch.backend.cli), ...statusBackend ? [statusBackend.cli] : []].map((cli) => [cli, cliExecutor(cli)]));
-var factory = new Factory(dataDir, {
+var executors = Object.fromEntries([...WATCHES.map((watch) => watch.backend.cli), ...statusBackend ? [statusBackend.cli] : []].map((cli) => [cli, cliExecutor(cli)]));
+var factory = new Factory(DATA_DIR, {
 	backend: "delegate",
 	executors: {
 		exec: hostExec,
@@ -164,8 +166,8 @@ var factory = new Factory(dataDir, {
 	}
 });
 var viewer = viewerHandler({
-	...viewerOptions(dataDir),
-	allowedHosts: allowedHostsFor(publicUrl, port),
+	...viewerOptions(DATA_DIR),
+	allowedHosts: allowedHostsFor(PUBLIC_URL, PORT),
 	factory
 });
 http.createServer((req, res) => {
@@ -173,7 +175,7 @@ http.createServer((req, res) => {
 		if (req.url === "/health") {
 			res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({
 				name: VIEWER_HEALTH,
-				dataDir: path.resolve(dataDir)
+				dataDir: path.resolve(DATA_DIR)
 			}));
 			return;
 		}
@@ -182,12 +184,12 @@ http.createServer((req, res) => {
 	} catch (error) {
 		failRequest(res, error);
 	}
-}).listen(port, "127.0.0.1", () => {
-	fs.mkdirSync(dataDir, { recursive: true });
-	fs.writeFileSync(path.join(dataDir, "viewer.pid"), String(process.pid));
-	startWatches(watches, {
+}).listen(PORT, "127.0.0.1", () => {
+	fs.mkdirSync(DATA_DIR, { recursive: true });
+	fs.writeFileSync(path.join(DATA_DIR, "viewer.pid"), String(process.pid));
+	startWatches(WATCHES, {
 		factory,
-		dataDir,
+		dataDir: DATA_DIR,
 		marketplace: marketplaceDir(),
 		exec: hostExec,
 		log: (message) => console.error(message)

@@ -89,7 +89,7 @@ function checkedCwd(rendered: string): string {
  * argument may start with "-" only when its template does. `with.cwd` sets the directory (an absolute
  * existing folder), `with.okCodes` the accepted exit codes (default [0]) and `with.parse: json` parses stdout.
  */
-const execCommand: Operation = async ({ args, state, input, answers, exec, cwd }) => {
+const builtinExec: Operation = async ({ args, state, input, answers, exec, cwd }) => {
   if (!Array.isArray(args.command) || args.command.length === 0) throw new Error("with.command must be a non-empty list");
   if (!exec) throw new Error("this factory process has no host exec");
   const view = { ...withEach({ state, input, answers }), node: process.execPath };
@@ -128,7 +128,7 @@ const streak: Operation = async ({ state, args, nodeId }) => {
 };
 
 export const OPERATIONS: Record<string, Operation> = {
-  "builtin.exec": execCommand,
+  "builtin.exec": builtinExec,
   "builtin.pass": pass,
   "builtin.count": async ({ state, nodeId }) => {
     const count = ((nodeId ? (state[nodeId] as { count?: number } | undefined)?.count : 0) ?? 0) + 1;

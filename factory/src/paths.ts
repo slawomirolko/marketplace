@@ -90,9 +90,13 @@ export function readSources(): string[] {
 
 export function registerDataSource(dataDir: string): void {
   const dir = path.resolve(dataDir);
-  if (dir === path.resolve(homeDataDir())) return;
-  const dirs = readSources().filter((d) => fs.existsSync(d));
-  if (!dirs.includes(dir)) dirs.push(dir);
+  if (dir === path.resolve(homeDataDir())) {
+    return;
+  }
+  const dirs = readSources().filter((source) => fs.existsSync(source));
+  if (!dirs.includes(dir)) {
+    dirs.push(dir);
+  }
   writeFileAtomic(sourcesFile(), `${JSON.stringify({ dirs }, null, 2)}\n`);
 }
 

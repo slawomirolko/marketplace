@@ -15311,13 +15311,13 @@ function createFactoryTools(factory, publicUrl) {
 // src/stdio.ts
 var settingsNote = homeEnvNote();
 if (settingsNote) console.error(settingsNote);
-var firstPort = Number(process.env.FACTORY_VIEWER_PORT ?? 7340);
-var dataDir = defaultDataDir();
+var FIRST_PORT = Number(process.env.FACTORY_VIEWER_PORT ?? 7340);
+var DATA_DIR = defaultDataDir();
 var PORTS_TO_TRY = 10;
 async function viewerOn(port) {
 	try {
 		const body = await (await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(1e3) })).json();
-		return body.name === "skill-factory-viewer" && body.dataDir === path.resolve(dataDir) ? "ours" : "other";
+		return body.name === "skill-factory-viewer" && body.dataDir === path.resolve(DATA_DIR) ? "ours" : "other";
 	} catch (error) {
 		return error.cause?.code === "ECONNREFUSED" ? "free" : "other";
 	}
@@ -15332,7 +15332,7 @@ function startViewer(port) {
 		windowsHide: true,
 		env: {
 			...process.env,
-			FACTORY_DATA_DIR: dataDir,
+			FACTORY_DATA_DIR: DATA_DIR,
 			FACTORY_VIEWER_PORT: String(port)
 		}
 	});
@@ -15340,7 +15340,7 @@ function startViewer(port) {
 	child.unref();
 }
 async function ensureViewer() {
-	for (let port = firstPort; port < firstPort + PORTS_TO_TRY; port += 1) {
+	for (let port = FIRST_PORT; port < FIRST_PORT + PORTS_TO_TRY; port += 1) {
 		const state = await viewerOn(port);
 		if (state === "ours") return port;
 		if (state === "free") {
@@ -15348,19 +15348,19 @@ async function ensureViewer() {
 			return port;
 		}
 	}
-	console.error(`no free port for the run page in ${firstPort}-${firstPort + PORTS_TO_TRY - 1}`);
-	return firstPort;
+	console.error(`no free port for the run page in ${FIRST_PORT}-${FIRST_PORT + PORTS_TO_TRY - 1}`);
+	return FIRST_PORT;
 }
-var backend = parseBackend(process.env.FACTORY_BACKEND);
-var cli = backend === "cli" ? parseCli(process.env.FACTORY_CLI) : void 0;
-registerDataSource(dataDir);
-var server = createFactoryTools(new Factory(dataDir, {
-	backend,
+var BACKEND = parseBackend(process.env.FACTORY_BACKEND);
+var CLI = BACKEND === "cli" ? parseCli(process.env.FACTORY_CLI) : void 0;
+registerDataSource(DATA_DIR);
+var server = createFactoryTools(new Factory(DATA_DIR, {
+	backend: BACKEND,
 	executors: {
 		exec: hostExec,
-		...cli ? { [cli]: cliExecutor(cli) } : {}
+		...CLI ? { [CLI]: cliExecutor(CLI) } : {}
 	},
-	...cli ? { cli } : {}
+	...CLI ? { cli: CLI } : {}
 }), `http://127.0.0.1:${await ensureViewer()}`).buildServer();
 var transport = new StdioServerTransport();
 transport.onclose = () => process.exit(0);

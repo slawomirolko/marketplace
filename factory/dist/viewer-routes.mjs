@@ -119,7 +119,7 @@ function readSources() {
 function registerDataSource(dataDir) {
 	const dir = path.resolve(dataDir);
 	if (dir === path.resolve(homeDataDir())) return;
-	const dirs = readSources().filter((d) => fs.existsSync(d));
+	const dirs = readSources().filter((source) => fs.existsSync(source));
 	if (!dirs.includes(dir)) dirs.push(dir);
 	writeFileAtomic(sourcesFile(), `${JSON.stringify({ dirs }, null, 2)}\n`);
 }
@@ -143,86 +143,6 @@ var homeEnv = {
 /** One line for the start-up log: setting names only, never their values. */
 function homeEnvNote() {
 	return homeEnv.loaded.length ? `factory settings from ${homeEnv.file}: ${homeEnv.loaded.join(", ")}` : null;
-}
-// src/models.ts
-/** The model ids the factory knows by name: the short aliases a harness accepts and the default tier models. */
-var HAIKU_MODEL = "claude-haiku-5-5";
-var SONNET_MODEL = "claude-sonnet-5-5";
-var OPUS_MODEL = "claude-opus-5-5";
-/** The short model names and the full model id each one stands for. */
-var MODEL_ALIASES = {
-	haiku: HAIKU_MODEL,
-	sonnet: SONNET_MODEL,
-	opus: OPUS_MODEL
-};
-/** The proposed model of every tier for a real backend; the user can change each one at confirmation. */
-var DEFAULT_TIER_MODELS = {
-	low: HAIKU_MODEL,
-	medium: HAIKU_MODEL,
-	high: HAIKU_MODEL
-};
-/** The model names of the fake backend, one per tier. */
-var FAKE_TIER_MODELS = {
-	low: "fake-low",
-	medium: "fake-medium",
-	high: "fake-high"
-};
-// src/prices.ts
-/** USD per million tokens, from https://platform.claude.com/docs/en/about-claude/pricing (read 2026-11-10); opencode/deepseek-v4.1-flash-free is OpenCode's free model (cost 0). */
-var PER_MTOK = {
-	[HAIKU_MODEL]: {
-		input: .1,
-		output: .5,
-		cacheRead: .01,
-		longContext: {
-			overTokens: 1e5,
-			input: .5,
-			output: 2.5,
-			cacheRead: .05
-		}
-	},
-	[SONNET_MODEL]: {
-		input: 2,
-		output: 10,
-		cacheRead: .1
-	},
-	[OPUS_MODEL]: {
-		input: 4,
-		output: 20,
-		cacheRead: .2
-	},
-	"opencode/deepseek-v4.1-flash-free": {
-		input: 0,
-		output: 0,
-		cacheRead: 0
-	}
-};
-var CACHE_WRITE_5M = 1.25;
-var CACHE_WRITE_1H = 2;
-function canonicalModel(model) {
-	if (!model) return null;
-	const bare = String(model).replace(/^anthropic\//, "");
-	return MODEL_ALIASES[bare] ?? bare;
-}
-function priceUsage(model, tokens, cacheWriteTtlKnown) {
-	const canonical = canonicalModel(model);
-	const base = canonical === null ? void 0 : PER_MTOK[canonical];
-	if (!base) return {
-		costUsd: null,
-		costSource: "unknown"
-	};
-	if (tokens.input == null || tokens.output == null) return {
-		costUsd: null,
-		costSource: "unknown"
-	};
-	const promptTokens = tokens.input + (tokens.cacheRead ?? 0) + (tokens.cacheWrite5m ?? 0) + (tokens.cacheWrite1h ?? 0);
-	const price = base.longContext && promptTokens > base.longContext.overTokens ? base.longContext : base;
-	const cost = tokens.input * price.input + tokens.output * price.output + (tokens.cacheRead ?? 0) * price.cacheRead + (tokens.cacheWrite5m ?? 0) * price.input * CACHE_WRITE_5M + (tokens.cacheWrite1h ?? 0) * price.input * CACHE_WRITE_1H;
-	const hasUntimedWrites = !cacheWriteTtlKnown && (tokens.cacheWrite5m ?? 0) > 0;
-	return {
-		costUsd: cost / 1e6,
-		costSource: hasUntimedWrites ? "estimated" : "measured"
-	};
 }
 // ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/mustache@4.2.0/node_modules/mustache/mustache.mjs
 /*!
@@ -809,66 +729,6 @@ mustache.escape = escapeHtml;
 mustache.Scanner = Scanner;
 mustache.Context = Context;
 mustache.Writer = Writer;
-// src/when.ts
-/** Prompts and conditions are plain text, never HTML: Mustache must not escape values. */
-mustache.escape = (text) => text;
-var CONDITION = /^([a-zA-Z0-9_./-]+)\s*(==|!=|>=|<=|>|<)\s*(.+)$/;
-function readPath(state, dotted) {
-	let value = state;
-	for (const key of dotted.split(".")) {
-		if (value === null || typeof value !== "object" || !(key in value)) return void 0;
-		value = value[key];
-	}
-	return value;
-}
-function literal(text) {
-	const trimmed = text.trim();
-	const quoted = trimmed.match(/^(["'])(.*)\1$/);
-	if (quoted?.[2] !== void 0) return quoted[2];
-	if (trimmed === "true" || trimmed === "false") return trimmed === "true";
-	if (trimmed === "null") return null;
-	const number = Number(trimmed);
-	if (Number.isNaN(number)) throw new Error(`condition value ${trimmed} is not a number, boolean, null or quoted string`);
-	return number;
-}
-function compare(clause, state) {
-	const match = clause.trim().match(CONDITION);
-	if (!match?.[1] || !match[2] || match[3] === void 0) throw new Error(`condition '${clause}' must be '<state path> <operator> <value>'`);
-	const raw = readPath(state, match[1]) ?? null;
-	const left = Array.isArray(raw) ? raw.length : raw;
-	const right = literal(match[3]);
-	if (match[2] === "==") return left === right;
-	if (match[2] === "!=") return left !== right;
-	if (left === null || right === null) return false;
-	switch (match[2]) {
-		case ">": return Number(left) > Number(right);
-		case "<": return Number(left) < Number(right);
-		case ">=": return Number(left) >= Number(right);
-		default: return Number(left) <= Number(right);
-	}
-}
-function evaluateWhen(when, state) {
-	return when.split("||").some((any) => any.split("&&").every((all) => compare(all, state)));
-}
-function eachView(value) {
-	const entries = Object.entries(value).map(([key, entry]) => ({
-		key,
-		value: entry
-	}));
-	return new Proxy(entries, {
-		get: (target, key) => key in target ? Reflect.get(target, key) : view(value[key]),
-		has: (target, key) => key in target || key in value
-	});
-}
-function view(value) {
-	return typeof value === "object" && value !== null && !Array.isArray(value) ? eachView(value) : value;
-}
-function withEach(context) {
-	return {
-		...context,
-		each: eachView(context)
-	};
-}
 // ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/identity.js
 var require_identity = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var ALIAS = Symbol.for("yaml.alias");
@@ -7405,8 +7265,8 @@ var require_public_api = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.parseDocument = parseDocument;
 	exports.stringify = stringify;
 }));
-// src/ops.ts
-var import_dist = (/* @__PURE__ */ __commonJSMin(((exports) => {
+// ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/index.js
+var require_dist$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var composer = require_composer();
 	var Document = require_Document();
 	var Schema = require_Schema();
@@ -7451,299 +7311,7 @@ var import_dist = (/* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.stringify = publicApi.stringify;
 	exports.visit = visit.visit;
 	exports.visitAsync = visit.visitAsync;
-})))();
-var pass = async () => ({
-	state: { passed: true },
-	output: "verify passed"
-});
-function readState(state, dotted) {
-	return dotted.split(".").reduce((value, key) => value && typeof value === "object" ? value[key] : void 0, state);
-}
-var listNext = async ({ state, args, nodeId }) => {
-	if (typeof args.over !== "string") throw new Error("with.over must be a state path");
-	const list = readState(state, args.over);
-	if (!Array.isArray(list)) throw new Error(`state.${args.over} is not a list`);
-	const previous = nodeId ? state[nodeId] : void 0;
-	const index = previous?.index === void 0 || previous.done ? 0 : previous.index + 1;
-	const done = index >= list.length;
-	return {
-		state: {
-			index,
-			number: index + 1,
-			total: list.length,
-			item: done ? null : list[index],
-			done
-		},
-		metrics: {
-			index,
-			total: list.length
-		},
-		output: done ? `All ${list.length} items handled.` : `Item ${index + 1} of ${list.length}.`
-	};
-};
-/** Appends one item built from state paths to this node's list; `restartWhen` starts a new list, for example at the first question of a batch. */
-var listAppend = async ({ state, args, nodeId }) => {
-	if (!args.values || typeof args.values !== "object" || Array.isArray(args.values)) throw new Error("with.values must map names to state paths");
-	const previous = typeof args.restartWhen === "string" && evaluateWhen(args.restartWhen, state) || !nodeId ? [] : state[nodeId]?.items ?? [];
-	const item = {
-		number: previous.length + 1,
-		...Object.fromEntries(Object.entries(args.values).map(([name, dotted]) => [name, readState(state, String(dotted))]))
-	};
-	const items = [...previous, item];
-	return {
-		state: {
-			items,
-			count: items.length
-		},
-		metrics: { count: items.length },
-		output: `${items.length} items collected.`
-	};
-};
-/** Counts the items of a list per value (or per the `by` field of each item), most frequent first; ties keep first-seen order. */
-var listCount = async ({ state, args }) => {
-	if (typeof args.over !== "string") throw new Error("with.over must be a state path");
-	const list = readState(state, args.over);
-	if (!Array.isArray(list)) throw new Error(`state.${args.over} is not a list`);
-	const by = typeof args.by === "string" ? args.by : void 0;
-	const tally = /* @__PURE__ */ new Map();
-	for (const item of list) {
-		const value = String(by && item && typeof item === "object" ? item[by] : item);
-		tally.set(value, (tally.get(value) ?? 0) + 1);
-	}
-	const counts = [...tally].map(([value, count]) => ({
-		value,
-		count
-	})).sort((a, b) => b.count - a.count);
-	return {
-		state: {
-			counts,
-			total: list.length
-		},
-		metrics: {
-			total: list.length,
-			values: counts.length
-		},
-		output: `${list.length} items, ${counts.length} distinct values.`
-	};
-};
-/** Keeps the items of a fixed list whose `id` is named in the `ids` state list; when `ids` is not a list, keeps every item. */
-var listPick = async ({ state, args }) => {
-	if (!Array.isArray(args.items)) throw new Error("with.items must be a list");
-	if (typeof args.ids !== "string") throw new Error("with.ids must be a state path");
-	const ids = readState(state, args.ids);
-	const items = Array.isArray(ids) ? args.items.filter((item) => ids.includes(item.id)) : args.items;
-	return {
-		state: {
-			items,
-			count: items.length
-		},
-		metrics: { count: items.length },
-		output: `${items.length} of ${args.items.length} items picked.`
-	};
-};
-var NODE_PROGRAM = "{{node}}";
-/** The program of `with.command`: `{{node}}` (this Node binary) or a literal name, never a template over state. */
-function execProgram(template) {
-	const text = String(template);
-	if (text === NODE_PROGRAM) return process.execPath;
-	if (text.includes("{{")) throw new Error("with.command[0] must be {{node}} or a literal program");
-	return text;
-}
-/** A rendered value may not turn into an option: it starts with "-" only when its template does. */
-function checkedArgument(template, rendered, index) {
-	if (rendered.startsWith("-") && !String(template).startsWith("-")) throw new Error(`with.command argument ${index} ${JSON.stringify(rendered)} starts with "-" but its template does not`);
-	return rendered;
-}
-function checkedCwd(rendered) {
-	if (!path.isAbsolute(rendered) || !fs.existsSync(rendered) || !fs.statSync(rendered).isDirectory()) throw new Error(`with.cwd ${JSON.stringify(rendered)} is not an absolute existing folder`);
-	return rendered;
-}
-/**
-* Runs one command without a shell. `with.command` is a list: the program (`{{node}}` for this Node binary,
-* or a literal name) and Mustache templates over input, state and answers for the arguments. A rendered
-* argument may start with "-" only when its template does. `with.cwd` sets the directory (an absolute
-* existing folder), `with.okCodes` the accepted exit codes (default [0]) and `with.parse: json` parses stdout.
-*/
-var execCommand = async ({ args, state, input, answers, exec, cwd }) => {
-	if (!Array.isArray(args.command) || args.command.length === 0) throw new Error("with.command must be a non-empty list");
-	if (!exec) throw new Error("this factory process has no host exec");
-	const view = {
-		...withEach({
-			state,
-			input,
-			answers
-		}),
-		node: process.execPath
-	};
-	const render = (template) => mustache.render(String(template), view, {}, { escape: (value) => String(value) });
-	const [programTemplate, ...argumentTemplates] = args.command;
-	const command = execProgram(programTemplate);
-	const rest = argumentTemplates.map((template, index) => checkedArgument(template, render(template), index + 1));
-	const okCodes = Array.isArray(args.okCodes) ? args.okCodes.map(Number) : [0];
-	const result = await exec(command, rest, { cwd: typeof args.cwd === "string" ? checkedCwd(render(args.cwd)) : cwd });
-	const stdout = result.stdout.trim();
-	if (!okCodes.includes(Number(result.code))) throw new Error(`command exited ${result.code}: ${result.stderr.trim().slice(-300)}`);
-	const json = args.parse === "json" && stdout ? JSON.parse(stdout) : null;
-	return {
-		state: {
-			code: result.code,
-			stdout: stdout.slice(0, 2e4),
-			json
-		},
-		metrics: { code: Number(result.code) },
-		output: stdout.split(/\r?\n/)[0]?.slice(0, 200) ?? ""
-	};
-};
-/** Adds the values of the `from` state list to this node's list once each; a value already kept is never removed, even when a later `from` list leaves it out. */
-var listMerge = async ({ state, args, nodeId }) => {
-	if (typeof args.from !== "string") throw new Error("with.from must be a state path");
-	const incoming = readState(state, args.from);
-	const previous = (nodeId ? state[nodeId]?.items : void 0) ?? [];
-	const items = [...previous];
-	for (const value of Array.isArray(incoming) ? incoming : []) if (!items.includes(value)) items.push(value);
-	const added = items.length - previous.length;
-	return {
-		state: {
-			items,
-			count: items.length,
-			added
-		},
-		metrics: {
-			count: items.length,
-			added
-		},
-		output: `${added} added, ${items.length} kept.`
-	};
-};
-/** Counts consecutive visits on which `when` holds; a visit where it does not hold resets the count, and the visit after the count reached `limit` starts again from zero. */
-var streak = async ({ state, args, nodeId }) => {
-	if (typeof args.when !== "string") throw new Error("with.when must be a condition");
-	if (typeof args.limit !== "number" || args.limit < 1) throw new Error("with.limit must be a positive number");
-	const previous = nodeId ? state[nodeId] : void 0;
-	const base = previous?.reached ? 0 : previous?.count ?? 0;
-	const count = evaluateWhen(args.when, state) ? base + 1 : 0;
-	const reached = count >= args.limit;
-	return {
-		state: {
-			count,
-			reached
-		},
-		metrics: { count },
-		output: reached ? `Streak ${count} reached the limit ${args.limit}.` : `Streak ${count}.`
-	};
-};
-var OPERATIONS = {
-	"builtin.exec": execCommand,
-	"builtin.pass": pass,
-	"builtin.count": async ({ state, nodeId }) => {
-		const count = ((nodeId ? state[nodeId]?.count : 0) ?? 0) + 1;
-		return {
-			state: { count },
-			metrics: { count },
-			output: `Round ${count}.`
-		};
-	},
-	"builtin.stop": async ({ args, state, input, answers }) => {
-		throw new Error(mustache.render(String(args.reason ?? "stopped by the user"), withEach({
-			state,
-			input,
-			answers
-		})).trim());
-	},
-	"builtin.values": async ({ args }) => {
-		if (!Array.isArray(args.values)) throw new Error("with.values must be a list");
-		return {
-			state: { values: args.values },
-			metrics: { values: args.values.length },
-			output: `${args.values.length} values.`
-		};
-	},
-	"builtin.gate": async ({ state, input, args }) => {
-		const when = String(args.when);
-		const enabled = evaluateWhen(when, {
-			...state,
-			input,
-			switches: input.switches ?? {}
-		});
-		const required = args.required === true;
-		const skipped = `Subgraph ${String(args.subgraph)} skipped: switch off (${when} is false).${required ? " WARNING: required step switched off; the source agent says it must never be skipped." : ""}`;
-		return {
-			state: {
-				enabled,
-				required
-			},
-			metrics: {
-				enabled: enabled ? 1 : 0,
-				requiredOff: required && !enabled ? 1 : 0
-			},
-			output: enabled ? `Subgraph ${String(args.subgraph)} runs (${when}).` : skipped
-		};
-	},
-	"list.next": listNext,
-	"list.append": listAppend,
-	"list.count": listCount,
-	"list.pick": listPick,
-	"list.merge": listMerge,
-	"builtin.streak": streak
-};
-function operationNamed(name) {
-	return OPERATIONS[name];
-}
-// src/parse-spec.ts
-function fieldName(field) {
-	return field.endsWith("?") ? {
-		name: field.slice(0, -1),
-		optional: true
-	} : {
-		name: field,
-		optional: false
-	};
-}
-function lastJson(text) {
-	const raw = [...text.matchAll(/```json\s*([\s\S]*?)```/g)].at(-1)?.[1] ?? text.trim();
-	try {
-		return JSON.parse(raw);
-	} catch {
-		throw new Error("the agent output has no ```json block");
-	}
-}
-function lastLine(text, count) {
-	const line = text.split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.split("|").length >= count);
-	if (!line) throw new Error(`the agent output has no result line with ${count} fields separated by |`);
-	const parts = line.split("|").map((p) => p.trim());
-	return [...parts.slice(0, count - 1), parts.slice(count - 1).join(" | ")];
-}
-function isParseSpec(value) {
-	if (value === "text") return true;
-	if (typeof value !== "object" || value === null) return false;
-	const list = value.json ?? value.line;
-	return Array.isArray(list) && list.length > 0 && list.every((f) => typeof f === "string" && /^[a-zA-Z][a-zA-Z0-9]*\??$/.test(f));
-}
-function buildParser(spec) {
-	if (spec === "text") return (text) => String(text).trim();
-	if ("json" in spec) {
-		const fields = spec.json.map(fieldName);
-		return (text) => {
-			const data = lastJson(String(text));
-			if (typeof data !== "object" || data === null || Array.isArray(data)) throw new Error("the agent JSON is not an object");
-			const missing = fields.filter((f) => !f.optional && !(f.name in data)).map((f) => f.name);
-			if (missing.length) throw new Error(`the agent JSON has no ${missing.join(", ")}`);
-			return {
-				...Object.fromEntries(fields.filter((f) => f.optional).map((f) => [f.name, null])),
-				...data,
-				text: String(text)
-			};
-		};
-	}
-	const fields = spec.line.map((f) => fieldName(f).name);
-	return (text) => {
-		const parts = lastLine(String(text), fields.length);
-		return {
-			...Object.fromEntries(fields.map((f, i) => [f, parts[i] ?? ""])),
-			text: String(text)
-		};
-	};
-}
+}));
 // ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/code.js
 var require_code$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
 	Object.defineProperty(exports, "__esModule", { value: true });
@@ -15229,6 +14797,7 @@ var require_dist = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	exports.default = formatsPlugin;
 }));
 // src/spec.ts
+var import_dist = require_dist$1();
 var import__2020 = require__2020();
 var import_dist$1 = /* @__PURE__ */ __toESM(require_dist(), 1);
 var specDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "spec");
@@ -15286,6 +14855,955 @@ function workflowGraphErrors(workflow) {
 function configRoleErrors(config) {
 	const tiers = new Set(config.tiers);
 	return Object.entries(config.roles).filter(([, tier]) => !tiers.has(tier)).map(([role, tier]) => `role '${role}' uses unknown tier '${tier}'`);
+}
+// src/config.ts
+var DEFAULT_MEMORY_LAYER = "olko-memory-layer";
+var DEFAULT_PROJECTS = {
+	markers: [
+		".agents/skill-config.md",
+		".agents/skills",
+		".opencode/agents",
+		".claude/skills",
+		".claude/agents"
+	],
+	maxDepth: 3,
+	statusWorkflow: "olko-project-status"
+};
+/** Project discovery settings from a parsed config file, with defaults. */
+function projectsOf(raw) {
+	return {
+		...DEFAULT_PROJECTS,
+		...raw?.projects ?? {}
+	};
+}
+/** FACTORY_STATUS_CLI names the CLI backend of the status workflow on this device; it replaces projects.statusBackend. */
+function withStatusCli(projects, cli = process.env.FACTORY_STATUS_CLI) {
+	if (!cli) return projects;
+	if (cli !== "claude" && cli !== "opencode") throw new Error("FACTORY_STATUS_CLI must be claude or opencode");
+	return {
+		...projects,
+		statusBackend: {
+			kind: "cli",
+			cli
+		}
+	};
+}
+/** The marketplace skill that gives an agent persistent memory, from a parsed config file. */
+function memoryLayerOf(raw) {
+	return raw?.memoryLayer ?? "olko-memory-layer";
+}
+function configFile() {
+	return process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR, "config", "factory.yaml");
+}
+function loadFactoryConfig(file = configFile()) {
+	const raw = (0, import_dist.parse)(fs.readFileSync(file, "utf8"));
+	const result = validate("factory-config", raw);
+	if (!result.valid) throw new Error(`${file}: ${result.errors.join("; ")}`);
+	return {
+		roles: raw.roles,
+		budget: {
+			maxCostUsd: raw.budget.maxCostUsd,
+			infoRatio: raw.budget.infoRatio ?? .5,
+			pauseRatio: raw.budget.pauseRatio ?? .8
+		},
+		switches: raw.switches ?? {},
+		memoryLayer: memoryLayerOf(raw),
+		projects: withStatusCli(projectsOf(raw)),
+		watches: (raw.watches ?? []).map((watch) => ({
+			...watch,
+			stableChecks: watch.stableChecks ?? 2,
+			skipWhen: watch.skipWhen ?? []
+		})),
+		...raw.supervisor ? { supervisor: raw.supervisor } : {}
+	};
+}
+// src/marketplace-agents.ts
+/** The alphabet of agent and skill names; a name is also a file name and a CLI argument. */
+var AGENT_NAME = /^[a-z0-9-]+$/;
+function marketplaceDir() {
+	return process.env.FACTORY_MARKETPLACE_DIR ?? path.join(FACTORY_DIR, "..");
+}
+function readFrontmatter(file) {
+	const match = fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n").match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+	if (!match?.[1] || match[2] === void 0) throw new Error(`${file}: no frontmatter`);
+	return {
+		front: (0, import_dist.parse)(match[1]),
+		raw: match[1],
+		body: match[2].trim()
+	};
+}
+function findSkill(name) {
+	const root = path.join(marketplaceDir(), "skills");
+	if (!fs.existsSync(root)) return void 0;
+	for (const category of fs.readdirSync(root)) {
+		const file = path.join(root, category, name, "SKILL.md");
+		if (fs.existsSync(file)) return file;
+	}
+	const plugins = path.join(marketplaceDir(), "plugins");
+	if (!fs.existsSync(plugins)) return void 0;
+	return fs.readdirSync(plugins).map((p) => path.join(plugins, p, "skills", name, "SKILL.md")).find((f) => fs.existsSync(f));
+}
+function findPluginAgent(name) {
+	const plugins = path.join(marketplaceDir(), "plugins");
+	if (!fs.existsSync(plugins)) return void 0;
+	return fs.readdirSync(plugins).map((p) => path.join(plugins, p, "agents", `${name}.md`)).find((f) => fs.existsSync(f));
+}
+function findPluginSkill(ref, pluginRoot) {
+	const [plugin, skill] = ref.includes(":") ? ref.split(":", 2) : [path.basename(pluginRoot), ref];
+	const file = path.join(marketplaceDir(), "plugins", plugin, "skills", skill, "SKILL.md");
+	return fs.existsSync(file) ? file : findSkill(skill);
+}
+function withPluginRoot(text, pluginRoot) {
+	return pluginRoot ? text.split("${CLAUDE_PLUGIN_ROOT}").join(pluginRoot) : text;
+}
+function declaredSkills(name, front) {
+	const allowed = Object.entries(front.permission?.skill ?? {}).filter(([skill, rule]) => skill !== "*" && rule === "allow").map(([skill]) => skill);
+	const manifest = path.join(marketplaceDir(), "agents", "opencode", "index.json");
+	const listed = fs.existsSync(manifest) ? JSON.parse(fs.readFileSync(manifest, "utf8")).agents.find((a) => a.name === name)?.skills ?? [] : [];
+	return [.../* @__PURE__ */ new Set([...allowed, ...listed])];
+}
+function skillsSection(skills, missing, pluginRoot) {
+	const root = pluginRoot ? `\n\nCLAUDE_PLUGIN_ROOT is ${pluginRoot}; use that path wherever a skill or these instructions write \${CLAUDE_PLUGIN_ROOT}.` : "";
+	if (!skills.length && !missing.length) return root;
+	const lines = skills.map((s) => `- ${s.name}: ${s.file}`);
+	const absent = missing.length ? `\nNot in the marketplace, so not available in this run: ${missing.join(", ")}.` : "";
+	return `${root}\n\nSkills: when these instructions load a skill or say a skill is preloaded, read its SKILL.md from the marketplace path below and follow it, not through the Skill tool and not from an installed copy. Files a skill names are next to its SKILL.md.\n${lines.join("\n")}${absent}`;
+}
+/** The skills found in the marketplace for the given names, and the names that were not found. */
+function resolveSkills(names, find) {
+	const skills = names.flatMap((name) => {
+		const found = find(name);
+		return found ? [{
+			name,
+			file: found
+		}] : [];
+	});
+	return {
+		skills,
+		missing: names.filter((name) => !skills.some((skill) => skill.name === name))
+	};
+}
+function readMarketplaceAgent(name) {
+	if (!AGENT_NAME.test(name)) throw new Error(`invalid agent name ${name}`);
+	const file = path.join(marketplaceDir(), "agents", "opencode", `${name}.md`);
+	if (fs.existsSync(file)) {
+		const { front, raw, body } = readFrontmatter(file);
+		const { skills, missing } = resolveSkills(declaredSkills(name, front), findSkill);
+		return {
+			name,
+			description: front.description ?? name,
+			prompt: body + skillsSection(skills, missing),
+			file,
+			frontmatter: raw,
+			skills,
+			dirs: skills.map((s) => path.dirname(s.file))
+		};
+	}
+	const pluginFile = findPluginAgent(name);
+	if (pluginFile) {
+		const pluginRoot = path.dirname(path.dirname(pluginFile));
+		const { front, raw, body } = readFrontmatter(pluginFile);
+		const { skills, missing } = resolveSkills(front.skills ?? [], (ref) => findPluginSkill(ref, pluginRoot));
+		return {
+			name,
+			description: front.description ?? name,
+			prompt: withPluginRoot(body, pluginRoot) + skillsSection(skills, missing, pluginRoot),
+			file: pluginFile,
+			frontmatter: raw,
+			skills,
+			dirs: [pluginRoot, ...skills.map((s) => path.dirname(s.file))],
+			pluginRoot
+		};
+	}
+	const skillFile = findSkill(name);
+	if (!skillFile) throw new Error(`agent or skill ${name} is not in the marketplace (${file})`);
+	const skillDir = path.dirname(skillFile);
+	const pluginRoot = path.basename(path.dirname(path.dirname(path.dirname(skillDir)))) === "plugins" ? path.dirname(path.dirname(skillDir)) : void 0;
+	const { front, body } = readFrontmatter(skillFile);
+	const prompt = `Follow the skill ${name} below for the task in the user message. The skill directory is ${skillDir}; read the files it names from there.\n\n${withPluginRoot(body, pluginRoot)}${skillsSection([], [], pluginRoot)}`;
+	return {
+		name,
+		description: front.description ?? name,
+		prompt,
+		file: skillFile,
+		frontmatter: "",
+		skills: [],
+		dirs: pluginRoot ? [pluginRoot, skillDir] : [skillDir],
+		skillDir,
+		...pluginRoot ? { pluginRoot } : {}
+	};
+}
+/** The permission that lets an agent ask the user itself: OpenCode `question: allow` or a Claude Code `AskUserQuestion` tool. */
+function askPermission(frontmatter) {
+	if (!frontmatter) return null;
+	const front = (0, import_dist.parse)(frontmatter);
+	if (front.permission?.question === "allow") return "question: allow";
+	return (Array.isArray(front.tools) ? front.tools.map(String) : String(front.tools ?? "").split(",").map((t) => t.trim())).includes("AskUserQuestion") ? "AskUserQuestion tool" : null;
+}
+function skillDescription(file) {
+	try {
+		return String(readFrontmatter(file).front.description ?? "").replace(/\s+/g, " ").trim();
+	} catch {
+		return "";
+	}
+}
+function skillScripts(skill, skillFile) {
+	const dir = path.join(path.dirname(skillFile), "scripts");
+	if (!fs.existsSync(dir)) return [];
+	return fs.readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isFile() && !/\.tests?\.[a-z0-9]+$/i.test(entry.name)).map((entry) => ({
+		skill,
+		name: entry.name,
+		path: path.join(dir, entry.name)
+	})).sort((a, b) => a.name.localeCompare(b.name));
+}
+function describeAgent(name, memoryLayer = DEFAULT_MEMORY_LAYER) {
+	let agent;
+	try {
+		agent = readMarketplaceAgent(name);
+	} catch {
+		return null;
+	}
+	const root = marketplaceDir();
+	const rel = (f) => path.relative(root, f).split(path.sep).join("/");
+	const kind = agent.skillDir ? "skill" : agent.pluginRoot ? "plugin-agent" : "agent";
+	const declared = kind === "skill" ? [] : agent.skills;
+	const scripts = kind === "skill" ? skillScripts(name, agent.file) : declared.flatMap((s) => skillScripts(s.name, s.file));
+	const fromPrompt = agent.prompt.match(/Not in the marketplace, so not available in this run: ([^\n]+)\./)?.[1]?.split(", ") ?? [];
+	return {
+		name,
+		kind,
+		description: String(agent.description).replace(/\s+/g, " ").trim(),
+		file: rel(agent.file),
+		skills: declared.map((s) => ({
+			name: s.name,
+			description: skillDescription(s.file),
+			file: rel(s.file)
+		})),
+		scripts: scripts.map((s) => ({
+			skill: s.skill,
+			name: s.name,
+			file: rel(s.path)
+		})),
+		missing: fromPrompt,
+		asks: askPermission(agent.frontmatter),
+		memoryLayer: kind !== "skill" && [...declared.map((s) => s.name), ...fromPrompt].includes(memoryLayer)
+	};
+}
+/** The neutral definition of an agent: the given definition after a name check, or the marketplace agent of that name. */
+function agentDefinition(agent) {
+	if (typeof agent !== "string") {
+		if (!AGENT_NAME.test(agent.name)) throw new Error(`invalid agent name ${agent.name}`);
+		return agent;
+	}
+	return readMarketplaceAgent(agent);
+}
+// src/models.ts
+/** The model ids the factory knows by name: the short aliases a harness accepts and the default tier models. */
+var HAIKU_MODEL = "claude-haiku-5-5";
+var SONNET_MODEL = "claude-sonnet-5-5";
+var OPUS_MODEL = "claude-opus-5-5";
+/** The short model names and the full model id each one stands for. */
+var MODEL_ALIASES = {
+	haiku: HAIKU_MODEL,
+	sonnet: SONNET_MODEL,
+	opus: OPUS_MODEL
+};
+/** The proposed model of every tier for a real backend; the user can change each one at confirmation. */
+var DEFAULT_TIER_MODELS = {
+	low: HAIKU_MODEL,
+	medium: HAIKU_MODEL,
+	high: HAIKU_MODEL
+};
+/** The model names of the fake backend, one per tier. */
+var FAKE_TIER_MODELS = {
+	low: "fake-low",
+	medium: "fake-medium",
+	high: "fake-high"
+};
+// src/prices.ts
+/** USD per million tokens, from https://platform.claude.com/docs/en/about-claude/pricing (read 2026-11-10); opencode/deepseek-v4.1-flash-free is OpenCode's free model (cost 0). */
+var PER_MTOK = {
+	[HAIKU_MODEL]: {
+		input: .1,
+		output: .5,
+		cacheRead: .01,
+		longContext: {
+			overTokens: 1e5,
+			input: .5,
+			output: 2.5,
+			cacheRead: .05
+		}
+	},
+	[SONNET_MODEL]: {
+		input: 2,
+		output: 10,
+		cacheRead: .1
+	},
+	[OPUS_MODEL]: {
+		input: 4,
+		output: 20,
+		cacheRead: .2
+	},
+	"opencode/deepseek-v4.1-flash-free": {
+		input: 0,
+		output: 0,
+		cacheRead: 0
+	}
+};
+var CACHE_WRITE_5M = 1.25;
+var CACHE_WRITE_1H = 2;
+function canonicalModel(model) {
+	if (!model) return null;
+	const bare = String(model).replace(/^anthropic\//, "");
+	return MODEL_ALIASES[bare] ?? bare;
+}
+function priceUsage(model, tokens, cacheWriteTtlKnown) {
+	const canonical = canonicalModel(model);
+	const base = canonical === null ? void 0 : PER_MTOK[canonical];
+	if (!base) return {
+		costUsd: null,
+		costSource: "unknown"
+	};
+	if (tokens.input == null || tokens.output == null) return {
+		costUsd: null,
+		costSource: "unknown"
+	};
+	const promptTokens = tokens.input + (tokens.cacheRead ?? 0) + (tokens.cacheWrite5m ?? 0) + (tokens.cacheWrite1h ?? 0);
+	const price = base.longContext && promptTokens > base.longContext.overTokens ? base.longContext : base;
+	const cost = tokens.input * price.input + tokens.output * price.output + (tokens.cacheRead ?? 0) * price.cacheRead + (tokens.cacheWrite5m ?? 0) * price.input * CACHE_WRITE_5M + (tokens.cacheWrite1h ?? 0) * price.input * CACHE_WRITE_1H;
+	const hasUntimedWrites = !cacheWriteTtlKnown && (tokens.cacheWrite5m ?? 0) > 0;
+	return {
+		costUsd: cost / 1e6,
+		costSource: hasUntimedWrites ? "estimated" : "measured"
+	};
+}
+// src/questions.ts
+var SCHEMA = `
+create table if not exists questions (
+  run_id text not null,
+  question_id text not null,
+  node text,
+  asked_by text,
+  text text not null,
+  allowed text,
+  asked_at text not null,
+  answer text,
+  answered_at text,
+  primary key (run_id, question_id)
+)`;
+function storedAskedBy(askedBy) {
+	if (askedBy.length === 0) return null;
+	return askedBy.length === 1 ? askedBy[0] : JSON.stringify(askedBy);
+}
+function readAskedBy(stored) {
+	if (stored === null) return [];
+	return stored.startsWith("[") ? JSON.parse(stored) : [stored];
+}
+function questionsFile(dataDir) {
+	return path.join(dataDir, "questions.sqlite");
+}
+function withStore(dataDir, use) {
+	const db = new DatabaseSync(questionsFile(dataDir));
+	try {
+		db.exec("pragma busy_timeout = 5000; pragma journal_mode = wal;");
+		db.exec(SCHEMA);
+		return use(db);
+	} finally {
+		db.close();
+	}
+}
+/** Stores a question when it is asked; asking it again after a restart keeps the first record. */
+function recordQuestion(dataDir, question) {
+	withStore(dataDir, (db) => {
+		db.prepare("insert or ignore into questions (run_id, question_id, node, asked_by, text, allowed, asked_at) values (?, ?, ?, ?, ?, ?, ?)").run(question.runId, question.questionId, question.node, storedAskedBy(question.askedBy), question.text, question.allowed ? JSON.stringify(question.allowed) : null, question.askedAt);
+	});
+}
+function recordAnswer(dataDir, runId, questionId, answer, answeredAt) {
+	withStore(dataDir, (db) => {
+		db.prepare("update questions set answer = ?, answered_at = ? where run_id = ? and question_id = ? and answer is null").run(answer, answeredAt, runId, questionId);
+	});
+}
+function readQuestions(dataDir, runId) {
+	const file = questionsFile(dataDir);
+	if (!fs.existsSync(file)) return [];
+	const db = new DatabaseSync(file, { readOnly: true });
+	try {
+		db.exec("pragma busy_timeout = 5000;");
+		return db.prepare("select * from questions where run_id = ? order by asked_at, rowid").all(runId).map((r) => ({
+			runId: r.run_id,
+			questionId: r.question_id,
+			node: r.node,
+			askedBy: readAskedBy(r.asked_by),
+			text: r.text,
+			allowed: r.allowed ? JSON.parse(r.allowed) : null,
+			askedAt: r.asked_at,
+			answer: r.answer,
+			answeredAt: r.answered_at
+		}));
+	} finally {
+		db.close();
+	}
+}
+// src/run-summary.ts
+var SUPERVISOR_PATH = "@supervisor";
+var NODE_END = /* @__PURE__ */ new Set([
+	"node_completed",
+	"node_skipped",
+	"node_failed"
+]);
+var RUN_END = /* @__PURE__ */ new Set([
+	"run_completed",
+	"run_failed",
+	"run_cancelled",
+	"budget_exceeded"
+]);
+function ms(at) {
+	return Date.parse(at);
+}
+function round$1(value, digits = 6) {
+	const factor = 10 ** digits;
+	return Math.round(value * factor) / factor;
+}
+function text(value) {
+	return typeof value === "string" ? value : value === void 0 || value === null ? "" : JSON.stringify(value);
+}
+function backendLabel(run) {
+	const backend = run.config?.backend;
+	if (!backend) return null;
+	return backend.kind === "cli" && backend.cli ? `cli:${backend.cli}` : backend.kind;
+}
+function kindOf(records) {
+	const kinds = new Set(records.map((r) => r.kind));
+	if (kinds.size === 0) return "none";
+	if (kinds.size > 1) return "mixed";
+	return records[0]?.kind ?? "none";
+}
+function single(values) {
+	const set = new Set(values.filter((v) => typeof v === "string"));
+	if (set.size === 0) return null;
+	return set.size === 1 ? [...set][0] ?? null : "mixed";
+}
+function nodeWallTimes(events) {
+	const open = /* @__PURE__ */ new Map();
+	const wall = /* @__PURE__ */ new Map();
+	for (const event of events) {
+		const node = typeof event.node === "string" ? event.node : void 0;
+		if (!node) continue;
+		if (event.type === "node_started") open.set(node, ms(event.at));
+		if (NODE_END.has(event.type) && open.has(node)) {
+			wall.set(node, (wall.get(node) ?? 0) + Math.max(0, ms(event.at) - (open.get(node) ?? 0)));
+			open.delete(node);
+		}
+	}
+	return wall;
+}
+function questionWaits(events) {
+	const asked = [];
+	const answered = /* @__PURE__ */ new Map();
+	for (const event of events) {
+		if (event.type === "needs_input" && typeof event.questionId === "string") asked.push({
+			questionId: event.questionId,
+			node: typeof event.node === "string" ? event.node : null,
+			at: ms(event.at)
+		});
+		if (event.type === "run_resumed" && typeof event.questionId === "string") answered.set(event.questionId, ms(event.at));
+	}
+	return asked.map((q) => {
+		const at = answered.get(q.questionId);
+		return {
+			questionId: q.questionId,
+			node: q.node,
+			waitMs: at === void 0 ? null : Math.max(0, at - q.at)
+		};
+	});
+}
+function clientWaits(events) {
+	const offered = /* @__PURE__ */ new Map();
+	const waits = [];
+	for (const event of events) {
+		const key = `${text(event.node)}|${text(event.agentId)}`;
+		if (event.type === "work_offered") offered.set(key, ms(event.at));
+		if (event.type === "agent_completed" && event.backend === "delegate" && offered.has(key)) {
+			waits.push({
+				node: text(event.node),
+				agentId: typeof event.agentId === "string" ? event.agentId : null,
+				waitMs: Math.max(0, ms(event.at) - (offered.get(key) ?? 0))
+			});
+			offered.delete(key);
+		}
+	}
+	return waits;
+}
+function summarizeRun(run) {
+	const ledger = run.ledger.filter((r) => r.nodePath !== SUPERVISOR_PATH);
+	const events = run.events.filter((e) => e.node !== "@supervisor" && !e.type.startsWith("supervisor_"));
+	const costUsd = ledger.reduce((s, r) => s + (r.costUsd ?? 0), 0);
+	const tokens = ledger.reduce((s, r) => s + (r.inputTokens ?? 0) + (r.outputTokens ?? 0) + (r.inputTokens == null ? r.totalTokens ?? 0 : 0), 0);
+	const cacheTokens = ledger.reduce((s, r) => s + (r.cacheReadTokens ?? 0) + (r.cacheWrite5mTokens ?? 0) + (r.cacheWrite1hTokens ?? 0), 0);
+	const wallByNode = nodeWallTimes(events);
+	const startedAt = events[0] ? ms(events[0].at) : 0;
+	const endEvent = [...events].reverse().find((e) => RUN_END.has(e.type)) ?? events.at(-1);
+	const wallMs = endEvent ? Math.max(0, ms(endEvent.at) - startedAt) : 0;
+	const nodeTime = [...wallByNode.values()].reduce((s, v) => s + v, 0);
+	const visitsByNode = /* @__PURE__ */ new Map();
+	for (const event of events) if (event.type === "node_started" && typeof event.node === "string") visitsByNode.set(event.node, (visitsByNode.get(event.node) ?? 0) + 1);
+	const failuresByNode = /* @__PURE__ */ new Map();
+	const failures = [];
+	for (const event of events) {
+		if (![
+			"agent_failed",
+			"node_failed",
+			"run_failed"
+		].includes(event.type)) continue;
+		const node = typeof event.node === "string" ? event.node : null;
+		failures.push({
+			node,
+			agentId: typeof event.agentId === "string" ? event.agentId : null,
+			error: text(event.error).slice(0, 500)
+		});
+		if (node) failuresByNode.set(node, (failuresByNode.get(node) ?? 0) + 1);
+	}
+	const nodes = [.../* @__PURE__ */ new Set([...ledger.map((r) => r.nodePath), ...visitsByNode.keys()])].map((node) => {
+		const records = ledger.filter((r) => r.nodePath === node);
+		const cost = records.reduce((s, r) => s + (r.costUsd ?? 0), 0);
+		const input = records.reduce((s, r) => s + (r.inputTokens ?? 0), 0);
+		const output = records.reduce((s, r) => s + (r.outputTokens ?? 0), 0);
+		const wall = wallByNode.get(node) ?? records.reduce((s, r) => s + (r.durationMs ?? 0), 0);
+		return {
+			node,
+			kind: kindOf(records),
+			tier: single(records.map((r) => r.tier)),
+			model: single(records.map((r) => r.model)),
+			visits: visitsByNode.get(node) ?? 0,
+			calls: records.length,
+			agents: [...new Set(records.map((r) => r.agentId).filter((a) => typeof a === "string"))],
+			costUsd: round$1(cost),
+			costShare: costUsd > 0 ? round$1(cost / costUsd, 3) : 0,
+			tokens: input + output,
+			inputTokens: input,
+			outputTokens: output,
+			wallMs: wall,
+			timeShare: nodeTime > 0 ? round$1(wall / nodeTime, 3) : 0,
+			failures: failuresByNode.get(node) ?? 0
+		};
+	}).sort((a, b) => b.costUsd - a.costUsd || b.wallMs - a.wallMs || a.node.localeCompare(b.node));
+	const questions = questionWaits(events);
+	const budgetUsd = run.config?.budget.maxCostUsd ?? run.proposal?.budget.maxCostUsd ?? null;
+	const slowest = [...nodes].sort((a, b) => b.wallMs - a.wallMs)[0];
+	const longest = [...questions].filter((q) => q.waitMs !== null).sort((a, b) => (b.waitMs ?? 0) - (a.waitMs ?? 0))[0];
+	return {
+		run: {
+			runId: run.runId,
+			workflow: run.workflow ?? "hello",
+			goal: run.goal,
+			status: run.status,
+			backend: backendLabel(run),
+			tierModels: { ...run.config?.tiers ?? {} },
+			budgetUsd
+		},
+		totals: {
+			costUsd: round$1(costUsd),
+			budgetRatio: budgetUsd ? round$1(costUsd / budgetUsd, 3) : null,
+			tokens,
+			cacheTokens,
+			llmSteps: ledger.filter((r) => r.kind === "llm").length,
+			scriptSteps: ledger.filter((r) => r.kind === "script").length,
+			unknownCostSteps: ledger.filter((r) => r.kind === "llm" && r.costSource === "unknown").length,
+			wallMs,
+			agentMs: ledger.reduce((s, r) => s + (r.durationMs ?? 0), 0)
+		},
+		nodes,
+		loops: nodes.filter((n) => n.visits > 1).map((n) => ({
+			node: n.node,
+			visits: n.visits
+		})),
+		failures,
+		questions,
+		clientWaits: clientWaits(events),
+		skipped: events.filter((e) => e.type === "node_skipped").map((e) => ({
+			node: text(e.node),
+			reason: text(e.reason)
+		})),
+		budget: events.filter((e) => e.type === "budget_threshold" || e.type === "budget_exceeded").map((e) => ({
+			level: e.type === "budget_exceeded" ? "exceeded" : text(e.level),
+			ratio: Number(e.ratio ?? 0)
+		})),
+		top: {
+			costNode: nodes[0] && nodes[0].costUsd > 0 ? nodes[0].node : null,
+			timeNode: slowest && slowest.wallMs > 0 ? slowest.node : null,
+			longestQuestion: longest?.questionId ?? null
+		}
+	};
+}
+/** Reads the last '<prefix> | <verdict> | <bottleneck> | <idea>' line of an agent's output; the format comes from the configured verdictLine. */
+function parseSupervisorLine(output, format) {
+	const line = output.trim().split(/\r?\n/).reverse().find((candidate) => startsVerdictLine(candidate, format.prefix));
+	if (!line) return null;
+	const [, verdict = "", bottleneck = "", ...idea] = line.replace(/`/g, "").split("|").map((part) => part.trim());
+	if (!format.verdicts.includes(verdict)) return null;
+	return {
+		verdict,
+		bottleneck,
+		idea: idea.join(" | ")
+	};
+}
+/** A line that starts with the prefix, optionally after a backtick, and then a '|'. */
+function startsVerdictLine(line, prefix) {
+	const head = line.trimStart().replace(/^`/, "");
+	return head.startsWith(prefix) && head.slice(prefix.length).trimStart().startsWith("|");
+}
+// src/when.ts
+/** Prompts and conditions are plain text, never HTML: Mustache must not escape values. */
+mustache.escape = (text) => text;
+var CONDITION = /^([a-zA-Z0-9_./-]+)\s*(==|!=|>=|<=|>|<)\s*(.+)$/;
+function readPath(state, dotted) {
+	let value = state;
+	for (const key of dotted.split(".")) {
+		if (value === null || typeof value !== "object" || !(key in value)) return void 0;
+		value = value[key];
+	}
+	return value;
+}
+function literal(text) {
+	const trimmed = text.trim();
+	const quoted = trimmed.match(/^(["'])(.*)\1$/);
+	if (quoted?.[2] !== void 0) return quoted[2];
+	if (trimmed === "true" || trimmed === "false") return trimmed === "true";
+	if (trimmed === "null") return null;
+	const number = Number(trimmed);
+	if (Number.isNaN(number)) throw new Error(`condition value ${trimmed} is not a number, boolean, null or quoted string`);
+	return number;
+}
+function compare(clause, state) {
+	const match = clause.trim().match(CONDITION);
+	if (!match?.[1] || !match[2] || match[3] === void 0) throw new Error(`condition '${clause}' must be '<state path> <operator> <value>'`);
+	const raw = readPath(state, match[1]) ?? null;
+	const left = Array.isArray(raw) ? raw.length : raw;
+	const right = literal(match[3]);
+	if (match[2] === "==") return left === right;
+	if (match[2] === "!=") return left !== right;
+	if (left === null || right === null) return false;
+	switch (match[2]) {
+		case ">": return Number(left) > Number(right);
+		case "<": return Number(left) < Number(right);
+		case ">=": return Number(left) >= Number(right);
+		default: return Number(left) <= Number(right);
+	}
+}
+function evaluateWhen(when, state) {
+	return when.split("||").some((any) => any.split("&&").every((all) => compare(all, state)));
+}
+function eachView(value) {
+	const entries = Object.entries(value).map(([key, entry]) => ({
+		key,
+		value: entry
+	}));
+	return new Proxy(entries, {
+		get: (target, key) => key in target ? Reflect.get(target, key) : view(value[key]),
+		has: (target, key) => key in target || key in value
+	});
+}
+function view(value) {
+	return typeof value === "object" && value !== null && !Array.isArray(value) ? eachView(value) : value;
+}
+function withEach(context) {
+	return {
+		...context,
+		each: eachView(context)
+	};
+}
+// src/ops.ts
+var pass = async () => ({
+	state: { passed: true },
+	output: "verify passed"
+});
+function readState(state, dotted) {
+	return dotted.split(".").reduce((value, key) => value && typeof value === "object" ? value[key] : void 0, state);
+}
+var listNext = async ({ state, args, nodeId }) => {
+	if (typeof args.over !== "string") throw new Error("with.over must be a state path");
+	const list = readState(state, args.over);
+	if (!Array.isArray(list)) throw new Error(`state.${args.over} is not a list`);
+	const previous = nodeId ? state[nodeId] : void 0;
+	const index = previous?.index === void 0 || previous.done ? 0 : previous.index + 1;
+	const done = index >= list.length;
+	return {
+		state: {
+			index,
+			number: index + 1,
+			total: list.length,
+			item: done ? null : list[index],
+			done
+		},
+		metrics: {
+			index,
+			total: list.length
+		},
+		output: done ? `All ${list.length} items handled.` : `Item ${index + 1} of ${list.length}.`
+	};
+};
+/** Appends one item built from state paths to this node's list; `restartWhen` starts a new list, for example at the first question of a batch. */
+var listAppend = async ({ state, args, nodeId }) => {
+	if (!args.values || typeof args.values !== "object" || Array.isArray(args.values)) throw new Error("with.values must map names to state paths");
+	const previous = typeof args.restartWhen === "string" && evaluateWhen(args.restartWhen, state) || !nodeId ? [] : state[nodeId]?.items ?? [];
+	const item = {
+		number: previous.length + 1,
+		...Object.fromEntries(Object.entries(args.values).map(([name, dotted]) => [name, readState(state, String(dotted))]))
+	};
+	const items = [...previous, item];
+	return {
+		state: {
+			items,
+			count: items.length
+		},
+		metrics: { count: items.length },
+		output: `${items.length} items collected.`
+	};
+};
+/** Counts the items of a list per value (or per the `by` field of each item), most frequent first; ties keep first-seen order. */
+var listCount = async ({ state, args }) => {
+	if (typeof args.over !== "string") throw new Error("with.over must be a state path");
+	const list = readState(state, args.over);
+	if (!Array.isArray(list)) throw new Error(`state.${args.over} is not a list`);
+	const by = typeof args.by === "string" ? args.by : void 0;
+	const tally = /* @__PURE__ */ new Map();
+	for (const item of list) {
+		const value = String(by && item && typeof item === "object" ? item[by] : item);
+		tally.set(value, (tally.get(value) ?? 0) + 1);
+	}
+	const counts = [...tally].map(([value, count]) => ({
+		value,
+		count
+	})).sort((a, b) => b.count - a.count);
+	return {
+		state: {
+			counts,
+			total: list.length
+		},
+		metrics: {
+			total: list.length,
+			values: counts.length
+		},
+		output: `${list.length} items, ${counts.length} distinct values.`
+	};
+};
+/** Keeps the items of a fixed list whose `id` is named in the `ids` state list; when `ids` is not a list, keeps every item. */
+var listPick = async ({ state, args }) => {
+	if (!Array.isArray(args.items)) throw new Error("with.items must be a list");
+	if (typeof args.ids !== "string") throw new Error("with.ids must be a state path");
+	const ids = readState(state, args.ids);
+	const items = Array.isArray(ids) ? args.items.filter((item) => ids.includes(item.id)) : args.items;
+	return {
+		state: {
+			items,
+			count: items.length
+		},
+		metrics: { count: items.length },
+		output: `${items.length} of ${args.items.length} items picked.`
+	};
+};
+var NODE_PROGRAM = "{{node}}";
+/** The program of `with.command`: `{{node}}` (this Node binary) or a literal name, never a template over state. */
+function execProgram(template) {
+	const text = String(template);
+	if (text === NODE_PROGRAM) return process.execPath;
+	if (text.includes("{{")) throw new Error("with.command[0] must be {{node}} or a literal program");
+	return text;
+}
+/** A rendered value may not turn into an option: it starts with "-" only when its template does. */
+function checkedArgument(template, rendered, index) {
+	if (rendered.startsWith("-") && !String(template).startsWith("-")) throw new Error(`with.command argument ${index} ${JSON.stringify(rendered)} starts with "-" but its template does not`);
+	return rendered;
+}
+function checkedCwd(rendered) {
+	if (!path.isAbsolute(rendered) || !fs.existsSync(rendered) || !fs.statSync(rendered).isDirectory()) throw new Error(`with.cwd ${JSON.stringify(rendered)} is not an absolute existing folder`);
+	return rendered;
+}
+/**
+* Runs one command without a shell. `with.command` is a list: the program (`{{node}}` for this Node binary,
+* or a literal name) and Mustache templates over input, state and answers for the arguments. A rendered
+* argument may start with "-" only when its template does. `with.cwd` sets the directory (an absolute
+* existing folder), `with.okCodes` the accepted exit codes (default [0]) and `with.parse: json` parses stdout.
+*/
+var builtinExec = async ({ args, state, input, answers, exec, cwd }) => {
+	if (!Array.isArray(args.command) || args.command.length === 0) throw new Error("with.command must be a non-empty list");
+	if (!exec) throw new Error("this factory process has no host exec");
+	const view = {
+		...withEach({
+			state,
+			input,
+			answers
+		}),
+		node: process.execPath
+	};
+	const render = (template) => mustache.render(String(template), view, {}, { escape: (value) => String(value) });
+	const [programTemplate, ...argumentTemplates] = args.command;
+	const command = execProgram(programTemplate);
+	const rest = argumentTemplates.map((template, index) => checkedArgument(template, render(template), index + 1));
+	const okCodes = Array.isArray(args.okCodes) ? args.okCodes.map(Number) : [0];
+	const result = await exec(command, rest, { cwd: typeof args.cwd === "string" ? checkedCwd(render(args.cwd)) : cwd });
+	const stdout = result.stdout.trim();
+	if (!okCodes.includes(Number(result.code))) throw new Error(`command exited ${result.code}: ${result.stderr.trim().slice(-300)}`);
+	const json = args.parse === "json" && stdout ? JSON.parse(stdout) : null;
+	return {
+		state: {
+			code: result.code,
+			stdout: stdout.slice(0, 2e4),
+			json
+		},
+		metrics: { code: Number(result.code) },
+		output: stdout.split(/\r?\n/)[0]?.slice(0, 200) ?? ""
+	};
+};
+/** Adds the values of the `from` state list to this node's list once each; a value already kept is never removed, even when a later `from` list leaves it out. */
+var listMerge = async ({ state, args, nodeId }) => {
+	if (typeof args.from !== "string") throw new Error("with.from must be a state path");
+	const incoming = readState(state, args.from);
+	const previous = (nodeId ? state[nodeId]?.items : void 0) ?? [];
+	const items = [...previous];
+	for (const value of Array.isArray(incoming) ? incoming : []) if (!items.includes(value)) items.push(value);
+	const added = items.length - previous.length;
+	return {
+		state: {
+			items,
+			count: items.length,
+			added
+		},
+		metrics: {
+			count: items.length,
+			added
+		},
+		output: `${added} added, ${items.length} kept.`
+	};
+};
+/** Counts consecutive visits on which `when` holds; a visit where it does not hold resets the count, and the visit after the count reached `limit` starts again from zero. */
+var streak = async ({ state, args, nodeId }) => {
+	if (typeof args.when !== "string") throw new Error("with.when must be a condition");
+	if (typeof args.limit !== "number" || args.limit < 1) throw new Error("with.limit must be a positive number");
+	const previous = nodeId ? state[nodeId] : void 0;
+	const base = previous?.reached ? 0 : previous?.count ?? 0;
+	const count = evaluateWhen(args.when, state) ? base + 1 : 0;
+	const reached = count >= args.limit;
+	return {
+		state: {
+			count,
+			reached
+		},
+		metrics: { count },
+		output: reached ? `Streak ${count} reached the limit ${args.limit}.` : `Streak ${count}.`
+	};
+};
+var OPERATIONS = {
+	"builtin.exec": builtinExec,
+	"builtin.pass": pass,
+	"builtin.count": async ({ state, nodeId }) => {
+		const count = ((nodeId ? state[nodeId]?.count : 0) ?? 0) + 1;
+		return {
+			state: { count },
+			metrics: { count },
+			output: `Round ${count}.`
+		};
+	},
+	"builtin.stop": async ({ args, state, input, answers }) => {
+		throw new Error(mustache.render(String(args.reason ?? "stopped by the user"), withEach({
+			state,
+			input,
+			answers
+		})).trim());
+	},
+	"builtin.values": async ({ args }) => {
+		if (!Array.isArray(args.values)) throw new Error("with.values must be a list");
+		return {
+			state: { values: args.values },
+			metrics: { values: args.values.length },
+			output: `${args.values.length} values.`
+		};
+	},
+	"builtin.gate": async ({ state, input, args }) => {
+		const when = String(args.when);
+		const enabled = evaluateWhen(when, {
+			...state,
+			input,
+			switches: input.switches ?? {}
+		});
+		const required = args.required === true;
+		const skipped = `Subgraph ${String(args.subgraph)} skipped: switch off (${when} is false).${required ? " WARNING: required step switched off; the source agent says it must never be skipped." : ""}`;
+		return {
+			state: {
+				enabled,
+				required
+			},
+			metrics: {
+				enabled: enabled ? 1 : 0,
+				requiredOff: required && !enabled ? 1 : 0
+			},
+			output: enabled ? `Subgraph ${String(args.subgraph)} runs (${when}).` : skipped
+		};
+	},
+	"list.next": listNext,
+	"list.append": listAppend,
+	"list.count": listCount,
+	"list.pick": listPick,
+	"list.merge": listMerge,
+	"builtin.streak": streak
+};
+function operationNamed(name) {
+	return OPERATIONS[name];
+}
+// src/parse-spec.ts
+function fieldName(field) {
+	return field.endsWith("?") ? {
+		name: field.slice(0, -1),
+		optional: true
+	} : {
+		name: field,
+		optional: false
+	};
+}
+function lastJson(text) {
+	const raw = [...text.matchAll(/```json\s*([\s\S]*?)```/g)].at(-1)?.[1] ?? text.trim();
+	try {
+		return JSON.parse(raw);
+	} catch {
+		throw new Error("the agent output has no ```json block");
+	}
+}
+function lastLine(text, count) {
+	const line = text.split(/\r?\n/).map((l) => l.trim().replace(/^`+|`+$/g, "")).reverse().find((l) => l.split("|").length >= count);
+	if (!line) throw new Error(`the agent output has no result line with ${count} fields separated by |`);
+	const parts = line.split("|").map((p) => p.trim());
+	return [...parts.slice(0, count - 1), parts.slice(count - 1).join(" | ")];
+}
+function isParseSpec(value) {
+	if (value === "text") return true;
+	if (typeof value !== "object" || value === null) return false;
+	const list = value.json ?? value.line;
+	return Array.isArray(list) && list.length > 0 && list.every((f) => typeof f === "string" && /^[a-zA-Z][a-zA-Z0-9]*\??$/.test(f));
+}
+function buildParser(spec) {
+	if (spec === "text") return (text) => String(text).trim();
+	if ("json" in spec) {
+		const fields = spec.json.map(fieldName);
+		return (text) => {
+			const data = lastJson(String(text));
+			if (typeof data !== "object" || data === null || Array.isArray(data)) throw new Error("the agent JSON is not an object");
+			const missing = fields.filter((f) => !f.optional && !(f.name in data)).map((f) => f.name);
+			if (missing.length) throw new Error(`the agent JSON has no ${missing.join(", ")}`);
+			return {
+				...Object.fromEntries(fields.filter((f) => f.optional).map((f) => [f.name, null])),
+				...data,
+				text: String(text)
+			};
+		};
+	}
+	const fields = spec.line.map((f) => fieldName(f).name);
+	return (text) => {
+		const parts = lastLine(String(text), fields.length);
+		return {
+			...Object.fromEntries(fields.map((f, i) => [f, parts[i] ?? ""])),
+			text: String(text)
+		};
+	};
 }
 // src/workflow-yaml.ts
 function agentsFromPath(dotted) {
@@ -15602,522 +16120,6 @@ function loadWorkflowDir(dir) {
 }
 function loadWorkflowSpecs(dir) {
 	return listWorkflowFiles(dir).map((f) => readSpec(path.join(dir, f)));
-}
-// src/config.ts
-var DEFAULT_MEMORY_LAYER = "olko-memory-layer";
-var DEFAULT_PROJECTS = {
-	markers: [
-		".agents/skill-config.md",
-		".agents/skills",
-		".opencode/agents",
-		".claude/skills",
-		".claude/agents"
-	],
-	maxDepth: 3,
-	statusWorkflow: "olko-project-status"
-};
-/** Project discovery settings from a parsed config file, with defaults. */
-function projectsOf(raw) {
-	return {
-		...DEFAULT_PROJECTS,
-		...raw?.projects ?? {}
-	};
-}
-/** FACTORY_STATUS_CLI names the CLI backend of the status workflow on this device; it replaces projects.statusBackend. */
-function withStatusCli(projects, cli = process.env.FACTORY_STATUS_CLI) {
-	if (!cli) return projects;
-	if (cli !== "claude" && cli !== "opencode") throw new Error("FACTORY_STATUS_CLI must be claude or opencode");
-	return {
-		...projects,
-		statusBackend: {
-			kind: "cli",
-			cli
-		}
-	};
-}
-/** The marketplace skill that gives an agent persistent memory, from a parsed config file. */
-function memoryLayerOf(raw) {
-	return raw?.memoryLayer ?? "olko-memory-layer";
-}
-function configFile() {
-	return process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR, "config", "factory.yaml");
-}
-function loadFactoryConfig(file = configFile()) {
-	const raw = (0, import_dist.parse)(fs.readFileSync(file, "utf8"));
-	const result = validate("factory-config", raw);
-	if (!result.valid) throw new Error(`${file}: ${result.errors.join("; ")}`);
-	return {
-		roles: raw.roles,
-		budget: {
-			maxCostUsd: raw.budget.maxCostUsd,
-			infoRatio: raw.budget.infoRatio ?? .5,
-			pauseRatio: raw.budget.pauseRatio ?? .8
-		},
-		switches: raw.switches ?? {},
-		memoryLayer: memoryLayerOf(raw),
-		projects: withStatusCli(projectsOf(raw)),
-		watches: (raw.watches ?? []).map((watch) => ({
-			...watch,
-			stableChecks: watch.stableChecks ?? 2,
-			skipWhen: watch.skipWhen ?? []
-		})),
-		...raw.supervisor ? { supervisor: raw.supervisor } : {}
-	};
-}
-// src/marketplace-agents.ts
-/** The alphabet of agent and skill names; a name is also a file name and a CLI argument. */
-var AGENT_NAME = /^[a-z0-9-]+$/;
-function marketplaceDir() {
-	return process.env.FACTORY_MARKETPLACE_DIR ?? path.join(FACTORY_DIR, "..");
-}
-function readFrontmatter(file) {
-	const match = fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n").match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-	if (!match?.[1] || match[2] === void 0) throw new Error(`${file}: no frontmatter`);
-	return {
-		front: (0, import_dist.parse)(match[1]),
-		raw: match[1],
-		body: match[2].trim()
-	};
-}
-function findSkill(name) {
-	const root = path.join(marketplaceDir(), "skills");
-	if (!fs.existsSync(root)) return void 0;
-	for (const category of fs.readdirSync(root)) {
-		const file = path.join(root, category, name, "SKILL.md");
-		if (fs.existsSync(file)) return file;
-	}
-	const plugins = path.join(marketplaceDir(), "plugins");
-	if (!fs.existsSync(plugins)) return void 0;
-	return fs.readdirSync(plugins).map((p) => path.join(plugins, p, "skills", name, "SKILL.md")).find((f) => fs.existsSync(f));
-}
-function findPluginAgent(name) {
-	const plugins = path.join(marketplaceDir(), "plugins");
-	if (!fs.existsSync(plugins)) return void 0;
-	return fs.readdirSync(plugins).map((p) => path.join(plugins, p, "agents", `${name}.md`)).find((f) => fs.existsSync(f));
-}
-function findPluginSkill(ref, pluginRoot) {
-	const [plugin, skill] = ref.includes(":") ? ref.split(":", 2) : [path.basename(pluginRoot), ref];
-	const file = path.join(marketplaceDir(), "plugins", plugin, "skills", skill, "SKILL.md");
-	return fs.existsSync(file) ? file : findSkill(skill);
-}
-function withPluginRoot(text, pluginRoot) {
-	return pluginRoot ? text.split("${CLAUDE_PLUGIN_ROOT}").join(pluginRoot) : text;
-}
-function declaredSkills(name, front) {
-	const allowed = Object.entries(front.permission?.skill ?? {}).filter(([skill, rule]) => skill !== "*" && rule === "allow").map(([skill]) => skill);
-	const manifest = path.join(marketplaceDir(), "agents", "opencode", "index.json");
-	const listed = fs.existsSync(manifest) ? JSON.parse(fs.readFileSync(manifest, "utf8")).agents.find((a) => a.name === name)?.skills ?? [] : [];
-	return [.../* @__PURE__ */ new Set([...allowed, ...listed])];
-}
-function skillsSection(skills, missing, pluginRoot) {
-	const root = pluginRoot ? `\n\nCLAUDE_PLUGIN_ROOT is ${pluginRoot}; use that path wherever a skill or these instructions write \${CLAUDE_PLUGIN_ROOT}.` : "";
-	if (!skills.length && !missing.length) return root;
-	const lines = skills.map((s) => `- ${s.name}: ${s.file}`);
-	const absent = missing.length ? `\nNot in the marketplace, so not available in this run: ${missing.join(", ")}.` : "";
-	return `${root}\n\nSkills: when these instructions load a skill or say a skill is preloaded, read its SKILL.md from the marketplace path below and follow it, not through the Skill tool and not from an installed copy. Files a skill names are next to its SKILL.md.\n${lines.join("\n")}${absent}`;
-}
-/** The skills found in the marketplace for the given names, and the names that were not found. */
-function resolveSkills(names, find) {
-	const skills = names.flatMap((name) => {
-		const found = find(name);
-		return found ? [{
-			name,
-			file: found
-		}] : [];
-	});
-	return {
-		skills,
-		missing: names.filter((name) => !skills.some((skill) => skill.name === name))
-	};
-}
-function readMarketplaceAgent(name) {
-	if (!AGENT_NAME.test(name)) throw new Error(`invalid agent name ${name}`);
-	const file = path.join(marketplaceDir(), "agents", "opencode", `${name}.md`);
-	if (fs.existsSync(file)) {
-		const { front, raw, body } = readFrontmatter(file);
-		const { skills, missing } = resolveSkills(declaredSkills(name, front), findSkill);
-		return {
-			name,
-			description: front.description ?? name,
-			prompt: body + skillsSection(skills, missing),
-			file,
-			frontmatter: raw,
-			skills,
-			dirs: skills.map((s) => path.dirname(s.file))
-		};
-	}
-	const pluginFile = findPluginAgent(name);
-	if (pluginFile) {
-		const pluginRoot = path.dirname(path.dirname(pluginFile));
-		const { front, raw, body } = readFrontmatter(pluginFile);
-		const { skills, missing } = resolveSkills(front.skills ?? [], (ref) => findPluginSkill(ref, pluginRoot));
-		return {
-			name,
-			description: front.description ?? name,
-			prompt: withPluginRoot(body, pluginRoot) + skillsSection(skills, missing, pluginRoot),
-			file: pluginFile,
-			frontmatter: raw,
-			skills,
-			dirs: [pluginRoot, ...skills.map((s) => path.dirname(s.file))],
-			pluginRoot
-		};
-	}
-	const skillFile = findSkill(name);
-	if (!skillFile) throw new Error(`agent or skill ${name} is not in the marketplace (${file})`);
-	const skillDir = path.dirname(skillFile);
-	const pluginRoot = path.basename(path.dirname(path.dirname(path.dirname(skillDir)))) === "plugins" ? path.dirname(path.dirname(skillDir)) : void 0;
-	const { front, body } = readFrontmatter(skillFile);
-	const prompt = `Follow the skill ${name} below for the task in the user message. The skill directory is ${skillDir}; read the files it names from there.\n\n${withPluginRoot(body, pluginRoot)}${skillsSection([], [], pluginRoot)}`;
-	return {
-		name,
-		description: front.description ?? name,
-		prompt,
-		file: skillFile,
-		frontmatter: "",
-		skills: [],
-		dirs: pluginRoot ? [pluginRoot, skillDir] : [skillDir],
-		skillDir,
-		...pluginRoot ? { pluginRoot } : {}
-	};
-}
-/** The permission that lets an agent ask the user itself: OpenCode `question: allow` or a Claude Code `AskUserQuestion` tool. */
-function askPermission(frontmatter) {
-	if (!frontmatter) return null;
-	const front = (0, import_dist.parse)(frontmatter);
-	if (front.permission?.question === "allow") return "question: allow";
-	return (Array.isArray(front.tools) ? front.tools.map(String) : String(front.tools ?? "").split(",").map((t) => t.trim())).includes("AskUserQuestion") ? "AskUserQuestion tool" : null;
-}
-function skillDescription(file) {
-	try {
-		return String(readFrontmatter(file).front.description ?? "").replace(/\s+/g, " ").trim();
-	} catch {
-		return "";
-	}
-}
-function skillScripts(skill, skillFile) {
-	const dir = path.join(path.dirname(skillFile), "scripts");
-	if (!fs.existsSync(dir)) return [];
-	return fs.readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isFile() && !/\.tests?\.[a-z0-9]+$/i.test(entry.name)).map((entry) => ({
-		skill,
-		name: entry.name,
-		path: path.join(dir, entry.name)
-	})).sort((a, b) => a.name.localeCompare(b.name));
-}
-function describeAgent(name, memoryLayer = DEFAULT_MEMORY_LAYER) {
-	let agent;
-	try {
-		agent = readMarketplaceAgent(name);
-	} catch {
-		return null;
-	}
-	const root = marketplaceDir();
-	const rel = (f) => path.relative(root, f).split(path.sep).join("/");
-	const kind = agent.skillDir ? "skill" : agent.pluginRoot ? "plugin-agent" : "agent";
-	const declared = kind === "skill" ? [] : agent.skills;
-	const scripts = kind === "skill" ? skillScripts(name, agent.file) : declared.flatMap((s) => skillScripts(s.name, s.file));
-	const fromPrompt = agent.prompt.match(/Not in the marketplace, so not available in this run: ([^\n]+)\./)?.[1]?.split(", ") ?? [];
-	return {
-		name,
-		kind,
-		description: String(agent.description).replace(/\s+/g, " ").trim(),
-		file: rel(agent.file),
-		skills: declared.map((s) => ({
-			name: s.name,
-			description: skillDescription(s.file),
-			file: rel(s.file)
-		})),
-		scripts: scripts.map((s) => ({
-			skill: s.skill,
-			name: s.name,
-			file: rel(s.path)
-		})),
-		missing: fromPrompt,
-		asks: askPermission(agent.frontmatter),
-		memoryLayer: kind !== "skill" && [...declared.map((s) => s.name), ...fromPrompt].includes(memoryLayer)
-	};
-}
-/** The neutral definition of an agent: the given definition after a name check, or the marketplace agent of that name. */
-function agentDefinition(agent) {
-	if (typeof agent !== "string") {
-		if (!AGENT_NAME.test(agent.name)) throw new Error(`invalid agent name ${agent.name}`);
-		return agent;
-	}
-	return readMarketplaceAgent(agent);
-}
-// src/questions.ts
-var SCHEMA = `
-create table if not exists questions (
-  run_id text not null,
-  question_id text not null,
-  node text,
-  asked_by text,
-  text text not null,
-  allowed text,
-  asked_at text not null,
-  answer text,
-  answered_at text,
-  primary key (run_id, question_id)
-)`;
-function storedAskedBy(askedBy) {
-	if (askedBy.length === 0) return null;
-	return askedBy.length === 1 ? askedBy[0] : JSON.stringify(askedBy);
-}
-function readAskedBy(stored) {
-	if (stored === null) return [];
-	return stored.startsWith("[") ? JSON.parse(stored) : [stored];
-}
-function questionsFile(dataDir) {
-	return path.join(dataDir, "questions.sqlite");
-}
-function withStore(dataDir, use) {
-	const db = new DatabaseSync(questionsFile(dataDir));
-	try {
-		db.exec("pragma busy_timeout = 5000; pragma journal_mode = wal;");
-		db.exec(SCHEMA);
-		return use(db);
-	} finally {
-		db.close();
-	}
-}
-/** Stores a question when it is asked; asking it again after a restart keeps the first record. */
-function recordQuestion(dataDir, question) {
-	withStore(dataDir, (db) => {
-		db.prepare("insert or ignore into questions (run_id, question_id, node, asked_by, text, allowed, asked_at) values (?, ?, ?, ?, ?, ?, ?)").run(question.runId, question.questionId, question.node, storedAskedBy(question.askedBy), question.text, question.allowed ? JSON.stringify(question.allowed) : null, question.askedAt);
-	});
-}
-function recordAnswer(dataDir, runId, questionId, answer, answeredAt) {
-	withStore(dataDir, (db) => {
-		db.prepare("update questions set answer = ?, answered_at = ? where run_id = ? and question_id = ? and answer is null").run(answer, answeredAt, runId, questionId);
-	});
-}
-function readQuestions(dataDir, runId) {
-	const file = questionsFile(dataDir);
-	if (!fs.existsSync(file)) return [];
-	const db = new DatabaseSync(file, { readOnly: true });
-	try {
-		db.exec("pragma busy_timeout = 5000;");
-		return db.prepare("select * from questions where run_id = ? order by asked_at, rowid").all(runId).map((r) => ({
-			runId: r.run_id,
-			questionId: r.question_id,
-			node: r.node,
-			askedBy: readAskedBy(r.asked_by),
-			text: r.text,
-			allowed: r.allowed ? JSON.parse(r.allowed) : null,
-			askedAt: r.asked_at,
-			answer: r.answer,
-			answeredAt: r.answered_at
-		}));
-	} finally {
-		db.close();
-	}
-}
-// src/run-summary.ts
-var SUPERVISOR_PATH = "@supervisor";
-var NODE_END = /* @__PURE__ */ new Set([
-	"node_completed",
-	"node_skipped",
-	"node_failed"
-]);
-var RUN_END = /* @__PURE__ */ new Set([
-	"run_completed",
-	"run_failed",
-	"run_cancelled",
-	"budget_exceeded"
-]);
-function ms(at) {
-	return Date.parse(at);
-}
-function round$1(value, digits = 6) {
-	const factor = 10 ** digits;
-	return Math.round(value * factor) / factor;
-}
-function text(value) {
-	return typeof value === "string" ? value : value === void 0 || value === null ? "" : JSON.stringify(value);
-}
-function backendLabel(run) {
-	const backend = run.config?.backend;
-	if (!backend) return null;
-	return backend.kind === "cli" && backend.cli ? `cli:${backend.cli}` : backend.kind;
-}
-function kindOf(records) {
-	const kinds = new Set(records.map((r) => r.kind));
-	if (kinds.size === 0) return "none";
-	if (kinds.size > 1) return "mixed";
-	return records[0]?.kind ?? "none";
-}
-function single(values) {
-	const set = new Set(values.filter((v) => typeof v === "string"));
-	if (set.size === 0) return null;
-	return set.size === 1 ? [...set][0] ?? null : "mixed";
-}
-function nodeWallTimes(events) {
-	const open = /* @__PURE__ */ new Map();
-	const wall = /* @__PURE__ */ new Map();
-	for (const event of events) {
-		const node = typeof event.node === "string" ? event.node : void 0;
-		if (!node) continue;
-		if (event.type === "node_started") open.set(node, ms(event.at));
-		if (NODE_END.has(event.type) && open.has(node)) {
-			wall.set(node, (wall.get(node) ?? 0) + Math.max(0, ms(event.at) - (open.get(node) ?? 0)));
-			open.delete(node);
-		}
-	}
-	return wall;
-}
-function questionWaits(events) {
-	const asked = [];
-	const answered = /* @__PURE__ */ new Map();
-	for (const event of events) {
-		if (event.type === "needs_input" && typeof event.questionId === "string") asked.push({
-			questionId: event.questionId,
-			node: typeof event.node === "string" ? event.node : null,
-			at: ms(event.at)
-		});
-		if (event.type === "run_resumed" && typeof event.questionId === "string") answered.set(event.questionId, ms(event.at));
-	}
-	return asked.map((q) => {
-		const at = answered.get(q.questionId);
-		return {
-			questionId: q.questionId,
-			node: q.node,
-			waitMs: at === void 0 ? null : Math.max(0, at - q.at)
-		};
-	});
-}
-function clientWaits(events) {
-	const offered = /* @__PURE__ */ new Map();
-	const waits = [];
-	for (const event of events) {
-		const key = `${text(event.node)}|${text(event.agentId)}`;
-		if (event.type === "work_offered") offered.set(key, ms(event.at));
-		if (event.type === "agent_completed" && event.backend === "delegate" && offered.has(key)) {
-			waits.push({
-				node: text(event.node),
-				agentId: typeof event.agentId === "string" ? event.agentId : null,
-				waitMs: Math.max(0, ms(event.at) - (offered.get(key) ?? 0))
-			});
-			offered.delete(key);
-		}
-	}
-	return waits;
-}
-function summarizeRun(run) {
-	const ledger = run.ledger.filter((r) => r.nodePath !== SUPERVISOR_PATH);
-	const events = run.events.filter((e) => e.node !== "@supervisor" && !e.type.startsWith("supervisor_"));
-	const costUsd = ledger.reduce((s, r) => s + (r.costUsd ?? 0), 0);
-	const tokens = ledger.reduce((s, r) => s + (r.inputTokens ?? 0) + (r.outputTokens ?? 0) + (r.inputTokens == null ? r.totalTokens ?? 0 : 0), 0);
-	const cacheTokens = ledger.reduce((s, r) => s + (r.cacheReadTokens ?? 0) + (r.cacheWrite5mTokens ?? 0) + (r.cacheWrite1hTokens ?? 0), 0);
-	const wallByNode = nodeWallTimes(events);
-	const startedAt = events[0] ? ms(events[0].at) : 0;
-	const endEvent = [...events].reverse().find((e) => RUN_END.has(e.type)) ?? events.at(-1);
-	const wallMs = endEvent ? Math.max(0, ms(endEvent.at) - startedAt) : 0;
-	const nodeTime = [...wallByNode.values()].reduce((s, v) => s + v, 0);
-	const visitsByNode = /* @__PURE__ */ new Map();
-	for (const event of events) if (event.type === "node_started" && typeof event.node === "string") visitsByNode.set(event.node, (visitsByNode.get(event.node) ?? 0) + 1);
-	const failuresByNode = /* @__PURE__ */ new Map();
-	const failures = [];
-	for (const event of events) {
-		if (![
-			"agent_failed",
-			"node_failed",
-			"run_failed"
-		].includes(event.type)) continue;
-		const node = typeof event.node === "string" ? event.node : null;
-		failures.push({
-			node,
-			agentId: typeof event.agentId === "string" ? event.agentId : null,
-			error: text(event.error).slice(0, 500)
-		});
-		if (node) failuresByNode.set(node, (failuresByNode.get(node) ?? 0) + 1);
-	}
-	const nodes = [.../* @__PURE__ */ new Set([...ledger.map((r) => r.nodePath), ...visitsByNode.keys()])].map((node) => {
-		const records = ledger.filter((r) => r.nodePath === node);
-		const cost = records.reduce((s, r) => s + (r.costUsd ?? 0), 0);
-		const input = records.reduce((s, r) => s + (r.inputTokens ?? 0), 0);
-		const output = records.reduce((s, r) => s + (r.outputTokens ?? 0), 0);
-		const wall = wallByNode.get(node) ?? records.reduce((s, r) => s + (r.durationMs ?? 0), 0);
-		return {
-			node,
-			kind: kindOf(records),
-			tier: single(records.map((r) => r.tier)),
-			model: single(records.map((r) => r.model)),
-			visits: visitsByNode.get(node) ?? 0,
-			calls: records.length,
-			agents: [...new Set(records.map((r) => r.agentId).filter((a) => typeof a === "string"))],
-			costUsd: round$1(cost),
-			costShare: costUsd > 0 ? round$1(cost / costUsd, 3) : 0,
-			tokens: input + output,
-			inputTokens: input,
-			outputTokens: output,
-			wallMs: wall,
-			timeShare: nodeTime > 0 ? round$1(wall / nodeTime, 3) : 0,
-			failures: failuresByNode.get(node) ?? 0
-		};
-	}).sort((a, b) => b.costUsd - a.costUsd || b.wallMs - a.wallMs || a.node.localeCompare(b.node));
-	const questions = questionWaits(events);
-	const budgetUsd = run.config?.budget.maxCostUsd ?? run.proposal?.budget.maxCostUsd ?? null;
-	const slowest = [...nodes].sort((a, b) => b.wallMs - a.wallMs)[0];
-	const longest = [...questions].filter((q) => q.waitMs !== null).sort((a, b) => (b.waitMs ?? 0) - (a.waitMs ?? 0))[0];
-	return {
-		run: {
-			runId: run.runId,
-			workflow: run.workflow ?? "hello",
-			goal: run.goal,
-			status: run.status,
-			backend: backendLabel(run),
-			tierModels: { ...run.config?.tiers ?? {} },
-			budgetUsd
-		},
-		totals: {
-			costUsd: round$1(costUsd),
-			budgetRatio: budgetUsd ? round$1(costUsd / budgetUsd, 3) : null,
-			tokens,
-			cacheTokens,
-			llmSteps: ledger.filter((r) => r.kind === "llm").length,
-			scriptSteps: ledger.filter((r) => r.kind === "script").length,
-			unknownCostSteps: ledger.filter((r) => r.kind === "llm" && r.costSource === "unknown").length,
-			wallMs,
-			agentMs: ledger.reduce((s, r) => s + (r.durationMs ?? 0), 0)
-		},
-		nodes,
-		loops: nodes.filter((n) => n.visits > 1).map((n) => ({
-			node: n.node,
-			visits: n.visits
-		})),
-		failures,
-		questions,
-		clientWaits: clientWaits(events),
-		skipped: events.filter((e) => e.type === "node_skipped").map((e) => ({
-			node: text(e.node),
-			reason: text(e.reason)
-		})),
-		budget: events.filter((e) => e.type === "budget_threshold" || e.type === "budget_exceeded").map((e) => ({
-			level: e.type === "budget_exceeded" ? "exceeded" : text(e.level),
-			ratio: Number(e.ratio ?? 0)
-		})),
-		top: {
-			costNode: nodes[0] && nodes[0].costUsd > 0 ? nodes[0].node : null,
-			timeNode: slowest && slowest.wallMs > 0 ? slowest.node : null,
-			longestQuestion: longest?.questionId ?? null
-		}
-	};
-}
-/** Reads the last '<prefix> | <verdict> | <bottleneck> | <idea>' line of an agent's output; the format comes from the configured verdictLine. */
-function parseSupervisorLine(output, format) {
-	const line = output.trim().split(/\r?\n/).reverse().find((candidate) => startsVerdictLine(candidate, format.prefix));
-	if (!line) return null;
-	const [, verdict = "", bottleneck = "", ...idea] = line.replace(/`/g, "").split("|").map((part) => part.trim());
-	if (!format.verdicts.includes(verdict)) return null;
-	return {
-		verdict,
-		bottleneck,
-		idea: idea.join(" | ")
-	};
-}
-/** A line that starts with the prefix, optionally after a backtick, and then a '|'. */
-function startsVerdictLine(line, prefix) {
-	const head = line.trimStart().replace(/^`/, "");
-	return head.startsWith(prefix) && head.slice(prefix.length).trimStart().startsWith("|");
 }
 // src/engine.ts
 /** Prices per million tokens for the fake backend only: fixed test numbers that make fake runs cost something, not real model prices. */
@@ -17736,8 +17738,8 @@ function spawnCli(command, args, stdinText, { cwd = cliWorkDir(), env = {} } = {
 			timedOut = true;
 			killTree(child.pid, () => child.kill());
 		}, TIMEOUT_MS);
-		child.stdout.on("data", (d) => stdout += d);
-		child.stderr.on("data", (d) => stderr += d);
+		child.stdout.on("data", (chunk) => stdout += chunk);
+		child.stderr.on("data", (chunk) => stderr += chunk);
 		child.on("error", (error) => {
 			stderr += String(error);
 		});
@@ -17797,7 +17799,7 @@ function claudeAgentArgs(agent, tools, dirs, definition) {
 		"--disallowedTools",
 		disallowed.join(","),
 		...permission,
-		...dirs.flatMap((d) => ["--add-dir", d])
+		...dirs.flatMap((dir) => ["--add-dir", dir])
 	];
 }
 async function runClaude(model, prompt, { agent: named, definition, cwd, tools = ["read"], dirs = [], env = {} } = {}) {
@@ -17845,17 +17847,17 @@ async function runClaude(model, prompt, { agent: named, definition, cwd, tools =
 			timedOut: res.timedOut
 		};
 	}
-	const usageByModel = Object.entries(out.modelUsage ?? {}).map(([id, u]) => ({
+	const usageByModel = Object.entries(out.modelUsage ?? {}).map(([id, usage]) => ({
 		model: id,
 		tokens: {
-			input: u.inputTokens ?? 0,
-			output: u.outputTokens ?? 0,
-			cacheRead: u.cacheReadInputTokens ?? 0,
-			cacheWrite5m: u.cacheCreationEphemeral5mInputTokens ?? 0,
-			cacheWrite1h: u.cacheCreationEphemeral1hInputTokens ?? 0
+			input: usage.inputTokens ?? 0,
+			output: usage.outputTokens ?? 0,
+			cacheRead: usage.cacheReadInputTokens ?? 0,
+			cacheWrite5m: usage.cacheCreationEphemeral5mInputTokens ?? 0,
+			cacheWrite1h: usage.cacheCreationEphemeral1hInputTokens ?? 0
 		},
 		cacheWriteTtlKnown: true,
-		harnessCostUsd: u.costUSD ?? null
+		harnessCostUsd: usage.costUSD ?? null
 	}));
 	return {
 		ok: !out.is_error,
@@ -17901,7 +17903,7 @@ async function runOpencode(model, prompt, { agent: named, definition, cwd, confi
 		if (agentDir && !configDir) removeTempDir(agentDir);
 	});
 	const { events, malformedLines } = parseEvents(res.stdout);
-	const error = events.find((e) => e.type === "error");
+	const error = events.find((event) => event.type === "error");
 	const tokens = {
 		input: 0,
 		output: 0,
@@ -17913,19 +17915,19 @@ async function runOpencode(model, prompt, { agent: named, definition, cwd, confi
 	let steps = 0;
 	let harnessCostUsd = 0;
 	let text = "";
-	for (const e of events) {
-		const p = e.part ?? {};
-		if (p.type === "step-finish") {
+	for (const event of events) {
+		const part = event.part ?? {};
+		if (part.type === "step-finish") {
 			steps += 1;
-			const t = p.tokens ?? {};
-			tokens.input += t.input ?? 0;
-			tokens.output += t.output ?? 0;
-			tokens.reasoning += t.reasoning ?? 0;
-			tokens.cacheRead += t.cache?.read ?? 0;
-			tokens.cacheWrite5m += t.cache?.write ?? 0;
-			harnessCostUsd += p.cost ?? 0;
+			const stepTokens = part.tokens ?? {};
+			tokens.input += stepTokens.input ?? 0;
+			tokens.output += stepTokens.output ?? 0;
+			tokens.reasoning += stepTokens.reasoning ?? 0;
+			tokens.cacheRead += stepTokens.cache?.read ?? 0;
+			tokens.cacheWrite5m += stepTokens.cache?.write ?? 0;
+			harnessCostUsd += part.cost ?? 0;
 		}
-		if (p.type === "text") text = p.text ?? text;
+		if (part.type === "text") text = part.text ?? text;
 	}
 	const dropped = malformedLines > 0 ? { malformedLines } : {};
 	if (error || steps === 0) {
@@ -17938,7 +17940,7 @@ async function runOpencode(model, prompt, { agent: named, definition, cwd, confi
 			...dropped
 		};
 	}
-	const sessionId = events.find((e) => e.sessionID)?.sessionID ?? null;
+	const sessionId = events.find((event) => event.sessionID)?.sessionID ?? null;
 	return {
 		ok: true,
 		text,
@@ -17969,8 +17971,8 @@ function hostExec(command, args, options = {}) {
 		});
 		let stdout = "";
 		let stderr = "";
-		child.stdout.on("data", (d) => stdout += d);
-		child.stderr.on("data", (d) => stderr += d);
+		child.stdout.on("data", (chunk) => stdout += chunk);
+		child.stderr.on("data", (chunk) => stderr += chunk);
 		child.on("error", (error) => resolve({
 			code: -1,
 			stdout,
@@ -18149,15 +18151,15 @@ function isLinkedWorktree(dir) {
 */
 function discoverProjects(settings, roots, file = projectsFile()) {
 	const registry = readRegistry(file);
-	const searched = (roots ?? registry.roots).filter((r) => fs.existsSync(r));
-	const taken = registry.projects.map((p) => p.id);
+	const searched = (roots ?? registry.roots).filter((root) => fs.existsSync(root));
+	const taken = registry.projects.map((project) => project.id);
 	const found = [];
 	const visit = (dir, depth) => {
 		if (isLinkedWorktree(dir)) return;
-		const markers = settings.markers.filter((m) => fs.existsSync(path.join(dir, m)));
+		const markers = settings.markers.filter((marker) => fs.existsSync(path.join(dir, marker)));
 		if (markers.length) {
-			if (!registry.projects.some((p) => sameFolder(p.path, dir)) && !found.some((c) => sameFolder(c.path, dir))) {
-				const suggestedId = suggestId(dir, [...taken, ...found.map((c) => c.suggestedId)]);
+			if (!registry.projects.some((project) => sameFolder(project.path, dir)) && !found.some((candidate) => sameFolder(candidate.path, dir))) {
+				const suggestedId = suggestId(dir, [...taken, ...found.map((candidate) => candidate.suggestedId)]);
 				found.push({
 					path: dir,
 					suggestedId,
@@ -18179,7 +18181,7 @@ function discoverProjects(settings, roots, file = projectsFile()) {
 		}
 	};
 	for (const root of searched) visit(path.resolve(root), 0);
-	return found.sort((a, b) => a.path.localeCompare(b.path));
+	return found.sort((first, second) => first.path.localeCompare(second.path));
 }
 /** The run input for a registered project: its folder, its id and, when set, its marketplace. */
 function projectInput(id, file = projectsFile()) {

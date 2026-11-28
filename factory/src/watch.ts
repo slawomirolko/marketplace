@@ -30,7 +30,9 @@ interface WatchState {
   seen: Record<string, number>;
 }
 
-const RENDER = (template: string, view: Record<string, unknown>): string => Mustache.render(template, view, {}, { escape: (value: unknown) => String(value) });
+function render(template: string, view: Record<string, unknown>): string {
+  return Mustache.render(template, view, {}, { escape: (value: unknown) => String(value) });
+}
 
 export function loadWatches(): WatchSpec[] {
   return loadFactoryConfig().watches;
@@ -57,12 +59,14 @@ export function knownProjectsFile(dataDir: string): string {
 export function knownProjects(dataDir: string): string[] {
   const file = readJson<{ dirs?: unknown }>(knownProjectsFile(dataDir), {});
   const listed = [...listProjects().map((project) => project.path), ...(Array.isArray(file.dirs) ? file.dirs : [])];
-  const dirs = new Set<string>(listed.filter((d): d is string => typeof d === "string").map((d) => path.resolve(d)));
+  const dirs = new Set<string>(listed.filter((dir): dir is string => typeof dir === "string").map((dir) => path.resolve(dir)));
   const runsDir = path.join(dataDir, "runs");
   if (fs.existsSync(runsDir)) {
-    for (const file of fs.readdirSync(runsDir).filter((f) => f.endsWith(".json"))) {
-      const project = readJson<{ input?: { project?: unknown } }>(path.join(runsDir, file), {}).input?.project;
-      if (typeof project === "string" && project.length > 0) dirs.add(path.resolve(project));
+    for (const runFile of fs.readdirSync(runsDir).filter((name) => name.endsWith(".json"))) {
+      const project = readJson<{ input?: { project?: unknown } }>(path.join(runsDir, runFile), {}).input?.project;
+      if (typeof project === "string" && project.length > 0) {
+        dirs.add(path.resolve(project));
+      }
     }
   }
   return [...dirs].sort();
@@ -86,10 +90,14 @@ export async function checkWatch(watch: WatchSpec, context: WatchContext): Promi
   const seen: Record<string, number> = {};
   const started: string[] = [];
   for (const project of knownProjects(dataDir)) {
-    if (!fs.existsSync(path.join(project, watch.projectsWhen))) continue;
+    if (!fs.existsSync(path.join(project, watch.projectsWhen))) {
+      continue;
+    }
     const view = { project, projectName: path.basename(project), marketplace, node: process.execPath };
-    const [command, ...args] = watch.command.map((part) => RENDER(part, view));
-    if (!command) continue;
+    const [command, ...args] = watch.command.map((part) => render(part, view));
+    if (!command) {
+      continue;
+    }
     const result = await exec(command, args, { cwd: project });
     if (result.code !== 0) {
       log(`watch ${watch.id}: command failed in project ${view.projectName} (exit ${result.code})`);
@@ -103,14 +111,20 @@ export async function checkWatch(watch: WatchSpec, context: WatchContext): Promi
       continue;
     }
     for (const item of itemsOf(output, watch.items)) {
-      if (watch.skipWhen.some((field) => Boolean(item[field]))) continue;
+      if (watch.skipWhen.some((field) => Boolean(item[field]))) {
+        continue;
+      }
       const itemView = { ...view, item: { ...item, files: Array.isArray(item.files) ? item.files.join(", ") : item.files } };
-      const key = `${project}::${RENDER(watch.key, itemView)}`;
+      const key = `${project}::${render(watch.key, itemView)}`;
       seen[key] = (previous.seen[key] ?? 0) + 1;
-      if (seen[key] < watch.stableChecks) continue;
-      const input: RunInput = Object.fromEntries(Object.entries(watch.input).map(([name, template]) => [name, RENDER(template, itemView)]));
-      const { run, reused } = factory.start(RENDER(watch.goal, itemView), `watch:${watch.id}:${key}`, { workflow: watch.workflow, input });
-      if (reused) continue;
+      if (seen[key] < watch.stableChecks) {
+        continue;
+      }
+      const input: RunInput = Object.fromEntries(Object.entries(watch.input).map(([name, template]) => [name, render(template, itemView)]));
+      const { run, reused } = factory.start(render(watch.goal, itemView), `watch:${watch.id}:${key}`, { workflow: watch.workflow, input });
+      if (reused) {
+        continue;
+      }
       /** The config never names a model; FACTORY_WATCH_MODEL picks one model for every tier of watch runs. */
       const model = process.env.FACTORY_WATCH_MODEL;
       try {
@@ -135,7 +149,9 @@ export function startWatches(watches: WatchSpec[], context: WatchContext): () =>
   for (const watch of watches) {
     let running = false;
     const tick = async () => {
-      if (running) return;
+      if (running) {
+        return;
+      }
       running = true;
       try {
         await checkWatch(watch, context);

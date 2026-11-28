@@ -108,7 +108,9 @@ function invalidRequest(model: string, dirs: string[]): string | null {
 
 /** On Windows an npm .cmd shim runs under cmd.exe, so killing cmd.exe leaves the CLI running; taskkill /T ends the whole tree. */
 function killTree(pid: number | undefined, fallback: () => void): void {
-  if (process.platform !== "win32" || pid === undefined) return fallback();
+  if (process.platform !== "win32" || pid === undefined) {
+    return fallback();
+  }
   spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" }).on("error", fallback);
 }
 
@@ -125,8 +127,8 @@ function spawnCli(command: string, args: string[], stdinText?: string, { cwd = c
       timedOut = true;
       killTree(child.pid, () => child.kill());
     }, TIMEOUT_MS);
-    child.stdout.on("data", (d) => (stdout += d));
-    child.stderr.on("data", (d) => (stderr += d));
+    child.stdout.on("data", (chunk) => (stdout += chunk));
+    child.stderr.on("data", (chunk) => (stderr += chunk));
     child.on("error", (error) => {
       stderr += String(error);
     });
@@ -159,7 +161,9 @@ function parseEvents(stdout: string): { events: OpencodeEvent[]; malformedLines:
 type AgentRunOptions = Omit<CliRequest, "model" | "prompt">;
 
 function removeTempDir(dir: string): void {
-  if (path.dirname(path.resolve(dir)) === path.resolve(os.tmpdir())) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+  if (path.dirname(path.resolve(dir)) === path.resolve(os.tmpdir())) {
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+  }
 }
 
 /** Why a request cannot start a CLI, or null: an agent name outside the agent alphabet, or an invalid model or extra directory. */
@@ -173,7 +177,7 @@ function requestError(agent: string | undefined, model: string, dirs: string[]):
 function claudeAgentArgs(agent: string, tools: AgentTool[], dirs: string[], definition: CliRequest["definition"]): string[] {
   const { allowed, disallowed } = claudeTools(tools);
   const permission = tools.includes("edit") ? ["--permission-mode", "acceptEdits"] : [];
-  return ["--agents", claudeAgentsFile(definition ?? agent, tools), "--agent", agent, "--max-turns", AGENT_MAX_TURNS, "--allowedTools", allowed.join(","), "--disallowedTools", disallowed.join(","), ...permission, ...dirs.flatMap((d) => ["--add-dir", d])];
+  return ["--agents", claudeAgentsFile(definition ?? agent, tools), "--agent", agent, "--max-turns", AGENT_MAX_TURNS, "--allowedTools", allowed.join(","), "--disallowedTools", disallowed.join(","), ...permission, ...dirs.flatMap((dir) => ["--add-dir", dir])];
 }
 
 async function runClaude(model: string, prompt: string, { agent: named, definition, cwd, tools = ["read"], dirs = [], env = {} }: AgentRunOptions = {}): Promise<CliResult> {
@@ -187,7 +191,9 @@ async function runClaude(model: string, prompt: string, { agent: named, definiti
     : ["-p", "--model", model, "--output-format", "json", ...CLAUDE_ISOLATION, "--max-turns", PROMPT_MAX_TURNS, "--disallowedTools", CLAUDE_DISALLOWED];
   const agentFile = args[args.indexOf("--agents") + 1];
   const res = await spawnCli("claude", args, prompt, { cwd: cwd ?? cliWorkDir(), env }).finally(() => {
-    if (agent && agentFile) removeTempDir(path.dirname(agentFile));
+    if (agent && agentFile) {
+      removeTempDir(path.dirname(agentFile));
+    }
   });
   let out: ClaudeOutput;
   try {
@@ -195,17 +201,17 @@ async function runClaude(model: string, prompt: string, { agent: named, definiti
   } catch {
     return { ok: false, error: `claude exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${(res.stderr || res.stdout).slice(-ERROR_TEXT_CHARS)}`, durationMs: res.durationMs, timedOut: res.timedOut };
   }
-  const usageByModel = Object.entries(out.modelUsage ?? {}).map(([id, u]) => ({
+  const usageByModel = Object.entries(out.modelUsage ?? {}).map(([id, usage]) => ({
     model: id,
     tokens: {
-      input: u.inputTokens ?? 0,
-      output: u.outputTokens ?? 0,
-      cacheRead: u.cacheReadInputTokens ?? 0,
-      cacheWrite5m: u.cacheCreationEphemeral5mInputTokens ?? 0,
-      cacheWrite1h: u.cacheCreationEphemeral1hInputTokens ?? 0,
+      input: usage.inputTokens ?? 0,
+      output: usage.outputTokens ?? 0,
+      cacheRead: usage.cacheReadInputTokens ?? 0,
+      cacheWrite5m: usage.cacheCreationEphemeral5mInputTokens ?? 0,
+      cacheWrite1h: usage.cacheCreationEphemeral1hInputTokens ?? 0,
     },
     cacheWriteTtlKnown: true,
-    harnessCostUsd: u.costUSD ?? null,
+    harnessCostUsd: usage.costUSD ?? null,
   }));
   return { ok: !out.is_error, error: out.is_error ? String(out.result).slice(0, ERROR_TEXT_CHARS) : undefined, text: out.result, turns: out.num_turns, harnessCostUsd: out.total_cost_usd ?? null, usageByModel, durationMs: res.durationMs };
 }
@@ -226,49 +232,55 @@ async function runOpencode(model: string, prompt: string, { agent: named, defini
   const args = ["run", "--standalone", "--archived", "--format", "json", "-m", id, ...(agent ? ["--agent", agent] : [])];
   const agentDir = configDir ?? (agent ? opencodeConfigDir(definition ?? agent, tools, dirs) : undefined);
   const res = await spawnCli("opencode", args, prompt, { cwd: cwd ?? cliWorkDir(), env: { ...env, ...(agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {}) } }).finally(() => {
-    if (agentDir && !configDir) removeTempDir(agentDir);
+    if (agentDir && !configDir) {
+      removeTempDir(agentDir);
+    }
   });
   const { events, malformedLines } = parseEvents(res.stdout);
-  const error = events.find((e) => e.type === "error");
+  const error = events.find((event) => event.type === "error");
   const tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite5m: 0, cacheWrite1h: 0, reasoning: 0 };
   let steps = 0;
   let harnessCostUsd = 0;
   let text = "";
-  for (const e of events) {
-    const p = e.part ?? {};
-    if (p.type === "step-finish") {
+  for (const event of events) {
+    const part = event.part ?? {};
+    if (part.type === "step-finish") {
       steps += 1;
-      const t = p.tokens ?? {};
-      tokens.input += t.input ?? 0;
-      tokens.output += t.output ?? 0;
-      tokens.reasoning += t.reasoning ?? 0;
-      tokens.cacheRead += t.cache?.read ?? 0;
-      tokens.cacheWrite5m += t.cache?.write ?? 0;
-      harnessCostUsd += p.cost ?? 0;
+      const stepTokens = part.tokens ?? {};
+      tokens.input += stepTokens.input ?? 0;
+      tokens.output += stepTokens.output ?? 0;
+      tokens.reasoning += stepTokens.reasoning ?? 0;
+      tokens.cacheRead += stepTokens.cache?.read ?? 0;
+      tokens.cacheWrite5m += stepTokens.cache?.write ?? 0;
+      harnessCostUsd += part.cost ?? 0;
     }
-    if (p.type === "text") text = p.text ?? text;
+    if (part.type === "text") {
+      text = part.text ?? text;
+    }
   }
   const dropped = malformedLines > 0 ? { malformedLines } : {};
   if (error || steps === 0) {
     const reason = error ? JSON.stringify(error.error ?? error).slice(0, ERROR_TEXT_CHARS) : `opencode exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${res.stderr.slice(-ERROR_TEXT_CHARS)}`;
     return { ok: false, error: malformedLines > 0 ? `${reason} (${malformedLines} malformed output lines dropped)` : reason, durationMs: res.durationMs, timedOut: res.timedOut, ...dropped };
   }
-  const sessionId = events.find((e) => e.sessionID)?.sessionID ?? null;
+  const sessionId = events.find((event) => event.sessionID)?.sessionID ?? null;
   return { ok: true, text, turns: steps, sessionId, harnessCostUsd, usageByModel: [{ model: id, tokens, cacheWriteTtlKnown: false, harnessCostUsd }], durationMs: res.durationMs, ...dropped };
 }
 
 export async function opencodeSessionUsage(sessionId: string): Promise<SessionUsage> {
-  if (!/^ses_[A-Za-z0-9]+$/.test(sessionId)) return { ok: false, error: "invalid session id" };
+  if (!/^ses_[A-Za-z0-9]+$/.test(sessionId)) {
+    return { ok: false, error: "invalid session id" };
+  }
   const res = await spawnCli("opencode", ["session", "export", sessionId]);
   try {
-    const s = JSON.parse(res.stdout) as OpencodeSession;
-    const t = s.info?.tokens ?? {};
+    const session = JSON.parse(res.stdout) as OpencodeSession;
+    const sessionTokens = session.info?.tokens ?? {};
     return {
       ok: true,
-      parentId: s.info?.parentID ?? null,
-      tokens: { input: t.input ?? 0, output: t.output ?? 0, reasoning: t.reasoning ?? 0, cacheRead: t.cache?.read ?? 0, cacheWrite5m: t.cache?.write ?? 0, cacheWrite1h: 0 },
+      parentId: session.info?.parentID ?? null,
+      tokens: { input: sessionTokens.input ?? 0, output: sessionTokens.output ?? 0, reasoning: sessionTokens.reasoning ?? 0, cacheRead: sessionTokens.cache?.read ?? 0, cacheWrite5m: sessionTokens.cache?.write ?? 0, cacheWrite1h: 0 },
       cacheWriteTtlKnown: false,
-      harnessCostUsd: s.info?.cost ?? null,
+      harnessCostUsd: session.info?.cost ?? null,
     };
   } catch {
     return { ok: false, error: `export failed: ${res.stderr.slice(-ERROR_TEXT_CHARS)}` };
@@ -276,8 +288,12 @@ export async function opencodeSessionUsage(sessionId: string): Promise<SessionUs
 }
 
 export function cliExecutor(cli: CliName): CliExecutor {
-  if (cli === "claude") return ({ model, prompt, ...options }) => runClaude(model, prompt, options);
-  if (cli === "opencode") return ({ model, prompt, ...options }) => runOpencode(model, prompt, options);
+  if (cli === "claude") {
+    return ({ model, prompt, ...options }) => runClaude(model, prompt, options);
+  }
+  if (cli === "opencode") {
+    return ({ model, prompt, ...options }) => runOpencode(model, prompt, options);
+  }
   throw new Error(`unsupported cli ${cli}`);
 }
 
@@ -286,8 +302,8 @@ export function hostExec(command: string, args: string[], options: { cwd?: strin
     const child = spawn(command, args, { env: cleanEnv(), shell: false, ...(options.cwd ? { cwd: options.cwd } : {}) });
     let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (d) => (stdout += d));
-    child.stderr.on("data", (d) => (stderr += d));
+    child.stdout.on("data", (chunk) => (stdout += chunk));
+    child.stderr.on("data", (chunk) => (stderr += chunk));
     child.on("error", (error) => resolve({ code: -1, stdout, stderr: String(error) }));
     child.on("close", (code) => resolve({ code, stdout, stderr }));
   });
