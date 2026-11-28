@@ -29,6 +29,7 @@ import type {
   ModelUsage,
   PendingQuestion,
   PendingWork,
+  QuestionItem,
   Report,
   Run,
   RunConfig,
@@ -306,8 +307,8 @@ export class Factory {
     if (!pending || pending.id !== questionId) {
       throw new Error(`no pending question ${questionId}`);
     }
-    if (pending.allowed && !pending.allowed.includes(answer)) {
-      throw new Error(`invalid answer '${answer}', allowed: ${pending.allowed.join(", ")}`);
+    if (pending.allowed && !isAllowedAnswer(pending, answer)) {
+      throw new Error(`invalid answer '${answer}', allowed: ${pending.allowed.join(", ")}${pending.multiple ? ", none, or several joined by ','" : ""}`);
     }
     run.answers[questionId] = answer;
     run.pendingQuestion = null;
@@ -685,8 +686,10 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
     }
     const view = this.view(run, node);
     const context = withEach({ goal: run.goal, input: view.input, state: view.state, answers: view.answers });
-    const { allowedFrom, ...fixed } = node.question;
-    const question = { ...fixed, id: view.prefix + Mustache.render(node.question.id, context), text: Mustache.render(node.question.text, context), ...(allowedFrom ? { allowed: allowedOf(view.state, allowedFrom) } : {}) };
+    const { allowedFrom, itemsFrom, ...fixed } = node.question;
+    const items = itemsFrom ? itemsOf(view.state, itemsFrom) : undefined;
+    const allowed = allowedFrom ? allowedOf(view.state, allowedFrom) : items?.map((item) => item.id);
+    const question = { ...fixed, id: view.prefix + Mustache.render(node.question.id, context), text: Mustache.render(node.question.text, context), ...(allowed ? { allowed } : {}), ...(items ? { items } : {}) };
     const answer = run.answers[question.id];
     if (answer === undefined) {
       this.askUser(run, { ...question, node: node.path }, node.askedBy ?? []);
@@ -864,6 +867,30 @@ function tierOf(config: RunConfig, agent: CurrentAgent): Tier {
     throw new Error(`no tier for role '${agent.role}'`);
   }
   return tier;
+}
+
+function isAllowedAnswer(pending: PendingQuestion, answer: string): boolean {
+  const allowed = pending.allowed ?? [];
+  if (!pending.multiple) {
+    return allowed.includes(answer);
+  }
+  if (answer === "none") {
+    return true;
+  }
+  const ids = answer.split(",");
+  if (new Set(ids).size !== ids.length) {
+    throw new Error(`duplicate id in answer '${answer}'`);
+  }
+  return ids.every((id) => allowed.includes(id));
+}
+
+function itemsOf(state: WorkflowState, dotted: string): QuestionItem[] {
+  const items = readPath(state, dotted.replace(/^state\./, ""));
+  const valid = Array.isArray(items) && items.length > 0 && items.every((item) => item && typeof item.id === "string" && typeof item.label === "string" && typeof item.detail === "string" && typeof item.checked === "boolean");
+  if (!valid) {
+    throw new Error(`itemsFrom ${dotted} is not a list of items with id, label, detail and checked`);
+  }
+  return (items as QuestionItem[]).map(({ id, label, detail, checked }) => ({ id, label, detail, checked }));
 }
 
 function allowedOf(state: WorkflowState, dotted: string): string[] {

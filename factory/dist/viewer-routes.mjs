@@ -16973,7 +16973,7 @@ var Factory = class {
 		}
 		const pending = run.pendingQuestion;
 		if (!pending || pending.id !== questionId) throw new Error(`no pending question ${questionId}`);
-		if (pending.allowed && !pending.allowed.includes(answer)) throw new Error(`invalid answer '${answer}', allowed: ${pending.allowed.join(", ")}`);
+		if (pending.allowed && !isAllowedAnswer(pending, answer)) throw new Error(`invalid answer '${answer}', allowed: ${pending.allowed.join(", ")}${pending.multiple ? ", none, or several joined by ','" : ""}`);
 		run.answers[questionId] = answer;
 		run.pendingQuestion = null;
 		run.status = "running";
@@ -17392,12 +17392,15 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 			state: view.state,
 			answers: view.answers
 		});
-		const { allowedFrom, ...fixed } = node.question;
+		const { allowedFrom, itemsFrom, ...fixed } = node.question;
+		const items = itemsFrom ? itemsOf(view.state, itemsFrom) : void 0;
+		const allowed = allowedFrom ? allowedOf(view.state, allowedFrom) : items?.map((item) => item.id);
 		const question = {
 			...fixed,
 			id: view.prefix + mustache.render(node.question.id, context),
 			text: mustache.render(node.question.text, context),
-			...allowedFrom ? { allowed: allowedOf(view.state, allowedFrom) } : {}
+			...allowed ? { allowed } : {},
+			...items ? { items } : {}
 		};
 		const answer = run.answers[question.id];
 		if (answer === void 0) {
@@ -17649,6 +17652,24 @@ function tierOf(config, agent) {
 	const tier = agent.role === void 0 ? void 0 : config.roles[agent.role];
 	if (!tier) throw new Error(`no tier for role '${agent.role}'`);
 	return tier;
+}
+function isAllowedAnswer(pending, answer) {
+	const allowed = pending.allowed ?? [];
+	if (!pending.multiple) return allowed.includes(answer);
+	if (answer === "none") return true;
+	const ids = answer.split(",");
+	if (new Set(ids).size !== ids.length) throw new Error(`duplicate id in answer '${answer}'`);
+	return ids.every((id) => allowed.includes(id));
+}
+function itemsOf(state, dotted) {
+	const items = readPath(state, dotted.replace(/^state\./, ""));
+	if (!(Array.isArray(items) && items.length > 0 && items.every((item) => item && typeof item.id === "string" && typeof item.label === "string" && typeof item.detail === "string" && typeof item.checked === "boolean"))) throw new Error(`itemsFrom ${dotted} is not a list of items with id, label, detail and checked`);
+	return items.map(({ id, label, detail, checked }) => ({
+		id,
+		label,
+		detail,
+		checked
+	}));
 }
 function allowedOf(state, dotted) {
 	const allowed = readPath(state, dotted.replace(/^state\./, ""));
@@ -19082,7 +19103,9 @@ function createDataApi({ factoryDir, dataDir, configFile, demo, factory }) {
 				workflow: run.workflow ?? "",
 				questionId: run.pendingQuestion?.id ?? "",
 				text: run.pendingQuestion?.text ?? "",
-				allowed: run.pendingQuestion?.allowed ?? []
+				allowed: run.pendingQuestion?.allowed ?? [],
+				multiple: run.pendingQuestion?.multiple === true,
+				items: run.pendingQuestion?.items ?? []
 			}));
 		},
 		answer(runId, questionId, answer) {

@@ -91,7 +91,7 @@ export function stateReferenceErrors(spec: WorkflowSpec): string[] {
       }
       for (const name of names.map((n) => n.replace(/^each\./, "")).filter((n) => n.startsWith("state."))) report(node.id, where, name, checkPath(spec, node.scope, name.slice("state.".length)));
     }
-    for (const [where, dotted] of [["agentsFrom", node.agentsFrom], ["allowedFrom", node.question?.allowedFrom]] as const) {
+    for (const [where, dotted] of [["agentsFrom", node.agentsFrom], ["allowedFrom", node.question?.allowedFrom], ["itemsFrom", node.question?.itemsFrom]] as const) {
       if (dotted) report(node.id, where, dotted, checkPath(spec, node.scope, dotted.replace(/^state\./, "")));
     }
   }

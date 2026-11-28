@@ -22,7 +22,7 @@ import type { MarketplaceScan, UpdateResult } from "./sources-lock.ts";
 import { execFileSync } from "node:child_process";
 import { hostExec } from "./cli-backend.ts";
 import type { AgentInfo } from "./marketplace-agents.ts";
-import type { Coverage, FactoryConfigFile, Report, Run, WorkflowSpec } from "./types.ts";
+import type { Coverage, FactoryConfigFile, QuestionItem, Report, Run, WorkflowSpec } from "./types.ts";
 
 const RUN_ID = /^r-[a-f0-9]{8}$/;
 
@@ -49,6 +49,8 @@ export interface PendingDecision {
   questionId: string;
   text: string;
   allowed: string[];
+  multiple: boolean;
+  items: QuestionItem[];
 }
 
 export interface RunListItem {
@@ -327,6 +329,8 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo, factory }
         questionId: run.pendingQuestion?.id ?? "",
         text: run.pendingQuestion?.text ?? "",
         allowed: run.pendingQuestion?.allowed ?? [],
+        multiple: run.pendingQuestion?.multiple === true,
+        items: run.pendingQuestion?.items ?? [],
       }));
     },
 

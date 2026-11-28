@@ -42,6 +42,26 @@ edges:
   - { from: scope, to: confirm }
   - { from: confirm, to: END }
 `);
+fs.writeFileSync(path.join(dir, "pick.yaml"), `
+name: pick
+version: 1.0.0
+entry: items
+nodes:
+  - id: items
+    kind: script
+    op: builtin.values
+    with:
+      values:
+        - { id: skill-a, label: Skill A, detail: "1.0.0 to 1.1.0", checked: true }
+        - { id: skill-b, label: Skill B, detail: "conflicts", checked: false }
+        - { id: skill-c, label: Skill C, detail: "2.0.0 to 2.1.0", checked: true }
+  - id: choose
+    kind: interrupt
+    question: { id: q-pick, text: "Which merges for {{goal}}?", multiple: true, itemsFrom: state.items.values }
+edges:
+  - { from: items, to: choose }
+  - { from: choose, to: END }
+`);
 process.env.FACTORY_WORKFLOWS_DIR = dir;
 
 test("the question store keeps the first ask of a question and its answer, and reads nothing before the first question", () => {
@@ -116,4 +136,54 @@ test("a run stores every question with its rendered text, the step that asks it,
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+async function askPick(): Promise<{ factory: InstanceType<typeof import("../src/engine.ts").Factory>; runId: string }> {
+  const { Factory } = await import("../src/engine.ts");
+  const factory = new Factory(tempDir("factory-multiple-"), { backend: "fake" });
+  const { run } = factory.start("the merge", undefined, { workflow: "pick" });
+  factory.confirm(run.runId, { backend: { kind: "fake" } });
+  await runReaches(factory, run.runId, "waiting_for_user");
+  return { factory, runId: run.runId };
+}
+
+test("a multiple question accepts a subset of allowed ids", async () => {
+  const { factory, runId } = await askPick();
+  const { run } = factory.answer(runId, "q-pick", "skill-c,skill-a");
+  assert.equal(run.answers["q-pick"], "skill-c,skill-a");
+  await runReaches(factory, runId, "done");
+});
+
+test("a multiple question accepts none", async () => {
+  const { factory, runId } = await askPick();
+  factory.answer(runId, "q-pick", "none");
+  await runReaches(factory, runId, "done");
+});
+
+test("a multiple question rejects an unknown id, a duplicate and an empty answer", async () => {
+  const { factory, runId } = await askPick();
+  assert.throws(() => factory.answer(runId, "q-pick", "skill-a,skill-z"), /invalid answer/);
+  assert.throws(() => factory.answer(runId, "q-pick", "skill-a,skill-a"), /duplicate/);
+  assert.throws(() => factory.answer(runId, "q-pick", ""), /invalid answer/);
+  assert.throws(() => factory.answer(runId, "q-pick", "skill-a,"), /invalid answer/);
+  assert.throws(() => factory.answer(runId, "q-pick", "none,skill-a"), /invalid answer/);
+  assert.equal(factory.get(runId).status, "waiting_for_user");
+});
+
+test("a multiple question's pending question carries its items and the viewer sees them", async () => {
+  const { createDataApi } = await import("../src/viewer-data.ts");
+  const { factory, runId } = await askPick();
+  const pending = factory.get(runId).pendingQuestion;
+  assert.equal(pending?.multiple, true);
+  assert.deepEqual(pending?.allowed, ["skill-a", "skill-b", "skill-c"]);
+  assert.deepEqual(pending?.items, [
+    { id: "skill-a", label: "Skill A", detail: "1.0.0 to 1.1.0", checked: true },
+    { id: "skill-b", label: "Skill B", detail: "conflicts", checked: false },
+    { id: "skill-c", label: "Skill C", detail: "2.0.0 to 2.1.0", checked: true },
+  ]);
+  assert.equal(readQuestions(factory.dataDir, runId)[0]?.questionId, "q-pick", "the questions table keeps working");
+  const api = createDataApi({ factoryDir: path.join(import.meta.dirname, ".."), dataDir: factory.dataDir, configFile: path.join(import.meta.dirname, "..", "spec", "examples", "valid", "factory-config.json"), demo: false, factory });
+  const [decision] = api.pending();
+  assert.equal(decision?.multiple, true);
+  assert.deepEqual(decision?.items, pending?.items);
 });

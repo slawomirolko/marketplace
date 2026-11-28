@@ -35,12 +35,22 @@ export interface Question {
   text: string;
   allowed?: string[];
   allowedFrom?: string;
+  multiple?: boolean;
+  itemsFrom?: string;
+}
+
+export interface QuestionItem {
+  id: string;
+  label: string;
+  detail: string;
+  checked: boolean;
 }
 
 export type AgentTool = "read" | "edit" | "bash";
 
 export interface PendingQuestion extends Question {
   node?: string;
+  items?: QuestionItem[];
 }
 
 export interface PendingWork {

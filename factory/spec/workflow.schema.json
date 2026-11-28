@@ -129,6 +129,15 @@
           "type": "string",
           "pattern": "^state\\.[a-zA-Z0-9_.-]+$",
           "description": "State path of a list of allowed answers, read when the question is asked."
+        },
+        "multiple": {
+          "type": "boolean",
+          "description": "The answer is none or a comma-separated list of ids taken from allowed."
+        },
+        "itemsFrom": {
+          "type": "string",
+          "pattern": "^state\\.[a-zA-Z0-9_.-]+$",
+          "description": "State path of a list of items with id, label, detail and checked, read when the question is asked. Their ids are the allowed answers unless allowed or allowedFrom is set."
         }
       }
     },
