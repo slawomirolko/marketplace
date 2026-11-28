@@ -43,8 +43,9 @@ owned by the marketplace checkout and kept in its root `scripts/` folder. They a
 ## Merge updates
 
 Use this flow to bring marketplace updates into one project. It covers every installed copy that
-is `outdated` and every `modified` copy whose marketplace source moved on after its base. The
-steps run in the factory workflow `olko-marketplace-merge` (input `project` or `projectId`, and
+is `outdated` and every `modified` copy whose marketplace source moved on after its base. When the
+project is a marketplace source checkout, it also synchronizes the checkout with its remote (see
+[Marketplace source checkout](#marketplace-source-checkout)). The steps run in the factory workflow `olko-marketplace-merge` (input `project` or `projectId`, and
 `marketplace`), and a person makes every decision.
 
 ### Start
@@ -54,9 +55,13 @@ button: **Check status** before the project has a status, **Re-check status** af
 is enabled when the latest status has either:
 
 - an installed skill or agent in state `outdated`, or
-- an installed skill or agent in state `modified` where the marketplace moved on after its base.
+- an installed skill or agent in state `modified` where the marketplace moved on after its base, or
+- in a marketplace source checkout, a skill or agent the remote has newer content for
+  (`outdated`, `missing` or `removed`: the checkout is behind) or a `modified` or `local-only`
+  skill or agent.
 
-The button is never enabled for a marketplace source checkout.
+When the button is disabled, its title says why, for example that the source checkout is in sync
+with its remote.
 
 ### Steps
 
@@ -96,6 +101,35 @@ The button is never enabled for a marketplace source checkout.
 
 An empty merge ends as done with "Nothing to merge".
 
+### Marketplace source checkout
+
+A marketplace source checkout keeps skills under `skills/<category>/` and lists them in
+`registry.json`. Its rows come from `scripts/olko-marketplace-merge-source.mjs` and need no
+resolve step, so a run with only these rows goes from prepare to the question.
+
+- **Pull row** (`pull`): "Pull <n> commits from origin/<branch> (fast-forward)" when the current
+  branch is behind the remote branch it tracks. The detail lists the commits. Applying it runs
+  `git merge --ff-only` to exactly the commit the row shows, never a forced or merge-commit pull.
+  The row starts unchecked, and apply refuses it, when the checkout has uncommitted changes to
+  tracked files or commits that are not on the remote; the detail says which.
+- **Publish rows** (`publish:<kind>:<name>`): one per `modified` or `local-only` skill or agent
+  that differs from the remote default branch. The detail lists the changed files with a short
+  diff. Applying one puts exactly that artifact's files (adapter files excluded) on the remote
+  default branch in a temporary git worktree, stages them and runs the sanitize gate on the
+  staged commit and on the PR title, body and commit message. Only when the gate passes does it
+  commit, push the new branch `feature/upstream-<kind>-<name>-<hash8>` and open a draft PR with
+  gh. It never pushes the default branch, never merges, never marks a PR ready and adds no
+  reviewers. Your branch and working tree stay as they are. A row the gate blocks is reported by
+  hit label only and nothing of it is pushed.
+- The gate runs with `--config-only`: the checkout's own folder, repository and remote names are
+  the marketplace's own, so only the configured leak terms (`leakTerms`, `forbiddenTerms`,
+  `FACTORY_LEAK_TERMS`) and the secret patterns apply. Without a configured term the gate fails
+  closed and the row is blocked.
+- A publish row starts unchecked, and apply refuses it, when the remote changed the same artifact
+  after the checkout's commit (pull and merge first, so newer remote text is never replaced).
+- Apply refuses every selected row before any action when the checkout moved, or an artifact's
+  files changed, after prepare. Then it pulls first and opens the draft PRs one by one.
+
 ### After apply
 
 Apply is also the approval for the upstream draft PRs. The `marketplace-upstream` watch picks
@@ -112,7 +146,9 @@ copy still holds it. The run input alone never skips the question.
 
 - Each row: its base, its resolution reasons and its classification.
 - Unchecked rows: they stay out of the project until someone checks them and applies again.
-- The project's `git status` after apply: only the selected artifacts and the lock change.
+- The project's `git status` after apply: only the selected artifacts and the lock change. In a
+  source checkout a pull moves the branch to the commits shown, and a publish row changes nothing
+  in the checkout.
 
 ## Installed-artifact model
 

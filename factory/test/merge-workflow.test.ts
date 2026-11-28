@@ -157,7 +157,28 @@ test("merge run: selected ids reach apply", async () => {
   assert.equal(flag(callOf(calls, "apply"), "--project"), PROJECT);
 });
 
-const UPSTREAM_INPUT = { project: PROJECT, marketplace: MARKETPLACE, artifact: "skill:sample-skill", contentHash: "abc", base: "1.0.0", files: "workflow.md" };
+test("merge run: a marketplace source checkout plan skips the resolve step and its rows reach apply", async () => {
+  const ids = ["pull", "publish:skill:sample-skill"];
+  const sourcePlan = { project: PROJECT, marketplace: MARKETPLACE, out: tempDir("merge-work-"), ids, conflicts: 0, modified: 0, source: 2, items: [{ id: "pull", action: "pull" }, { id: "publish:skill:sample-skill", action: "publish", state: "modified" }] };
+  let questionText = "";
+  const { done, calls, order, asked } = await startRun("olko-marketplace-merge", MERGE_INPUT, { prepare: sourcePlan, summary: rows(ids), apply: { applied: ids, skipped: [], upstream: [] } }, {
+    reply: () => undefined,
+    answer: (_questionId, question) => {
+      questionText = question.text;
+      return ids.join(",");
+    },
+  });
+  assert.equal(done.status, "done");
+  assert.deepEqual(order, [], "a source checkout has no three-way merge to resolve");
+  assert.deepEqual(asked, ["q-merge"]);
+  assert.deepEqual(calls.map((call) => call.args[1]), ["prepare", "summary", "apply"]);
+  assert.equal(flag(callOf(calls, "apply"), "--selected"), "pull,publish:skill:sample-skill");
+  assert.match(questionText, /marketplace source checkout/);
+  assert.match(questionText, /fast-forward/);
+  assert.match(questionText, /draft PR/);
+});
+
+const UPSTREAM_INPUT ={ project: PROJECT, marketplace: MARKETPLACE, artifact: "skill:sample-skill", contentHash: "abc", base: "1.0.0", files: "workflow.md" };
 
 test("upstream run skips the question when the lock confirms the approval of this content", async () => {
   const replies = { approved: { approved: true, reason: "approved" } };

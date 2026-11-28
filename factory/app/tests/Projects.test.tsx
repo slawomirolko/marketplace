@@ -181,7 +181,6 @@ describe("Projects", () => {
       unmount();
     }
     const notMergeable = [
-      withData({ artifacts: [artifact({ harness: "source", state: "outdated" })] }),
       withData({ artifacts: [artifact({ state: "modified" })] }),
       withData({ artifacts: [artifact({ state: "current" })] }),
     ];
@@ -194,6 +193,28 @@ describe("Projects", () => {
       expect(button).toHaveAttribute("title", expect.stringMatching(/./));
       unmount();
     }
+  });
+
+  test("Merge updates is enabled for a marketplace source checkout behind its remote or changed locally, and says why not when in sync", async () => {
+    const sourceRows = [
+      withData({ artifacts: [artifact({ harness: "source", state: "outdated" })] }),
+      withData({ artifacts: [artifact({ harness: "source", state: "missing" })] }),
+      withData({ artifacts: [artifact({ harness: "source", state: "modified" })] }),
+      withData({ artifacts: [artifact({ harness: "source", state: "local-only" })] }),
+    ];
+    for (const view of sourceRows) {
+      serve({ statuses: { "sample-app": view, "sample-web": null } });
+      const { unmount } = render(<Projects onShowRuns={() => {}} />);
+      await screen.findByRole("table");
+      expect(screen.getByTestId("merge-updates")).toBeEnabled();
+      unmount();
+    }
+    serve({ statuses: { "sample-app": withData({ artifacts: [artifact({ harness: "source", state: "current" })] }), "sample-web": null } });
+    render(<Projects onShowRuns={() => {}} />);
+    await screen.findByRole("table");
+    const button = screen.getByTestId("merge-updates");
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("title", expect.stringMatching(/source checkout is in sync with its remote/));
   });
 
   test("Merge updates starts the merge workflow and re-checks the status when the run finishes", async () => {

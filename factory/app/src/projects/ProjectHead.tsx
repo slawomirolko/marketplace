@@ -44,7 +44,7 @@ export function ProjectHead({ project, overview, checkingRun, checkingState, mer
           </button>
         )}
         {overview.mergeWorkflowInstalled && overview.canAnalyze && (
-          <button type="button" data-testid="merge-updates" disabled={busy || Boolean(checkingRun) || Boolean(mergingRun) || !project.exists || mergeBlocker !== null} onClick={() => onMerge(project.id)} title={mergeBlocker ?? `Merge the marketplace updates of the outdated and changed skills and agents into the project; you choose what is applied (${overview.mergeWorkflow} workflow).`}>
+          <button type="button" data-testid="merge-updates" disabled={busy || Boolean(checkingRun) || Boolean(mergingRun) || !project.exists || mergeBlocker !== null} onClick={() => onMerge(project.id)} title={mergeBlocker ?? `Merge the marketplace updates of the outdated and changed skills and agents into the project, or, in a marketplace source checkout, pull its remote and open draft PRs for its local changes; you choose what is applied (${overview.mergeWorkflow} workflow).`}>
             {mergingRun ? "Merging…" : "Merge updates"}
           </button>
         )}

@@ -235,7 +235,7 @@ test("identical copies give one item with two locations; different copies give o
   assert.notEqual(itemOf(apart, `skill:sample-skill@${SKILL_DIR}`).dir, itemOf(apart, "skill:sample-skill@.claude/skills/sample-skill").dir);
 });
 
-test("source harness, unknown-base, current and modified without upstream move are left out", () => {
+test("unknown-base, current, modified without upstream move and a detached source checkout give no rows", () => {
   const f = fixture();
   write(f.project, ".agents/skills/sample-other/SKILL.md", "---\nname: sample-other\n---\ntotally different\n");
   write(f.project, AGENT_FILE, AGENT_V2);
@@ -742,4 +742,258 @@ test("apply writes only changed files, keeps CRLF line endings and the executabl
   if (process.platform !== "win32") {
     assert.equal(fs.statSync(skillPath).mode & 0o777, 0o755);
   }
+});
+
+const SOURCE_SKILL = "skills/demo/sample-skill";
+const LEAK_TERM = "zebrafinch";
+
+/**
+ * A marketplace source checkout: a bare `remote`, a `checkout` clone of it on main, and an `other` clone that pushes new
+ * remote commits. The sanitize gate reads `terms` (one made-up leak term) and nothing from the real home.
+ */
+function sourceFixture() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-source-test-"));
+  const seed = path.join(root, "seed");
+  write(seed, "registry.json", `{"skills":[]}\n`);
+  write(seed, "README.md", "readme\n");
+  write(seed, `${SOURCE_SKILL}/SKILL.md`, skillFile("1.0.0", "step one"));
+  write(seed, `${SOURCE_SKILL}/workflow.md`, WORKFLOW_V1);
+  write(seed, "skills/demo/sample-other/SKILL.md", "---\nname: sample-other\n---\nother\n");
+  write(seed, "agents/opencode/sample-agent.md", AGENT_V1);
+  git(root, "init", "-q", "-b", "main", seed);
+  git(seed, "add", ".");
+  git(seed, "commit", "-q", "-m", "v1");
+  const remote = path.join(root, "remote.git");
+  git(root, "clone", "-q", "--bare", seed, remote);
+  const clone = (name) => {
+    const dir = path.join(root, name);
+    git(root, "clone", "-q", remote, dir);
+    for (const [key, value] of [["user.name", "t"], ["user.email", "t@example.com"], ["core.autocrlf", "false"]]) {
+      git(dir, "config", key, value);
+    }
+    return dir;
+  };
+  const terms = path.join(root, "terms.json");
+  fs.writeFileSync(terms, JSON.stringify({ leakTerms: [LEAK_TERM] }));
+  return { root, remote, checkout: clone("checkout"), other: clone("other"), out: path.join(root, "out"), plan: path.join(root, "out.plan.json"), terms };
+}
+
+/** Pushes one commit that writes `files` from the other clone; returns its commit. */
+function pushRemote(s, files, message = "remote change") {
+  for (const [file, text] of Object.entries(files)) {
+    write(s.other, file, text);
+  }
+  git(s.other, "add", "-A");
+  git(s.other, "commit", "-q", "-m", message);
+  git(s.other, "push", "-q", "origin", "main");
+  return git(s.other, "rev-parse", "HEAD");
+}
+
+function sourcePrepare(s) {
+  return prepare({ project: s.checkout, marketplace: s.checkout, out: s.out, plan: s.plan });
+}
+
+/** A gh that records its calls and prints a PR URL. */
+function fakeGh() {
+  const calls = [];
+  const gh = (args, options) => {
+    calls.push({ args, cwd: options.cwd });
+    return { status: 0, stdout: "https://example.invalid/pull/1\n", stderr: "" };
+  };
+  return { calls, gh };
+}
+
+function sourceApply(s, selected, gh = fakeGh().gh) {
+  return apply({ plan: s.plan, project: s.checkout, marketplace: s.checkout, selected, gh, termsFile: s.terms });
+}
+
+function sourceRow(s, id) {
+  return summary({ plan: s.plan }).items.find((item) => item.id === id);
+}
+
+function checkoutState(s) {
+  return { branch: git(s.checkout, "symbolic-ref", "--short", "HEAD"), head: git(s.checkout, "rev-parse", "HEAD"), status: git(s.checkout, "status", "--porcelain"), files: snapshot(path.join(s.checkout, "skills")) };
+}
+
+function remoteBranches(s) {
+  return git(s.remote, "for-each-ref", "--format=%(refname:short)", "refs/heads").split("\n").filter(Boolean).sort();
+}
+
+function worktreeCount(s) {
+  return git(s.checkout, "worktree", "list", "--porcelain").split("\n").filter((line) => line.startsWith("worktree ")).length;
+}
+
+test("source checkout behind its remote and clean: the pull row is checked and apply fast-forwards", () => {
+  const s = sourceFixture();
+  const remoteHead = pushRemote(s, { [`${SOURCE_SKILL}/SKILL.md`]: skillFile("1.1.0", "step one\nstep two") });
+  const before = git(s.checkout, "rev-parse", "HEAD");
+  const plan = sourcePrepare(s);
+  assert.deepEqual(plan.ids, ["pull"]);
+  assert.equal(plan.modified, 0, "a source row needs no resolve step");
+  assert.equal(plan.conflicts, 0);
+  assert.equal(git(s.checkout, "rev-parse", "HEAD"), before, "prepare does not pull");
+  const row = sourceRow(s, "pull");
+  assert.equal(row.label, "Pull 1 commit from origin/main (fast-forward)");
+  assert.match(row.detail, /remote change/);
+  assert.equal(row.checked, true);
+  const result = sourceApply(s, ["pull"]);
+  assert.equal(git(s.checkout, "rev-parse", "HEAD"), remoteHead);
+  assert.equal(git(s.checkout, "status", "--porcelain"), "");
+  assert.equal(git(s.checkout, "symbolic-ref", "--short", "HEAD"), "main");
+  assert.deepEqual(result.items, [{ id: "pull", result: "pulled 1 commit", upstream: false }]);
+});
+
+test("source checkout behind with an uncommitted change: the pull row is unchecked and apply refuses", () => {
+  const s = sourceFixture();
+  pushRemote(s, { [`${SOURCE_SKILL}/SKILL.md`]: skillFile("1.1.0", "step one\nstep two") });
+  write(s.checkout, "README.md", "readme edited here\n");
+  sourcePrepare(s);
+  const row = sourceRow(s, "pull");
+  assert.equal(row.checked, false);
+  assert.match(row.detail, /uncommitted changes: README\.md/);
+  const before = checkoutState(s);
+  assert.throws(() => sourceApply(s, ["pull"]), /Nothing was written\. pull: .*uncommitted changes/);
+  assert.deepEqual(checkoutState(s), before);
+  assert.equal(read(s.checkout, "README.md"), "readme edited here\n");
+});
+
+test("source checkout with a commit not on the remote: the pull row is unchecked and apply refuses", () => {
+  const s = sourceFixture();
+  pushRemote(s, { [`${SOURCE_SKILL}/SKILL.md`]: skillFile("1.1.0", "step one\nstep two") });
+  write(s.checkout, "README.md", "a local commit\n");
+  git(s.checkout, "commit", "-q", "-am", "local");
+  sourcePrepare(s);
+  const row = sourceRow(s, "pull");
+  assert.equal(row.checked, false);
+  assert.match(row.detail, /1 commit that is not on origin\/main/);
+  const before = checkoutState(s);
+  assert.throws(() => sourceApply(s, ["pull"]), /not on origin\/main/);
+  assert.deepEqual(checkoutState(s), before);
+});
+
+test("a modified source skill becomes a draft PR branch with only its files; the checkout stays as it was", () => {
+  const s = sourceFixture();
+  const remoteMain = git(s.remote, "rev-parse", "main");
+  write(s.checkout, `${SOURCE_SKILL}/workflow.md`, "flow ONE\nflow two\nflow three\n");
+  write(s.checkout, "README.md", "an unrelated edit\n");
+  const plan = sourcePrepare(s);
+  const id = "publish:skill:sample-skill";
+  assert.deepEqual(plan.ids, [id]);
+  const item = itemOf(plan, id);
+  assert.match(item.branch, /^feature\/upstream-skill-sample-skill-[0-9a-f]{8}$/);
+  const row = sourceRow(s, id);
+  assert.equal(row.checked, true);
+  assert.match(row.label, /skill sample-skill \(modified\): draft PR/);
+  assert.match(row.detail, /skills\/demo\/sample-skill\/workflow\.md \(modified\)/);
+  assert.match(row.detail, /\+flow ONE/);
+  const before = checkoutState(s);
+  const { calls, gh } = fakeGh();
+  const result = sourceApply(s, [id], gh);
+  assert.deepEqual(result.items, [{ id, result: "draft PR opened", upstream: false, branch: item.branch, url: "https://example.invalid/pull/1" }]);
+  assert.deepEqual(remoteBranches(s), [item.branch, "main"].sort());
+  assert.equal(git(s.remote, "rev-parse", "main"), remoteMain, "the default branch is never pushed");
+  assert.equal(git(s.remote, "diff", "--name-only", "main", item.branch), `${SOURCE_SKILL}/workflow.md`);
+  assert.equal(git(s.remote, "show", `${item.branch}:${SOURCE_SKILL}/workflow.md`), "flow ONE\nflow two\nflow three");
+  assert.deepEqual(checkoutState(s), before, "the person's branch and working tree are left as they were");
+  assert.equal(worktreeCount(s), 1, "the temporary worktree is gone");
+  assert.equal(calls.length, 1);
+  const args = calls[0].args;
+  assert.deepEqual(args.slice(0, 3), ["pr", "create", "--draft"]);
+  assert.equal(args[args.indexOf("--head") + 1], item.branch);
+  assert.equal(args[args.indexOf("--base") + 1], "main");
+  for (const forbidden of ["merge", "ready", "--reviewer"]) {
+    assert.equal(args.includes(forbidden), false, forbidden);
+  }
+});
+
+test("a local-only source agent becomes a draft PR too", () => {
+  const s = sourceFixture();
+  write(s.checkout, "agents/opencode/sample-new.md", agentFile("provider/a", "new agent"));
+  const plan = sourcePrepare(s);
+  assert.deepEqual(plan.ids, ["publish:agent:sample-new"]);
+  const result = sourceApply(s, ["publish:agent:sample-new"]);
+  assert.equal(result.items[0].result, "draft PR opened");
+  assert.equal(git(s.remote, "diff", "--name-only", "main", itemOf(plan, "publish:agent:sample-new").branch), "agents/opencode/sample-new.md");
+});
+
+test("the sanitize gate blocks a source change holding a leak term: nothing is pushed and no PR is opened", () => {
+  const s = sourceFixture();
+  write(s.checkout, `${SOURCE_SKILL}/workflow.md`, `flow one\nflow two\ncopied from ${LEAK_TERM}\n`);
+  sourcePrepare(s);
+  const id = "publish:skill:sample-skill";
+  const before = checkoutState(s);
+  const { calls, gh } = fakeGh();
+  const result = sourceApply(s, [id], gh);
+  assert.equal(result.items[0].result, "blocked");
+  assert.match(result.items[0].reason, /sanitize gate: staged:skills\/demo\/sample-skill\/workflow\.md:3 #1/);
+  assert.equal(JSON.stringify(result).includes(LEAK_TERM), false, "the report names the hit by label, never by value");
+  assert.deepEqual(remoteBranches(s), ["main"]);
+  assert.deepEqual(calls, []);
+  assert.deepEqual(checkoutState(s), before);
+  assert.equal(worktreeCount(s), 1);
+});
+
+test("the sanitize gate fails closed without configured terms", () => {
+  const s = sourceFixture();
+  write(s.checkout, `${SOURCE_SKILL}/workflow.md`, "flow ONE\nflow two\nflow three\n");
+  sourcePrepare(s);
+  fs.writeFileSync(s.terms, JSON.stringify({ leakTerms: [] }));
+  const previous = process.env.FACTORY_LEAK_TERMS;
+  delete process.env.FACTORY_LEAK_TERMS;
+  try {
+    const result = sourceApply(s, ["publish:skill:sample-skill"]);
+    assert.equal(result.items[0].result, "blocked");
+    assert.match(result.items[0].reason, /E_NO_TERMS/);
+  } finally {
+    if (previous !== undefined) {
+      process.env.FACTORY_LEAK_TERMS = previous;
+    }
+  }
+  assert.deepEqual(remoteBranches(s), ["main"]);
+});
+
+test("a source change of a skill the remote also changed is unchecked and refused: newer remote text is never replaced", () => {
+  const s = sourceFixture();
+  pushRemote(s, { [`${SOURCE_SKILL}/SKILL.md`]: skillFile("1.1.0", "step one\nstep two") });
+  write(s.checkout, `${SOURCE_SKILL}/workflow.md`, "flow ONE\nflow two\nflow three\n");
+  sourcePrepare(s);
+  const id = "publish:skill:sample-skill";
+  const row = sourceRow(s, id);
+  assert.equal(row.checked, false);
+  assert.match(row.detail, /origin\/main changed this skill after the checkout's commit/);
+  assert.throws(() => sourceApply(s, [id]), /Nothing was written\. publish:skill:sample-skill: origin\/main changed/);
+  assert.deepEqual(remoteBranches(s), ["main"]);
+});
+
+test("apply refuses source rows whose checkout changed after prepare, before any action", () => {
+  const s = sourceFixture();
+  pushRemote(s, { "README.md": "remote readme\n" });
+  write(s.checkout, `${SOURCE_SKILL}/workflow.md`, "flow ONE\nflow two\nflow three\n");
+  git(s.checkout, "commit", "-q", "-am", "local skill change");
+  sourcePrepare(s);
+  write(s.checkout, `${SOURCE_SKILL}/workflow.md`, "flow ONE\nflow two\nflow three\nedited after prepare\n");
+  const row = sourceRow(s, "publish:skill:sample-skill");
+  assert.equal(row.checked, false);
+  assert.match(row.detail, /changed after prepare/);
+  const { calls, gh } = fakeGh();
+  assert.throws(() => sourceApply(s, ["publish:skill:sample-skill"], gh), /publish:skill:sample-skill: The checkout copy changed after prepare/);
+  assert.deepEqual(calls, []);
+  assert.deepEqual(remoteBranches(s), ["main"]);
+
+  const t = sourceFixture();
+  pushRemote(t, { "README.md": "remote readme\n" });
+  sourcePrepare(t);
+  write(t.checkout, "notes.md", "new\n");
+  git(t.checkout, "add", "notes.md");
+  git(t.checkout, "commit", "-q", "-m", "after prepare");
+  const head = git(t.checkout, "rev-parse", "HEAD");
+  assert.throws(() => sourceApply(t, ["pull"]), /pull: The checkout moved after prepare/);
+  assert.equal(git(t.checkout, "rev-parse", "HEAD"), head);
+});
+
+test("a source checkout in sync with its remote gives no rows", () => {
+  const s = sourceFixture();
+  const plan = sourcePrepare(s);
+  assert.deepEqual(plan.ids, []);
+  assert.deepEqual(summary({ plan: s.plan }).items, []);
 });

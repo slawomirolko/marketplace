@@ -1,14 +1,14 @@
 name: olko-marketplace-merge
-version: 0.1.0
-description: "Brings marketplace updates into the changed or outdated marketplace skills and agents of one project. A script prepares a three-way merge of every affected artifact in a work folder of the run (never in the project or the marketplace), an agent resolves the conflicted hunks there and classifies what of each local change would go upstream, and one question lists every artifact with its result. Nothing is written before the answer. The checked artifacts are written into the project and their new base and content are recorded in the project's marketplace lock; that answer also approves the draft PR of each applied local change, which the marketplace-upstream watch then opens without asking again (the sanitize gate still runs)."
+version: 0.2.0
+description: "Brings marketplace updates into the changed or outdated marketplace skills and agents of one project. A script prepares a three-way merge of every affected artifact in a work folder of the run (never in the project or the marketplace), an agent resolves the conflicted hunks there and classifies what of each local change would go upstream, and one question lists every artifact with its result. Nothing is written before the answer. The checked artifacts are written into the project and their new base and content are recorded in the project's marketplace lock; that answer also approves the draft PR of each applied local change, which the marketplace-upstream watch then opens without asking again (the sanitize gate still runs). When the project is a marketplace source checkout, the same question also lists a fast-forward pull row when the checkout is behind its remote and one row per modified or local-only skill or agent; applying such a row opens a draft PR for exactly that change from a temporary worktree after the sanitize gate passes. These rows need no resolve step."
 inputs: "project, the project folder (or projectId, a registered project), and marketplace, a marketplace checkout."
-source: "scripts/olko-marketplace-merge.mjs; agents/opencode/olko-marketplace-upstream.md and skills/marketplace/olko-marketplace-upstream (resolve step)"
+source: "scripts/olko-marketplace-merge.mjs and scripts/olko-marketplace-merge-source.mjs; agents/opencode/olko-marketplace-upstream.md and skills/marketplace/olko-marketplace-upstream (resolve step)"
 roles:
   resolver: medium
 entry: prepare
 nodes:
   - id: prepare
-    description: "Runs the merge script's prepare command: per outdated artifact the upstream copy, per modified artifact whose marketplace source moved a git merge-file of base, local copy (adapter excluded) and upstream. Writes only into a fresh work folder named after the run under the factory home, which becomes the workspace of the later steps, so the resolve agent works there and not in the project, and the plan next to that folder, out of the agent's reach, with the hash of every project copy and proposed file."
+    description: "Runs the merge script's prepare command: per outdated artifact the upstream copy, per modified artifact whose marketplace source moved a git merge-file of base, local copy (adapter excluded) and upstream. Writes only into a fresh work folder named after the run under the factory home, which becomes the workspace of the later steps, so the resolve agent works there and not in the project, and the plan next to that folder, out of the agent's reach, with the hash of every project copy and proposed file. For a marketplace source checkout it also fetches the checkout's origin and adds the pull row and the publish rows, with the commits and file hashes apply checks; they add nothing to the conflicts or the modified count, so they never start the resolve step."
     kind: script
     op: builtin.exec
     with:
@@ -19,7 +19,7 @@ nodes:
     description: "Ends the run normally when no artifact of the project is outdated or modified with a newer marketplace version, with a note. Nothing was written."
     kind: script
     op: builtin.pass
-    with: { note: "Nothing to merge: no outdated or diverged skills or agents in this project. Nothing was written." }
+    with: { note: "Nothing to merge: no outdated or diverged skills or agents in this project, and a marketplace source checkout is neither behind its remote nor locally changed. Nothing was written." }
   - id: resolve
     description: "Resolves every conflicted hunk in the work folder (never dropping newer upstream text for base text, marking unsure resolutions) and classifies each modified artifact's local change as portable or project-specific. Reads and writes only inside the work folder, with the read and edit tools and no shell."
     kind: llm
@@ -38,7 +38,7 @@ nodes:
       End with one ```json block:
       {"resolved": <conflicted files resolved>, "unsure": <hunks marked sure: false>, "classified": <modified items classified>}
   - id: summary
-    description: "Builds one row per artifact for the question from the plan prepare wrote: kind, name, state and versions; files merged cleanly; conflicts with the agent's reason per hunk and the resolution diff; what would go upstream; any proposed file that changed outside the conflicts. A row is checked by default only when its base is known, every conflict is resolved and explained, every hunk is marked sure, no proposed file changed outside the conflicts and a modified artifact is classified."
+    description: "Builds one row per artifact for the question from the plan prepare wrote: kind, name, state and versions; files merged cleanly; conflicts with the agent's reason per hunk and the resolution diff; what would go upstream; any proposed file that changed outside the conflicts. A row is checked by default only when its base is known, every conflict is resolved and explained, every hunk is marked sure, no proposed file changed outside the conflicts and a modified artifact is classified. A source checkout row shows the commits to pull or the changed files with a short diff, and is checked only when apply would take it now."
     kind: script
     op: builtin.exec
     with:
@@ -49,12 +49,12 @@ nodes:
     kind: interrupt
     question:
       id: q-merge
-      text: "Merge marketplace updates into {{input.project}}.\nCheck the artifacts to apply. Applying one writes the merged copy into the project (its adapter stays) and records it in .agents/marketplace.lock.json; in a project without that file, applying creates .agents/marketplace.lock.json, so the marketplace-upstream watch can open the approved draft PRs. Applying also approves a draft marketplace PR for the portable part of its local change; the sanitize gate still runs and the PR stays a draft.\nnone: apply nothing."
+      text: "Merge marketplace updates into {{input.project}}.\nCheck the artifacts to apply. Applying one writes the merged copy into the project (its adapter stays) and records it in .agents/marketplace.lock.json; in a project without that file, applying creates .agents/marketplace.lock.json, so the marketplace-upstream watch can open the approved draft PRs. Applying also approves a draft marketplace PR for the portable part of its local change; the sanitize gate still runs and the PR stays a draft.\nIn a marketplace source checkout, the pull row fast-forwards the checkout to the commits shown (never a forced or merge-commit pull), and a skill or agent row puts exactly that change on a new branch and opens a draft PR after the sanitize gate passes; your branch and working tree stay as they are.\nnone: apply nothing."
       multiple: true
       allowedFrom: state.summary.json.ids
       itemsFrom: state.summary.json.items
   - id: apply
-    description: "Writes the selected artifacts into every project location that holds them, adapter untouched, and records the new base and the approved content hash in the project's marketplace lock (created when the project has none). Takes the project and the marketplace from the run input and the plan from next to the work folder. Checks every selected artifact first and writes nothing when one still holds conflict markers, has a conflict without a resolution, has a proposed file that changed outside the conflicts or a file not in the plan, or changed in the project after prepare. The marketplace-upstream watch then opens the draft PRs of the approved local changes without asking again."
+    description: "Writes the selected artifacts into every project location that holds them, adapter untouched, and records the new base and the approved content hash in the project's marketplace lock (created when the project has none). Takes the project and the marketplace from the run input and the plan from next to the work folder. Checks every selected artifact first and writes nothing when one still holds conflict markers, has a conflict without a resolution, has a proposed file that changed outside the conflicts or a file not in the plan, or changed in the project after prepare, and refuses a source checkout row whose checkout moved, has uncommitted changes or commits not on the remote, or whose files changed after prepare. Then it pulls, opens the draft PR of each selected source row (a row the sanitize gate blocks is reported by hit label and nothing of it is pushed) and writes the installed copies. The marketplace-upstream watch then opens the draft PRs of the approved local changes without asking again."
     kind: script
     op: builtin.exec
     with:

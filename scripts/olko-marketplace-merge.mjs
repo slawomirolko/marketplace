@@ -12,7 +12,9 @@
  *
  * What is installed, its portable content and its marketplace history come from the installed-artifact model
  * of the olko-factory-project skill, and the states from its project status, so the merge and the status agree.
- * A marketplace source checkout (harness `source`) is never merged.
+ * Installed copies of a marketplace source checkout (harness `source`) are not merged; when the project is such a
+ * checkout, prepare adds its own rows instead: a fast-forward pull row and one draft-PR row per modified or local-only
+ * skill or agent (see scripts/olko-marketplace-merge-source.mjs). Those rows need no resolve step.
  *
  * This is a marketplace gate: it runs from a marketplace checkout (`<marketplace>/scripts/`), never from an
  * installed skill. See "Script ownership" in docs/project-change-upstream.md.
@@ -25,6 +27,10 @@
  * `resolution.json` does not name, has a proposed file that changed outside the conflicts or a file not in the plan,
  * or has a project copy that changed after prepare. Then it writes every item, then records every item in the lock.
  *
+ * For the selected source rows apply checks the checkout first (refusing everything before any action when it moved,
+ * has uncommitted changes or commits not on the remote, or an artifact changed after prepare), then pulls, then opens
+ * the draft PRs, each after the sanitize gate passes.
+ *
  * `summary` reads the plan and the `resolution.json` an agent wrote per item and prints the rows of the one
  * merge question: `{ ids, items: [{ id, label, detail, checked }] }`. A row is checked by default only when
  * its base is known, every conflict is resolved and explained, every resolved hunk is marked sure, no proposed file
@@ -33,7 +39,7 @@
  * Usage:
  *   node scripts/olko-marketplace-merge.mjs prepare --project <dir> --marketplace <dir> --out <dir> [--plan <file>] [--no-fetch] [--json]
  *   node scripts/olko-marketplace-merge.mjs summary --plan <file> [--json]
- *   node scripts/olko-marketplace-merge.mjs apply --plan <file> --project <dir> --marketplace <dir> --selected <id,id,...|none> [--json]
+ *   node scripts/olko-marketplace-merge.mjs apply --plan <file> --project <dir> --marketplace <dir> --selected <id,id,...|none> [--terms-file <json>] [--json]
  */
 
 import { spawnSync } from "node:child_process";
@@ -57,6 +63,7 @@ import {
 } from "../skills/software-factory/olko-factory-project/scripts/installed-artifacts.mjs";
 import { projectStatus } from "../skills/software-factory/olko-factory-project/scripts/project-scan.mjs";
 import { isArtifactId, readLock, record } from "./olko-marketplace-lock.mjs";
+import { applySource, diffLines, fetchCheckout, isSourceItem, sourceItems, sourceRefusals, sourceRow } from "./olko-marketplace-merge-source.mjs";
 import { parseFlags } from "./lib/cli.mjs";
 
 const SOURCE_HARNESS = "source";
@@ -70,14 +77,14 @@ const PLAN_SUFFIX = ".plan.json";
 /** The folder of the work directory that holds the base, local and upstream copy of each item, for the resolve agent; never installed. */
 const SIDES_DIR = "sides";
 const SHORT_COMMIT = 7;
-const DIFF_CONTEXT = 1;
-const DIFF_LINES = 40;
 /** The file an agent step may write into an item folder; it describes the resolution and is never installed. */
 const RESOLUTION_FILE = "resolution.json";
 /** A conflict marker line of `git merge-file`, in the merge or the diff3 style. */
 const CONFLICT_MARKER = /^(?:<{7}|\|{7}|>{7})(?: .*)?$|^={7}$/m;
 const CRLF = /\r\n/;
 const NONE = "none";
+/** The apply results of a source row that count as applied. */
+const SOURCE_DONE_PREFIXES = ["pulled", "draft PR opened", "already on the remote"];
 const MERGE_LABELS = ["-L", "local", "-L", "base", "-L", "upstream"];
 const MAX_CONFLICT_STATUS = 127;
 
@@ -314,8 +321,9 @@ export function defaultPlanFile(out) {
 
 /**
  * Prepares the merge of every outdated or modified artifact of a project into `out`; writes the plan to `plan`
- * (outside `out`) and a copy for the resolve agent to `<out>/plan.json`, and returns the plan. Nothing is written
- * to the project or the marketplace (`fetch` refreshes the marketplace remote refs, as the status scan does).
+ * (outside `out`) and a copy for the resolve agent to `<out>/plan.json`, and returns the plan. A marketplace source
+ * checkout adds its pull and publish rows (`source` counts them). Nothing is written to the project or the marketplace
+ * (`fetch` refreshes the remote refs of the marketplace and of a source checkout, as the status scan does).
  */
 export function prepare({ project, marketplace, out, plan: planFile = defaultPlanFile(out), fetch = true }) {
   if (isInside(out, planFile)) {
@@ -324,14 +332,18 @@ export function prepare({ project, marketplace, out, plan: planFile = defaultPla
   const status = projectStatus({ project, marketplace, factory: path.join(marketplace, "factory"), depth: DEFAULT_DEPTH, fetch });
   const lock = readLock(project);
   fs.mkdirSync(out, { recursive: true });
-  const items = [];
+  const installed = [];
   for (const [artifactId, entries] of collect(project, status)) {
     const groups = groupCopies(entries);
     for (const group of groups) {
       const id = groups.length === 1 ? artifactId : `${artifactId}@${group[0].status.location}`;
-      items.push(buildItem({ project, marketplace, ref: status.ref, lock, out, id, group }));
+      installed.push(buildItem({ project, marketplace, ref: status.ref, lock, out, id, group }));
     }
   }
+  if (status.marketplaceSource && fetch && path.resolve(project) !== path.resolve(marketplace)) {
+    fetchCheckout(project);
+  }
+  const items = [...installed, ...(status.marketplaceSource ? sourceItems(project, status) : [])];
   const plan = {
     project,
     marketplace,
@@ -339,8 +351,9 @@ export function prepare({ project, marketplace, out, plan: planFile = defaultPla
     ref: status.ref,
     head: status.head,
     ids: items.map((item) => item.id),
-    conflicts: items.reduce((sum, item) => sum + item.files.filter((file) => file.result === "conflict").length, 0),
-    modified: items.filter((item) => item.state === "modified").length,
+    conflicts: installed.reduce((sum, item) => sum + item.files.filter((file) => file.result === "conflict").length, 0),
+    modified: installed.filter((item) => item.state === "modified").length,
+    source: items.length - installed.length,
     items,
   };
   const text = `${JSON.stringify(plan, null, 2)}\n`;
@@ -559,8 +572,10 @@ function itemResult(selected, written, id) {
  * `refusalsOf`), naming each item and why. Then it writes every item, then records every item in the lock.
  * `applied` lists the items written, `skipped` every other item of the plan (not selected, or already applied),
  * `upstream` the written items whose result still differs from the marketplace, and `items` the result per item.
+ * Selected source rows are checked in the same pass and applied first (see applySource); `gh` runs gh and
+ * `termsFile` is the sanitize gate's terms file.
  */
-export function apply({ plan: planFile, project, marketplace, selected }) {
+export function apply({ plan: planFile, project, marketplace, selected, gh, termsFile }) {
   const plan = readPlan(planFile);
   if (path.resolve(String(plan.project)) !== path.resolve(project)) {
     throw new Error("The plan was prepared for another project");
@@ -572,25 +587,33 @@ export function apply({ plan: planFile, project, marketplace, selected }) {
   if (unknown.length > 0) {
     throw new Error(`Not in the plan: ${unknown.join(", ")}`);
   }
-  const loadedItems = plan.items.filter((item) => selected.includes(item.id)).map((item) => loadItem(project, plan.out, item));
+  const chosen = plan.items.filter((item) => selected.includes(item.id));
+  const sourceChosen = chosen.filter(isSourceItem);
+  const loadedItems = chosen.filter((item) => !isSourceItem(item)).map((item) => loadItem(project, plan.out, item));
   const lock = readLock(project);
   const pending = loadedItems.filter((candidate) => !isApplied(lock, candidate));
-  const refused = pending.map((loaded) => ({ id: loaded.item.id, reasons: refusalsOf(project, loaded) })).filter((entry) => entry.reasons.length > 0);
+  const refused = [
+    ...sourceChosen.map((item) => ({ id: item.id, reasons: sourceRefusals(project, item) })),
+    ...pending.map((loaded) => ({ id: loaded.item.id, reasons: refusalsOf(project, loaded) })),
+  ].filter((entry) => entry.reasons.length > 0);
   if (refused.length > 0) {
     throw new Error(`Nothing was written. ${refused.map((entry) => `${entry.id}: ${entry.reasons.join("; ")}`).join(". ")}`);
   }
+  const sourceResults = applySource(project, sourceChosen, { gh, termsFile });
   for (const loaded of pending) {
     for (const { target } of loaded.targets) {
       writeCopy(loaded, target);
     }
   }
-  const applied = pending.map((loaded) => loaded.item.id);
+  const written = pending.map((loaded) => loaded.item.id);
   const upstream = pending.filter((loaded) => recordApplied(project, marketplace, loaded)).map((loaded) => loaded.item.id);
+  const done = sourceResults.filter((result) => SOURCE_DONE_PREFIXES.some((prefix) => result.result.startsWith(prefix))).map((result) => result.id);
+  const applied = plan.ids.filter((id) => written.includes(id) || done.includes(id));
   return {
     applied,
     skipped: plan.ids.filter((id) => !applied.includes(id)),
     upstream,
-    items: plan.ids.map((id) => ({ id, result: itemResult(selected, applied, id), upstream: upstream.includes(id) })),
+    items: plan.ids.map((id) => sourceResults.find((result) => result.id === id) ?? { id, result: itemResult(selected, written, id), upstream: upstream.includes(id) }),
   };
 }
 
@@ -625,18 +648,7 @@ function resolutionDiff(plan, item, name) {
   if (local === undefined || proposed === undefined) {
     return [proposed === undefined ? "the proposed copy removes this file" : "the project has no copy of this file; the proposed copy adds it"];
   }
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-merge-diff-"));
-  try {
-    fs.writeFileSync(path.join(tempDir, "project"), local);
-    fs.writeFileSync(path.join(tempDir, "proposed"), proposed);
-    const result = spawnSync("git", ["diff", "--no-index", "--no-color", `-U${DIFF_CONTEXT}`, "project", "proposed"], { cwd: tempDir, encoding: "utf8" });
-    const lines = result.stdout.split("\n");
-    const body = lines.slice(Math.max(0, lines.findIndex((line) => line.startsWith("@@")))).filter((line) => line !== "");
-    const shown = body.slice(0, DIFF_LINES);
-    return body.length > DIFF_LINES ? [...shown, `... ${body.length - DIFF_LINES} more lines`] : shown;
-  } finally {
-    fs.rmSync(tempDir, { recursive: true, force: true });
-  }
+  return diffLines(local, proposed);
 }
 
 /** The lines of one conflicted file: its kind, the agent's reason per hunk and the diff of the resolution. */
@@ -719,7 +731,7 @@ function summaryRow(plan, item) {
  */
 export function summary({ plan: planFile }) {
   const plan = readPlan(planFile);
-  return { ids: plan.ids, items: plan.items.map((item) => summaryRow(plan, item)) };
+  return { ids: plan.ids, items: plan.items.map((item) => (isSourceItem(item) ? sourceRow(plan.project, item) : summaryRow(plan, item))) };
 }
 
 function requireFlag(options, key, flag) {
@@ -745,7 +757,7 @@ function runPrepare(rest) {
 }
 
 function runApply(rest) {
-  const options = parseFlags(rest, { values: { "--plan": "plan", "--project": "project", "--marketplace": "marketplace", "--selected": "selected" }, switches: { "--json": "json" } });
+  const options = parseFlags(rest, { values: { "--plan": "plan", "--project": "project", "--marketplace": "marketplace", "--selected": "selected", "--terms-file": "termsFile" }, switches: { "--json": "json" } });
   if (!options.selected) {
     throw new Error("Missing --selected <id,id,...|none>");
   }
@@ -755,6 +767,7 @@ function runApply(rest) {
     project: requireFlag(options, "project", "--project"),
     marketplace: requireFlag(options, "marketplace", "--marketplace"),
     selected,
+    termsFile: options.termsFile ? path.resolve(options.termsFile) : undefined,
   });
   return { result, json: options.json };
 }

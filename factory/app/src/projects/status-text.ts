@@ -18,13 +18,31 @@ const LOCAL_REF = "HEAD";
 /** The harness of the skills and agents of a marketplace source checkout. */
 const SOURCE_HARNESS = "source";
 
-/** Why Merge updates is off for these artifacts, or null when one of them can be merged. */
+/** States of a source checkout row that the remote has newer content for: the checkout is behind its remote. */
+const SOURCE_BEHIND = ["outdated", "missing", "removed"];
+/** States of a source checkout row that the merge offers as a draft PR. */
+const SOURCE_CHANGED = ["modified", "local-only"];
+
+/** True when the merge has a row for this artifact: an installed copy to merge, or a source checkout to pull or publish. */
+function isMergeable(artifact: ProjectArtifact): boolean {
+  if (artifact.harness === SOURCE_HARNESS) {
+    return SOURCE_BEHIND.includes(artifact.state) || SOURCE_CHANGED.includes(artifact.state);
+  }
+  return artifact.state === "outdated" || (artifact.state === "modified" && artifact.upstreamMoved === true);
+}
+
+/** Why Merge updates is off for these artifacts, or null when one of them can be merged, pulled or published. */
 export function mergeBlocker(artifacts: ProjectArtifact[] | undefined): string | null {
   if (!artifacts) {
     return "Check the status first: the merge needs to know which skills and agents differ from the marketplace.";
   }
-  const mergeable = artifacts.some((artifact) => artifact.harness !== SOURCE_HARNESS && (artifact.state === "outdated" || (artifact.state === "modified" && artifact.upstreamMoved === true)));
-  return mergeable ? null : "Nothing to merge: no installed skill or agent is outdated, or modified with a newer marketplace version. A marketplace source checkout is never merged.";
+  if (artifacts.some(isMergeable)) {
+    return null;
+  }
+  const source = artifacts.some((artifact) => artifact.harness === SOURCE_HARNESS);
+  return source
+    ? "Nothing to merge: this marketplace source checkout is in sync with its remote, with no modified or local-only skill or agent to open a draft PR for."
+    : "Nothing to merge: no installed skill or agent is outdated, or modified with a newer marketplace version.";
 }
 
 export function mergeNote(projectId: string, text: string): string {
