@@ -4,7 +4,7 @@
     {
       "name": "olko-factory-project",
       "category": "software-factory",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "description": "Script command that reports the Olko marketplace status of one local project for the Software Factory: the harnesses set up in it, every installed skill and agent with its state (current, adapted, outdated, modified, unknown-base, missing, removed, local-only) against the marketplace history, and the factory workflows that run them. Read only for the project. Use when you check a project's marketplace sync or run the project status workflow. Triggers: 'project status', 'project marketplace sync', 'which marketplace skills are installed', 'olko-factory-project'.",
       "tags": [
         "software-factory",
