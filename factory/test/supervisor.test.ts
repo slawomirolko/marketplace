@@ -7,7 +7,10 @@ import { SUPERVISOR_PATH, parseSupervisorLine, summarizeRun } from "../src/run-s
 import type { CliRequest, CliResult, LedgerRecord, Run, RunEvent } from "../src/types.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
-const { Factory, SUPERVISOR_AGENT } = await import("../src/engine.ts");
+const { Factory } = await import("../src/engine.ts");
+const { loadFactoryConfig } = await import("../src/config.ts");
+const SUPERVISOR_AGENT = loadFactoryConfig().supervisor?.agent;
+const VERDICT_LINE = { prefix: "supervise", verdicts: ["ok", "improve", "fix"] };
 type FactoryType = InstanceType<typeof Factory>;
 
 const T0 = Date.parse("2026-11-13T10:00:00.000Z");
@@ -100,10 +103,41 @@ test("the run summary ranks steps by cost, counts loops, waits and failures, and
 });
 
 test("the supervisor line is read from the last matching line", () => {
-  assert.deepEqual(parseSupervisorLine("FACTS: x\nsupervise | improve | w/fix | lower fix to low tier | saves 40%\n"), { verdict: "improve", bottleneck: "w/fix", idea: "lower fix to low tier | saves 40%" });
-  assert.deepEqual(parseSupervisorLine("`supervise | ok | none | none`"), { verdict: "ok", bottleneck: "none", idea: "none" });
-  assert.equal(parseSupervisorLine("supervise | great | x | y"), null);
-  assert.equal(parseSupervisorLine("no line"), null);
+  assert.deepEqual(parseSupervisorLine("FACTS: x\nsupervise | improve | w/fix | lower fix to low tier | saves 40%\n", VERDICT_LINE), { verdict: "improve", bottleneck: "w/fix", idea: "lower fix to low tier | saves 40%" });
+  assert.deepEqual(parseSupervisorLine("`supervise | ok | none | none`", VERDICT_LINE), { verdict: "ok", bottleneck: "none", idea: "none" });
+  assert.equal(parseSupervisorLine("supervise | great | x | y", VERDICT_LINE), null);
+  assert.equal(parseSupervisorLine("no line", VERDICT_LINE), null);
+  assert.equal(parseSupervisorLine("supervisewise | ok | x | y", VERDICT_LINE), null);
+  assert.deepEqual(parseSupervisorLine("review | pass | w/a | none", { prefix: "review", verdicts: ["pass", "fail"] }), { verdict: "pass", bottleneck: "w/a", idea: "none" });
+});
+
+test("the post-run agent, its prompt, host hint and verdict line come from config/factory.yaml", () => {
+  const settings = loadFactoryConfig().supervisor;
+  assert.equal(settings?.agent, "olko-factory-supervisor");
+  assert.deepEqual(settings?.verdictLine, VERDICT_LINE);
+  assert.ok(settings?.prompt.includes("{{summaryJson}}"));
+  assert.match(settings?.hostHint ?? "", /supervisorWork/);
+});
+
+test("without a supervisor section in the config no post-run agent runs", async () => {
+  const config = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "factory-no-supervisor-")), "factory.yaml");
+  const lines = fs.readFileSync(path.join(import.meta.dirname, "..", "config", "factory.yaml"), "utf8").split(/\r?\n/);
+  const start = lines.indexOf("supervisor:");
+  const end = lines.findIndex((line, index) => index > start && /^\S/.test(line));
+  fs.writeFileSync(config, [...lines.slice(0, start), ...lines.slice(end)].join("\n"));
+  process.env.FACTORY_CONFIG = config;
+  try {
+    assert.equal(loadFactoryConfig().supervisor, undefined);
+    const factory = factoryWith({ backend: "fake" });
+    const { run } = factory.start("unsupervised fake run");
+    factory.confirm(run.runId);
+    const ended = await finish(factory, run.runId);
+    assert.equal(ended.status, "done");
+    assert.equal(ended.supervisor, undefined);
+    assert.equal(ended.ledger.filter((record) => record.nodePath === SUPERVISOR_PATH).length, 0);
+  } finally {
+    delete process.env.FACTORY_CONFIG;
+  }
 });
 
 function factoryWith(options: ConstructorParameters<typeof Factory>[1]): FactoryType {

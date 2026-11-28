@@ -3,7 +3,7 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { FACTORY_DIR } from "./paths.ts";
 import { validate } from "./spec.ts";
-import type { CliName, ProjectsConfig, Tier, WatchSpec } from "./types.ts";
+import type { CliName, ProjectsConfig, SupervisorSettings, Tier, WatchSpec } from "./types.ts";
 
 export interface FactoryConfig {
   roles: Record<string, Tier>;
@@ -12,6 +12,7 @@ export interface FactoryConfig {
   memoryLayer: string;
   projects: ProjectSettings;
   watches: WatchSpec[];
+  supervisor?: SupervisorSettings;
 }
 
 /** Project settings with defaults; the status backend stays optional. */
@@ -46,7 +47,7 @@ export function configFile(): string {
 }
 
 export function loadFactoryConfig(file = configFile()): FactoryConfig {
-  const raw = parseYaml(fs.readFileSync(file, "utf8")) as { roles: Record<string, Tier>; budget: { maxCostUsd: number; infoRatio?: number; pauseRatio?: number }; switches?: Record<string, boolean>; memoryLayer?: string; watches?: (Omit<WatchSpec, "stableChecks" | "skipWhen"> & { stableChecks?: number; skipWhen?: string[] })[]; projects?: ProjectsConfig };
+  const raw = parseYaml(fs.readFileSync(file, "utf8")) as { roles: Record<string, Tier>; budget: { maxCostUsd: number; infoRatio?: number; pauseRatio?: number }; switches?: Record<string, boolean>; memoryLayer?: string; watches?: (Omit<WatchSpec, "stableChecks" | "skipWhen"> & { stableChecks?: number; skipWhen?: string[] })[]; projects?: ProjectsConfig; supervisor?: SupervisorSettings };
   const result = validate("factory-config", raw);
   if (!result.valid) throw new Error(`${file}: ${result.errors.join("; ")}`);
   return {
@@ -56,5 +57,6 @@ export function loadFactoryConfig(file = configFile()): FactoryConfig {
     memoryLayer: memoryLayerOf(raw),
     projects: withStatusCli(projectsOf(raw)),
     watches: (raw.watches ?? []).map((watch) => ({ ...watch, stableChecks: watch.stableChecks ?? 2, skipWhen: watch.skipWhen ?? [] })),
+    ...(raw.supervisor ? { supervisor: raw.supervisor } : {}),
   };
 }

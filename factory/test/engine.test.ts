@@ -64,7 +64,8 @@ edges:
 process.env.FACTORY_WORKFLOWS_DIR = workflows;
 process.env.FACTORY_TURN_DELAY_MS = "0";
 
-const { Factory, SUPERVISOR_AGENT } = await import("../src/engine.ts");
+const { Factory } = await import("../src/engine.ts");
+const SUPERVISOR_AGENT = (await import("../src/config.ts")).loadFactoryConfig().supervisor?.agent;
 const { OPERATIONS } = await import("../src/ops.ts");
 OPERATIONS["test.workspace"] = async ({ input }) => ({ state: {}, output: "moved", workspace: String(input.target) });
 

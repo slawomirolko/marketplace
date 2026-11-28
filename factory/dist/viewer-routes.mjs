@@ -15615,7 +15615,8 @@ function loadFactoryConfig(file = configFile()) {
 			...watch,
 			stableChecks: watch.stableChecks ?? 2,
 			skipWhen: watch.skipWhen ?? []
-		}))
+		})),
+		...raw.supervisor ? { supervisor: raw.supervisor } : {}
 	};
 }
 // src/marketplace-agents.ts
@@ -16057,20 +16058,22 @@ function summarizeRun(run) {
 		}
 	};
 }
-function parseSupervisorLine(output) {
-	const line = output.trim().split(/\r?\n/).reverse().find((l) => /^\s*`?supervise\s*\|/.test(l));
+/** Reads the last '<prefix> | <verdict> | <bottleneck> | <idea>' line of an agent's output; the format comes from the configured verdictLine. */
+function parseSupervisorLine(output, format) {
+	const line = output.trim().split(/\r?\n/).reverse().find((candidate) => startsVerdictLine(candidate, format.prefix));
 	if (!line) return null;
-	const [, verdict = "", bottleneck = "", ...idea] = line.replace(/`/g, "").split("|").map((p) => p.trim());
-	if (![
-		"ok",
-		"improve",
-		"fix"
-	].includes(verdict)) return null;
+	const [, verdict = "", bottleneck = "", ...idea] = line.replace(/`/g, "").split("|").map((part) => part.trim());
+	if (!format.verdicts.includes(verdict)) return null;
 	return {
 		verdict,
 		bottleneck,
 		idea: idea.join(" | ")
 	};
+}
+/** A line that starts with the prefix, optionally after a backtick, and then a '|'. */
+function startsVerdictLine(line, prefix) {
+	const head = line.trimStart().replace(/^`/, "");
+	return head.startsWith(prefix) && head.slice(prefix.length).trimStart().startsWith("|");
 }
 // src/engine.ts
 var LOCKED_FILE_CODES = /* @__PURE__ */ new Set([
@@ -16103,7 +16106,6 @@ var FAKE_PRICE_PER_MTOK = {
 	}
 };
 var PARALLEL_AGENTS = 10;
-var SUPERVISOR_AGENT = "olko-factory-supervisor";
 var SUPERVISOR_ID = "supervisor";
 var ENDED = /* @__PURE__ */ new Set([
 	"done",
@@ -16111,7 +16113,6 @@ var ENDED = /* @__PURE__ */ new Set([
 	"cancelled",
 	"failed"
 ]);
-var SUPERVISOR_HINT = "The run has ended. Run supervisorWork now in its own subagent like a pendingWork item (supervisorWork.prompt, supervisorWork.model, the agent supervisorWork.agentName with supervisorWork.agentInstructions), then call factory_submit with its output, nodePath and agentId. After that, call factory_report and show the user viewerUrl.";
 function workspace(run) {
 	return run.workspace ?? run.input?.project ?? run.input?.cwd ?? process.env.FACTORY_WORKSPACE ?? process.cwd();
 }
@@ -16374,9 +16375,10 @@ var Factory = class {
 			}
 		};
 		run.status = "running";
-		run.supervisor = {
+		const supervisor = loadFactoryConfig().supervisor;
+		if (supervisor) run.supervisor = {
 			status: "pending",
-			agent: SUPERVISOR_AGENT
+			agent: supervisor.agent
 		};
 		this.event(run, "run_confirmed", { config: run.config });
 		this.checkpoint(run);
@@ -17018,6 +17020,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 			model
 		});
 		try {
+			const settings = supervisorSettings();
 			if (config.backend.kind === "fake") {
 				run.steps += 1;
 				this.appendLedger(run, {
@@ -17030,13 +17033,13 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 					turn: 1,
 					...fakeModelTurn(tier, 1),
 					costSource: "measured",
-					agentName: SUPERVISOR_AGENT
+					agentName: record.agent
 				});
-				this.finishSupervisor(run, fakeSupervisorText(summary));
+				this.finishSupervisor(run, fakeSupervisorText(summary, settings.verdictLine), settings.verdictLine);
 				return;
 			}
-			const definition = readMarketplaceAgent(SUPERVISOR_AGENT);
-			const prompt = supervisorPrompt(summary);
+			const definition = readMarketplaceAgent(record.agent);
+			const prompt = supervisorPrompt(settings, summary);
 			if (config.backend.kind === "delegate") {
 				record.status = "waiting_for_client";
 				record.work = {
@@ -17058,13 +17061,13 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 				});
 				return;
 			}
-			const job = this.runCliSupervisor(run, prompt, definition.dirs).finally(() => this.supervising.delete(run.runId));
+			const job = this.runCliSupervisor(run, prompt, definition.dirs, settings.verdictLine).finally(() => this.supervising.delete(run.runId));
 			this.supervising.set(run.runId, job);
 		} catch (error) {
 			this.failSupervisor(run, error);
 		}
 	}
-	async runCliSupervisor(run, prompt, dirs) {
+	async runCliSupervisor(run, prompt, dirs, verdictLine) {
 		const record = run.supervisor;
 		const cli = configOf(run).backend.cli;
 		try {
@@ -17073,7 +17076,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 			const result = await executor({
 				model: record.model,
 				prompt,
-				agent: SUPERVISOR_AGENT,
+				agent: record.agent,
 				tools: ["read"],
 				dirs
 			});
@@ -17082,13 +17085,13 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 			for (const entry of cliEntries(result, {
 				nodePath: SUPERVISOR_PATH,
 				agentId: SUPERVISOR_ID,
-				agentName: SUPERVISOR_AGENT,
+				agentName: record.agent,
 				tier: record.tier,
 				requestedModel: record.model,
 				cli,
 				keepOutput: false
 			})) this.appendLedger(run, entry);
-			this.finishSupervisor(run, result.text ?? "");
+			this.finishSupervisor(run, result.text ?? "", verdictLine);
 		} catch (error) {
 			this.failSupervisor(run, error);
 		}
@@ -17107,10 +17110,10 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 		run.steps += 1;
 		this.appendLedger(run, {
 			...delegateEntry(work, output, usage),
-			agentName: SUPERVISOR_AGENT
+			agentName: record.agent
 		});
 		record.work = null;
-		this.finishSupervisor(run, output);
+		this.finishSupervisor(run, output, loadFactoryConfig().supervisor?.verdictLine);
 		this.checkpoint(run);
 		return {
 			run,
@@ -17121,9 +17124,9 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 		const records = run.ledger.filter((r) => r.nodePath === SUPERVISOR_PATH);
 		return records.length ? round(records.reduce((s, r) => s + (r.costUsd ?? 0), 0)) : null;
 	}
-	finishSupervisor(run, output) {
+	finishSupervisor(run, output, verdictLine) {
 		const record = run.supervisor;
-		const parsed = parseSupervisorLine(output);
+		const parsed = verdictLine ? parseSupervisorLine(output, verdictLine) : null;
 		Object.assign(record, {
 			status: "done",
 			finishedAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -17180,7 +17183,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 			pendingWork: run.status === "waiting_for_client" ? run.pendingWork : void 0,
 			pendingWorkItems: run.status === "waiting_for_client" ? run.pendingWorkItems ?? (run.pendingWork ? [run.pendingWork] : []) : void 0,
 			retryAfterMs: run.status === "running" ? 2e3 : null,
-			next: supervisorWork ? SUPERVISOR_HINT : nextHint(run),
+			next: supervisorWork ? loadFactoryConfig().supervisor?.hostHint ?? nextHint(run) : nextHint(run),
 			proposal: run.status === "needs_confirmation" ? run.proposal : void 0,
 			cost: this.footer(run),
 			...run.supervisor ? { supervisor: {
@@ -17331,16 +17334,24 @@ function supervisorView(record) {
 	const { work: _work, ...view } = record;
 	return view;
 }
-function supervisorPrompt(summary) {
-	return `Supervise this finished factory run. The JSON below is its summary, made by a script from the run's events and ledger; it is your only data.\n\n\`\`\`json\n${JSON.stringify(summary, null, 2)}\n\`\`\``;
+/** The post-run agent settings from config/factory.yaml; a run gets a supervisor only when they exist. */
+function supervisorSettings() {
+	const settings = loadFactoryConfig().supervisor;
+	if (!settings) throw new Error("config/factory.yaml has no supervisor section");
+	return settings;
 }
-function fakeSupervisorText(summary) {
+/** The configured prompt template rendered over the run summary. */
+function supervisorPrompt(settings, summary) {
+	return mustache.render(settings.prompt, { summaryJson: JSON.stringify(summary, null, 2) }, {}, { escape: (value) => String(value) });
+}
+/** The fake model's supervisor output: fixed facts and a verdict line in the configured format with the first verdict. */
+function fakeSupervisorText(summary, verdictLine) {
 	const bottleneck = summary.top.costNode ?? "none";
 	return [
 		`FACTS: ${summary.run.workflow} ${summary.run.status}, $${summary.totals.costUsd} of $${summary.run.budgetUsd ?? "?"}, ${summary.totals.llmSteps} llm steps, ${summary.loops.length} loops, ${summary.failures.length} failures.`,
 		`BOTTLENECK: ${bottleneck}.`,
 		"IDEAS: none (fake model).",
-		`supervise | ok | ${bottleneck} | none`
+		`${verdictLine.prefix} | ${verdictLine.verdicts[0]} | ${bottleneck} | none`
 	].join("\n");
 }
 function delegateEntry(work, output, usage) {

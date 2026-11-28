@@ -41,6 +41,18 @@ switches:
   adopt: false
 # Marketplace skill that gives an agent persistent memory; the viewer marks agents that declare it.
 memoryLayer: olko-memory-layer
+# The post-run agent: it runs once after every run ends, reads the run summary the factory
+# makes from the run's events and ledger, and ends its output with the verdict line.
+supervisor:
+  agent: olko-factory-supervisor
+  prompt: |-
+    Supervise this finished factory run. The JSON below is its summary, made by a script from the run's events and ledger; it is your only data.
+
+    ```json
+    {{summaryJson}}
+    ```
+  hostHint: "The run has ended. Run supervisorWork now in its own subagent like a pendingWork item (supervisorWork.prompt, supervisorWork.model, the agent supervisorWork.agentName with supervisorWork.agentInstructions), then call factory_submit with its output, nodePath and agentId. After that, call factory_report and show the user viewerUrl."
+  verdictLine: { prefix: supervise, verdicts: [ok, improve, fix] }
 # Local projects that use the marketplace. The project list and the root folders to search
 # are kept in ~/.skill-factory/projects.json, never in this repository.
 projects:

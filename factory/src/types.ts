@@ -305,6 +305,21 @@ export interface Run {
 
 export type SupervisorStatus = "pending" | "running" | "waiting_for_client" | "done" | "failed";
 
+/** The post-run agent from the `supervisor` section of config/factory.yaml. */
+export interface SupervisorSettings {
+  agent: string;
+  /** Mustache template; {{summaryJson}} is the run summary. */
+  prompt: string;
+  hostHint: string;
+  verdictLine: VerdictLineFormat;
+}
+
+/** The output line '<prefix> | <verdict> | <bottleneck> | <idea>'; the first verdict means nothing to improve. */
+export interface VerdictLineFormat {
+  prefix: string;
+  verdicts: string[];
+}
+
 export interface SupervisorRecord {
   status: SupervisorStatus;
   agent: string;
@@ -481,6 +496,7 @@ export interface FactoryConfigFile {
   switches?: Record<string, boolean>;
   memoryLayer?: string;
   projects?: ProjectsConfig;
+  supervisor?: SupervisorSettings;
 }
 
 export interface ProjectsConfig {

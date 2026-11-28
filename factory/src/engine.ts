@@ -34,8 +34,10 @@ import type {
   RunInput,
   RunStatusView,
   SubmitUsage,
+  SupervisorSettings,
   Tier,
   TokenCounts,
+  VerdictLineFormat,
   Workflow,
   WorkflowNode,
 } from "./types.ts";
@@ -63,10 +65,8 @@ const FAKE_PRICE_PER_MTOK: Record<Tier, { input: number; output: number }> = {
 
 const PARALLEL_AGENTS = 10;
 
-export const SUPERVISOR_AGENT = "olko-factory-supervisor";
 const SUPERVISOR_ID = "supervisor";
 const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
-const SUPERVISOR_HINT = "The run has ended. Run supervisorWork now in its own subagent like a pendingWork item (supervisorWork.prompt, supervisorWork.model, the agent supervisorWork.agentName with supervisorWork.agentInstructions), then call factory_submit with its output, nodePath and agentId. After that, call factory_report and show the user viewerUrl.";
 
 function workspace(run: Run): string {
   return run.workspace ?? run.input?.project ?? run.input?.cwd ?? process.env.FACTORY_WORKSPACE ?? process.cwd();
@@ -298,7 +298,10 @@ export class Factory {
       budget: { ...run.proposal.budget, ...(overrides.budget ?? {}) },
     };
     run.status = "running";
-    run.supervisor = { status: "pending", agent: SUPERVISOR_AGENT };
+    const supervisor = loadFactoryConfig().supervisor;
+    if (supervisor) {
+      run.supervisor = { status: "pending", agent: supervisor.agent };
+    }
     this.event(run, "run_confirmed", { config: run.config });
     this.checkpoint(run);
     this.schedule(run);
@@ -732,38 +735,39 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
     Object.assign(record, { status: "running", tier, model, startedAt: new Date().toISOString(), summary, error: null });
     this.event(run, "supervisor_started", { node: SUPERVISOR_PATH, tier, model });
     try {
+      const settings = supervisorSettings();
       if (config.backend.kind === "fake") {
         run.steps += 1;
-        this.appendLedger(run, { nodePath: SUPERVISOR_PATH, agentId: SUPERVISOR_ID, kind: "llm", tier, model, backend: "fake", turn: 1, ...fakeModelTurn(tier, 1), costSource: "measured", agentName: SUPERVISOR_AGENT });
-        this.finishSupervisor(run, fakeSupervisorText(summary));
+        this.appendLedger(run, { nodePath: SUPERVISOR_PATH, agentId: SUPERVISOR_ID, kind: "llm", tier, model, backend: "fake", turn: 1, ...fakeModelTurn(tier, 1), costSource: "measured", agentName: record.agent });
+        this.finishSupervisor(run, fakeSupervisorText(summary, settings.verdictLine), settings.verdictLine);
         return;
       }
-      const definition = readMarketplaceAgent(SUPERVISOR_AGENT);
-      const prompt = supervisorPrompt(summary);
+      const definition = readMarketplaceAgent(record.agent);
+      const prompt = supervisorPrompt(settings, summary);
       if (config.backend.kind === "delegate") {
         record.status = "waiting_for_client";
         record.work = { nodePath: SUPERVISOR_PATH, agentId: SUPERVISOR_ID, tier, model, prompt, agentName: definition.name, agentDescription: definition.description, agentInstructions: definition.prompt, tools: ["read"], dirs: definition.dirs };
         this.event(run, "work_offered", { node: SUPERVISOR_PATH, agentId: SUPERVISOR_ID, tier });
         return;
       }
-      const job = this.runCliSupervisor(run, prompt, definition.dirs).finally(() => this.supervising.delete(run.runId));
+      const job = this.runCliSupervisor(run, prompt, definition.dirs, settings.verdictLine).finally(() => this.supervising.delete(run.runId));
       this.supervising.set(run.runId, job);
     } catch (error) {
       this.failSupervisor(run, error);
     }
   }
 
-  async runCliSupervisor(run: Run, prompt: string, dirs: string[]): Promise<void> {
+  async runCliSupervisor(run: Run, prompt: string, dirs: string[], verdictLine: VerdictLineFormat): Promise<void> {
     const record = run.supervisor as NonNullable<Run["supervisor"]>;
     const cli = configOf(run).backend.cli;
     try {
       const executor = cli ? this.executors[cli] : undefined;
       if (!cli || !executor) throw new Error(`no executor for cli backend '${cli}' in this factory process`);
-      const result = await executor({ model: record.model as string, prompt, agent: SUPERVISOR_AGENT, tools: ["read"], dirs });
+      const result = await executor({ model: record.model as string, prompt, agent: record.agent, tools: ["read"], dirs });
       run.steps += 1;
       if (!result.ok) throw new Error(result.error ?? "the supervisor agent failed");
-      for (const entry of cliEntries(result, { nodePath: SUPERVISOR_PATH, agentId: SUPERVISOR_ID, agentName: SUPERVISOR_AGENT, tier: record.tier as Tier, requestedModel: record.model as string, cli, keepOutput: false })) this.appendLedger(run, entry);
-      this.finishSupervisor(run, result.text ?? "");
+      for (const entry of cliEntries(result, { nodePath: SUPERVISOR_PATH, agentId: SUPERVISOR_ID, agentName: record.agent, tier: record.tier as Tier, requestedModel: record.model as string, cli, keepOutput: false })) this.appendLedger(run, entry);
+      this.finishSupervisor(run, result.text ?? "", verdictLine);
     } catch (error) {
       this.failSupervisor(run, error);
     }
@@ -778,9 +782,9 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
       throw new Error(`no pending work for node ${SUPERVISOR_PATH}`);
     }
     run.steps += 1;
-    this.appendLedger(run, { ...delegateEntry(work, output, usage), agentName: SUPERVISOR_AGENT });
+    this.appendLedger(run, { ...delegateEntry(work, output, usage), agentName: record.agent });
     record.work = null;
-    this.finishSupervisor(run, output);
+    this.finishSupervisor(run, output, loadFactoryConfig().supervisor?.verdictLine);
     this.checkpoint(run);
     return { run, duplicate: false };
   }
@@ -790,9 +794,9 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
     return records.length ? round(records.reduce((s, r) => s + (r.costUsd ?? 0), 0)) : null;
   }
 
-  finishSupervisor(run: Run, output: string): void {
+  finishSupervisor(run: Run, output: string, verdictLine: VerdictLineFormat | undefined): void {
     const record = run.supervisor as NonNullable<Run["supervisor"]>;
-    const parsed = parseSupervisorLine(output);
+    const parsed = verdictLine ? parseSupervisorLine(output, verdictLine) : null;
     Object.assign(record, { status: "done", finishedAt: new Date().toISOString(), output, verdict: parsed?.verdict ?? null, bottleneck: parsed?.bottleneck ?? null, idea: parsed?.idea ?? null, costUsd: this.supervisorCost(run) });
     this.event(run, "supervisor_completed", { node: SUPERVISOR_PATH, verdict: record.verdict, costUsd: record.costUsd });
   }
@@ -831,7 +835,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
       pendingWork: run.status === "waiting_for_client" ? run.pendingWork : undefined,
       pendingWorkItems: run.status === "waiting_for_client" ? (run.pendingWorkItems ?? (run.pendingWork ? [run.pendingWork] : [])) : undefined,
       retryAfterMs: run.status === "running" ? 2000 : null,
-      next: supervisorWork ? SUPERVISOR_HINT : nextHint(run),
+      next: supervisorWork ? (loadFactoryConfig().supervisor?.hostHint ?? nextHint(run)) : nextHint(run),
       proposal: run.status === "needs_confirmation" ? run.proposal : undefined,
       cost: this.footer(run),
       ...(run.supervisor ? { supervisor: { status: run.supervisor.status, verdict: run.supervisor.verdict ?? null, bottleneck: run.supervisor.bottleneck ?? null, idea: run.supervisor.idea ?? null, costUsd: run.supervisor.costUsd ?? null } } : {}),
@@ -940,17 +944,28 @@ function supervisorView(record: NonNullable<Run["supervisor"]>): Omit<NonNullabl
   return view;
 }
 
-function supervisorPrompt(summary: RunSummary): string {
-  return `Supervise this finished factory run. The JSON below is its summary, made by a script from the run's events and ledger; it is your only data.\n\n\`\`\`json\n${JSON.stringify(summary, null, 2)}\n\`\`\``;
+/** The post-run agent settings from config/factory.yaml; a run gets a supervisor only when they exist. */
+function supervisorSettings(): SupervisorSettings {
+  const settings = loadFactoryConfig().supervisor;
+  if (!settings) {
+    throw new Error("config/factory.yaml has no supervisor section");
+  }
+  return settings;
 }
 
-function fakeSupervisorText(summary: RunSummary): string {
+/** The configured prompt template rendered over the run summary. */
+function supervisorPrompt(settings: SupervisorSettings, summary: RunSummary): string {
+  return Mustache.render(settings.prompt, { summaryJson: JSON.stringify(summary, null, 2) }, {}, { escape: (value: unknown) => String(value) });
+}
+
+/** The fake model's supervisor output: fixed facts and a verdict line in the configured format with the first verdict. */
+function fakeSupervisorText(summary: RunSummary, verdictLine: VerdictLineFormat): string {
   const bottleneck = summary.top.costNode ?? "none";
   return [
     `FACTS: ${summary.run.workflow} ${summary.run.status}, $${summary.totals.costUsd} of $${summary.run.budgetUsd ?? "?"}, ${summary.totals.llmSteps} llm steps, ${summary.loops.length} loops, ${summary.failures.length} failures.`,
     `BOTTLENECK: ${bottleneck}.`,
     "IDEAS: none (fake model).",
-    `supervise | ok | ${bottleneck} | none`,
+    `${verdictLine.prefix} | ${verdictLine.verdicts[0]} | ${bottleneck} | none`,
   ].join("\n");
 }
 

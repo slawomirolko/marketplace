@@ -1,4 +1,4 @@
-import type { LedgerRecord, Run, RunEvent } from "./types.ts";
+import type { LedgerRecord, Run, RunEvent, VerdictLineFormat } from "./types.ts";
 
 export const SUPERVISOR_PATH = "@supervisor";
 
@@ -196,11 +196,22 @@ export interface SupervisorVerdict {
   idea: string;
 }
 
-export function parseSupervisorLine(output: string): SupervisorVerdict | null {
-  const line = output.trim().split(/\r?\n/).reverse().find((l) => /^\s*`?supervise\s*\|/.test(l));
-  if (!line) return null;
-  const parts = line.replace(/`/g, "").split("|").map((p) => p.trim());
+/** Reads the last '<prefix> | <verdict> | <bottleneck> | <idea>' line of an agent's output; the format comes from the configured verdictLine. */
+export function parseSupervisorLine(output: string, format: VerdictLineFormat): SupervisorVerdict | null {
+  const line = output.trim().split(/\r?\n/).reverse().find((candidate) => startsVerdictLine(candidate, format.prefix));
+  if (!line) {
+    return null;
+  }
+  const parts = line.replace(/`/g, "").split("|").map((part) => part.trim());
   const [, verdict = "", bottleneck = "", ...idea] = parts;
-  if (!["ok", "improve", "fix"].includes(verdict)) return null;
+  if (!format.verdicts.includes(verdict)) {
+    return null;
+  }
   return { verdict, bottleneck, idea: idea.join(" | ") };
+}
+
+/** A line that starts with the prefix, optionally after a backtick, and then a '|'. */
+function startsVerdictLine(line: string, prefix: string): boolean {
+  const head = line.trimStart().replace(/^`/, "");
+  return head.startsWith(prefix) && head.slice(prefix.length).trimStart().startsWith("|");
 }

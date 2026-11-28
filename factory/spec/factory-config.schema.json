@@ -91,6 +91,38 @@
       "pattern": "^[a-z][a-z0-9-]*(:[a-z][a-z0-9-]*)?$",
       "default": "olko-memory-layer"
     },
+    "supervisor": {
+      "description": "The agent that runs once after every run ends and judges how the run spent money and time. Without this section no post-run agent runs.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent", "prompt", "hostHint", "verdictLine"],
+      "properties": {
+        "agent": {
+          "description": "The marketplace agent that supervises the run.",
+          "$ref": "#/$defs/name"
+        },
+        "prompt": {
+          "description": "Mustache template of the agent's task. {{summaryJson}} is the run summary that the factory makes from the run's events and ledger.",
+          "type": "string",
+          "minLength": 1
+        },
+        "hostHint": {
+          "description": "The next step the factory gives a delegate-mode client while the supervisor work waits for it.",
+          "type": "string",
+          "minLength": 1
+        },
+        "verdictLine": {
+          "description": "The last line of the agent's output that the factory reads: '<prefix> | <verdict> | <bottleneck> | <idea>'. The first verdict means nothing to improve.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["prefix", "verdicts"],
+          "properties": {
+            "prefix": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+            "verdicts": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" } }
+          }
+        }
+      }
+    },
     "projects": {
       "description": "How the factory finds local projects that use the marketplace. The project list and the root folders stay outside the repository, in the user's factory home.",
       "type": "object",

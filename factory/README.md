@@ -142,7 +142,7 @@ Code exists only for named operations (`src/ops.ts`: `list.next`, `list.count` (
 
 Device settings: the server, the run page process and the stdio server read `KEY=value` lines from `.env` in the factory home (`~/.skill-factory/.env`, never in a repository) at start; a variable already set in the environment wins. `FACTORY_STATUS_CLI` (`claude` or `opencode`) there picks the CLI backend of the project status workflow on that device, in place of `projects.statusBackend`.
 
-Configuration: `config/factory.yaml` (`FACTORY_CONFIG` changes it), validated against `spec/factory-config.schema.json`: roles to tiers, backends and budget. It names no model; the proposal at run start shows the tier-to-model map and the user confirms or changes it. `docs/yaml-migration-plan.md` lists the workflows still to move.
+Configuration: `config/factory.yaml` (`FACTORY_CONFIG` changes it), validated against `spec/factory-config.schema.json`: roles to tiers, backends, budget, and the post-run `supervisor`: the marketplace agent that judges every ended run, its prompt template over the run summary (`{{summaryJson}}`), the next-step hint for delegate clients and the verdict line it ends with (without the section no post-run agent runs). It names no model; the proposal at run start shows the tier-to-model map and the user confirms or changes it. `docs/yaml-migration-plan.md` lists the workflows still to move.
 
 ## Layout
 
