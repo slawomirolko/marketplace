@@ -62,9 +62,13 @@ test(`the plan documentation of a one-Task idea ends done within ${LIMIT_MIN} mi
   const startedAt = Date.now();
   const deadline = startedAt + LIMIT_MIN * 60000;
   const offered: string[] = [];
+  const subagents = new AbortController();
   let timer: NodeJS.Timeout | undefined;
   const expired = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`the smoke run passed its ${LIMIT_MIN} min limit while subagents were running`)), deadline - startedAt);
+    timer = setTimeout(() => {
+      subagents.abort();
+      reject(new Error(`the smoke run passed its ${LIMIT_MIN} min limit while subagents were running`));
+    }, deadline - startedAt);
   });
   expired.catch(() => undefined);
   try {
@@ -74,7 +78,7 @@ test(`the plan documentation of a one-Task idea ends done within ${LIMIT_MIN} mi
       if (view.status === "waiting_for_client") {
         const items = (view.pendingWorkItems ?? []) as Payload[];
         offered.push(...items.map((w) => String(w.nodePath)));
-        const results = await Promise.race([Promise.all(items.map((w) => runSubagent(w, { cwd: (w.cwd as string | undefined) ?? project }))), expired]);
+        const results = await Promise.race([Promise.all(items.map((w) => runSubagent(w, { cwd: (w.cwd as string | undefined) ?? project, signal: subagents.signal }))), expired]);
         for (const [i, work] of items.entries()) factory.submit(run.runId, work.nodePath, results[i]!.output, results[i]!.usage, work.agentId);
       } else if (view.status === "waiting_for_user") {
         const question = view.pendingQuestion as Payload;
@@ -99,6 +103,7 @@ test(`the plan documentation of a one-Task idea ends done within ${LIMIT_MIN} mi
     assert.ok(fs.readdirSync(path.join(feature, "tasks")).some((f) => f.endsWith("-implementation.md")), "the Task has an implementation plan");
   } finally {
     clearTimeout(timer);
+    subagents.abort();
     if (!ENDED.has(factory.get(run.runId).status)) factory.cancel(run.runId);
     removeDir(project);
   }

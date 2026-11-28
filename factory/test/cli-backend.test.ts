@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { withEnv } from "./helpers/env.ts";
+import { until } from "./helpers/poll.ts";
 import { tempDir } from "./helpers/temp.ts";
 import { cliExecutor, hostExec } from "../src/cli-backend.ts";
 import { homeEnv } from "../src/home-env.ts";
@@ -26,6 +27,11 @@ fs.writeFileSync(
   [
     `const probe = { argv: process.argv.slice(2), cwd: process.cwd(), env: Object.fromEntries(${JSON.stringify(PROBED_ENV)}.map((name) => [name, process.env[name] ?? null])) };`,
     "const text = JSON.stringify(probe);",
+    "if (process.env.FACTORY_FAKE_PID_FILE) {",
+    "  require('node:fs').writeFileSync(process.env.FACTORY_FAKE_PID_FILE, String(process.pid));",
+    "  setInterval(() => undefined, 1000);",
+    "  return;",
+    "}",
     "if (process.env.FACTORY_FAKE_MALFORMED) {",
     "  process.stdout.write('not json\\n');",
     "}",
@@ -158,3 +164,26 @@ test("OpenCode output lines that are not JSON are counted and named in the resul
   assert.equal(failed.malformedLines, 1);
   assert.match(failed.error ?? "", /1 malformed output lines dropped/);
 });
+
+function processGone(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ESRCH";
+  }
+}
+
+for (const cli of ["claude", "opencode"] as const) {
+  test(`an aborted ${cli} request ends the CLI process and fails the request`, async () => {
+    const pidFile = path.join(tempDir("factory-cli-abort-"), "pid");
+    const controller = new AbortController();
+    const pending = cliExecutor(cli)({ model: "sonnet", prompt: "hi", env: { FACTORY_FAKE_PID_FILE: pidFile }, signal: controller.signal });
+    const pid = await until(() => (fs.existsSync(pidFile) ? Number(fs.readFileSync(pidFile, "utf8")) : 0), "the fake CLI to start");
+    controller.abort();
+    const result = await pending;
+    assert.equal(result.ok, false);
+    assert.match(result.error ?? "", /\(aborted\)/);
+    await until(() => processGone(pid), `the CLI process ${pid} to end`);
+  });
+}

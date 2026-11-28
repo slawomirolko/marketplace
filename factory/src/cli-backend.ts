@@ -28,6 +28,7 @@ interface SpawnResult {
   stderr: string;
   durationMs: number;
   timedOut: boolean;
+  aborted: boolean;
 }
 
 interface ClaudeModelUsage {
@@ -114,7 +115,15 @@ function killTree(pid: number | undefined, fallback: () => void): void {
   spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" }).on("error", fallback);
 }
 
-function spawnCli(command: string, args: string[], stdinText?: string, { cwd = cliWorkDir(), env = {} }: { cwd?: string; env?: Record<string, string> } = {}): Promise<SpawnResult> {
+/** Why a CLI process ended early, for its error text: " (timed out)", " (aborted)" or nothing. */
+function endedEarly(res: SpawnResult): string {
+  if (res.timedOut) {
+    return " (timed out)";
+  }
+  return res.aborted ? " (aborted)" : "";
+}
+
+function spawnCli(command: string, args: string[], stdinText?: string, { cwd = cliWorkDir(), env = {}, signal }: { cwd?: string; env?: Record<string, string>; signal?: AbortSignal | undefined } = {}): Promise<SpawnResult> {
   return new Promise((resolve) => {
     const started = Date.now();
     const childEnv = { ...cleanEnv(), PWD: cwd, ...env };
@@ -123,10 +132,20 @@ function spawnCli(command: string, args: string[], stdinText?: string, { cwd = c
     let stdout = "";
     let stderr = "";
     let timedOut = false;
+    let aborted = false;
     const timer = setTimeout(() => {
       timedOut = true;
       killTree(child.pid, () => child.kill());
     }, TIMEOUT_MS);
+    const abort = () => {
+      aborted = true;
+      killTree(child.pid, () => child.kill());
+    };
+    if (signal?.aborted) {
+      abort();
+    } else {
+      signal?.addEventListener("abort", abort, { once: true });
+    }
     child.stdout.on("data", (chunk) => (stdout += chunk));
     child.stderr.on("data", (chunk) => (stderr += chunk));
     child.on("error", (error) => {
@@ -135,7 +154,8 @@ function spawnCli(command: string, args: string[], stdinText?: string, { cwd = c
     child.stdin.on("error", () => {});
     child.on("close", (code) => {
       clearTimeout(timer);
-      resolve({ code, stdout, stderr, durationMs: Date.now() - started, timedOut });
+      signal?.removeEventListener("abort", abort);
+      resolve({ code, stdout, stderr, durationMs: Date.now() - started, timedOut, aborted });
     });
     child.stdin.end(stdinText ?? "");
   });
@@ -180,7 +200,7 @@ function claudeAgentArgs(agent: string, tools: AgentTool[], dirs: string[], defi
   return ["--agents", claudeAgentsFile(definition ?? agent, tools), "--agent", agent, "--max-turns", AGENT_MAX_TURNS, "--allowedTools", allowed.join(","), "--disallowedTools", disallowed.join(","), ...permission, ...dirs.flatMap((dir) => ["--add-dir", dir])];
 }
 
-async function runClaude(model: string, prompt: string, { agent: named, definition, cwd, tools = ["read"], dirs = [], env = {} }: AgentRunOptions = {}): Promise<CliResult> {
+async function runClaude(model: string, prompt: string, { agent: named, definition, cwd, tools = ["read"], dirs = [], env = {}, signal }: AgentRunOptions = {}): Promise<CliResult> {
   const agent = definition?.name ?? named;
   const invalid = requestError(agent, model, dirs);
   if (invalid) {
@@ -190,7 +210,7 @@ async function runClaude(model: string, prompt: string, { agent: named, definiti
     ? ["-p", "--model", model, "--output-format", "json", ...CLAUDE_ISOLATION, ...claudeAgentArgs(agent, tools, dirs, definition)]
     : ["-p", "--model", model, "--output-format", "json", ...CLAUDE_ISOLATION, "--max-turns", PROMPT_MAX_TURNS, "--disallowedTools", CLAUDE_DISALLOWED];
   const agentFile = args[args.indexOf("--agents") + 1];
-  const res = await spawnCli("claude", args, prompt, { cwd: cwd ?? cliWorkDir(), env }).finally(() => {
+  const res = await spawnCli("claude", args, prompt, { cwd: cwd ?? cliWorkDir(), env, signal }).finally(() => {
     if (agent && agentFile) {
       removeTempDir(path.dirname(agentFile));
     }
@@ -199,7 +219,7 @@ async function runClaude(model: string, prompt: string, { agent: named, definiti
   try {
     out = JSON.parse(res.stdout) as ClaudeOutput;
   } catch {
-    return { ok: false, error: `claude exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${(res.stderr || res.stdout).slice(-ERROR_TEXT_CHARS)}`, durationMs: res.durationMs, timedOut: res.timedOut };
+    return { ok: false, error: `claude exit ${res.code}${endedEarly(res)}: ${(res.stderr || res.stdout).slice(-ERROR_TEXT_CHARS)}`, durationMs: res.durationMs, timedOut: res.timedOut };
   }
   const usageByModel = Object.entries(out.modelUsage ?? {}).map(([id, usage]) => ({
     model: id,
@@ -222,7 +242,7 @@ function opencodeModelId(model: string): string {
   return full.startsWith("claude-") ? `anthropic/${full}` : full;
 }
 
-async function runOpencode(model: string, prompt: string, { agent: named, definition, cwd, configDir, tools = ["read"], dirs = [], env = {} }: AgentRunOptions = {}): Promise<CliResult> {
+async function runOpencode(model: string, prompt: string, { agent: named, definition, cwd, configDir, tools = ["read"], dirs = [], env = {}, signal }: AgentRunOptions = {}): Promise<CliResult> {
   const agent = definition?.name ?? named;
   const id = opencodeModelId(model);
   const invalid = requestError(agent, model, dirs);
@@ -231,7 +251,7 @@ async function runOpencode(model: string, prompt: string, { agent: named, defini
   }
   const args = ["run", "--standalone", "--archived", "--format", "json", "-m", id, ...(agent ? ["--agent", agent] : [])];
   const agentDir = configDir ?? (agent ? opencodeConfigDir(definition ?? agent, tools, dirs) : undefined);
-  const res = await spawnCli("opencode", args, prompt, { cwd: cwd ?? cliWorkDir(), env: { ...env, ...(agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {}) } }).finally(() => {
+  const res = await spawnCli("opencode", args, prompt, { cwd: cwd ?? cliWorkDir(), env: { ...env, ...(agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {}) }, signal }).finally(() => {
     if (agentDir && !configDir) {
       removeTempDir(agentDir);
     }
@@ -260,7 +280,7 @@ async function runOpencode(model: string, prompt: string, { agent: named, defini
   }
   const dropped = malformedLines > 0 ? { malformedLines } : {};
   if (error || steps === 0) {
-    const reason = error ? JSON.stringify(error.error ?? error).slice(0, ERROR_TEXT_CHARS) : `opencode exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${res.stderr.slice(-ERROR_TEXT_CHARS)}`;
+    const reason = error ? JSON.stringify(error.error ?? error).slice(0, ERROR_TEXT_CHARS) : `opencode exit ${res.code}${endedEarly(res)}: ${res.stderr.slice(-ERROR_TEXT_CHARS)}`;
     return { ok: false, error: malformedLines > 0 ? `${reason} (${malformedLines} malformed output lines dropped)` : reason, durationMs: res.durationMs, timedOut: res.timedOut, ...dropped };
   }
   const sessionId = events.find((event) => event.sessionID)?.sessionID ?? null;

@@ -17873,7 +17873,12 @@ function killTree(pid, fallback) {
 		"/F"
 	], { stdio: "ignore" }).on("error", fallback);
 }
-function spawnCli(command, args, stdinText, { cwd = cliWorkDir(), env = {} } = {}) {
+/** Why a CLI process ended early, for its error text: " (timed out)", " (aborted)" or nothing. */
+function endedEarly(res) {
+	if (res.timedOut) return " (timed out)";
+	return res.aborted ? " (aborted)" : "";
+}
+function spawnCli(command, args, stdinText, { cwd = cliWorkDir(), env = {}, signal } = {}) {
 	return new Promise((resolve) => {
 		const started = Date.now();
 		const childEnv = {
@@ -17891,10 +17896,17 @@ function spawnCli(command, args, stdinText, { cwd = cliWorkDir(), env = {} } = {
 		let stdout = "";
 		let stderr = "";
 		let timedOut = false;
+		let aborted = false;
 		const timer = setTimeout(() => {
 			timedOut = true;
 			killTree(child.pid, () => child.kill());
 		}, TIMEOUT_MS);
+		const abort = () => {
+			aborted = true;
+			killTree(child.pid, () => child.kill());
+		};
+		if (signal?.aborted) abort();
+		else signal?.addEventListener("abort", abort, { once: true });
 		child.stdout.on("data", (chunk) => stdout += chunk);
 		child.stderr.on("data", (chunk) => stderr += chunk);
 		child.on("error", (error) => {
@@ -17903,12 +17915,14 @@ function spawnCli(command, args, stdinText, { cwd = cliWorkDir(), env = {} } = {
 		child.stdin.on("error", () => {});
 		child.on("close", (code) => {
 			clearTimeout(timer);
+			signal?.removeEventListener("abort", abort);
 			resolve({
 				code,
 				stdout,
 				stderr,
 				durationMs: Date.now() - started,
-				timedOut
+				timedOut,
+				aborted
 			});
 		});
 		child.stdin.end(stdinText ?? "");
@@ -17959,7 +17973,7 @@ function claudeAgentArgs(agent, tools, dirs, definition) {
 		...dirs.flatMap((dir) => ["--add-dir", dir])
 	];
 }
-async function runClaude(model, prompt, { agent: named, definition, cwd, tools = ["read"], dirs = [], env = {} } = {}) {
+async function runClaude(model, prompt, { agent: named, definition, cwd, tools = ["read"], dirs = [], env = {}, signal } = {}) {
 	const agent = definition?.name ?? named;
 	const invalid = requestError(agent, model, dirs);
 	if (invalid) return {
@@ -17989,7 +18003,8 @@ async function runClaude(model, prompt, { agent: named, definition, cwd, tools =
 	const agentFile = args[args.indexOf("--agents") + 1];
 	const res = await spawnCli("claude", args, prompt, {
 		cwd: cwd ?? cliWorkDir(),
-		env
+		env,
+		signal
 	}).finally(() => {
 		if (agent && agentFile) removeTempDir(path.dirname(agentFile));
 	});
@@ -17999,7 +18014,7 @@ async function runClaude(model, prompt, { agent: named, definition, cwd, tools =
 	} catch {
 		return {
 			ok: false,
-			error: `claude exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${(res.stderr || res.stdout).slice(-300)}`,
+			error: `claude exit ${res.code}${endedEarly(res)}: ${(res.stderr || res.stdout).slice(-300)}`,
 			durationMs: res.durationMs,
 			timedOut: res.timedOut
 		};
@@ -18031,7 +18046,7 @@ function opencodeModelId(model) {
 	const full = MODEL_ALIASES[model] ?? model;
 	return full.startsWith("claude-") ? `anthropic/${full}` : full;
 }
-async function runOpencode(model, prompt, { agent: named, definition, cwd, configDir, tools = ["read"], dirs = [], env = {} } = {}) {
+async function runOpencode(model, prompt, { agent: named, definition, cwd, configDir, tools = ["read"], dirs = [], env = {}, signal } = {}) {
 	const agent = definition?.name ?? named;
 	const id = opencodeModelId(model);
 	const invalid = requestError(agent, model, dirs);
@@ -18055,7 +18070,8 @@ async function runOpencode(model, prompt, { agent: named, definition, cwd, confi
 		env: {
 			...env,
 			...agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {}
-		}
+		},
+		signal
 	}).finally(() => {
 		if (agentDir && !configDir) removeTempDir(agentDir);
 	});
@@ -18088,7 +18104,7 @@ async function runOpencode(model, prompt, { agent: named, definition, cwd, confi
 	}
 	const dropped = malformedLines > 0 ? { malformedLines } : {};
 	if (error || steps === 0) {
-		const reason = error ? JSON.stringify(error.error ?? error).slice(0, ERROR_TEXT_CHARS) : `opencode exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${res.stderr.slice(-300)}`;
+		const reason = error ? JSON.stringify(error.error ?? error).slice(0, ERROR_TEXT_CHARS) : `opencode exit ${res.code}${endedEarly(res)}: ${res.stderr.slice(-300)}`;
 		return {
 			ok: false,
 			error: malformedLines > 0 ? `${reason} (${malformedLines} malformed output lines dropped)` : reason,

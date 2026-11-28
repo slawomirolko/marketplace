@@ -101,7 +101,7 @@ function usageOf(result: CliResult): SubagentResult["usage"] {
  * Runs one pendingWorkItems entry as an isolated subagent of TEST_HARNESS, with the engine's per-call timeout and one retry.
  * The agent runs in sandboxEnv() unless `env` is given; `network: "github-read"` is the explicit opt-in for GitHub reads.
  */
-export async function runSubagent(work: Payload, { cwd, env, tools, network = "none" }: { cwd: string; env?: Record<string, string>; tools?: AgentTool[]; network?: SubagentNetwork }): Promise<SubagentResult> {
+export async function runSubagent(work: Payload, { cwd, env, tools, network = "none", signal }: { cwd: string; env?: Record<string, string>; tools?: AgentTool[]; network?: SubagentNetwork; signal?: AbortSignal }): Promise<SubagentResult> {
   const run = cliExecutor(TEST_HARNESS);
   const agentEnv = env ?? sandboxFor(network);
   const request = {
@@ -112,12 +112,16 @@ export async function runSubagent(work: Payload, { cwd, env, tools, network = "n
     env: agentEnv,
     tools: tools ?? (work.tools as AgentTool[]),
     dirs: work.dirs as string[],
+    signal,
   };
   const errors: string[] = [];
   for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
     const result = await run(request);
     if (result.ok) return { output: result.text ?? "", usage: usageOf(result) };
     errors.push(`attempt ${attempt}: ${result.error}`);
+    if (signal?.aborted) {
+      break;
+    }
   }
   throw new Error(`${TEST_HARNESS} subagent ${work.agentName} at ${work.nodePath} failed: ${errors.join(" | ")}`);
 }

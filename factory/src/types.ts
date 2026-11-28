@@ -140,6 +140,8 @@ export interface CliRequest {
   /** The agent's own instructions, used instead of looking `agent` up in the marketplace. */
   definition?: { name: string; description: string; prompt: string } | undefined;
   env?: Record<string, string> | undefined;
+  /** Ends the CLI process tree when aborted; the request then fails with "(aborted)". */
+  signal?: AbortSignal | undefined;
 }
 
 export interface CliResult {
