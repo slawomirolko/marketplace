@@ -74,16 +74,19 @@ Also apply the `olko-design-rules` catalogue to the changed lines: its design ru
 ### Documentation and method shape
 - After reading a method name, a person should be able to understand what the method does.
 - If a method name contains `And` or `Or`, inspect it for single-responsibility violations and split it when appropriate.
-- Remove `/// <summary>` and `/// <remark>` comments. Keep comments only when they explain an edge case that is not clear from the code.
+- Remove every `/// <summary>`/`/// <remarks>`/`<param>` block and every `//` line: a changed C# file carries ZERO comments. The only exception is the three test-body markers `// Arrange`, `// Act`, `// Assert`.
 - A comment that explains what a method does signals a weak name: rename the method so the comment becomes redundant, then remove the comment.
+- Never add a doc block to silence a missing-parameter-doc compiler warning; disable that warning in the project instead.
 - Keep methods at or below 30 lines unless the local docs allow a specific exception.
 - Method names should represent one responsibility.
 
 ### Naming and file organization
 - Use file-scoped namespaces.
 - Namespace must match the file location relative to the project root, for example `ProjectRoot/Weather/WeatherService.cs` -> `ProjectRoot.Weather`.
-- Keep one public type per file unless a tiny helper type is tightly bound to the main type.
-- Keep related types together in the same feature namespace and folder tree.
+- Keep one public type per file and never declare a second type in that file — no nested `private sealed` helper, no nested record, no interface member record. One file = one type declaration.
+- A result record returned by an interface (`<Name>RunResult`, `<Name>TickResult`) lives in its own file; an interface file declares only the interface.
+- Keep related types in the same feature namespace and folder tree.
+- Write only bounded loops: never `while (true)`. Use `for (var page = 0; page < MaxPageCount; page++)` with a named constant, or a `while (condition)` whose condition changes in the body, and log when the safety bound is hit.
 - For every `record`, declare data with explicit public properties using `{ get; init; }`.
 - Use opening and closing braces for all control flow statements, including single-line `if`, `else`, `for`, `foreach`, `while`, `using`, `lock`, and `fixed`.
 - `CancellationToken` parameters must use the full name `cancellationToken` and default to `default`, for example `CancellationToken cancellationToken = default`. Check every changed interface member and method declaration, not just the implementation, and report each missing `= default` as a violation.
@@ -157,6 +160,7 @@ Owner directives; they apply to every project that uses this skill.
 
 ### Mappers, endpoints, instrumentation
 - Put transport-to-domain and domain-to-read-model conversion in extension methods on a dedicated `<Thing>MappingExtensions` or `<Thing>ReadModelExtensions` type. Never inline a mapping lambda, projection, or DTO construction block in an endpoint, handler, or service body.
+- A private `Build*`/`Create*`/`Map*` method that only forwards arguments to a production factory is a mapper defect: convert it into an extension method on a `<Thing>Extensions` type that returns the factory's `ErrorOr<T>` result.
 - Keep a host endpoint file to routing, authorization, parameter parsing, and delegation. A non-trivial read composition goes to an `I<Thing>ReadService` registered in host DI. Never place repository or unit-of-work access, mapping, formatting, ordering, or state-name selection in an endpoint.
 - Extract a group of `activity?.SetTag(...)` calls into a private `Setup<Operation>Instrumentation` method and call it once per operation.
 - Give a recurring invalid-input rule that must surface as a specific transport failure code its own exception type (for gRPC, an `RpcException` subtype) instead of repeating a generic error conversion at several call sites.

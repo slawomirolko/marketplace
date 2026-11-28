@@ -121,7 +121,8 @@ Apply these defaults unless config, adapter, or project docs override them.
 - Test data builders should be static factory methods on the model or dedicated builder classes.
 - Give every builder method a named default for each parameter, so a test names only the field it varies.
 - Builders read production-exposed values (smart enum `Name`s, contract constants) and call the production factory instead of re-typing literals or construction rules.
-- Do not keep an inline static factory inside one test class when a second test class needs the same data; extract it to the shared test setup location.
+- Never keep a `private static` factory/helper that constructs a test entity or DTO (`BuildFeedback`, `BuildEvent`, `Snapshot`, `Computed`) inside a test class, even when only one test class uses it; extract it to a shared `<Type>TestBuilder`.
+- Do not wrap a production factory that already exists (`MarketReactionResult.Unavailable`); call it directly.
 - Do not duplicate the same `WebApplicationFactory` setup across multiple test classes.
 - Put channel/client/marshaller plumbing that more than one test needs on the shared test base or a dedicated helper type, never in individual test classes.
 
@@ -170,7 +171,7 @@ Apply these defaults unless config, adapter, or project docs override them.
 Owner directives; they apply to every project that uses this skill.
 
 ### Arrange / Act / Assert markers are required
-- Every test body is split by exactly three block comments: `// Arrange`, `// Act`, `// Assert`, including a single-line assert.
+- Every test body is split by exactly three block comments: `// Arrange`, `// Act`, `// Assert`, including a single-line assert. These three markers are the ONLY comments allowed in test code; no XML docs, no `#region`, no other narration.
 - Arrange builds the input and seeds state; Act performs the single call under test; Assert holds every `ShouldBe`/`ShouldThrow`/`Should*` claim.
 - Never omit a section, and never mix assertions into Arrange or Act.
 - Apart from those three markers, do not write explanatory comments in a test body ("regression guard", "unique per test", rationale notes). Make intent visible through the name, the builder, and the assertions.
@@ -184,6 +185,7 @@ Owner directives; they apply to every project that uses this skill.
 - Build request/entity input with one shared internal test-data builder per feature slice, exposed to the test project through `InternalsVisibleTo` when it lives in production or in the test setup folder when it is test-only.
 - Give every builder parameter a named default so a test names only the field it varies.
 - Never write inline static factories, `ForEach` request mutators, or per-test duplicated object graphs when a builder covers the shape.
+- Name the builder `<Type>TestBuilder` and its entry point `Create` (for example `WeatherMemoryFeedbackTestBuilder.Create(regionId, ruleId, MarketReactionHorizon.OneHour)`); a `private static` helper in a test class that builds an entity or DTO is a violation even when only one test uses it.
 
 ### Test naming and organization
 - Name tests after one behavior using `MethodUnderTest__scenario_expectedResult` with exactly TWO underscores between the method under test and the scenario.
