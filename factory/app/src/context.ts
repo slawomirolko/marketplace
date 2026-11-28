@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
-import type { HumanIcon, LiveState } from "./tree.ts";
+import type { HumanIcon } from "./human.ts";
+import type { LiveState } from "./live.ts";
 import type { Item, StaleWorkflow } from "./types.ts";
 import type { AgentInfo, AskedQuestion, FactoryConfig, RunData, RunIndex, RunReport, Workflow } from "./types.ts";
 

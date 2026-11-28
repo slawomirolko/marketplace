@@ -1,12 +1,13 @@
 import { http, HttpResponse } from "msw";
 import { App } from "../src/App.tsx";
-import { Projects, actionOf, countsText, fetchNoteOf, remoteNameOf, verdictOf, versionText } from "../src/Projects.tsx";
-import type { ProjectArtifact, ProjectList, ProjectStatusView } from "../src/Projects.tsx";
+import { Projects } from "../src/Projects.tsx";
+import { actionOf, countsText, fetchNoteOf, remoteNameOf, verdictOf, versionText } from "../src/projects/status-text.ts";
+import type { ProjectArtifact, ProjectOverview, ProjectStatusView } from "../src/types.ts";
 import { fireEvent, render, screen, server, userEvent, waitFor, within } from "./testUtils/index.ts";
 
 const artifact = (extra: Partial<ProjectArtifact>): ProjectArtifact => ({ id: "skill:sample-skill", kind: "skill", name: "sample-skill", harness: "agents", location: ".agents/skills/sample-skill", state: "current", installed: "1.0.0", current: "1.0.0", files: [], workflows: [], ...extra });
 
-const list: ProjectList = {
+const list: ProjectOverview = {
   roots: ["/src"],
   statusWorkflow: "olko-project-status",
   statusWorkflowInstalled: true,
@@ -46,7 +47,7 @@ const remoteRef = "origin/main", installedCommit = "aaaaaaa", currentCommit = "b
 
 type Posted = Record<string, string>;
 
-function serve(posted: Posted[] = [], statuses: Record<string, ProjectStatusView | null> = { "sample-app": status, "sample-web": null }, projects: ProjectList = list) {
+function serve(posted: Posted[] = [], statuses: Record<string, ProjectStatusView | null> = { "sample-app": status, "sample-web": null }, projects: ProjectOverview = list) {
   server.use(
     http.get("/api/projects", () => HttpResponse.json(projects)),
     http.get("/api/projects/:id/status", ({ params }) => {

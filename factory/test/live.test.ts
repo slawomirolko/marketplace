@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isLive, liveState } from "../app/src/tree.ts";
+import { isLive, liveState } from "../app/src/live.ts";
 import type { Item, RunData } from "../app/src/types.ts";
 
 function run(status: string, events: RunData["events"], extra: Partial<RunData> = {}): RunData {
@@ -53,7 +53,8 @@ test("a call is live while a node inside it runs, and an agent card only when it
 });
 
 test("a group's cost includes its multi-agent nodes", async () => {
-  const { buildLevel, costOf } = await import("../app/src/tree.ts");
+  const { buildLevel } = await import("../app/src/tree.ts");
+  const { costOf } = await import("../app/src/run-facts.ts");
   const cost = (costUsd: number) => ({ costUsd, tokens: 10, cacheTokens: 0, steps: 1, llmSteps: 1, unknownSteps: 0, costSource: "measured", byAgent: {} });
   const workflows = [
     { name: "root", version: "1", entry: "phase", nodes: [{ id: "phase", kind: "group", workflow: "inner" }], edges: [{ from: "phase", to: "END" }] },
@@ -68,7 +69,7 @@ test("a group's cost includes its multi-agent nodes", async () => {
 });
 
 test("a step counts as run only when it started; an agent only when it worked", async () => {
-  const { ranIn } = await import("../app/src/tree.ts");
+  const { ranIn } = await import("../app/src/run-facts.ts");
   const data = run("done", [{ at, type: "node_started", node: "wf/workers" }, { at, type: "agent_started", node: "wf/workers", agentId: "flow" }]);
   const step = (key: string) => ({ key, kind: "step", node: { id: key, kind: "script" } }) as unknown as Item;
   const agent = (id: string) => ({ key: `wf/workers#${id}`, kind: "agent", nodePath: "wf/workers", agent: { id, role: "plan-worker" } }) as unknown as Item;

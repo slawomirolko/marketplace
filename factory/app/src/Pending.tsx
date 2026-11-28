@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { API, messageOf, postAction, requestJson } from "./api.ts";
+import { API, LIVE_REFRESH_MS, messageOf, postAction, requestJson } from "./api.ts";
 
 export interface PendingDecision {
   runId: string;
@@ -9,8 +9,6 @@ export interface PendingDecision {
   text: string;
   allowed: string[];
 }
-
-const REFRESH_MS = 15_000;
 
 /** Questions of runs the viewer process owns (for example runs started by a watch), with one button per allowed answer. */
 export function PendingDecisions({ onOpenRun }: { onOpenRun: (runId: string) => void }) {
@@ -30,7 +28,7 @@ export function PendingDecisions({ onOpenRun }: { onOpenRun: (runId: string) => 
 
   useEffect(() => {
     load();
-    const id = setInterval(load, REFRESH_MS);
+    const id = setInterval(load, LIVE_REFRESH_MS);
     return () => clearInterval(id);
   }, [load]);
 

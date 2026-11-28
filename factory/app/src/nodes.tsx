@@ -2,7 +2,12 @@ import { useEffect, useRef } from "react";
 import { Handle, Position } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import { useViewer } from "./context.ts";
-import { agentScripts, formatDuration, formatTokens, formatUsd, hasMemoryLayer, humanLabel, isDisabled, isGroup, isLive, ranIn } from "./tree.ts";
+import { formatDuration, formatTokens, formatUsd } from "./format.ts";
+import { humanLabel } from "./human.ts";
+import { isLive } from "./live.ts";
+import { ranIn } from "./run-facts.ts";
+import { isDisabled } from "./switches.ts";
+import { agentScripts, hasMemoryLayer, isGroup } from "./tree.ts";
 import type { CardFlowNode, ClusterFlowNode, TerminalFlowNode } from "./layout.ts";
 import type { Item, RunIndexEntry, RunReport } from "./types.ts";
 

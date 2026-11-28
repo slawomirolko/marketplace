@@ -11,7 +11,10 @@ import type { Cost, Item, Level, RunData, RunReport } from "../app/src/types.ts"
 import { runTimeline } from "../src/run-timing.ts";
 import { subgraphCosts } from "../src/run-report.ts";
 import { supervisorRing } from "../app/src/supervisor.ts";
-import { agentScripts, allItems, buildLevel, costOf, failureOf, rawFailureOf, runCalls, runPasses, formatTokens, hasMemoryLayer, humanIcons, humanLabel, isEngineScript, questionsFor, ledgerOf, formatUsd, END_KEY, START_KEY } from "../app/src/tree.ts";
+import { formatTokens, formatUsd } from "../app/src/format.ts";
+import { humanIcons, humanLabel, questionsFor } from "../app/src/human.ts";
+import { costOf, failureOf, ledgerOf, rawFailureOf, runCalls, runPasses } from "../app/src/run-facts.ts";
+import { agentScripts, allItems, buildLevel, END_KEY, hasMemoryLayer, isEngineScript, START_KEY } from "../app/src/tree.ts";
 import { agentsOnly } from "../app/src/agents-only.ts";
 import { layoutGraph, scriptsHeight } from "../app/src/layout.ts";
 
@@ -275,7 +278,7 @@ test("api passes non-GET requests and other paths on to the next handler", async
 
 test("totals with unknown steps are shown as unknown or partial, never as an exact amount", async () => {
   const { runReport } = await import("../src/run-report.ts");
-  const { formatAmount, formatUsd } = await import("../app/src/tree.ts");
+  const { formatAmount, formatUsd } = await import("../app/src/format.ts");
   const record = (nodePath: string, model: string, costUsd: number | null, costSource: string) => ({ nodePath, agentId: nodePath.split("/").at(-1), kind: "llm", tier: "medium", model, inputTokens: 10, outputTokens: 1, costUsd, costSource });
   const run = {
     runId: "r-0000abcd",
@@ -301,7 +304,7 @@ test("totals with unknown steps are shown as unknown or partial, never as an exa
 });
 
 test("run index gives the same cost, tier and failure as the per-node lookups", async () => {
-  const { buildRunIndex, tierOf } = await import("../app/src/tree.ts");
+  const { buildRunIndex, tierOf } = await import("../app/src/run-facts.ts");
   const { data, detail } = await demoRun();
   const config = data.config();
   const run = { ...detail.run, events: [...detail.run.events, { at: "", type: "node_failed", node: "hello/build/implement", error: "boom" }] };
@@ -327,7 +330,7 @@ function ledgerRecord(nodePath: string, at: string, costUsd: number | null, extr
 }
 
 test("run count: a step in a retry loop counts every visit, a group sums the steps inside it", async () => {
-  const { runCount } = await import("../app/src/tree.ts");
+  const { runCount } = await import("../app/src/run-facts.ts");
   const step = (key: string): Item => ({ key, kind: "step", node: { id: key.split("/").at(-1) ?? key, kind: "llm" } });
   const run = runWithEvents([
     { at: "1", type: "node_started", node: "w/fix", visit: 1 },
@@ -399,7 +402,7 @@ test("run calls: every visit in time order with status, ledger cost and duration
 });
 
 test("time spent: passes add up, user waits are left out, a team counts wall time and a group sums its steps", async () => {
-  const { itemPasses, runCalls, timeSpent } = await import("../app/src/tree.ts");
+  const { itemPasses, runCalls, timeSpent } = await import("../app/src/run-facts.ts");
   const at = (s: number) => new Date(Date.UTC(2026, 0, 1) + s * 1000).toISOString();
   const run: RunData = {
     ...runWithEvents([
@@ -449,7 +452,7 @@ test("time spent: passes add up, user waits are left out, a team counts wall tim
 });
 
 test("durations read as 840ms, 3m 12s or 1h 05m", async () => {
-  const { formatDuration } = await import("../app/src/tree.ts");
+  const { formatDuration } = await import("../app/src/format.ts");
   assert.deepEqual(
     [null, 0, 840, 999, 1000, 59_400, 59_600, 192_000, 3_599_000, 3_900_000, 36_000_000].map(formatDuration),
     ["—", "0ms", "840ms", "999ms", "1s", "59s", "1m 00s", "3m 12s", "59m 59s", "1h 05m", "10h 00m"],
@@ -457,7 +460,8 @@ test("durations read as 840ms, 3m 12s or 1h 05m", async () => {
 });
 
 test("demo run: every ledger record lands in one call and the index carries the run counts", async () => {
-  const { allItems, ancestorKeys, buildRunIndex, findItem, runCalls, runCount, timeSpent } = await import("../app/src/tree.ts");
+  const { allItems, ancestorKeys, findItem } = await import("../app/src/tree.ts");
+  const { buildRunIndex, runCalls, runCount, timeSpent } = await import("../app/src/run-facts.ts");
   const { data, detail } = await demoRun();
   const calls = runCalls(detail.report);
   assert.equal(calls.reduce((s, c) => s + c.records, 0), detail.run.ledger.length, "no ledger record is lost or counted twice");
@@ -486,7 +490,7 @@ test("the run detail carries the supervisor and the ring shows its verdict, cost
   assert.match(ring.headline, /^bottleneck: hello\/\S+ · idea: none$/);
   assert.match(ring.text, /^FACTS: /);
   assert.ok(detail.run.ledger.some((r) => r.nodePath === "@supervisor"), "the supervisor cost is in the run ledger");
-  const { runCalls } = await import("../app/src/tree.ts");
+  const { runCalls } = await import("../app/src/run-facts.ts");
   const call = runCalls(detail.report).find((c) => c.node === "@supervisor");
   assert.equal(call?.status, "done", "the supervisor is one call in the calls list");
   assert.equal(call?.records, 1);

@@ -1,5 +1,6 @@
 import { useViewer } from "./context.ts";
-import { questionsFor, stepName } from "./tree.ts";
+import { questionsFor } from "./human.ts";
+import { stepName } from "./tree.ts";
 import type { Item } from "./types.ts";
 
 function when(at: string | null): string {

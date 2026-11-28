@@ -393,3 +393,72 @@ export interface Bounds {
   width: number;
   height: number;
 }
+
+export interface ProjectSummary {
+  id: string;
+  path: string;
+  marketplace?: string;
+  exists: boolean;
+  runs: number;
+  analyzing: string | null;
+  status: { runId: string; createdAt: string | null; summary: string | null; counts: Record<string, number> | null } | null;
+}
+
+/** The project registry as the viewer API returns it: root folders, projects and whether the status workflow can run. */
+export interface ProjectOverview {
+  roots: string[];
+  projects: ProjectSummary[];
+  statusWorkflow: string;
+  statusWorkflowInstalled: boolean;
+  canAnalyze: boolean;
+}
+
+export interface ProjectCandidate {
+  path: string;
+  suggestedId: string;
+  markers: string[];
+}
+
+export interface ProjectArtifact {
+  id: string;
+  kind: "skill" | "agent";
+  name: string;
+  harness: string | null;
+  location: string | null;
+  state: string;
+  installed: string | null;
+  current: string | null;
+  installedCommit?: string;
+  currentCommit?: string;
+  nearestVersion?: string | null;
+  nearestCommit?: string;
+  lastVersion?: string | null;
+  lastCommit?: string;
+  upstreamMoved?: boolean;
+  files: string[];
+  requiredBy?: string[];
+  workflows: string[];
+}
+
+export interface ProjectStatusData {
+  head: string | null;
+  harnesses: { id: string; markers: string[] }[];
+  /** The marketplace ref compared with: `origin/HEAD` or `origin/main` after a fetch, `HEAD` without a remote. */
+  ref?: string;
+  /** False when the scan used what the last fetch left, true when it fetched now. */
+  fetched?: boolean;
+  /** Why the fetch failed; the comparison then used what the last fetch left. */
+  fetchError?: string | null;
+  artifacts: ProjectArtifact[];
+  counts: Record<string, number>;
+  workflows: string[];
+  summary: string;
+  createdAt?: string;
+}
+
+export interface ProjectStatusView {
+  runId: string;
+  status: string;
+  createdAt: string | null;
+  data: ProjectStatusData | null;
+}

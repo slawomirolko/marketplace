@@ -1,5 +1,8 @@
 export const API = `${import.meta.env.BASE_URL}api`;
 
+/** How often the viewer reloads data that changes while a run is live: the open run, the run list and the pending decisions. */
+export const LIVE_REFRESH_MS = 15_000;
+
 /** Shown when a change is refused with 401: a server beyond loopback keeps the token from the page, so the viewer is read-only there. */
 export const READ_ONLY_NOTE = "This viewer is read-only here: changes need the factory token, which the page does not get. Use the factory tools, or open the viewer on the factory machine.";
 

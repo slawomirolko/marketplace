@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useViewer } from "./context.ts";
-import { formatDuration, runCalls } from "./tree.ts";
+import { formatDuration } from "./format.ts";
+import { runCalls } from "./run-facts.ts";
 import type { RunCall } from "./types.ts";
 
 export function callKey(call: RunCall, teamNodes: Set<string>): string {
