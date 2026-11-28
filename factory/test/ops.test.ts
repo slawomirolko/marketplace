@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { operationNamed } from "../src/ops.ts";
+import { homeDataDir } from "../src/paths.ts";
 
 const count = operationNamed("list.count")!;
 
@@ -93,6 +94,12 @@ test("builtin.exec refuses a rendered argument that turns into an option", async
   assert.equal(calls.length, 0);
   await exec({ state: { name: "repo" }, input: {}, answers: {}, args: { command: ["git", "--no-pager", "log", "{{state.name}}"] }, exec: run } as any);
   assert.deepEqual(calls[0]?.args, ["--no-pager", "log", "repo"], "an option written in the template stays allowed");
+});
+
+test("builtin.exec templates see the run id and the factory home", async () => {
+  const { calls, run } = recordingExec();
+  await exec({ state: {}, input: {}, answers: {}, runId: "r-12345678", args: { command: ["{{node}}", "--out", "{{home}}/merges/{{runId}}"] }, exec: run } as any);
+  assert.deepEqual(calls[0]?.args, ["--out", `${homeDataDir()}/merges/r-12345678`]);
 });
 
 test("builtin.exec runs only in an existing absolute folder", async () => {

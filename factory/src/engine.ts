@@ -714,7 +714,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
       throw new Error(`script node ${node.path} has no operation`);
     }
     const view = this.view(run, node);
-    const result = await node.script({ input: view.input, state: view.state, exec: this.executors.exec, goal: run.goal, answers: view.answers, cwd: workspace(run), nodeId: view.key });
+    const result = await node.script({ input: view.input, state: view.state, exec: this.executors.exec, goal: run.goal, answers: view.answers, cwd: workspace(run), nodeId: view.key, runId: run.runId });
     view.state[view.key] = result.state;
     if (result.workspace) {
       this.moveWorkspace(run, node, result.workspace);

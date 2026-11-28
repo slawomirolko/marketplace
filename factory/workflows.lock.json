@@ -192,6 +192,13 @@
       "skills/workflow/olko-task-implementation-workflow/SKILL.md": "9f8d5b1d85bc55a9"
     }
   },
+  "olko-marketplace-merge": {
+    "commit": "d04ff8caf53435c03c5e88c3836f0686116b5b5f",
+    "files": {
+      "agents/opencode/olko-marketplace-upstream.md": "1a6f09aea56089bb",
+      "skills/marketplace/olko-marketplace-upstream/SKILL.md": "f2700dce0b840589"
+    }
+  },
   "olko-marketplace-skill-sync": {
     "commit": "84ea35a",
     "files": {
@@ -199,9 +206,9 @@
     }
   },
   "olko-marketplace-upstream": {
-    "commit": "2492470143f77d276e1a0fb27cc32a80290592fe",
+    "commit": "d04ff8caf53435c03c5e88c3836f0686116b5b5f",
     "files": {
-      "agents/opencode/olko-marketplace-upstream.md": "61e752f562064dc4"
+      "agents/opencode/olko-marketplace-upstream.md": "1a6f09aea56089bb"
     }
   },
   "olko-obsidian-knowledge": {

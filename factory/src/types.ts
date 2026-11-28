@@ -113,6 +113,8 @@ export interface RunInput {
   workflowsDir?: string;
   /** The registered project this run belongs to; the factory fills `project` from it. */
   projectId?: string;
+  /** "true" when the person already approved this exact change, for example by applying a marketplace merge. */
+  approved?: string;
 }
 
 export interface ExecResult {
@@ -184,6 +186,7 @@ export interface ScriptContext {
   answers?: Record<string, string>;
   cwd?: string;
   nodeId?: string;
+  runId?: string;
 }
 
 export interface ScriptResult {

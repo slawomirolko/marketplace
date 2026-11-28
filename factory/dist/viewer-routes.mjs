@@ -15725,8 +15725,10 @@ function checkedCwd(rendered) {
 * or a literal name) and Mustache templates over input, state and answers for the arguments. A rendered
 * argument may start with "-" only when its template does. `with.cwd` sets the directory (an absolute
 * existing folder), `with.okCodes` the accepted exit codes (default [0]) and `with.parse: json` parses stdout.
+* The templates also see `{{runId}}` and `{{home}}` (the factory home, FACTORY_HOME_DIR or ~/.skill-factory),
+* for a work folder of the run outside every repository.
 */
-var builtinExec = async ({ args, state, input, answers, exec, cwd }) => {
+var builtinExec = async ({ args, state, input, answers, exec, cwd, runId }) => {
 	if (!Array.isArray(args.command) || args.command.length === 0) throw new Error("with.command must be a non-empty list");
 	if (!exec) throw new Error("this factory process has no host exec");
 	const view = {
@@ -15735,7 +15737,9 @@ var builtinExec = async ({ args, state, input, answers, exec, cwd }) => {
 			input,
 			answers
 		}),
-		node: process.execPath
+		node: process.execPath,
+		home: homeDataDir(),
+		runId: runId ?? ""
 	};
 	const render = (template) => mustache.render(String(template), view, {}, { escape: (value) => String(value) });
 	const [programTemplate, ...argumentTemplates] = args.command;
@@ -17439,7 +17443,8 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 			goal: run.goal,
 			answers: view.answers,
 			cwd: workspace(run),
-			nodeId: view.key
+			nodeId: view.key,
+			runId: run.runId
 		});
 		view.state[view.key] = result.state;
 		if (result.workspace) this.moveWorkspace(run, node, result.workspace);

@@ -1,0 +1,71 @@
+name: olko-marketplace-merge
+version: 0.1.0
+description: "Brings marketplace updates into the changed or outdated marketplace skills and agents of one project. A script prepares a three-way merge of every affected artifact in a work folder of the run (never in the project or the marketplace), an agent resolves the conflicted hunks there and classifies what of each local change would go upstream, and one question lists every artifact with its result. Nothing is written before the answer. The checked artifacts are written into the project and their new base and content are recorded in the project's marketplace lock; that answer also approves the draft PR of each applied local change, which the marketplace-upstream watch then opens without asking again (the sanitize gate still runs)."
+inputs: "project, the project folder (or projectId, a registered project), and marketplace, a marketplace checkout."
+source: "scripts/olko-marketplace-merge.mjs; agents/opencode/olko-marketplace-upstream.md and skills/marketplace/olko-marketplace-upstream (resolve step)"
+roles:
+  resolver: medium
+entry: prepare
+nodes:
+  - id: prepare
+    description: "Runs the merge script's prepare command: per outdated artifact the upstream copy, per modified artifact whose marketplace source moved a git merge-file of base, local copy (adapter excluded) and upstream. Writes only into a fresh work folder named after the run under the factory home."
+    kind: script
+    op: builtin.exec
+    with:
+      command: ["{{node}}", "{{input.marketplace}}/scripts/olko-marketplace-merge.mjs", prepare, --project, "{{input.project}}", --marketplace, "{{input.marketplace}}", --out, "{{home}}/merges/{{runId}}", --json]
+      parse: json
+  - id: nothing
+    description: "Stops the run when no artifact of the project is outdated or modified with a newer marketplace version. Nothing was written."
+    kind: script
+    op: builtin.stop
+    with: { reason: "Nothing to merge: no marketplace skill or agent of this project is outdated, or changed while the marketplace moved on. Nothing was written." }
+  - id: resolve
+    description: "Resolves every conflicted hunk in the work folder (never dropping newer upstream text for base text, marking unsure resolutions) and classifies each modified artifact's local change as portable or project-specific. Writes only inside the work folder."
+    kind: llm
+    role: resolver
+    agent: olko-marketplace-upstream
+    tools: [read, edit, bash]
+    dirs: ["{{state.prepare.json.out}}"]
+    parse: { json: [resolved, unsure, classified] }
+    prompt: |
+      Do the resolve step of olko-marketplace-upstream.
+      Work directory: {{state.prepare.json.out}}
+      Plan: {{state.prepare.json.out}}/plan.json
+      Project (read only): {{input.project}}
+      Marketplace checkout (read only): {{input.marketplace}}
+      Follow the resolve step of the olko-marketplace-upstream skill exactly. Edit and write files only inside the work directory.
+
+      End with one ```json block:
+      {"resolved": <conflicted files resolved>, "unsure": <hunks marked sure: false>, "classified": <modified items classified>}
+  - id: summary
+    description: "Builds one row per artifact for the question: kind, name, state and versions; files merged cleanly; conflicts with the agent's reason per hunk and the resolution diff; what would go upstream. A row is checked by default only when its base is known and every hunk is marked sure."
+    kind: script
+    op: builtin.exec
+    with:
+      command: ["{{node}}", "{{input.marketplace}}/scripts/olko-marketplace-merge.mjs", summary, --out, "{{state.prepare.json.out}}", --json]
+      parse: json
+  - id: ask-merge
+    description: "Asks once which artifacts to apply. Applying an artifact also approves the draft PR of its portable local change. none applies nothing."
+    kind: interrupt
+    question:
+      id: q-merge
+      text: "Merge marketplace updates into {{input.project}}.\nCheck the artifacts to apply. Applying one writes the merged copy into the project (its adapter stays) and also approves a draft marketplace PR for the portable part of its local change; the sanitize gate still runs and the PR stays a draft.\nnone: apply nothing."
+      multiple: true
+      allowedFrom: state.summary.json.ids
+      itemsFrom: state.summary.json.items
+  - id: apply
+    description: "Writes the selected artifacts into every project location that holds them, adapter untouched, and records the new base and the approved content hash in the project's marketplace lock. Refuses an artifact that still holds conflict markers or whose conflicts have no resolution. The marketplace-upstream watch then opens the draft PRs of the approved local changes without asking again."
+    kind: script
+    op: builtin.exec
+    with:
+      command: ["{{node}}", "{{input.marketplace}}/scripts/olko-marketplace-merge.mjs", apply, --out, "{{state.prepare.json.out}}", --selected, "{{state.ask-merge.answer}}", --json]
+      parse: json
+edges:
+  - { from: prepare, to: nothing, when: "prepare.json.ids == 0", description: "no artifact to merge" }
+  - { from: prepare, to: resolve, when: "prepare.json.conflicts > 0 || prepare.json.modified > 0", description: "conflicts to resolve or local changes to classify" }
+  - { from: prepare, to: summary, description: "only outdated artifacts without conflicts" }
+  - { from: nothing, to: END, description: "never reached: nothing fails the run with its note" }
+  - { from: resolve, to: summary }
+  - { from: summary, to: ask-merge }
+  - { from: ask-merge, to: apply }
+  - { from: apply, to: END }

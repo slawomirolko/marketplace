@@ -12,8 +12,9 @@ after a person says so. A person always merges or closes the PR.
 | `scripts/olko-marketplace-lock.mjs` | `init` writes the lock (finds the base version in marketplace history), `status` lists changed artifacts, `record` stores a pending PR or a rejected content hash, moves the base (`--marketplace <dir> --base-commit <sha>` sets version, source commit, hash and files from that marketplace commit and creates a missing entry) and stores an approved content hash (`--approved <sha256>`; `status` reports `approved` when it equals the copy's `contentHash`). Reads installed copies through the shared model, see [Installed-artifact model](#installed-artifact-model). |
 | `scripts/olko-sanitize.mjs` | Blocking gate, see [Sanitize gate](#sanitize-gate). Exit 0 clean, 2 blocked, 1 failed. |
 | `scripts/olko-upstream-plan.mjs` | Deterministic PR plan: `open`, `append` (open draft PR on the same base) or `skip` (duplicate, rejected, adapter-only). |
-| `olko-marketplace-upstream` (agent and skill) | `stage`, `optimize` and `publish` steps. Draft PRs only; deny rules for merge, ready, reviewers and `gh api`. |
+| `olko-marketplace-upstream` (agent and skill) | `stage`, `optimize` and `publish` steps, plus `resolve` for a merge. Draft PRs only; deny rules for merge, ready, reviewers and `gh api`. |
 | Factory watch `marketplace-upstream` | Every 10 minutes, per known project with a lock, runs `status`. A change whose hash is the same in two checks starts one `olko-marketplace-upstream` run. |
+| `scripts/olko-marketplace-merge.mjs` and workflow `olko-marketplace-merge` | Brings marketplace updates into a project, see [Merge updates](#merge-updates). |
 | Factory viewer | Shows "Waiting for your decision" with `ok` / `no` for runs the viewer process owns. |
 
 ## Script ownership
@@ -38,6 +39,21 @@ owned by the marketplace checkout and kept in its root `scripts/` folder. They a
 4. `no`: the content hash is recorded as rejected; the same content is never offered again.
 5. `ok`: the factory runs the steps in the background with the watch's CLI backend (set `FACTORY_WATCH_MODEL` in the factory's environment to pick the model for every tier, for example the model your OpenCode agents use): stage (adapter hunks stay out), optimize, sanitize gate, plan, publish (draft PR, label `upstream-candidate`). The PR is recorded as pending in the lock.
 6. Review the draft PR on GitHub. Merge or close it yourself.
+
+## Merge updates
+
+The `olko-marketplace-merge` workflow (input `project` or `projectId`, and `marketplace`) brings marketplace updates into every
+`outdated` artifact of one project and every `modified` one whose marketplace source moved on:
+
+1. `prepare` merges base, local copy (adapter excluded) and upstream with `git merge-file` into a fresh work folder
+   `<factory home>/merges/<run id>` (`FACTORY_HOME_DIR` or `~/.skill-factory`). Nothing is written to the project or the marketplace.
+2. `resolve` (agent `olko-marketplace-upstream`, step `resolve`, writes only in the work folder) resolves conflicted hunks without
+   dropping newer upstream text and classifies each local change as portable or project-specific in `<item>/resolution.json`.
+3. `summary` builds one row per artifact; one question lists them all. A row is checked by default when its base is known
+   and every hunk is marked sure.
+4. `apply` writes the checked artifacts into the project (adapter untouched) and records the new base and the approved
+   content hash in the lock. That answer is also the approval of the draft PR: the watch passes `approved` to
+   `olko-marketplace-upstream`, whose `route` step then skips its question. The sanitize gate still runs and PRs stay drafts.
 
 ## Installed-artifact model
 

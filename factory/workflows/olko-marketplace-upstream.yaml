@@ -1,14 +1,18 @@
 name: olko-marketplace-upstream
 version: 0.1.0
-description: "Turns one local change to a marketplace skill or agent in a project into a draft marketplace PR. The marketplace-upstream watch starts it when the change has stayed the same for two checks; it asks first and does nothing until you answer. ok: copy the change into a stage directory without the project adapter, keep project-specific hunks out, optimize the staged copy, run the sanitize gate, plan the PR (open, append or skip) and open or extend a draft PR. no: the content hash is recorded as rejected and never offered again. Merge or close of the PR is always yours."
+description: "Turns one local change to a marketplace skill or agent in a project into a draft marketplace PR. The marketplace-upstream watch starts it when the change has stayed the same for two checks; it asks first and does nothing until you answer, unless you already approved this exact content (for example by applying it in a marketplace merge). ok: copy the change into a stage directory without the project adapter, keep project-specific hunks out, optimize the staged copy, run the sanitize gate, plan the PR (open, append or skip) and open or extend a draft PR. no: the content hash is recorded as rejected and never offered again. Merge or close of the PR is always yours."
 source: "agents/opencode/olko-marketplace-upstream.md"
 roles:
   sync: medium
   publisher: medium
-entry: ask-upstream
+entry: route
 limits:
   maxCycleIterations: 2
 nodes:
+  - id: route
+    description: "Skips the question when the person already approved this exact change (input approved is \"true\", for example after applying it in a marketplace merge); otherwise asks first."
+    kind: script
+    op: builtin.pass
   - id: ask-upstream
     description: "Asks whether to send this local change upstream as a draft PR. Nothing runs before the answer."
     kind: interrupt
@@ -103,6 +107,8 @@ nodes:
       End with one ```json block:
       {"pr": <PR number>, "url": "<PR URL>"}
 edges:
+  - { from: route, to: stage, when: 'input.approved == "true"', description: "the person approved this content already (marketplace merge)" }
+  - { from: route, to: ask-upstream, description: "not approved yet: ask first" }
   - { from: ask-upstream, to: record-rejected, when: 'ask-upstream.answer == "no"', description: "you chose no" }
   - { from: ask-upstream, to: stage, description: "you chose ok" }
   - { from: record-rejected, to: END }

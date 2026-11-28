@@ -66,6 +66,8 @@ projects:
 # the `dirs` list of projects.json in the data dir and every run's input.project), and starts one run of its workflow per item
 # that stayed the same for stableChecks checks. The run stops at its first question,
 # so nothing happens until you answer it in the viewer. The viewer process runs them.
+# A change you already approved (lock status approved, for example applied by a marketplace
+# merge) skips the question of olko-marketplace-upstream; the sanitize gate still runs.
 watches:
   - id: marketplace-upstream
     everyMinutes: 10
@@ -84,4 +86,5 @@ watches:
       contentHash: "{{item.contentHash}}"
       base: "{{item.base}}"
       files: "{{item.files}}"
+      approved: "{{item.approved}}"
     backend: { kind: cli, cli: opencode }
