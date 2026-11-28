@@ -15614,10 +15614,17 @@ function withEach(context) {
 	};
 }
 // src/ops.ts
-var pass = async () => ({
-	state: { passed: true },
-	output: "verify passed"
-});
+/** Passes on; `with.note` (a template over input, state and answers) is its output, for a readable note on a normal end. */
+var pass = async ({ args, state, input, answers }) => {
+	return {
+		state: { passed: true },
+		output: typeof args?.note === "string" ? mustache.render(args.note, withEach({
+			state,
+			input,
+			answers
+		})).trim() : "verify passed"
+	};
+};
 function readState(state, dotted) {
 	return dotted.split(".").reduce((value, key) => value && typeof value === "object" ? value[key] : void 0, state);
 }

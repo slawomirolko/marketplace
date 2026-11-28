@@ -5,7 +5,11 @@ import { homeDataDir } from "./paths.ts";
 import { evaluateWhen, withEach } from "./when.ts";
 import type { Operation } from "./types.ts";
 
-const pass: Operation = async () => ({ state: { passed: true }, output: "verify passed" });
+/** Passes on; `with.note` (a template over input, state and answers) is its output, for a readable note on a normal end. */
+const pass: Operation = async ({ args, state, input, answers }) => {
+  const note = typeof args?.note === "string" ? Mustache.render(args.note, withEach({ state, input, answers })).trim() : "verify passed";
+  return { state: { passed: true }, output: note };
+};
 
 function readState(state: Record<string, unknown>, dotted: string): unknown {
   return dotted.split(".").reduce<unknown>((value, key) => (value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined), state);

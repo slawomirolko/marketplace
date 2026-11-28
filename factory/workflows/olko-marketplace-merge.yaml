@@ -15,10 +15,10 @@ nodes:
       command: ["{{node}}", "{{input.marketplace}}/scripts/olko-marketplace-merge.mjs", prepare, --project, "{{input.project}}", --marketplace, "{{input.marketplace}}", --out, "{{home}}/merges/{{runId}}", --json]
       parse: json
   - id: nothing
-    description: "Stops the run when no artifact of the project is outdated or modified with a newer marketplace version. Nothing was written."
+    description: "Ends the run normally when no artifact of the project is outdated or modified with a newer marketplace version, with a note. Nothing was written."
     kind: script
-    op: builtin.stop
-    with: { reason: "Nothing to merge: no marketplace skill or agent of this project is outdated, or changed while the marketplace moved on. Nothing was written." }
+    op: builtin.pass
+    with: { note: "Nothing to merge: no outdated or diverged skills or agents in this project. Nothing was written." }
   - id: resolve
     description: "Resolves every conflicted hunk in the work folder (never dropping newer upstream text for base text, marking unsure resolutions) and classifies each modified artifact's local change as portable or project-specific. Writes only inside the work folder."
     kind: llm
@@ -64,7 +64,7 @@ edges:
   - { from: prepare, to: nothing, when: "prepare.json.ids == 0", description: "no artifact to merge" }
   - { from: prepare, to: resolve, when: "prepare.json.conflicts > 0 || prepare.json.modified > 0", description: "conflicts to resolve or local changes to classify" }
   - { from: prepare, to: summary, description: "only outdated artifacts without conflicts" }
-  - { from: nothing, to: END, description: "never reached: nothing fails the run with its note" }
+  - { from: nothing, to: END }
   - { from: resolve, to: summary }
   - { from: summary, to: ask-merge }
   - { from: ask-merge, to: apply }

@@ -70,9 +70,11 @@ function flag(call: ExecCall | undefined, name: string): string | undefined {
 
 const MERGE_INPUT = { project: PROJECT, marketplace: MARKETPLACE, projectId: "sample-app" };
 
-test("merge run: no items stops with a note", async () => {
+test("merge run: no items ends done with a note", async () => {
   const { done, calls, order, asked, runId } = await startRun("olko-marketplace-merge", MERGE_INPUT, { prepare: plan([]) }, { reply: () => undefined });
-  assert.ok(stoppedBy(done, /Nothing to merge/), JSON.stringify(done.events.at(-1)));
+  assert.equal(done.status, "done", "an empty merge is a normal outcome");
+  const note = done.events.find((event) => event.type === "node_completed" && String(event.node).endsWith("/nothing"));
+  assert.match(String(note?.result), /^Nothing to merge: no outdated or diverged skills or agents/);
   assert.deepEqual(order, []);
   assert.deepEqual(asked, []);
   assert.deepEqual(calls.map((call) => call.args[1]), ["prepare"]);

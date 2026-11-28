@@ -96,6 +96,12 @@ test("builtin.exec refuses a rendered argument that turns into an option", async
   assert.deepEqual(calls[0]?.args, ["--no-pager", "log", "repo"], "an option written in the template stays allowed");
 });
 
+test("builtin.pass reports its note, rendered, or the default output", async () => {
+  const pass = operationNamed("builtin.pass")!;
+  assert.equal((await pass({ state: {}, input: { project: "/p" }, answers: {}, args: { note: "Nothing for {{input.project}}" } } as any)).output, "Nothing for /p");
+  assert.equal((await pass({ state: {}, input: {}, answers: {}, args: {} } as any)).output, "verify passed");
+});
+
 test("builtin.exec templates see the run id and the factory home", async () => {
   const { calls, run } = recordingExec();
   await exec({ state: {}, input: {}, answers: {}, runId: "r-12345678", args: { command: ["{{node}}", "--out", "{{home}}/merges/{{runId}}"] }, exec: run } as any);
