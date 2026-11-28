@@ -1,4 +1,4 @@
-import { C as defaultDataDir, E as __toESM, _ as require_ajv, c as cliExecutor, d as errorMessage, f as parseBackend, g as require_dist, i as viewerUrlFor, l as hostExec, o as projectScopedInput, p as parseCli, s as projectsAction, u as Factory, w as registerDataSource, x as FACTORY_DIR, y as homeEnvNote } from "./viewer-routes.mjs";
+import { D as __toESM, S as FACTORY_DIR, T as registerDataSource, _ as require_dist, b as homeEnvNote, c as cliExecutor, d as errorMessage, f as loadedWorkflows, i as viewerUrlFor, l as hostExec, m as parseCli, o as projectScopedInput, p as parseBackend, s as projectsAction, u as Factory, v as require_ajv, w as defaultDataDir } from "./viewer-routes.mjs";
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
@@ -15039,6 +15039,12 @@ function longPath(p) {
 var MIN_STATUS_INTERVAL_MS = Number(process.env.FACTORY_MIN_STATUS_INTERVAL_MS ?? 500);
 var DEFAULT_WAIT_SEC = 20;
 var MAX_WAIT_SEC = 50;
+var START_DESCRIPTION = "Create a factory run for a goal. workflow names a factory workflow; input holds its parameters, listed below for each workflow that declares them. projectId names a registered project (see factory_projects): the factory sets input.project to its folder and keeps the id on the run. The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.";
+/** The factory_start description: the generic text, then the input help that each workflow YAML declares in `inputs`. */
+function startDescription() {
+	const inputs = [...loadedWorkflows().values()].filter((workflow) => workflow.inputs).map((workflow) => `- ${workflow.name}: ${workflow.inputs}`);
+	return inputs.length === 0 ? START_DESCRIPTION : `${START_DESCRIPTION}\nInputs by workflow:\n${inputs.join("\n")}`;
+}
 function createFactoryTools(factory, publicUrl) {
 	const lastStatusAt = /* @__PURE__ */ new Map();
 	let statusCalls = 0;
@@ -15093,7 +15099,7 @@ function createFactoryTools(factory, publicUrl) {
 			version: "0.1.0"
 		});
 		server.registerTool("factory_start", {
-			description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name and pr number, plus fresh: true for a fresh review of your own PR; or plan, a plan file path in the workspace, and optional criteria; for olko-marketplace-skill-sync: project, the absolute path of the local project, optional marketplace, the absolute path of the marketplace checkout, and optional artifacts, the skill and agent names to sync; for olko-claude-sync: target and targetName, a Claude Code plugin marketplace checkout and a kebab-case name for it, olko, the Olko checkout, optional user, the user scope (default ~/.claude), optional stateDir (default ~/.olko-sync) and optional artifacts). projectId names a registered project (see factory_projects): the factory sets input.project to its folder and keeps the id on the run. The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
+			description: startDescription(),
 			inputSchema: {
 				goal: string().min(1),
 				workflow: string().regex(/^[a-z][a-z0-9-]*$/).optional(),

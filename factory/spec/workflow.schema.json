@@ -75,6 +75,11 @@
       "type": "string",
       "minLength": 1,
       "description": "What this workflow or phase group does, in one or two sentences."
+    },
+    "inputs": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The parameters a caller puts in factory_start input for this workflow and what each one means. The factory_start tool lists it for every workflow that has it."
     }
   },
   "$defs": {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cspHeader, cspMiddleware, createNonce, NONCE_PLACEHOLDER } from "../app/csp.ts";
+import { cspHeader, cspMiddleware, createNonce, NONCE_PLACEHOLDER } from "../src/csp.ts";
 
 interface FakeResponse {
   headersSent: boolean;

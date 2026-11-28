@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import type { AgentTool, CliExecutor, CliName, CliRequest, CliResult, ExecResult, TokenCounts } from "./types.ts";
-import { claudeAgentsFile, claudeTools, opencodeConfigDir } from "./marketplace-agents.ts";
+import { claudeAgentsFile, claudeTools, opencodeConfigDir } from "./cli-agents.ts";
 import { homeEnv } from "./home-env.ts";
 import { spawnPlan } from "./win-spawn.ts";
 

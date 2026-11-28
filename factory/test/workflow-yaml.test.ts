@@ -3,8 +3,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { evaluateWhen, listWorkflowFiles, loadWorkflowDir, loadWorkflowFile, loadWorkflowSpecs, negateWhen } from "../src/workflow-yaml.ts";
-import { claudeAgentsFile, claudeTools, describeAgent, marketplaceDir, readMarketplaceAgent } from "../src/marketplace-agents.ts";
+import { evaluateWhen } from "../src/when.ts";
+import { listWorkflowFiles, loadWorkflowDir, loadWorkflowFile, loadWorkflowSpecs, negateWhen } from "../src/workflow-yaml.ts";
+import { claudeAgentsFile, claudeTools } from "../src/cli-agents.ts";
+import { describeAgent, marketplaceDir, readMarketplaceAgent } from "../src/marketplace-agents.ts";
 import { operationNamed } from "../src/ops.ts";
 
 function writeYaml(text: string): string {

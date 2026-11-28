@@ -764,6 +764,66 @@ mustache.escape = escapeHtml;
 mustache.Scanner = Scanner;
 mustache.Context = Context;
 mustache.Writer = Writer;
+// src/when.ts
+/** Prompts and conditions are plain text, never HTML: Mustache must not escape values. */
+mustache.escape = (text) => text;
+var CONDITION = /^([a-zA-Z0-9_./-]+)\s*(==|!=|>=|<=|>|<)\s*(.+)$/;
+function readPath(state, dotted) {
+	let value = state;
+	for (const key of dotted.split(".")) {
+		if (value === null || typeof value !== "object" || !(key in value)) return void 0;
+		value = value[key];
+	}
+	return value;
+}
+function literal(text) {
+	const trimmed = text.trim();
+	const quoted = trimmed.match(/^(["'])(.*)\1$/);
+	if (quoted?.[2] !== void 0) return quoted[2];
+	if (trimmed === "true" || trimmed === "false") return trimmed === "true";
+	if (trimmed === "null") return null;
+	const number = Number(trimmed);
+	if (Number.isNaN(number)) throw new Error(`condition value ${trimmed} is not a number, boolean, null or quoted string`);
+	return number;
+}
+function compare(clause, state) {
+	const match = clause.trim().match(CONDITION);
+	if (!match?.[1] || !match[2] || match[3] === void 0) throw new Error(`condition '${clause}' must be '<state path> <operator> <value>'`);
+	const raw = readPath(state, match[1]) ?? null;
+	const left = Array.isArray(raw) ? raw.length : raw;
+	const right = literal(match[3]);
+	if (match[2] === "==") return left === right;
+	if (match[2] === "!=") return left !== right;
+	if (left === null || right === null) return false;
+	switch (match[2]) {
+		case ">": return Number(left) > Number(right);
+		case "<": return Number(left) < Number(right);
+		case ">=": return Number(left) >= Number(right);
+		default: return Number(left) <= Number(right);
+	}
+}
+function evaluateWhen(when, state) {
+	return when.split("||").some((any) => any.split("&&").every((all) => compare(all, state)));
+}
+function eachView(value) {
+	const entries = Object.entries(value).map(([key, entry]) => ({
+		key,
+		value: entry
+	}));
+	return new Proxy(entries, {
+		get: (target, key) => key in target ? Reflect.get(target, key) : view(value[key]),
+		has: (target, key) => key in target || key in value
+	});
+}
+function view(value) {
+	return typeof value === "object" && value !== null && !Array.isArray(value) ? eachView(value) : value;
+}
+function withEach(context) {
+	return {
+		...context,
+		each: eachView(context)
+	};
+}
 // ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/identity.js
 var require_identity = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var ALIAS = Symbol.for("yaml.alias");
@@ -15183,70 +15243,12 @@ function configRoleErrors(config) {
 	return Object.entries(config.roles).filter(([, tier]) => !tiers.has(tier)).map(([role, tier]) => `role '${role}' uses unknown tier '${tier}'`);
 }
 // src/workflow-yaml.ts
-mustache.escape = (text) => text;
-var CONDITION = /^([a-zA-Z0-9_./-]+)\s*(==|!=|>=|<=|>|<)\s*(.+)$/;
-function readPath(state, dotted) {
-	let value = state;
-	for (const key of dotted.split(".")) {
-		if (value === null || typeof value !== "object" || !(key in value)) return void 0;
-		value = value[key];
-	}
-	return value;
-}
-function literal(text) {
-	const trimmed = text.trim();
-	const quoted = trimmed.match(/^(["'])(.*)\1$/);
-	if (quoted?.[2] !== void 0) return quoted[2];
-	if (trimmed === "true" || trimmed === "false") return trimmed === "true";
-	if (trimmed === "null") return null;
-	const number = Number(trimmed);
-	if (Number.isNaN(number)) throw new Error(`condition value ${trimmed} is not a number, boolean, null or quoted string`);
-	return number;
-}
-function compare(clause, state) {
-	const match = clause.trim().match(CONDITION);
-	if (!match?.[1] || !match[2] || match[3] === void 0) throw new Error(`condition '${clause}' must be '<state path> <operator> <value>'`);
-	const raw = readPath(state, match[1]) ?? null;
-	const left = Array.isArray(raw) ? raw.length : raw;
-	const right = literal(match[3]);
-	if (match[2] === "==") return left === right;
-	if (match[2] === "!=") return left !== right;
-	if (left === null || right === null) return false;
-	switch (match[2]) {
-		case ">": return Number(left) > Number(right);
-		case "<": return Number(left) < Number(right);
-		case ">=": return Number(left) >= Number(right);
-		default: return Number(left) <= Number(right);
-	}
-}
-function evaluateWhen(when, state) {
-	return when.split("||").some((any) => any.split("&&").every((all) => compare(all, state)));
-}
 function agentsFromPath(dotted) {
 	const statePath = dotted.replace(/^state\./, "");
 	return (state) => {
 		const agents = readPath(state ?? {}, statePath);
 		if (!Array.isArray(agents)) throw new Error(`agentsFrom ${dotted} is not a list`);
 		return agents;
-	};
-}
-function eachView(value) {
-	const entries = Object.entries(value).map(([key, entry]) => ({
-		key,
-		value: entry
-	}));
-	return new Proxy(entries, {
-		get: (target, key) => key in target ? Reflect.get(target, key) : view(value[key]),
-		has: (target, key) => key in target || key in value
-	});
-}
-function view(value) {
-	return typeof value === "object" && value !== null && !Array.isArray(value) ? eachView(value) : value;
-}
-function withEach(context) {
-	return {
-		...context,
-		each: eachView(context)
 	};
 }
 function render(template) {
@@ -15518,7 +15520,8 @@ function buildWorkflow(spec, file) {
 		} : e),
 		maxCycleIterations: spec.limits?.maxCycleIterations ?? 3,
 		...spec.source ? { source: spec.source } : {},
-		...spec.roles ? { roles: spec.roles } : {}
+		...spec.roles ? { roles: spec.roles } : {},
+		...spec.inputs ? { inputs: spec.inputs } : {}
 	};
 }
 /** The workflow files of a folder, sorted: names ending in .yaml or .yml. */
@@ -15617,29 +15620,6 @@ function loadFactoryConfig(file = configFile()) {
 }
 // src/marketplace-agents.ts
 var AGENT_NAME = /^[a-z0-9-]+$/;
-var CLAUDE_TOOLS = {
-	read: [
-		"Read",
-		"Grep",
-		"Glob"
-	],
-	edit: ["Edit", "Write"],
-	bash: ["Bash"]
-};
-var CLAUDE_ALL_TOOLS = [
-	"Read",
-	"Grep",
-	"Glob",
-	"Skill",
-	"Edit",
-	"Write",
-	"Bash",
-	"WebFetch",
-	"WebSearch",
-	"Agent",
-	"Task",
-	"NotebookEdit"
-];
 function marketplaceDir() {
 	return process.env.FACTORY_MARKETPLACE_DIR ?? path.join(FACTORY_DIR, "..");
 }
@@ -15811,63 +15791,13 @@ function describeAgent(name, memoryLayer = DEFAULT_MEMORY_LAYER) {
 		memoryLayer: kind !== "skill" && [...declared.map((s) => s.name), ...fromPrompt].includes(memoryLayer)
 	};
 }
-function claudeTools(tools) {
-	const allowed = [...new Set(tools.flatMap((t) => CLAUDE_TOOLS[t]))];
-	return {
-		allowed,
-		disallowed: CLAUDE_ALL_TOOLS.filter((t) => !allowed.includes(t))
-	};
-}
-function freshDir(prefix) {
-	return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-}
-function definitionOf(agent) {
+/** The neutral definition of an agent: the given definition after a name check, or the marketplace agent of that name. */
+function agentDefinition(agent) {
 	if (typeof agent !== "string") {
 		if (!AGENT_NAME.test(agent.name)) throw new Error(`invalid agent name ${agent.name}`);
 		return agent;
 	}
 	return readMarketplaceAgent(agent);
-}
-function claudeAgentsFile(agent, tools = ["read"]) {
-	const definition = definitionOf(agent);
-	const file = path.join(freshDir("factory-agent-"), `claude-${definition.name}.json`);
-	fs.writeFileSync(file, JSON.stringify({ [definition.name]: {
-		description: definition.description,
-		prompt: definition.prompt,
-		tools: claudeTools(tools).allowed
-	} }));
-	return file;
-}
-/** OpenCode access outside the workspace: denied, except inside the node's extra directories (the same folders the Claude backend passes as --add-dir). */
-function externalDirectoryPermission(dirs) {
-	if (dirs.length === 0) return "deny";
-	return {
-		"*": "deny",
-		...Object.fromEntries(dirs.map((dir) => [path.join(dir, "*"), "allow"]))
-	};
-}
-function opencodeConfigDir(agent, tools = ["read"], dirs = []) {
-	const definition = definitionOf(agent);
-	const dir = freshDir("factory-opencode-");
-	const target = path.join(dir, "agents", `${definition.name}.md`);
-	fs.mkdirSync(path.dirname(target), { recursive: true });
-	if (definition.skillDir || definition.pluginRoot || !definition.frontmatter) {
-		const allow = (tool) => tools.includes(tool) ? "allow" : "deny";
-		const front = {
-			description: definition.description,
-			mode: "subagent",
-			permission: {
-				edit: allow("edit"),
-				bash: allow("bash"),
-				task: "deny",
-				webfetch: "deny",
-				websearch: "deny",
-				external_directory: externalDirectoryPermission(dirs)
-			}
-		};
-		fs.writeFileSync(target, `---\n${JSON.stringify(front)}\n---\n\n${definition.prompt}\n`);
-	} else fs.writeFileSync(target, `---\n${definition.frontmatter}\n---\n\n${definition.prompt}\n`);
-	return dir;
 }
 // src/questions.ts
 var SCHEMA = `
@@ -17538,6 +17468,83 @@ function errorMessage(error) {
 function runReport(run) {
 	return Factory.prototype.report.call(Factory.prototype, run);
 }
+// src/cli-agents.ts
+/** How each agent CLI receives a neutral agent definition: Claude Code as an --agents JSON file, OpenCode as an agent Markdown file in its own config folder. */
+/** The Claude Code tools behind each neutral agent tool. */
+var CLAUDE_TOOLS = {
+	read: [
+		"Read",
+		"Grep",
+		"Glob"
+	],
+	edit: ["Edit", "Write"],
+	bash: ["Bash"]
+};
+var CLAUDE_ALL_TOOLS = [
+	"Read",
+	"Grep",
+	"Glob",
+	"Skill",
+	"Edit",
+	"Write",
+	"Bash",
+	"WebFetch",
+	"WebSearch",
+	"Agent",
+	"Task",
+	"NotebookEdit"
+];
+function claudeTools(tools) {
+	const allowed = [...new Set(tools.flatMap((tool) => CLAUDE_TOOLS[tool]))];
+	return {
+		allowed,
+		disallowed: CLAUDE_ALL_TOOLS.filter((tool) => !allowed.includes(tool))
+	};
+}
+function claudeAgentsFile(agent, tools = ["read"]) {
+	const definition = agentDefinition(agent);
+	const file = path.join(freshDir("factory-agent-"), `claude-${definition.name}.json`);
+	fs.writeFileSync(file, JSON.stringify({ [definition.name]: {
+		description: definition.description,
+		prompt: definition.prompt,
+		tools: claudeTools(tools).allowed
+	} }));
+	return file;
+}
+function opencodeConfigDir(agent, tools = ["read"], dirs = []) {
+	const definition = agentDefinition(agent);
+	const dir = freshDir("factory-opencode-");
+	const target = path.join(dir, "agents", `${definition.name}.md`);
+	fs.mkdirSync(path.dirname(target), { recursive: true });
+	if (definition.skillDir || definition.pluginRoot || !definition.frontmatter) {
+		const allow = (tool) => tools.includes(tool) ? "allow" : "deny";
+		const front = {
+			description: definition.description,
+			mode: "subagent",
+			permission: {
+				edit: allow("edit"),
+				bash: allow("bash"),
+				task: "deny",
+				webfetch: "deny",
+				websearch: "deny",
+				external_directory: externalDirectoryPermission(dirs)
+			}
+		};
+		fs.writeFileSync(target, `---\n${JSON.stringify(front)}\n---\n\n${definition.prompt}\n`);
+	} else fs.writeFileSync(target, `---\n${definition.frontmatter}\n---\n\n${definition.prompt}\n`);
+	return dir;
+}
+function freshDir(prefix) {
+	return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+/** OpenCode access outside the workspace: denied, except inside the node's extra directories (the same folders the Claude backend passes as --add-dir). */
+function externalDirectoryPermission(dirs) {
+	if (dirs.length === 0) return "deny";
+	return {
+		"*": "deny",
+		...Object.fromEntries(dirs.map((dir) => [path.join(dir, "*"), "allow"]))
+	};
+}
 // src/win-spawn.ts
 /** Characters cmd.exe treats specially on a command line; each gets a caret so cmd.exe passes it through as text. */
 var CMD_META = /([()\][%!^"`<>&|;, *?])/g;
@@ -17907,7 +17914,7 @@ function hostExec(command, args, options = {}) {
 		}));
 	});
 }
-// app/csp.ts
+// src/csp.ts
 var NONCE_PLACEHOLDER = "FACTORYCSPNONCEPLACEHOLD";
 function createNonce() {
 	return randomBytes(18).toString("base64");
@@ -18400,7 +18407,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 		console.log(`${Object.keys(lock).length} workflows locked against ${marketplace} at ${commit} in ${LOCK_FILE}`);
 	}
 }
-// app/data.ts
+// src/viewer-data.ts
 var RUN_ID = /^r-[a-f0-9]{8}$/;
 var MAX_BODY = 16384;
 function readBody(req) {
@@ -18911,4 +18918,4 @@ function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHost
 		return true;
 	};
 }
-export { defaultDataDir as C, __toESM as E, VIEWER_HEALTH as S, viewerOptions as T, require_ajv as _, listProjects as a, DEFAULT_VIEWER_PORT as b, cliExecutor as c, errorMessage as d, parseBackend as f, require_dist as g, loadFactoryConfig as h, viewerUrlFor as i, hostExec as l, marketplaceDir as m, failRequest as n, projectScopedInput as o, parseCli as p, viewerHandler as r, projectsAction as s, allowedHostsFor as t, Factory as u, mustache as v, registerDataSource as w, FACTORY_DIR as x, homeEnvNote as y };
+export { VIEWER_HEALTH as C, __toESM as D, viewerOptions as E, FACTORY_DIR as S, registerDataSource as T, require_dist as _, listProjects as a, homeEnvNote as b, cliExecutor as c, errorMessage as d, loadedWorkflows as f, loadFactoryConfig as g, marketplaceDir as h, viewerUrlFor as i, hostExec as l, parseCli as m, failRequest as n, projectScopedInput as o, parseBackend as p, viewerHandler as r, projectsAction as s, allowedHostsFor as t, Factory as u, require_ajv as v, defaultDataDir as w, DEFAULT_VIEWER_PORT as x, mustache as y };

@@ -2,7 +2,7 @@ import Mustache from "mustache";
 import { missingField, OPERATION_CONTRACTS } from "./contract.ts";
 import { isParseSpec, parseContract } from "./parse-spec.ts";
 import type { WorkflowSpec, WorkflowSpecNode } from "./types.ts";
-import { whenClauses } from "./workflow-yaml.ts";
+import { whenClauses } from "./when.ts";
 
 const CONTEXT_ROOTS = new Set(["answers", "input", "switches"]);
 const CONDITION_PATH = /^\s*([a-zA-Z0-9_./-]+)\s*(==|!=|>=|<=|>|<)/;

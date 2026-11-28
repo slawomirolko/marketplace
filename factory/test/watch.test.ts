@@ -10,8 +10,8 @@ import { Factory } from "../src/engine.ts";
 import { hostExec } from "../src/cli-backend.ts";
 import { checkWatch, knownProjects, knownProjectsFile } from "../src/watch.ts";
 import { addProject, projectsFile } from "../src/projects.ts";
-import type { WatchSpec } from "../src/watch.ts";
-import { apiMiddleware, createDataApi } from "../app/data.ts";
+import type { WatchSpec } from "../src/types.ts";
+import { apiMiddleware, createDataApi } from "../src/viewer-data.ts";
 
 const workflows = fs.mkdtempSync(path.join(os.tmpdir(), "factory-watch-workflows-"));
 fs.writeFileSync(path.join(workflows, "watched.yaml"), `

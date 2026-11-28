@@ -1,14 +1,10 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { DEFAULT_MEMORY_LAYER } from "./config.ts";
 import { FACTORY_DIR } from "./paths.ts";
-import type { AgentTool } from "./types.ts";
 
 const AGENT_NAME = /^[a-z0-9-]+$/;
-const CLAUDE_TOOLS: Record<AgentTool, string[]> = { read: ["Read", "Grep", "Glob"], edit: ["Edit", "Write"], bash: ["Bash"] };
-const CLAUDE_ALL_TOOLS = ["Read", "Grep", "Glob", "Skill", "Edit", "Write", "Bash", "WebFetch", "WebSearch", "Agent", "Task", "NotebookEdit"];
 
 export interface MarketplaceSkill {
   name: string;
@@ -192,52 +188,16 @@ export function describeAgent(name: string, memoryLayer: string = DEFAULT_MEMORY
   };
 }
 
-export function claudeTools(tools: AgentTool[]): { allowed: string[]; disallowed: string[] } {
-  const allowed = [...new Set(tools.flatMap((t) => CLAUDE_TOOLS[t]))];
-  return { allowed, disallowed: CLAUDE_ALL_TOOLS.filter((t) => !allowed.includes(t)) };
-}
-
-function freshDir(prefix: string): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-}
-
 /** An agent given by its instructions, for example a delegate work item, instead of by its marketplace name. */
 export type AgentDefinition = Pick<MarketplaceAgent, "name" | "description" | "prompt"> & Partial<MarketplaceAgent>;
 
-function definitionOf(agent: string | AgentDefinition): AgentDefinition {
+/** The neutral definition of an agent: the given definition after a name check, or the marketplace agent of that name. */
+export function agentDefinition(agent: string | AgentDefinition): AgentDefinition {
   if (typeof agent !== "string") {
-    if (!AGENT_NAME.test(agent.name)) throw new Error(`invalid agent name ${agent.name}`);
+    if (!AGENT_NAME.test(agent.name)) {
+      throw new Error(`invalid agent name ${agent.name}`);
+    }
     return agent;
   }
   return readMarketplaceAgent(agent);
-}
-
-export function claudeAgentsFile(agent: string | AgentDefinition, tools: AgentTool[] = ["read"]): string {
-  const definition = definitionOf(agent);
-  const file = path.join(freshDir("factory-agent-"), `claude-${definition.name}.json`);
-  fs.writeFileSync(file, JSON.stringify({ [definition.name]: { description: definition.description, prompt: definition.prompt, tools: claudeTools(tools).allowed } }));
-  return file;
-}
-
-/** OpenCode access outside the workspace: denied, except inside the node's extra directories (the same folders the Claude backend passes as --add-dir). */
-function externalDirectoryPermission(dirs: string[]): string | Record<string, string> {
-  if (dirs.length === 0) {
-    return "deny";
-  }
-  return { "*": "deny", ...Object.fromEntries(dirs.map((dir) => [path.join(dir, "*"), "allow"])) };
-}
-
-export function opencodeConfigDir(agent: string | AgentDefinition, tools: AgentTool[] = ["read"], dirs: string[] = []): string {
-  const definition = definitionOf(agent);
-  const dir = freshDir("factory-opencode-");
-  const target = path.join(dir, "agents", `${definition.name}.md`);
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  if (definition.skillDir || definition.pluginRoot || !definition.frontmatter) {
-    const allow = (tool: AgentTool) => (tools.includes(tool) ? "allow" : "deny");
-    const front = { description: definition.description, mode: "subagent", permission: { edit: allow("edit"), bash: allow("bash"), task: "deny", webfetch: "deny", websearch: "deny", external_directory: externalDirectoryPermission(dirs) } };
-    fs.writeFileSync(target, `---\n${JSON.stringify(front)}\n---\n\n${definition.prompt}\n`);
-  } else {
-    fs.writeFileSync(target, `---\n${definition.frontmatter}\n---\n\n${definition.prompt}\n`);
-  }
-  return dir;
 }

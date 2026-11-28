@@ -11,23 +11,8 @@ import path from "node:path";
 import Mustache from "mustache";
 import { loadFactoryConfig } from "./config.ts";
 import { listProjects } from "./projects.ts";
-import type { CliName, ExecResult, RunInput } from "./types.ts";
+import type { ExecResult, RunInput, WatchSpec } from "./types.ts";
 import type { Factory } from "./engine.ts";
-
-export interface WatchSpec {
-  id: string;
-  everyMinutes: number;
-  stableChecks: number;
-  command: string[];
-  projectsWhen: string;
-  items: string;
-  skipWhen: string[];
-  key: string;
-  workflow: string;
-  goal: string;
-  input: Record<string, string>;
-  backend: { kind: "cli"; cli: CliName };
-}
 
 export interface WatchContext {
   factory: Factory;

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import Mustache from "mustache";
-import { evaluateWhen, withEach } from "./workflow-yaml.ts";
+import { evaluateWhen, withEach } from "./when.ts";
 import type { Operation } from "./types.ts";
 
 const pass: Operation = async () => ({ state: { passed: true }, output: "verify passed" });

@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { cspMiddleware } from "../app/csp.ts";
-import { apiMiddleware, createDataApi } from "../app/data.ts";
+import { cspMiddleware } from "./csp.ts";
+import { apiMiddleware, createDataApi } from "./viewer-data.ts";
 import type { Factory } from "./engine.ts";
 
 export interface ViewerOptions {

@@ -83,7 +83,7 @@ test("a question passed on from several steps keeps all of them; one step stays 
 test("a run stores every question with its rendered text, the step that asks it, and the answer", async () => {
   process.env.FACTORY_TURN_DELAY_MS = "0";
   const { Factory } = await import("../src/engine.ts");
-  const { createDataApi } = await import("../app/data.ts");
+  const { createDataApi } = await import("../src/viewer-data.ts");
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-questions-"));
   const factory = new Factory(dataDir, { backend: "fake" });
   const { run } = factory.start("the login task", undefined, { workflow: "main" });

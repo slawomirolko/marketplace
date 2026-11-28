@@ -1,6 +1,7 @@
 name: olko-marketplace-skill-sync
 version: 0.6.0
 description: "Synchronizes project-local skills and OpenCode agents with the marketplace: compares every artifact and asks the test coverage advisor for missing tests, asks one decision per difference and one for the accepted test suggestions, applies, writes the accepted tests, publishes through a marketplace PR, installs after the merge, and then delivers the project-side changes through a second, separate local project PR. Every question to the user is composed by grill-with-docs in the user's response language; the workflow only puts it to the user."
+inputs: "project, the absolute path of the local project, optional marketplace, the absolute path of the marketplace checkout, and optional artifacts, the skill and agent names to sync."
 source: agents/opencode/olko-marketplace-skill-sync-manager.md (phases 1-6, user question gate, response language)
 roles:
   bootstrap: low

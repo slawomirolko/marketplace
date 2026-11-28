@@ -7,7 +7,7 @@ import path from "node:path";
 import test from "node:test";
 import { cliExecutor, hostExec } from "../src/cli-backend.ts";
 import { homeEnv } from "../src/home-env.ts";
-import { opencodeConfigDir } from "../src/marketplace-agents.ts";
+import { opencodeConfigDir } from "../src/cli-agents.ts";
 
 interface Probe {
   argv: string[];

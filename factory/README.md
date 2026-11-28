@@ -92,7 +92,7 @@ After `pnpm install` (once, from `factory/`) it starts Vite on <http://127.0.0.1
 - a run selector and run totals by tier, model and cost source.
 - a human icon on a step that asks you (green: the step asks, through `askedBy`, `askAfterTurn` or its agent's permission to ask; black: an interrupt or group that passes the question on); a click opens the Questions tab with every question of that step in the selected run and your answers. The factory stores each question with its rendered text and the answer in `questions.sqlite` in the data directory (built-in `node:sqlite`), so only runs started after that store was added show their questions.
 
-Data comes read-only from the factory data directory. Without `FACTORY_DATA_DIR` the app uses `factory/.viewer-data` (git-ignored) and creates one finished demo run with the fake model on first start. To look at real runs, set `FACTORY_DATA_DIR` to the directory the factory writes to (it holds `runs/*.json`). The Vite server listens on 127.0.0.1 only and serves GET requests only. HTML responses carry a Content-Security-Policy with a new nonce per request (`app/csp.ts`): no unsafe-inline, no unsafe-eval.
+Data comes read-only from the factory data directory. Without `FACTORY_DATA_DIR` the app uses `factory/.viewer-data` (git-ignored) and creates one finished demo run with the fake model on first start. To look at real runs, set `FACTORY_DATA_DIR` to the directory the factory writes to (it holds `runs/*.json`). The Vite server listens on 127.0.0.1 only and serves GET requests only. HTML responses carry a Content-Security-Policy with a new nonce per request (`src/csp.ts`): no unsafe-inline, no unsafe-eval.
 
 ## Real workflow: olko-review
 
@@ -124,7 +124,7 @@ Each call writes `<out>.mmd`, `<out>.md` (a Mermaid block that GitHub renders) a
 
 ## Workflows in YAML
 
-Every workflow is a YAML file in `workflows/` (`FACTORY_WORKFLOWS_DIR` changes the folder), validated against `spec/workflow.schema.json` when the factory starts. No workflow is defined in code. A file has `name`, `version`, `source`, `roles` (role to tier), `entry`, `nodes`, `edges` and optional `limits.maxCycleIterations` (default 3).
+Every workflow is a YAML file in `workflows/` (`FACTORY_WORKFLOWS_DIR` changes the folder), validated against `spec/workflow.schema.json` when the factory starts. No workflow is defined in code. A file has `name`, `version`, `source`, `roles` (role to tier), `entry`, `nodes`, `edges`, optional `limits.maxCycleIterations` (default 3) and optional `inputs`: help text for the parameters a caller puts in `factory_start` input, which the `factory_start` tool description lists per workflow.
 
 | Node kind | Fields | What the engine does |
 |---|---|---|
@@ -153,7 +153,7 @@ factory/
   src/spec.ts          schema validation for config, workflow, ledger, footer
   spec/                 JSON Schemas and examples
   workflows/            workflows in YAML (olko-review, olko-marketplace-skill-sync, hello sample)
-  app/                  viewer app (Vite + React Flow), read-only data API in app/data.ts
+  app/                  viewer app (Vite + React Flow), read-only data API in src/viewer-data.ts
   viewer/               Mermaid diagram of a workflow, with per-node cost from a run report
   test/spec.test.ts    schema tests
   test/viewer.test.ts  viewer and per-node cost tests

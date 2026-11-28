@@ -1,6 +1,7 @@
 name: olko-review
 version: 0.5.0
 description: "Code review of a PR, a local diff or a plan: REVIEW for someone else's PR (or a fresh review of your own), LOCAL for a working tree against a base branch, PLAN for a plan file, FEEDBACK for comments and CI on your own PR."
+inputs: "repo, owner/name, and pr, the PR number, plus fresh: true for a fresh review of your own PR; or plan, a plan file path in the workspace, and optional criteria."
 source: agents/opencode/olko-review-orchestrator.md (REVIEW, PLAN and FEEDBACK routes)
 roles:
   orchestrator: medium

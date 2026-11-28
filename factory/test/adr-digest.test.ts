@@ -282,7 +282,7 @@ for (const [workflow, prefix, context, input] of [
 
 test("impl build asks again only when the test-first step did not decide the overlapping topics", async () => {
   const { loadedWorkflows } = await import("../src/engine.ts");
-  const { evaluateWhen } = await import("../src/workflow-yaml.ts");
+  const { evaluateWhen } = await import("../src/when.ts");
   const edge = loadedWorkflows().get("olko-impl-build")!.edges.find((e: any) => e.from === "store-context" && e.to === "ask-store") as any;
   const blocked = { "store-context": { "store-context": { blocked: [BLOCKED] } } };
   assert.equal(evaluateWhen(edge.when, blocked), true);

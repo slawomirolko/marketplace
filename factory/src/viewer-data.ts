@@ -1,22 +1,22 @@
 import fs from "node:fs";
-import { loadWorkflowSpecs } from "../src/workflow-yaml.ts";
+import { loadWorkflowSpecs } from "./workflow-yaml.ts";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
-import { Factory, errorMessage, loadedWorkflows, runReport } from "../src/engine.ts";
-import { homeDataDir, readSources } from "../src/paths.ts";
-import { describeAgent, marketplaceDir } from "../src/marketplace-agents.ts";
-import { readQuestions } from "../src/questions.ts";
-import type { AskedQuestion } from "../src/questions.ts";
-import { loadFactoryConfig, memoryLayerOf, projectsOf } from "../src/config.ts";
-import { projectScopedInput, projectsAction, readRegistry } from "../src/projects.ts";
-import type { Project, ProjectsActionRequest } from "../src/projects.ts";
-import { standaloneNames, workflowsThatRan } from "../src/standalone.ts";
-import { readLock, scanMarketplace, updateMarketplace } from "../src/sources-lock.ts";
-import type { MarketplaceScan, UpdateResult } from "../src/sources-lock.ts";
+import { Factory, errorMessage, loadedWorkflows, runReport } from "./engine.ts";
+import { homeDataDir, readSources } from "./paths.ts";
+import { describeAgent, marketplaceDir } from "./marketplace-agents.ts";
+import { readQuestions } from "./questions.ts";
+import type { AskedQuestion } from "./questions.ts";
+import { loadFactoryConfig, memoryLayerOf, projectsOf } from "./config.ts";
+import { projectScopedInput, projectsAction, readRegistry } from "./projects.ts";
+import type { Project, ProjectsActionRequest } from "./projects.ts";
+import { standaloneNames, workflowsThatRan } from "./standalone.ts";
+import { readLock, scanMarketplace, updateMarketplace } from "./sources-lock.ts";
+import type { MarketplaceScan, UpdateResult } from "./sources-lock.ts";
 import { execFileSync } from "node:child_process";
-import { hostExec } from "../src/cli-backend.ts";
-import type { AgentInfo } from "../src/marketplace-agents.ts";
-import type { Coverage, FactoryConfigFile, Report, Run, WorkflowSpec } from "../src/types.ts";
+import { hostExec } from "./cli-backend.ts";
+import type { AgentInfo } from "./marketplace-agents.ts";
+import type { Coverage, FactoryConfigFile, Report, Run, WorkflowSpec } from "./types.ts";
 
 const RUN_ID = /^r-[a-f0-9]{8}$/;
 

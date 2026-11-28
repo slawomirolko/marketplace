@@ -10,7 +10,7 @@ const home = fs.mkdtempSync(path.join(os.tmpdir(), "factory-projects-home-"));
 process.env.FACTORY_HOME_DIR = home;
 
 const { addProject, addRoot, discoverProjects, listProjects, projectById, projectInput, projectScopedInput, projectsAction, projectsCli, projectsFile, readRegistry, removeProject, removeRoot, suggestId } = await import("../src/projects.ts");
-const { apiMiddleware, createDataApi, parseProjectsAction, statusFileOf } = await import("../app/data.ts");
+const { apiMiddleware, createDataApi, parseProjectsAction, statusFileOf } = await import("../src/viewer-data.ts");
 const { loadFactoryConfig, projectsOf, withStatusCli, DEFAULT_PROJECTS } = await import("../src/config.ts");
 const { loadHomeEnv, readSources, registerDataSource } = await import("../src/paths.ts");
 const { validate } = await import("../src/spec.ts");

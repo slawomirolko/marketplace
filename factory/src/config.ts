@@ -3,8 +3,7 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { FACTORY_DIR } from "./paths.ts";
 import { validate } from "./spec.ts";
-import type { CliName, ProjectsConfig, Tier } from "./types.ts";
-import type { WatchSpec } from "./watch.ts";
+import type { CliName, ProjectsConfig, Tier, WatchSpec } from "./types.ts";
 
 export interface FactoryConfig {
   roles: Record<string, Tier>;

@@ -222,6 +222,7 @@ export interface WorkflowNode {
 export interface Workflow {
   name: string;
   version: string;
+  inputs?: string;
   source?: string;
   roles?: Record<string, Tier>;
   entry: string;
@@ -463,6 +464,8 @@ export interface WorkflowSpecEdge {
 export interface WorkflowSpec {
   name: string;
   description?: string;
+  /** The parameters a caller puts in factory_start input, as help text. */
+  inputs?: string;
   version: string;
   source?: string;
   roles?: Record<string, string>;
@@ -486,4 +489,20 @@ export interface ProjectsConfig {
   statusWorkflow?: string;
   /** The CLI backend that runs the status workflow when the viewer starts it. */
   statusBackend?: { kind: "cli"; cli: CliName };
+}
+
+/** An interval watch from config/factory.yaml: see watch.ts for how it starts runs. */
+export interface WatchSpec {
+  id: string;
+  everyMinutes: number;
+  stableChecks: number;
+  command: string[];
+  projectsWhen: string;
+  items: string;
+  skipWhen: string[];
+  key: string;
+  workflow: string;
+  goal: string;
+  input: Record<string, string>;
+  backend: { kind: "cli"; cli: CliName };
 }

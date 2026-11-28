@@ -1,6 +1,7 @@
 name: olko-claude-sync
 version: 0.3.0
 description: "Synchronizes skills and agents between a Claude Code plugin marketplace (target), the Olko marketplace and your ~/.claude scope: inventory, match, compare, one decision per row, port through stage folders, apply one row at a time, publish a draft PR, optional consolidation. Every step runs on the sync manager and its marketplace workers."
+inputs: "target and targetName, a Claude Code plugin marketplace checkout and a kebab-case name for it, olko, the Olko checkout, optional user, the user scope (default ~/.claude), optional stateDir (default ~/.olko-sync) and optional artifacts."
 source: plugins/olko-sync/agents/olko-claude-sync-manager.md (phases 0-6)
 roles:
   sync-worker: low

@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
-import { cspMiddleware, NONCE_PLACEHOLDER } from "./csp.ts";
-import { apiMiddleware, createDataApi } from "./data.ts";
+import { cspMiddleware, NONCE_PLACEHOLDER } from "../src/csp.ts";
+import { apiMiddleware, createDataApi } from "../src/viewer-data.ts";
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const factoryDir = path.join(appDir, "..");

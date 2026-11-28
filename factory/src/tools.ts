@@ -3,7 +3,7 @@ import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { errorMessage } from "./engine.ts";
+import { errorMessage, loadedWorkflows } from "./engine.ts";
 import type { Factory } from "./engine.ts";
 import { viewerUrlFor } from "./viewer-routes.ts";
 import { HARNESSES, installGuide } from "./install-guide.ts";
@@ -29,6 +29,14 @@ export interface FactoryTools {
 const MIN_STATUS_INTERVAL_MS = Number(process.env.FACTORY_MIN_STATUS_INTERVAL_MS ?? 500);
 const DEFAULT_WAIT_SEC = 20;
 const MAX_WAIT_SEC = 50;
+
+const START_DESCRIPTION = "Create a factory run for a goal. workflow names a factory workflow; input holds its parameters, listed below for each workflow that declares them. projectId names a registered project (see factory_projects): the factory sets input.project to its folder and keeps the id on the run. The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.";
+
+/** The factory_start description: the generic text, then the input help that each workflow YAML declares in `inputs`. */
+function startDescription(): string {
+  const inputs = [...loadedWorkflows().values()].filter((workflow) => workflow.inputs).map((workflow) => `- ${workflow.name}: ${workflow.inputs}`);
+  return inputs.length === 0 ? START_DESCRIPTION : `${START_DESCRIPTION}\nInputs by workflow:\n${inputs.join("\n")}`;
+}
 
 export function createFactoryTools(factory: Factory, publicUrl: string): FactoryTools {
   const lastStatusAt = new Map<string, number>();
@@ -78,7 +86,7 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
     server.registerTool(
       "factory_start",
       {
-        description: "Create a factory run for a goal. workflow names a factory workflow (for example olko-review); input holds its parameters (for olko-review: repo owner/name and pr number, plus fresh: true for a fresh review of your own PR; or plan, a plan file path in the workspace, and optional criteria; for olko-marketplace-skill-sync: project, the absolute path of the local project, optional marketplace, the absolute path of the marketplace checkout, and optional artifacts, the skill and agent names to sync; for olko-claude-sync: target and targetName, a Claude Code plugin marketplace checkout and a kebab-case name for it, olko, the Olko checkout, optional user, the user scope (default ~/.claude), optional stateDir (default ~/.olko-sync) and optional artifacts). projectId names a registered project (see factory_projects): the factory sets input.project to its folder and keeps the id on the run. The result contains proposed settings. Show the proposal to the user. After the user replies, call factory_confirm.",
+        description: startDescription(),
         inputSchema: {
           goal: z.string().min(1),
           workflow: z.string().regex(/^[a-z][a-z0-9-]*$/).optional(),
