@@ -217,6 +217,7 @@ export interface RunCall {
   visit: number | null;
   status: string;
   startedAt: string;
+  /** The sum of the call's ledger records; null (unknown, not zero) when any record has no known cost. */
   costUsd: number | null;
   records: number;
   durationMs: number | null;
@@ -240,6 +241,7 @@ export interface LedgerRecord {
   cacheReadTokens?: number | null;
   cacheWrite5mTokens?: number | null;
   cacheWrite1hTokens?: number | null;
+  /** Null when the harness reported no cost for this turn: unknown, not zero (`costSource` is then `unknown`). */
   costUsd: number | null;
   costSource: string;
   durationMs?: number | null;

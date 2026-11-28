@@ -18,11 +18,28 @@ const PAD = 20;
 const HEADER = 72;
 const SCRIPT_BOX = 26;
 const SCRIPT_LIST = 34;
+/** Space below the last script box inside an agent card. */
+const SCRIPTS_PADDING = 8;
+/** Horizontal space between two nodes of the same rank, in px. */
+const NODE_GAP = 36;
+/** Vertical space between two ranks, in px. */
+const RANK_GAP = 56;
+/**
+ * Dagre reserves room for an edge label, but cannot measure text. The width is estimated at 6.5 px per character
+ * (edge labels use an 11 px font in styles.css) and capped at 240 px, so one long label cannot spread the graph
+ * sideways; one line is 18 px high.
+ */
+const LABEL_CHAR_WIDTH = 6.5;
+const LABEL_MAX_WIDTH = 240;
+const LABEL_HEIGHT = 18;
+const ARROW_SIZE = 18;
+/** The dash pattern of an optional edge: one that runs only under a condition or a switch. */
+const OPTIONAL_DASH = "6 4";
 
 /** Extra card height for an agent's scripts: one box per script inside the card, or a two-line name list. */
 export function scriptsHeight(count: number, listed: boolean): number {
   if (count === 0) return 0;
-  return listed ? SCRIPT_LIST : count * SCRIPT_BOX + 8;
+  return listed ? SCRIPT_LIST : count * SCRIPT_BOX + SCRIPTS_PADDING;
 }
 
 interface LevelLayout {
@@ -77,11 +94,11 @@ function layoutLevel(level: Level, expanded: Set<string>, parentKey: string | nu
   });
 
   const graph = new dagre.graphlib.Graph();
-  graph.setGraph({ rankdir: "TB", nodesep: 36, ranksep: 56, marginx: 0, marginy: 0 });
+  graph.setGraph({ rankdir: "TB", nodesep: NODE_GAP, ranksep: RANK_GAP, marginx: 0, marginy: 0 });
   graph.setDefaultEdgeLabel(() => ({}));
   const levelEdges = mergeParallel(level.edges);
   for (const entry of sized) graph.setNode(entry.item.key, { width: entry.width, height: entry.height });
-  for (const edge of levelEdges) graph.setEdge(edge.from, edge.to, edge.label ? { label: edge.label, width: Math.min(240, edge.label.length * 6.5), height: 18 } : {});
+  for (const edge of levelEdges) graph.setEdge(edge.from, edge.to, edge.label ? { label: edge.label, width: Math.min(LABEL_MAX_WIDTH, edge.label.length * LABEL_CHAR_WIDTH), height: LABEL_HEIGHT } : {});
   dagre.layout(graph);
 
   const placed = sized.map((entry) => {
@@ -111,7 +128,7 @@ function layoutLevel(level: Level, expanded: Set<string>, parentKey: string | nu
     }
   }
   const edges: FlowEdge[] = [
-    ...levelEdges.map((edge) => ({ id: `${edge.from}->${edge.to}`, source: edge.from, target: edge.to, label: edge.label ?? undefined, type: "smoothstep", ...(edge.dashed ? { style: { strokeDasharray: "6 4" }, className: "optional" } : {}), markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 } })),
+    ...levelEdges.map((edge) => ({ id: `${edge.from}->${edge.to}`, source: edge.from, target: edge.to, label: edge.label ?? undefined, type: "smoothstep", ...(edge.dashed ? { style: { strokeDasharray: OPTIONAL_DASH }, className: "optional" } : {}), markerEnd: { type: MarkerType.ArrowClosed, width: ARROW_SIZE, height: ARROW_SIZE } })),
     ...placed.flatMap((box) => box.inner?.edges ?? []),
   ];
   return {

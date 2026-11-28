@@ -92,6 +92,12 @@ interface ParsedError {
   message?: string | null;
 }
 
+/**
+ * A readable error text: `type status: message` from a JSON error, else the text itself. The CLI backend cuts a
+ * harness error to its first 300 characters (ERROR_TEXT_CHARS in factory/src/cli-backend.ts). An OpenCode error is
+ * JSON, so the cut can leave it unparsable; the fields are then read from the text with patterns. A Claude CLI error
+ * is usually plain text and is shown as it is.
+ */
 function errorMessage(error: unknown): string {
   const text = String(error ?? "failed");
   let parsed: ParsedError | null = null;

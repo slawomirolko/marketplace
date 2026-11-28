@@ -44,6 +44,11 @@ export function useLiveExpansion(level: Level | null, run: RunData | null): Live
   }, [level, live, expand]);
 
   const liveKey = `${live.node ?? ""}|${live.agents.join(",")}`;
+  /**
+   * Expands the groups that hold the current step when the live step or agents change, or when the graph first
+   * exists. `showCurrent` is left out of the dependencies on purpose: it changes with every refreshed run and every
+   * new level, and running on each of those would expand again the groups the user has just collapsed.
+   */
   useEffect(() => {
     if (live.node || live.agents.length) {
       showCurrent();

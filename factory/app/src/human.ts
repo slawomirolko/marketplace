@@ -62,6 +62,12 @@ function askerOf(icons: Map<string, HumanIcon>, key: string): HumanIcon {
   return icon;
 }
 
+/**
+ * The drawn step an `askedBy` reference of an interrupt names. A plain id is the step of that id next to the
+ * interrupt. A `{ workflow, step }` reference may match several drawn LLM steps (the same workflow drawn in more than
+ * one place); the nearest wins: the one whose key shares the longest prefix with the interrupt's key. On a tie the
+ * first in drawing order wins, since the sort is stable. Null when the diagram draws no such step.
+ */
 function drawnStep(items: DrawnItem[], owners: Map<string, string>, from: string, ref: AskedByRef): string | null {
   if (typeof ref === "string") {
     return `${parentPath(from)}/${ref}`;

@@ -24,6 +24,11 @@ export function disabledKeys(run: RunData | null): string[] {
   return run.events.filter(isSwitchedOffEvent).map((event) => String(event.node));
 }
 
+/**
+ * The graph nodes the factory config switches off, for the workflows view. A node's `enabledWhen` has the form
+ * `switches.<name> == true|false` or `switches.<name> != true|false`; a switch the config does not set counts as
+ * true. Any other `enabledWhen` text is not evaluated, so it never switches a node off here.
+ */
 export function configDisabledKeys(level: Level | null, config: FactoryConfig | null): string[] {
   const switches = config?.switches ?? {};
   const keys: string[] = [];

@@ -9,6 +9,9 @@ import { FitToBounds } from "./FitToBounds.tsx";
 import type { BuiltLevel } from "./useGraph.ts";
 import type { ViewMode } from "./view-mode.ts";
 
+/** The smallest zoom, low enough to show a large expanded workflow whole. */
+const MIN_ZOOM = 0.1;
+
 export interface FlowCanvasProps {
   built: BuiltLevel | null;
   mode: ViewMode;
@@ -43,7 +46,7 @@ export function FlowCanvas({ built, mode, runId, runError, nodes, edges, bounds,
       nodesDraggable={false}
       nodesConnectable={false}
       colorMode="system"
-      minZoom={0.1}
+      minZoom={MIN_ZOOM}
     >
       <Panel position="top-left">
         <label className="agents-only" title="Show only agent steps. Solid line: always runs next. Dashed line: runs only under a condition or a switch.">
