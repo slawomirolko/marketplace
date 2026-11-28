@@ -135,3 +135,55 @@ The sanitize gate reads them from private configuration only:
 - `FACTORY_LEAK_TERMS`: comma-separated terms in the environment of the factory or shell.
 
 Keep these values out of every tracked file, issue, PR and commit message.
+
+## Marketplace merge
+
+Use this flow to bring marketplace updates into one project. It covers copies that were
+changed locally and copies that are only outdated. The steps run in the factory, and a
+person makes every decision.
+
+### Start
+
+In the factory viewer, open the project and click **Merge updates**, next to **Re-check status**.
+The button is enabled when the latest status has either:
+
+- an installed skill or agent in state `outdated`, or
+- an installed skill or agent in state `modified` where the marketplace moved on after its base.
+
+The button is never enabled for a marketplace source checkout.
+
+### Steps
+
+1. **Prepare.** The workflow `olko-marketplace-merge` runs `node scripts/olko-marketplace-merge.mjs prepare`.
+   It merges the base, the local copy (adapter excluded) and the upstream text with a three-way
+   merge. The result goes into a new work folder, `<factory home>/merges/<run id>`. Nothing is
+   written to the project or the marketplace.
+2. **Resolve.** The agent `olko-marketplace-upstream` runs the `resolve` step. It reads and edits
+   files only inside the work folder, and it has no shell. It keeps newer upstream text where
+   the hunks allow it. It writes `resolution.json` with a reason for each hunk and a
+   classification of each local change as portable or project-specific.
+3. **Summary.** The `summary` subcommand builds one row per artifact.
+4. **Decide.** The viewer asks one question with one checkbox per artifact. A row starts
+   unchecked when its base is a guess, when a resolution is unsure, or when there is no
+   upstream classification. Choose **Apply selected** or **Apply none**.
+5. **Apply.** Only the selected artifacts are written into the project. Adapter files are not
+   touched. Apply refuses to run while a conflict is unresolved. It records the new base and
+   the approved content hash in the project lock.
+
+An empty merge ends as done with "Nothing to merge".
+
+### After apply
+
+Apply is also the approval for the upstream draft PRs. The `marketplace-upstream` watch picks
+up approved changes after its two stable checks, about 20 minutes. It then runs
+`olko-marketplace-upstream` without asking again.
+
+- The sanitize gate still runs. It checks the whole staged commit, the commit message, the PR
+  title and the PR body.
+- PRs stay drafts. A person merges or closes each one.
+
+### What to check
+
+- Each row: its base, its resolution reasons and its classification.
+- Unchecked rows: they stay out of the project until someone checks them and applies again.
+- The project's `git status` after apply: only the selected artifacts and the lock change.
