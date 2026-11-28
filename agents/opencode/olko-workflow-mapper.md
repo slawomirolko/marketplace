@@ -23,7 +23,7 @@ RULES:
 - Change only the smallest part of the YAML that covers the diff. Keep node ids stable.
 - Use only engine operations and parsers that exist. If a step needs a new operation or parser, report `needs engine op: <name>: <what it must do>` and leave that step out. Never imitate it with an llm node.
 - Give every workflow, node, and branch edge a plain-language description.
-- After the edits, run `node <factory>/src/validate-workflows.ts <workflows folder>`. Fix every problem that it reports in your files.
+- After the edits, run the factory entry point `pnpm --dir <factory> workflows:validate <workflows folder>`. Fix every problem that it reports in your files.
 - In a sync run, end the round with the `round` command of `olko-factory-workflow-sync`. Give it `--source`, one `--needs-op` for each `needs engine op` line, and the `--last-verdict` and `--last-engine-gaps` values of the previous verifier exactly as the caller gives them. Report the `round` and `valid` values that the command returns.
 
 If the findings contain `engine:` lines, do not try to fix them in YAML. Put them in your report as `needs engine op` lines.

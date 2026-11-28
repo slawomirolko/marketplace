@@ -48,7 +48,7 @@ nodes:
       Sync run. Source ({{state.item-next.item.kind}}): {{state.scan.scan.marketplace}}/{{state.item-next.item.source}}
       Item file (the YAML files that name it, every file of their workflows, and the diff file): {{state.item-next.item.itemFile}}
       Workflows folder (edit only YAML files here): {{state.scan.scan.workflows}}
-      Validate with: node {{state.scan.scan.factory}}/src/validate-workflows.ts {{state.scan.scan.workflows}}
+      Validate with: pnpm --dir {{state.scan.scan.factory}} workflows:validate {{state.scan.scan.workflows}}
       End the round with the `round` command of the olko-factory-workflow-sync script: `--state-dir {{state.scan.scan.stateDir}} --source {{state.item-next.item.source}}{{#state.verify}} --last-verdict {{state.verify.verify.verdict}} --last-engine-gaps {{state.verify.verify.engineGaps}}{{/state.verify}}`. Add one `--needs-op` for each `needs engine op` line in your report.
       {{#state.verify}}
       Report of the last verifier. Use its `yaml:` lines only when they name this source:
