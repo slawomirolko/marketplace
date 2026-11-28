@@ -19,8 +19,13 @@
  * removes the files the merge removed, and records the new base and the approved content hash in the project's
  * marketplace lock. It refuses to write anything while a selected item still holds conflict markers.
  *
+ * `summary` reads the plan and the `resolution.json` an agent wrote per item and prints the rows of the one
+ * merge question: `{ ids, items: [{ id, label, detail, checked }] }`. A row is checked by default only when
+ * its base is known and every resolved hunk is marked sure.
+ *
  * Usage:
  *   node scripts/olko-marketplace-merge.mjs prepare --project <dir> --marketplace <dir> --out <dir> [--no-fetch] [--json]
+ *   node scripts/olko-marketplace-merge.mjs summary --out <dir> [--json]
  *   node scripts/olko-marketplace-merge.mjs apply --out <dir> --selected <id,id,...|none> [--json]
  */
 
@@ -49,8 +54,12 @@ import { parseFlags } from "./lib/cli.mjs";
 const SOURCE_HARNESS = "source";
 const FRONT_MATTER_FENCE = "---\n";
 const PREPARE = "prepare";
+const SUMMARY = "summary";
 const APPLY = "apply";
 const PLAN_FILE = "plan.json";
+const SHORT_COMMIT = 7;
+const DIFF_CONTEXT = 1;
+const DIFF_LINES = 40;
 /** The file an agent step may write into an item folder; it describes the resolution and is never installed. */
 const RESOLUTION_FILE = "resolution.json";
 const CONFLICT_MARKER = /^(<<<<<<< local|>>>>>>> upstream)\s*$/m;
@@ -269,10 +278,12 @@ export function prepare({ project, marketplace, out, fetch = true }) {
   const plan = {
     project,
     marketplace,
+    out: path.resolve(out),
     ref: status.ref,
     head: status.head,
     ids: items.map((item) => item.id),
     conflicts: items.reduce((sum, item) => sum + item.files.filter((file) => file.result === "conflict").length, 0),
+    modified: items.filter((item) => item.state === "modified").length,
     items,
   };
   fs.writeFileSync(path.join(out, PLAN_FILE), `${JSON.stringify(plan, null, 2)}\n`);
@@ -342,18 +353,25 @@ function unresolvedFiles(loaded) {
   return loaded.item.files.filter((file) => file.result === "conflict" && CONFLICT_MARKER.test(loaded.files.get(file.path) ?? "")).map((file) => file.path);
 }
 
+/** The `resolution.json` an agent wrote into an item folder, or null when it is missing or unreadable. */
+function readResolution(item) {
+  try {
+    const resolution = JSON.parse(fs.readFileSync(path.join(item.dir, RESOLUTION_FILE), "utf8"));
+    return resolution && typeof resolution === "object" ? resolution : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The hunks of a resolution that name a file, or an empty list. */
+function hunksOf(resolution) {
+  return Array.isArray(resolution?.hunks) ? resolution.hunks.filter((hunk) => hunk && typeof hunk.file === "string") : [];
+}
+
 /** The conflicted files of an item that `<item.dir>/resolution.json` does not name in `hunks[].file`; all of them without a readable resolution. */
 function unexplainedFiles(item) {
-  const conflicts = item.files.filter((file) => file.result === "conflict").map((file) => file.path);
-  const resolutionPath = path.join(item.dir, RESOLUTION_FILE);
-  let named = [];
-  try {
-    const hunks = JSON.parse(fs.readFileSync(resolutionPath, "utf8")).hunks;
-    named = Array.isArray(hunks) ? hunks.map((hunk) => hunk?.file) : [];
-  } catch {
-    named = [];
-  }
-  return conflicts.filter((file) => !named.includes(file));
+  const named = hunksOf(readResolution(item)).map((hunk) => hunk.file);
+  return item.files.filter((file) => file.result === "conflict" && !named.includes(file.path)).map((file) => file.path);
 }
 
 /** True when the project and the lock already hold the proposed result of an item. */
@@ -445,6 +463,121 @@ export function apply({ out, selected }) {
   return { applied, skipped: plan.ids.filter((id) => !applied.includes(id)), upstream };
 }
 
+/** A version pair as "local -> upstream"; the short commits are added when the versions cannot tell the sides apart. */
+function versionText(versions) {
+  const { local, upstream, localCommit, upstreamCommit } = versions;
+  if (local && upstream && local !== upstream) {
+    return `${local} -> ${upstream}`;
+  }
+  const short = (commit) => String(commit ?? "").slice(0, SHORT_COMMIT);
+  return `${local ?? "?"} (${short(localCommit)}) -> ${upstream ?? "?"} (${short(upstreamCommit)})`;
+}
+
+/** The text of a file, line endings normalized, or undefined when it does not exist. */
+function readText(file) {
+  return fs.existsSync(file) && fs.statSync(file).isFile() ? normalizeText(fs.readFileSync(file, "utf8")) : undefined;
+}
+
+/** The project copy of one item file at the item's first location. */
+function projectFile(plan, item, name) {
+  const target = copyAtLocation(plan.project, item.kind, item.name, item.locations[0])?.target;
+  if (!target) {
+    return undefined;
+  }
+  return item.kind === "agent" ? target : path.join(target, ...name.split("/"));
+}
+
+/** The diff lines from the project copy of a file to its proposed copy, at most DIFF_LINES of them. */
+function resolutionDiff(plan, item, name) {
+  const local = readText(projectFile(plan, item, name) ?? "");
+  const proposed = readText(path.join(item.dir, ...name.split("/")));
+  if (local === undefined || proposed === undefined) {
+    return [proposed === undefined ? "the proposed copy removes this file" : "the project has no copy of this file; the proposed copy adds it"];
+  }
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "marketplace-merge-diff-"));
+  try {
+    fs.writeFileSync(path.join(tempDir, "project"), local);
+    fs.writeFileSync(path.join(tempDir, "proposed"), proposed);
+    const result = spawnSync("git", ["diff", "--no-index", "--no-color", `-U${DIFF_CONTEXT}`, "project", "proposed"], { cwd: tempDir, encoding: "utf8" });
+    const lines = result.stdout.split("\n");
+    const body = lines.slice(Math.max(0, lines.findIndex((line) => line.startsWith("@@")))).filter((line) => line !== "");
+    const shown = body.slice(0, DIFF_LINES);
+    return body.length > DIFF_LINES ? [...shown, `... ${body.length - DIFF_LINES} more lines`] : shown;
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+/** The lines of one conflicted file: its kind, the agent's reason per hunk and the diff of the resolution. */
+function conflictLines(plan, item, file, hunks) {
+  const lines = [`Conflict in ${file.path} (${file.conflictKind}):`];
+  const text = readText(path.join(item.dir, ...file.path.split("/")));
+  if (text !== undefined && CONFLICT_MARKER.test(text)) {
+    return [...lines, "  - conflict markers remain; apply refuses this item"];
+  }
+  const own = hunks.filter((hunk) => hunk.file === file.path);
+  if (own.length === 0) {
+    lines.push("  - no resolution yet; apply refuses this item");
+  }
+  for (const hunk of own) {
+    lines.push(`  - ${String(hunk.reason ?? "no reason given")}${hunk.sure === true ? "" : " (unsure)"}`);
+  }
+  return [...lines, ...resolutionDiff(plan, item, file.path).map((line) => `    ${line}`)];
+}
+
+/** The lines that say what would go upstream as a draft PR. */
+function upstreamLines(item, resolution) {
+  if (item.state !== "modified") {
+    return ["Upstream: nothing to send (no local change)."];
+  }
+  const upstream = resolution?.upstream;
+  if (!upstream || typeof upstream !== "object") {
+    return ["Upstream: not classified yet; the upstream flow classifies the change before any draft PR."];
+  }
+  const portable = Array.isArray(upstream.portable) ? upstream.portable.map(String) : [];
+  const adapter = Array.isArray(upstream.adapter) ? upstream.adapter.map(String) : [];
+  return [
+    portable.length > 0 ? `Upstream draft PR: ${portable.join("; ")}` : "Upstream: nothing portable; the change stays in the project.",
+    ...(adapter.length > 0 ? [`Stays in the project: ${adapter.join("; ")}`] : []),
+  ];
+}
+
+/** One row of the merge question for a plan item. */
+function summaryRow(plan, out, item) {
+  if (typeof item.dir !== "string" || !isInside(out, item.dir)) {
+    throw new Error(`The folder of ${item.id} is outside the work directory`);
+  }
+  const resolution = readResolution(item);
+  const hunks = hunksOf(resolution);
+  const conflicts = item.files.filter((file) => file.result === "conflict");
+  const clean = item.files.filter((file) => file.result !== "conflict");
+  const unresolved = conflicts.some((file) => CONFLICT_MARKER.test(readText(path.join(item.dir, ...file.path.split("/"))) ?? ""));
+  const location = item.id.includes("@") ? ` at ${item.locations.join(", ")}` : "";
+  const detail = [
+    ...(item.baseGuessed ? ["Base guessed: the project lock does not record which marketplace version this copy came from."] : []),
+    ...(clean.length > 0 ? [`Merged cleanly: ${clean.map((file) => `${file.path} (${file.result})`).join(", ")}`] : []),
+    ...conflicts.flatMap((file) => conflictLines(plan, item, file, hunks)),
+    ...upstreamLines(item, resolution),
+  ];
+  const sure = hunks.every((hunk) => hunk.sure === true);
+  return {
+    id: item.id,
+    label: `${item.kind} ${item.name}${location} (${item.state}) ${versionText(item.versions)}`,
+    detail: detail.join("\n"),
+    checked: !item.baseGuessed && !unresolved && unexplainedFiles(item).length === 0 && sure,
+  };
+}
+
+/**
+ * The rows of the one merge question for the plan in `out`: per item a label (kind, name, state, versions),
+ * a detail (clean files, conflicts with the agent's reason per hunk and the resolution diff, the upstream part)
+ * and whether it is checked by default (a known base and every hunk sure). Reads only.
+ */
+export function summary({ out }) {
+  const plan = JSON.parse(fs.readFileSync(path.join(out, PLAN_FILE), "utf8"));
+  return { ids: plan.ids, items: plan.items.map((item) => summaryRow(plan, out, item)) };
+}
+
 function requireFlag(options, key, flag) {
   if (!options[key]) {
     throw new Error(`Missing ${flag}`);
@@ -472,11 +605,16 @@ function runApply(rest) {
   return { result: apply({ out: requireFlag(options, "out", "--out"), selected }), json: options.json };
 }
 
+function runSummary(rest) {
+  const options = parseFlags(rest, { values: { "--out": "out" }, switches: { "--json": "json" } });
+  return { result: summary({ out: requireFlag(options, "out", "--out") }), json: options.json };
+}
+
 function main() {
   const [command, ...rest] = process.argv.slice(2);
-  const commands = { [PREPARE]: runPrepare, [APPLY]: runApply };
+  const commands = { [PREPARE]: runPrepare, [SUMMARY]: runSummary, [APPLY]: runApply };
   if (!Object.hasOwn(commands, command ?? "")) {
-    throw new Error(`Unknown command: ${command}. Use ${PREPARE} or ${APPLY}.`);
+    throw new Error(`Unknown command: ${command}. Use ${PREPARE}, ${SUMMARY} or ${APPLY}.`);
   }
   const { result, json } = commands[command](rest);
   console.log(json ? JSON.stringify(result, null, 2) : JSON.stringify(result));

@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { apply, prepare } from "./olko-marketplace-merge.mjs";
+import { apply, prepare, summary } from "./olko-marketplace-merge.mjs";
 import { status as lockStatus } from "./olko-marketplace-lock.mjs";
 
 const scriptPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "olko-marketplace-merge.mjs");
@@ -505,4 +505,86 @@ test("apply refuses when resolution.json misses a conflicted file", () => {
   const before = snapshot(f.project);
   assert.throws(() => applyRun(f, [CONFLICT_ID]), /resolution/);
   assert.deepEqual(snapshot(f.project), before);
+});
+
+function lockAtV1(f) {
+  write(f.project, ".agents/marketplace.lock.json", JSON.stringify({ schemaVersion: 1, "skill:sample-skill": { kind: "skill", source: "skills/demo/sample-skill", location: SKILL_DIR, sourceCommit: f.v1 } }));
+}
+
+function summaryItem(f, id = CONFLICT_ID) {
+  return summary({ out: f.out }).items.find((item) => item.id === id);
+}
+
+test("prepare records the work directory and the count of modified items", () => {
+  const f = conflictFixture();
+  write(f.project, AGENT_FILE, AGENT_V1);
+  const plan = run(f);
+  assert.equal(plan.out, path.resolve(f.out));
+  assert.equal(plan.modified, 1);
+});
+
+test("summary of an outdated item: versions, clean files, nothing upstream, checked", () => {
+  const f = fixture();
+  installV1Skill(f);
+  run(f);
+  const result = summary({ out: f.out });
+  assert.deepEqual(result.ids, [CONFLICT_ID]);
+  const [item] = result.items;
+  assert.deepEqual(Object.keys(item).sort(), ["checked", "detail", "id", "label"]);
+  assert.equal(item.id, CONFLICT_ID);
+  assert.equal(item.label, "skill sample-skill (outdated) 1.0.0 -> 1.1.0");
+  assert.match(item.detail, /Merged cleanly: SKILL\.md \(upstream\)/);
+  assert.match(item.detail, /Upstream: nothing to send/);
+  assert.equal(item.checked, true);
+});
+
+test("summary of a resolved conflict shows the reason, the resolution diff and the upstream part", () => {
+  const f = conflictFixture();
+  lockAtV1(f);
+  const item = itemOf(run(f), CONFLICT_ID);
+  write(item.dir, "workflow.md", "flow RESOLVED\nflow two\nflow three\n");
+  write(item.dir, "resolution.json", JSON.stringify({ hunks: [{ file: "workflow.md", reason: "keeps the local wording on the upstream line", sure: true }], upstream: { portable: ["workflow.md: clearer first step"], adapter: [] } }));
+  const row = summaryItem(f);
+  assert.equal(row.label, "skill sample-skill (modified) 1.0.0 -> 1.1.0");
+  assert.match(row.detail, /Merged cleanly: SKILL\.md \(upstream\)/);
+  assert.match(row.detail, /Conflict in workflow\.md \(both-edited\)/);
+  assert.match(row.detail, /keeps the local wording on the upstream line/);
+  assert.match(row.detail, /^\s*-flow LOCAL$/m);
+  assert.match(row.detail, /^\s*\+flow RESOLVED$/m);
+  assert.match(row.detail, /Upstream draft PR: workflow\.md: clearer first step/);
+  assert.equal(row.checked, true);
+});
+
+test("summary unchecks an unsure hunk, a missing resolution and a guessed base", () => {
+  const f = conflictFixture();
+  lockAtV1(f);
+  const item = itemOf(run(f), CONFLICT_ID);
+  const missing = summaryItem(f);
+  assert.equal(missing.checked, false);
+  assert.match(missing.detail, /conflict markers remain/);
+  write(item.dir, "workflow.md", "flow RESOLVED\nflow two\nflow three\n");
+  assert.match(summaryItem(f).detail, /no resolution yet/);
+  write(item.dir, "resolution.json", JSON.stringify({ hunks: [{ file: "workflow.md", reason: "picked upstream, local intent unclear", sure: false }], upstream: { portable: [], adapter: ["workflow.md: project wording"] } }));
+  const unsure = summaryItem(f);
+  assert.equal(unsure.checked, false);
+  assert.match(unsure.detail, /picked upstream, local intent unclear \(unsure\)/);
+  assert.match(unsure.detail, /Stays in the project: workflow\.md: project wording/);
+  assert.match(unsure.detail, /Upstream: nothing portable/);
+
+  const guessed = fixture();
+  installV1Skill(guessed, SKILL_DIR, { workflow: "flow ONE\nflow two\nflow three\n" });
+  run(guessed);
+  const row = summaryItem(guessed);
+  assert.equal(row.checked, false);
+  assert.match(row.detail, /Base guessed/);
+  assert.match(row.detail, /Upstream: not classified yet/);
+});
+
+test("the CLI prints the summary", () => {
+  const f = fixture();
+  installV1Skill(f);
+  run(f);
+  const result = spawnSync(process.execPath, [scriptPath, "summary", "--out", f.out, "--json"], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), summary({ out: f.out }));
 });
