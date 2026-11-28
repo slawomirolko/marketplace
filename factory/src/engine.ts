@@ -15,6 +15,7 @@ import type { RunSummary } from "./run-summary.ts";
 import type {
   WorkflowState,
   Agent,
+  CliExecutor,
   CliName,
   CliResult,
   ConfirmOverrides,
@@ -85,12 +86,16 @@ function ownedByOtherProcess(run: Run): boolean {
 
 export function parseBackend(value: string | undefined): DefaultBackend {
   const backend = value ?? "delegate";
-  if (backend !== "fake" && backend !== "delegate" && backend !== "cli") throw new Error("FACTORY_BACKEND must be fake, delegate or cli");
+  if (backend !== "fake" && backend !== "delegate" && backend !== "cli") {
+    throw new Error("FACTORY_BACKEND must be fake, delegate or cli");
+  }
   return backend;
 }
 
 export function parseCli(value: string | undefined): CliName {
-  if (value !== "claude" && value !== "opencode") throw new Error("FACTORY_CLI must be claude or opencode");
+  if (value !== "claude" && value !== "opencode") {
+    throw new Error("FACTORY_CLI must be claude or opencode");
+  }
   return value;
 }
 
@@ -115,7 +120,9 @@ export function loadedWorkflows(): Map<string, Workflow> {
 
 export function workflowOf(run: Pick<Run, "workflow">): Workflow {
   const workflow = loadedWorkflows().get(run.workflow ?? "hello");
-  if (!workflow) throw new Error(`unknown workflow ${run.workflow}`);
+  if (!workflow) {
+    throw new Error(`unknown workflow ${run.workflow}`);
+  }
   return workflow;
 }
 
@@ -159,7 +166,9 @@ export class Factory {
   constructor(dataDir: string, { executors = {}, backend = "delegate", cli }: FactoryOptions = {}) {
     this.dataDir = dataDir;
     this.executors = executors;
-    if (backend === "cli" && !(cli && executors[cli])) throw new Error("the cli backend needs a cli name and its executor");
+    if (backend === "cli" && !(cli && executors[cli])) {
+      throw new Error("the cli backend needs a cli name and its executor");
+    }
     this.defaultConfig = defaultConfig(backend, cli);
     fs.mkdirSync(path.join(dataDir, "runs"), { recursive: true });
     this.restore();
@@ -167,10 +176,12 @@ export class Factory {
 
   restore(): void {
     const dir = path.join(this.dataDir, "runs");
-    for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".json"))) {
+    for (const file of fs.readdirSync(dir).filter((name) => name.endsWith(".json"))) {
       const run = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8")) as Run;
       this.runs.set(run.runId, run);
-      if (run.idempotencyKey) this.idempotency.set(run.idempotencyKey, run.runId);
+      if (run.idempotencyKey) {
+        this.idempotency.set(run.idempotencyKey, run.runId);
+      }
       const previousOwnerPid = run.ownerPid ?? null;
       if (run.status === "running" && !ownedByOtherProcess(run)) {
         this.event(run, "run_recovered", { previousOwnerPid });
@@ -186,25 +197,35 @@ export class Factory {
   }
 
   checkpoint(run: Run): void {
-    if (ENDED.has(run.status) && run.supervisor?.status === "pending") this.supervise(run);
+    if (ENDED.has(run.status) && run.supervisor?.status === "pending") {
+      this.supervise(run);
+    }
     writeFileAtomic(path.join(this.dataDir, "runs", `${run.runId}.json`), JSON.stringify(run, null, 2));
-    if (run.status !== "running") this.notify(run);
+    if (run.status !== "running") {
+      this.notify(run);
+    }
   }
 
   notify(run: Run): void {
     const waiting = this.waiters.get(run.runId);
-    if (!waiting) return;
+    if (!waiting) {
+      return;
+    }
     this.waiters.delete(run.runId);
-    for (const resolve of waiting) resolve(run);
+    for (const resolve of waiting) {
+      resolve(run);
+    }
   }
 
   waitForChange(runId: string, timeoutMs: number): Promise<WaitResult> {
     const run = this.get(runId);
-    if (run.status !== "running") return Promise.resolve({ run, timedOut: false });
+    if (run.status !== "running") {
+      return Promise.resolve({ run, timedOut: false });
+    }
     return new Promise((resolve) => {
-      const done = (r: Run) => {
+      const done = (changed: Run) => {
         clearTimeout(timer);
-        resolve({ run: r, timedOut: false });
+        resolve({ run: changed, timedOut: false });
       };
       const timer = setTimeout(() => {
         this.waiters.get(runId)?.delete(done);
@@ -239,15 +260,21 @@ export class Factory {
 
   get(runId: string): Run {
     const run = this.runs.get(runId);
-    if (!run) throw new Error(`unknown runId ${runId}`);
+    if (!run) {
+      throw new Error(`unknown runId ${runId}`);
+    }
     return run;
   }
 
   start(goal: string, idempotencyKey?: string, { workflow = "hello", input = {} }: { workflow?: string; input?: RunInput } = {}): { run: Run; reused: boolean } {
     const definition = loadedWorkflows().get(workflow);
-    if (!definition) throw new Error(`unknown workflow ${workflow}`);
+    if (!definition) {
+      throw new Error(`unknown workflow ${workflow}`);
+    }
     const existing = idempotencyKey ? this.idempotency.get(idempotencyKey) : undefined;
-    if (existing) return { run: this.get(existing), reused: true };
+    if (existing) {
+      return { run: this.get(existing), reused: true };
+    }
     const defaults = structuredClone(this.defaultConfig);
     const run: Run = {
       runId: `r-${crypto.randomUUID().slice(0, 8)}`,
@@ -260,7 +287,7 @@ export class Factory {
       status: "needs_confirmation",
       proposal: { ...defaults, roles: Object.fromEntries(Object.entries(definition.roles ?? {}).map(([role, tier]) => [role, defaults.roles[role] ?? tier])) },
       config: null,
-      cursor: definition.nodes.findIndex((n) => n.id === definition.entry),
+      cursor: definition.nodes.findIndex((candidate) => candidate.id === definition.entry),
       visits: { [definition.entry]: 1 },
       nodeTurn: 0,
       steps: 0,
@@ -272,7 +299,9 @@ export class Factory {
       thresholdsHit: [],
     };
     this.runs.set(run.runId, run);
-    if (idempotencyKey) this.idempotency.set(idempotencyKey, run.runId);
+    if (idempotencyKey) {
+      this.idempotency.set(idempotencyKey, run.runId);
+    }
     this.event(run, "run_created", { goal });
     this.checkpoint(run);
     return { run, reused: false };
@@ -280,9 +309,13 @@ export class Factory {
 
   confirm(runId: string, overrides: ConfirmOverrides = {}): Run {
     const run = this.get(runId);
-    if (run.status !== "needs_confirmation") return run;
+    if (run.status !== "needs_confirmation") {
+      return run;
+    }
     const backend = { ...run.proposal.backend, ...(overrides.backend ?? {}) };
-    if (backend.kind === "cli" && !(backend.cli && this.executors[backend.cli])) throw new Error(`no executor for cli backend '${backend.cli}' in this factory process`);
+    if (backend.kind === "cli" && !(backend.cli && this.executors[backend.cli])) {
+      throw new Error(`no executor for cli backend '${backend.cli}' in this factory process`);
+    }
     run.config = {
       ...run.proposal,
       backend,
@@ -304,11 +337,15 @@ export class Factory {
   answer(runId: string, questionId: string, answer: string): { run: Run; duplicate: boolean } {
     const run = this.get(runId);
     if (run.answers[questionId] !== undefined) {
-      if (run.answers[questionId] === answer) return { run, duplicate: true };
+      if (run.answers[questionId] === answer) {
+        return { run, duplicate: true };
+      }
       throw new Error(`question ${questionId} already answered with a different value`);
     }
     const pending = run.pendingQuestion;
-    if (!pending || pending.id !== questionId) throw new Error(`no pending question ${questionId}`);
+    if (!pending || pending.id !== questionId) {
+      throw new Error(`no pending question ${questionId}`);
+    }
     if (pending.allowed && !pending.allowed.includes(answer)) {
       throw new Error(`invalid answer '${answer}', allowed: ${pending.allowed.join(", ")}`);
     }
@@ -329,12 +366,15 @@ export class Factory {
 
   submit(runId: string, nodePath: string, output: string, usage: SubmitUsage = {}, agentId: string | undefined = undefined): { run: Run; duplicate: boolean } {
     const run = this.get(runId);
-    if (nodePath === SUPERVISOR_PATH) return this.submitSupervisor(run, output, usage);
-    const items = run.pendingWorkItems ?? (run.pendingWork ? [run.pendingWork] : []);
-    const work = items.find((w) => w.nodePath === nodePath && (!agentId || w.agentId === agentId));
+    if (nodePath === SUPERVISOR_PATH) {
+      return this.submitSupervisor(run, output, usage);
+    }
+    const work = findPendingWork(run, nodePath, agentId);
     if (run.status !== "waiting_for_client" || !work) {
-      const done = run.ledger.find((r) => r.nodePath === nodePath && r.backend === "delegate" && (!agentId || r.agentId === agentId));
-      if (done) return { run, duplicate: true };
+      const done = run.ledger.find((record) => record.nodePath === nodePath && record.backend === "delegate" && (!agentId || record.agentId === agentId));
+      if (done) {
+        return { run, duplicate: true };
+      }
       throw new Error(`no pending work for node ${nodePath}`);
     }
     run.steps += 1;
@@ -345,15 +385,7 @@ export class Factory {
     } catch (error) {
       return this.rejectOutput(run, node, work, error);
     }
-    this.event(run, "agent_completed", { node: node.path, agentId: work.agentId, backend: "delegate" });
-    const left = items.filter((w) => w !== work);
-    run.pendingWorkItems = left;
-    run.pendingWork = left[0] ?? null;
-    if (left.length === 0) {
-      run.status = "running";
-      this.event(run, "node_completed", { node: node.path, backend: "delegate" });
-      this.advance(run, node);
-    }
+    this.completeWorkItem(run, node, work);
     this.checkpoint(run);
     this.schedule(run);
     return { run, duplicate: false };
@@ -380,7 +412,9 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
   enrichLedger(runId: string, index: number, usage: Pick<ModelUsage, "tokens" | "cacheWriteTtlKnown">): void {
     const run = this.get(runId);
     const record = run.ledger[index];
-    if (!record) throw new Error(`no ledger record ${index} in run ${runId}`);
+    if (!record) {
+      throw new Error(`no ledger record ${index} in run ${runId}`);
+    }
     const priced = priceUsage(record.model, usage.tokens, usage.cacheWriteTtlKnown);
     Object.assign(record, {
       inputTokens: usage.tokens.input,
@@ -405,11 +439,15 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
   }
 
   schedule(run: Run): void {
-    if (this.timers.has(run.runId) || this.busy.has(run.runId)) return;
+    if (this.timers.has(run.runId) || this.busy.has(run.runId)) {
+      return;
+    }
     run.ownerPid = process.pid;
     const tick = async () => {
       this.timers.delete(run.runId);
-      if (run.status !== "running") return;
+      if (run.status !== "running") {
+        return;
+      }
       this.busy.add(run.runId);
       try {
         await this.step(run);
@@ -421,7 +459,9 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
         this.busy.delete(run.runId);
       }
       this.checkpoint(run);
-      if (run.status === "running") this.timers.set(run.runId, setTimeout(tick, TURN_DELAY_MS));
+      if (run.status === "running") {
+        this.timers.set(run.runId, setTimeout(tick, TURN_DELAY_MS));
+      }
     };
     this.timers.set(run.runId, setTimeout(tick, TURN_DELAY_MS));
   }
@@ -438,12 +478,10 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
       this.event(run, "budget_exceeded", { ratio });
       return false;
     }
-    if (ratio >= infoRatio && !run.thresholdsHit.includes("info")) {
-      run.thresholdsHit.push("info");
+    if (hitThreshold(run, "info", ratio, infoRatio)) {
       this.event(run, "budget_threshold", { level: "info", ratio });
     }
-    if (ratio >= pauseRatio && !run.thresholdsHit.includes("pause")) {
-      run.thresholdsHit.push("pause");
+    if (hitThreshold(run, "pause", ratio, pauseRatio)) {
       this.askUser(run, { id: BUDGET_PAUSE_QUESTION, text: `The factory run has used ${Math.round(ratio * 100)}% of its budget. Continue or stop?`, allowed: ["continue", "stop"] }, []);
       this.event(run, "budget_threshold", { level: "pause", ratio });
       return false;
@@ -453,16 +491,22 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 
   nodeAgents(run: Run, node: WorkflowNode): CurrentAgent[] {
     const agents = agentsOf(run, node);
-    if (!agents) return [{ id: node.localId ?? node.id, role: node.role, agentName: node.agent }];
-    return agents.map((a) => ({ ...a, role: a.role ?? node.role, agentName: a.agentName ?? node.agent }));
+    if (!agents) {
+      return [{ id: node.localId ?? node.id, role: node.role, agentName: node.agent }];
+    }
+    return agents.map((agent) => ({ ...agent, role: agent.role ?? node.role, agentName: agent.agentName ?? node.agent }));
   }
 
   view(run: Run, node: WorkflowNode): { state: WorkflowState; input: RunInput; answers: Record<string, string>; prefix: string; key: string } {
-    if (!node.scope) return { state: (run.state ??= {}), input: run.input ?? {}, answers: run.answers, prefix: "", key: node.localId ?? node.id };
+    if (!node.scope) {
+      return { state: (run.state ??= {}), input: run.input ?? {}, answers: run.answers, prefix: "", key: node.localId ?? node.id };
+    }
     const scope = run.scopes?.[node.scope];
-    if (!scope) throw new Error(`node ${node.path} runs before its call ${node.scope} entered`);
+    if (!scope) {
+      throw new Error(`node ${node.path} runs before its call ${node.scope} entered`);
+    }
     const prefix = `${node.scope}#${scope.iteration}:`;
-    const answers = Object.fromEntries(Object.entries(run.answers).filter(([k]) => k.startsWith(prefix)).map(([k, v]) => [k.slice(prefix.length), v]));
+    const answers = Object.fromEntries(Object.entries(run.answers).filter(([questionId]) => questionId.startsWith(prefix)).map(([questionId, answer]) => [questionId.slice(prefix.length), answer]));
     run.state ??= {};
     const state = ((run.state[node.scope] as WorkflowState | undefined) ?? (run.state[node.scope] = {})) as WorkflowState;
     return { state, input: scope.input, answers, prefix, key: node.localId ?? node.id };
@@ -472,20 +516,30 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
     const spec = node.enterScope!;
     const parent = this.view(run, { ...node, scope: undefined } as WorkflowNode);
     const context = { goal: run.goal, input: run.input, state: parent.state };
-    const input = { ...(run.input ?? {}), ...Object.fromEntries(Object.entries(spec.input).map(([k, v]) => [k, Mustache.render(v, context)])) } as RunInput;
+    const input = { ...(run.input ?? {}), ...Object.fromEntries(Object.entries(spec.input).map(([key, template]) => [key, Mustache.render(template, context)])) } as RunInput;
     run.scopes ??= {};
     const iteration = (run.scopes[node.id]?.iteration ?? 0) + 1;
     run.scopes[node.id] = { iteration, input };
     run.state ??= {};
     run.state[node.id] = {};
     const inner = `${node.id}/`;
-    for (const k of Object.keys(run.visits ?? {})) if (k.startsWith(inner)) delete run.visits![k];
-    for (const k of Object.keys(run.nodeAgents ?? {})) if (k.startsWith(inner)) delete run.nodeAgents![k];
+    for (const key of Object.keys(run.visits ?? {})) {
+      if (key.startsWith(inner)) {
+        delete run.visits![key];
+      }
+    }
+    for (const key of Object.keys(run.nodeAgents ?? {})) {
+      if (key.startsWith(inner)) {
+        delete run.nodeAgents![key];
+      }
+    }
     this.event(run, "node_completed", { node: node.path, result: `call ${spec.workflow} #${iteration}`, input: Object.keys(spec.input) });
   }
 
   prompt(run: Run, node: WorkflowNode, agent: CurrentAgent = currentAgent(run, node)): string {
-    if (!node.prompt) throw new Error(`node ${node.path} has no prompt`);
+    if (!node.prompt) {
+      throw new Error(`node ${node.path} has no prompt`);
+    }
     const view = this.view(run, node);
     return node.prompt({
       goal: run.goal,
@@ -506,7 +560,9 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
   }
 
   storeParsed(run: Run, node: WorkflowNode, agentId: string, output: string): void {
-    if (!node.parse) return;
+    if (!node.parse) {
+      return;
+    }
     const { state, key } = this.view(run, node);
     const previous = state[key];
     const byAgent = typeof previous === "object" && previous !== null ? previous : {};
@@ -516,10 +572,14 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
   advance(run: Run, node: WorkflowNode): void {
     const workflow = workflowOf(run);
     const view = this.view(run, node);
-    if (node.workspace) this.moveWorkspace(run, node, node.workspace({ goal: run.goal, input: view.input, state: view.state, agent: { id: node.localId ?? node.id }, answers: view.answers, steps: run.steps }).trim());
+    if (node.workspace) {
+      this.moveWorkspace(run, node, node.workspace({ goal: run.goal, input: view.input, state: view.state, agent: { id: node.localId ?? node.id }, answers: view.answers, steps: run.steps }).trim());
+    }
     const context = { ...view.state, answers: view.answers, input: view.input, switches: run.input?.switches ?? {} };
-    const edge = workflow.edges.filter((e) => e.from === node.id).find((e) => e.when === undefined || evaluateWhen(e.when, context));
-    if (!edge) throw new Error(`no edge from ${node.id} matches the run state`);
+    const edge = workflow.edges.filter((candidate) => candidate.from === node.id).find((candidate) => candidate.when === undefined || evaluateWhen(candidate.when, context));
+    if (!edge) {
+      throw new Error(`no edge from ${node.id} matches the run state`);
+    }
     run.nodeTurn = 0;
     run.agentIndex = 0;
     this.event(run, "edge_taken", { from: node.id, to: edge.to, ...(edge.when ? { when: edge.when } : {}) });
@@ -529,16 +589,24 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
     }
     run.visits ??= {};
     const visits = (run.visits[edge.to] ?? 0) + 1;
-    const limit = workflow.nodes.find((n) => n.id === edge.to)?.maxVisits ?? workflow.maxCycleIterations;
-    if (visits > limit) throw new Error(`node ${edge.to} would run ${visits} times; the workflow allows ${limit}`);
+    const limit = workflow.nodes.find((candidate) => candidate.id === edge.to)?.maxVisits ?? workflow.maxCycleIterations;
+    if (visits > limit) {
+      throw new Error(`node ${edge.to} would run ${visits} times; the workflow allows ${limit}`);
+    }
     run.visits[edge.to] = visits;
-    if (run.nodeAgents) delete run.nodeAgents[edge.to];
-    run.cursor = workflow.nodes.findIndex((n) => n.id === edge.to);
+    if (run.nodeAgents) {
+      delete run.nodeAgents[edge.to];
+    }
+    run.cursor = workflow.nodes.findIndex((candidate) => candidate.id === edge.to);
   }
 
   moveWorkspace(run: Run, node: WorkflowNode, target: string): void {
-    if (!target || target === run.workspace) return;
-    if (!fs.existsSync(target) || !fs.statSync(target).isDirectory()) throw new Error(`node ${node.path}: workspace ${target} is not a directory`);
+    if (!target || target === run.workspace) {
+      return;
+    }
+    if (!fs.existsSync(target) || !fs.statSync(target).isDirectory()) {
+      throw new Error(`node ${node.path}: workspace ${target} is not a directory`);
+    }
     run.workspace = target;
     this.event(run, "workspace_changed", { node: node.path, workspace: target });
   }
@@ -548,7 +616,9 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
       run.status = "stopped";
       return;
     }
-    if (!this.checkBudget(run)) return;
+    if (!this.checkBudget(run)) {
+      return;
+    }
     const node = run.cursor < 0 ? undefined : workflowOf(run).nodes[run.cursor];
     if (!node) {
       run.status = "done";
@@ -556,111 +626,25 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
       return;
     }
     const visit = run.visits?.[node.id] ?? 1;
-    if (run.nodeTurn === 0 && !run.events.some((e) => e.type === "node_started" && e.node === node.path && e.visit === visit)) {
+    if (run.nodeTurn === 0 && !run.events.some((event) => event.type === "node_started" && event.node === node.path && event.visit === visit)) {
       this.event(run, "node_started", { node: node.path, visit });
     }
-
-    if (node.kind === "interrupt") {
-      if (!node.question) throw new Error(`interrupt node ${node.path} has no question`);
-      const view = this.view(run, node);
-      const context = withEach({ goal: run.goal, input: view.input, state: view.state, answers: view.answers });
-      const { allowedFrom, ...fixed } = node.question;
-      const question = { ...fixed, id: view.prefix + Mustache.render(node.question.id, context), text: Mustache.render(node.question.text, context), ...(allowedFrom ? { allowed: allowedOf(view.state, allowedFrom) } : {}) };
-      const answer = run.answers[question.id];
-      if (answer === undefined) {
-        this.askUser(run, { ...question, node: node.path }, node.askedBy ?? []);
-        this.event(run, "needs_input", { node: node.path, questionId: question.id });
-        return;
-      }
-      view.state[view.key] = { answer };
-      this.event(run, "node_completed", { node: node.path, answer });
-      this.advance(run, node);
-      return;
+    switch (node.kind) {
+      case "interrupt":
+        return this.stepInterrupt(run, node);
+      case "script":
+        return this.stepScript(run, node);
+      default:
+        return this.stepAgents(run, node);
     }
-
-    if (node.kind === "script") {
-      run.steps += 1;
-      const started = Date.now();
-      if (node.enterScope) {
-        this.enterScope(run, node);
-        this.advance(run, node);
-        return;
-      }
-      if (!node.script) throw new Error(`script node ${node.path} has no operation`);
-      const view = this.view(run, node);
-      const result = await node.script({ input: view.input, state: view.state, exec: this.executors.exec, goal: run.goal, answers: view.answers, cwd: workspace(run), nodeId: view.key });
-      view.state[view.key] = result.state;
-      if (result.workspace) {
-        this.moveWorkspace(run, node, result.workspace);
-      }
-      this.appendLedger(run, { nodePath: node.path, agentId: node.id, kind: "script", tier: null, model: null, backend: "script", turn: 1, inputTokens: 0, outputTokens: 0, costUsd: 0, costSource: "measured", durationMs: Date.now() - started, output: result.output ?? null });
-      this.event(run, "node_completed", { node: node.path, result: (String(result.output ?? "").split(/\r?\n/)[0] ?? "").slice(0, OUTPUT_PREVIEW_CHARS), ...(result.metrics ? { metrics: result.metrics } : {}) });
-      this.advance(run, node);
-      return;
-    }
-
-    const config = configOf(run);
-    const backend = config.backend.kind;
-    const askNow = backend === "fake" ? run.nodeTurn === node.askAfterTurn : true;
-    if (node.question && askNow && run.answers[node.question.id] === undefined) {
-      this.askUser(run, { ...node.question, node: node.path }, [node.path]);
-      this.event(run, "needs_input", { node: node.path, questionId: node.question.id });
-      return;
-    }
-
-    if (node.agentsFrom && run.nodeAgents?.[node.id] === undefined) {
-      run.nodeAgents ??= {};
-      const selected = node.agentsFrom(this.view(run, node).state);
-      run.nodeAgents[node.id] = selected;
-      if (node.freshResults) {
-        const view = this.view(run, node);
-        delete view.state[view.key];
-      }
-      this.event(run, "agents_selected", { node: node.path, agents: selected.map((a) => a.id) });
-    }
-    if (agentsOf(run, node)?.length === 0 || node.skipIf?.(this.view(run, node).state)) {
-      this.event(run, "node_skipped", { node: node.path, reason: node.skipReason ?? "no work" });
-      this.advance(run, node);
-      return;
-    }
-    if (backend === "cli") return this.runCliNode(run, node);
-    if (backend === "delegate") {
-      const items = this.nodeAgents(run, node).map((agent) => {
-        const tier = tierOf(config, agent);
-        const definition = agent.agentName ? readMarketplaceAgent(agent.agentName) : undefined;
-        return {
-          nodePath: node.path,
-          agentId: agent.id,
-          tier,
-          model: config.tiers[tier],
-          prompt: this.prompt(run, node, agent),
-          ...(definition ? { agentName: definition.name, agentDescription: definition.description, agentInstructions: definition.prompt } : {}),
-          tools: node.tools ?? ["read"],
-          dirs: this.dirs(run, node, agent),
-          ...(run.workspace ? { cwd: run.workspace } : {}),
-        };
-      });
-      run.pendingWorkItems = items;
-      run.pendingWork = items[0] ?? null;
-      run.status = "waiting_for_client";
-      for (const item of items) this.event(run, "work_offered", { node: node.path, agentId: item.agentId, tier: item.tier });
-      return;
-    }
-    const agent = currentAgent(run, node);
-    const tier = tierOf(config, agent);
-
-    const turn = run.nodeTurn + 1;
-    const usage = fakeModelTurn(tier, turn, run.agentIndex ?? 0);
-    run.steps += 1;
-    run.nodeTurn = turn;
-    this.appendLedger(run, { nodePath: node.path, agentId: agent.id, kind: "llm", tier, model: config.tiers[tier], backend: "fake", turn, ...usage, costSource: "measured" });
-    if (node.turns !== undefined && turn >= node.turns) this.finishAgent(run, node, { turns: turn });
   }
 
   finishAgent(run: Run, node: WorkflowNode, details: Record<string, unknown>): void {
     const agent = currentAgent(run, node);
     const agents = agentsOf(run, node);
-    if (agents) this.event(run, "agent_completed", { node: node.path, agentId: agent.id, ...details });
+    if (agents) {
+      this.event(run, "agent_completed", { node: node.path, agentId: agent.id, ...details });
+    }
     run.nodeTurn = 0;
     if (agents && (run.agentIndex ?? 0) + 1 < agents.length) {
       run.agentIndex = (run.agentIndex ?? 0) + 1;
@@ -674,29 +658,15 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
     const config = configOf(run);
     const { cli } = config.backend;
     const executor = cli ? this.executors[cli] : undefined;
-    if (!executor) throw new Error(`no executor for cli backend '${cli}' in this factory process`);
+    if (!executor) {
+      throw new Error(`no executor for cli backend '${cli}' in this factory process`);
+    }
     const agents = this.nodeAgents(run, node);
     const limit = node.parallel ?? PARALLEL_AGENTS;
     const failures: string[] = [];
     for (let i = 0; i < agents.length && run.status === "running"; i += limit) {
       const batch = agents.slice(i, i + limit);
-      const outcomes = await Promise.allSettled(batch.map(async (agent) => {
-        const tier = tierOf(config, agent);
-        const model = config.tiers[tier];
-        this.event(run, "agent_started", { node: node.path, agentId: agent.id, tier });
-        this.checkpoint(run);
-        const result = await executor({ model, prompt: this.prompt(run, node, agent), agent: agent.agentName, cwd: workspace(run), configDir: run.input?.agentConfigDir, tools: node.tools ?? ["read"], dirs: this.dirs(run, node, agent) });
-        run.steps += 1;
-        if (!result.ok) {
-          failures.push(`${agent.id}: ${result.error}`);
-          this.event(run, "agent_failed", { node: node.path, agentId: agent.id, error: result.error, ...(result.malformedLines ? { malformedLines: result.malformedLines } : {}) });
-          return;
-        }
-        for (const entry of cliEntries(result, { nodePath: node.path, agentId: agent.id, agentName: agent.agentName ?? null, tier, requestedModel: model, cli: cli as CliName, keepOutput: true })) this.appendLedger(run, entry);
-        this.storeParsed(run, node, agent.id, result.text ?? "");
-        this.event(run, "agent_completed", { node: node.path, agentId: agent.id, backend: `cli:${cli}`, ...(result.malformedLines ? { malformedLines: result.malformedLines } : {}) });
-        this.checkpoint(run);
-      }));
+      const outcomes = await Promise.allSettled(batch.map((agent) => this.runCliAgent(run, node, agent, executor, failures)));
       outcomes.forEach((outcome, index) => {
         if (outcome.status === "rejected") {
           const agentId = batch[index]?.id;
@@ -719,7 +689,9 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 
   supervise(run: Run): void {
     const record = run.supervisor;
-    if (!record) return;
+    if (!record) {
+      return;
+    }
     const config = configOf(run);
     const tier: Tier = config.roles.supervisor ?? "low";
     const model = config.tiers[tier];
@@ -754,11 +726,17 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
     const cli = configOf(run).backend.cli;
     try {
       const executor = cli ? this.executors[cli] : undefined;
-      if (!cli || !executor) throw new Error(`no executor for cli backend '${cli}' in this factory process`);
+      if (!cli || !executor) {
+        throw new Error(`no executor for cli backend '${cli}' in this factory process`);
+      }
       const result = await executor({ model: record.model as string, prompt, agent: record.agent, tools: ["read"], dirs });
       run.steps += 1;
-      if (!result.ok) throw new Error(result.error ?? "the supervisor agent failed");
-      for (const entry of cliEntries(result, { nodePath: SUPERVISOR_PATH, agentId: SUPERVISOR_ID, agentName: record.agent, tier: record.tier as Tier, requestedModel: record.model as string, cli, keepOutput: false })) this.appendLedger(run, entry);
+      if (!result.ok) {
+        throw new Error(result.error ?? "the supervisor agent failed");
+      }
+      for (const entry of cliEntries(result, { nodePath: SUPERVISOR_PATH, agentId: SUPERVISOR_ID, agentName: record.agent, tier: record.tier as Tier, requestedModel: record.model as string, cli, keepOutput: false })) {
+        this.appendLedger(run, entry);
+      }
       this.finishSupervisor(run, result.text ?? "", verdictLine);
     } catch (error) {
       this.failSupervisor(run, error);
@@ -770,7 +748,9 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
     const record = run.supervisor;
     const work = record?.work;
     if (record?.status !== "waiting_for_client" || !work) {
-      if (record?.status === "done") return { run, duplicate: true };
+      if (record?.status === "done") {
+        return { run, duplicate: true };
+      }
       throw new Error(`no pending work for node ${SUPERVISOR_PATH}`);
     }
     run.steps += 1;
@@ -812,7 +792,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
       currentNode: node?.path ?? null,
       pendingQuestion: run.pendingQuestion,
       pendingWork: run.status === "waiting_for_client" ? run.pendingWork : undefined,
-      pendingWorkItems: run.status === "waiting_for_client" ? (run.pendingWorkItems ?? (run.pendingWork ? [run.pendingWork] : [])) : undefined,
+      pendingWorkItems: run.status === "waiting_for_client" ? pendingItems(run) : undefined,
       retryAfterMs: run.status === "running" ? 2000 : null,
       next: supervisorWork ? (loadFactoryConfig().supervisor?.hostHint ?? nextHint(run)) : nextHint(run),
       proposal: run.status === "needs_confirmation" ? run.proposal : undefined,
@@ -841,6 +821,177 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
     }
     return lines.join("\n");
   }
+
+  /** An interrupt step asks its question once and, when the answer is in, stores it and moves on. */
+  private stepInterrupt(run: Run, node: WorkflowNode): void {
+    if (!node.question) {
+      throw new Error(`interrupt node ${node.path} has no question`);
+    }
+    const view = this.view(run, node);
+    const context = withEach({ goal: run.goal, input: view.input, state: view.state, answers: view.answers });
+    const { allowedFrom, ...fixed } = node.question;
+    const question = { ...fixed, id: view.prefix + Mustache.render(node.question.id, context), text: Mustache.render(node.question.text, context), ...(allowedFrom ? { allowed: allowedOf(view.state, allowedFrom) } : {}) };
+    const answer = run.answers[question.id];
+    if (answer === undefined) {
+      this.askUser(run, { ...question, node: node.path }, node.askedBy ?? []);
+      this.event(run, "needs_input", { node: node.path, questionId: question.id });
+      return;
+    }
+    view.state[view.key] = { answer };
+    this.event(run, "node_completed", { node: node.path, answer });
+    this.advance(run, node);
+  }
+
+  /** A script step either enters a call scope or runs its operation and records it in the ledger at no cost. */
+  private async stepScript(run: Run, node: WorkflowNode): Promise<void> {
+    run.steps += 1;
+    const started = Date.now();
+    if (node.enterScope) {
+      this.enterScope(run, node);
+      this.advance(run, node);
+      return;
+    }
+    if (!node.script) {
+      throw new Error(`script node ${node.path} has no operation`);
+    }
+    const view = this.view(run, node);
+    const result = await node.script({ input: view.input, state: view.state, exec: this.executors.exec, goal: run.goal, answers: view.answers, cwd: workspace(run), nodeId: view.key });
+    view.state[view.key] = result.state;
+    if (result.workspace) {
+      this.moveWorkspace(run, node, result.workspace);
+    }
+    this.appendLedger(run, { nodePath: node.path, agentId: node.id, kind: "script", tier: null, model: null, backend: "script", turn: 1, inputTokens: 0, outputTokens: 0, costUsd: 0, costSource: "measured", durationMs: Date.now() - started, output: result.output ?? null });
+    this.event(run, "node_completed", { node: node.path, result: (String(result.output ?? "").split(/\r?\n/)[0] ?? "").slice(0, OUTPUT_PREVIEW_CHARS), ...(result.metrics ? { metrics: result.metrics } : {}) });
+    this.advance(run, node);
+  }
+
+  /** An llm step asks its question first, selects its agents, skips when there is no work, then hands the agents to the run's backend. */
+  private async stepAgents(run: Run, node: WorkflowNode): Promise<void> {
+    const config = configOf(run);
+    const backend = config.backend.kind;
+    const askNow = backend === "fake" ? run.nodeTurn === node.askAfterTurn : true;
+    if (node.question && askNow && run.answers[node.question.id] === undefined) {
+      this.askUser(run, { ...node.question, node: node.path }, [node.path]);
+      this.event(run, "needs_input", { node: node.path, questionId: node.question.id });
+      return;
+    }
+    if (node.agentsFrom && run.nodeAgents?.[node.id] === undefined) {
+      run.nodeAgents ??= {};
+      const selected = node.agentsFrom(this.view(run, node).state);
+      run.nodeAgents[node.id] = selected;
+      if (node.freshResults) {
+        const view = this.view(run, node);
+        delete view.state[view.key];
+      }
+      this.event(run, "agents_selected", { node: node.path, agents: selected.map((agent) => agent.id) });
+    }
+    if (agentsOf(run, node)?.length === 0 || node.skipIf?.(this.view(run, node).state)) {
+      this.event(run, "node_skipped", { node: node.path, reason: node.skipReason ?? "no work" });
+      this.advance(run, node);
+      return;
+    }
+    if (backend === "cli") {
+      return this.runCliNode(run, node);
+    }
+    if (backend === "delegate") {
+      this.offerDelegateWork(run, node, config);
+      return;
+    }
+    this.stepFake(run, node, config);
+  }
+
+  /** In delegate mode the run waits while the client runs one work item per agent of the step. */
+  private offerDelegateWork(run: Run, node: WorkflowNode, config: RunConfig): void {
+    const items = this.nodeAgents(run, node).map((agent) => {
+      const tier = tierOf(config, agent);
+      const definition = agent.agentName ? readMarketplaceAgent(agent.agentName) : undefined;
+      return {
+        nodePath: node.path,
+        agentId: agent.id,
+        tier,
+        model: config.tiers[tier],
+        prompt: this.prompt(run, node, agent),
+        ...(definition ? { agentName: definition.name, agentDescription: definition.description, agentInstructions: definition.prompt } : {}),
+        tools: node.tools ?? ["read"],
+        dirs: this.dirs(run, node, agent),
+        ...(run.workspace ? { cwd: run.workspace } : {}),
+      };
+    });
+    run.pendingWorkItems = items;
+    run.pendingWork = items[0] ?? null;
+    run.status = "waiting_for_client";
+    for (const item of items) {
+      this.event(run, "work_offered", { node: node.path, agentId: item.agentId, tier: item.tier });
+    }
+  }
+
+  /** The fake backend takes one turn per tick and finishes the agent after the step's turns. */
+  private stepFake(run: Run, node: WorkflowNode, config: RunConfig): void {
+    const agent = currentAgent(run, node);
+    const tier = tierOf(config, agent);
+    const turn = run.nodeTurn + 1;
+    const usage = fakeModelTurn(tier, turn, run.agentIndex ?? 0);
+    run.steps += 1;
+    run.nodeTurn = turn;
+    this.appendLedger(run, { nodePath: node.path, agentId: agent.id, kind: "llm", tier, model: config.tiers[tier], backend: "fake", turn, ...usage, costSource: "measured" });
+    if (node.turns !== undefined && turn >= node.turns) {
+      this.finishAgent(run, node, { turns: turn });
+    }
+  }
+
+  /** Records a delegate agent's work as done; when it was the step's last item the run moves on. */
+  private completeWorkItem(run: Run, node: WorkflowNode, work: PendingWork): void {
+    this.event(run, "agent_completed", { node: node.path, agentId: work.agentId, backend: "delegate" });
+    const left = pendingItems(run).filter((item) => item !== work);
+    run.pendingWorkItems = left;
+    run.pendingWork = left[0] ?? null;
+    if (left.length === 0) {
+      run.status = "running";
+      this.event(run, "node_completed", { node: node.path, backend: "delegate" });
+      this.advance(run, node);
+    }
+  }
+
+  /** Runs one agent of a CLI step; a failed result is added to failures, not thrown. */
+  private async runCliAgent(run: Run, node: WorkflowNode, agent: CurrentAgent, executor: CliExecutor, failures: string[]): Promise<void> {
+    const config = configOf(run);
+    const cli = config.backend.cli as CliName;
+    const tier = tierOf(config, agent);
+    const model = config.tiers[tier];
+    this.event(run, "agent_started", { node: node.path, agentId: agent.id, tier });
+    this.checkpoint(run);
+    const result = await executor({ model, prompt: this.prompt(run, node, agent), agent: agent.agentName, cwd: workspace(run), configDir: run.input?.agentConfigDir, tools: node.tools ?? ["read"], dirs: this.dirs(run, node, agent) });
+    run.steps += 1;
+    if (!result.ok) {
+      failures.push(`${agent.id}: ${result.error}`);
+      this.event(run, "agent_failed", { node: node.path, agentId: agent.id, error: result.error, ...(result.malformedLines ? { malformedLines: result.malformedLines } : {}) });
+      return;
+    }
+    for (const entry of cliEntries(result, { nodePath: node.path, agentId: agent.id, agentName: agent.agentName ?? null, tier, requestedModel: model, cli, keepOutput: true })) {
+      this.appendLedger(run, entry);
+    }
+    this.storeParsed(run, node, agent.id, result.text ?? "");
+    this.event(run, "agent_completed", { node: node.path, agentId: agent.id, backend: `cli:${cli}`, ...(result.malformedLines ? { malformedLines: result.malformedLines } : {}) });
+    this.checkpoint(run);
+  }
+}
+
+/** The work items a run waits for: pendingWorkItems, or the single pendingWork when no list is set. */
+function pendingItems(run: Run): PendingWork[] {
+  return run.pendingWorkItems ?? (run.pendingWork ? [run.pendingWork] : []);
+}
+
+function findPendingWork(run: Run, nodePath: string, agentId: string | undefined): PendingWork | undefined {
+  return pendingItems(run).find((item) => item.nodePath === nodePath && (!agentId || item.agentId === agentId));
+}
+
+/** True the first time the cost ratio reaches a budget threshold; the threshold is then recorded as hit. */
+function hitThreshold(run: Run, level: string, ratio: number, thresholdRatio: number): boolean {
+  if (!(ratio >= thresholdRatio) || run.thresholdsHit.includes(level)) {
+    return false;
+  }
+  run.thresholdsHit.push(level);
+  return true;
 }
 
 function supervisorView(record: NonNullable<Run["supervisor"]>): Omit<NonNullable<Run["supervisor"]>, "work"> {
@@ -918,26 +1069,26 @@ interface CliEntryContext {
 }
 
 function cliEntries(result: CliResult, context: CliEntryContext): LedgerEntry[] {
-  return (result.usageByModel ?? []).map((u) => {
-    const priced = priceUsage(u.model, u.tokens, u.cacheWriteTtlKnown);
+  return (result.usageByModel ?? []).map((usage) => {
+    const priced = priceUsage(usage.model, usage.tokens, usage.cacheWriteTtlKnown);
     return {
       nodePath: context.nodePath,
       agentId: context.agentId,
       kind: "llm",
       tier: context.tier,
-      model: u.model,
+      model: usage.model,
       requestedModel: context.requestedModel,
       backend: `cli:${context.cli}`,
       turn: 1,
       harnessTurns: result.turns,
-      inputTokens: u.tokens.input,
-      outputTokens: u.tokens.output,
-      cacheReadTokens: u.tokens.cacheRead,
-      cacheWrite5mTokens: u.tokens.cacheWrite5m,
-      cacheWrite1hTokens: u.tokens.cacheWrite1h,
+      inputTokens: usage.tokens.input,
+      outputTokens: usage.tokens.output,
+      cacheReadTokens: usage.tokens.cacheRead,
+      cacheWrite5mTokens: usage.tokens.cacheWrite5m,
+      cacheWrite1hTokens: usage.tokens.cacheWrite1h,
       costUsd: priced.costUsd,
       costSource: priced.costSource,
-      harnessCostUsd: u.harnessCostUsd,
+      harnessCostUsd: usage.harnessCostUsd,
       durationMs: result.durationMs,
       outputPreview: String(result.text ?? "").slice(0, OUTPUT_PREVIEW_CHARS),
       output: context.keepOutput ? (result.text ?? null) : null,
@@ -947,25 +1098,33 @@ function cliEntries(result: CliResult, context: CliEntryContext): LedgerEntry[] 
 }
 
 function configOf(run: Run): RunConfig {
-  if (!run.config) throw new Error(`run ${run.runId} is not confirmed`);
+  if (!run.config) {
+    throw new Error(`run ${run.runId} is not confirmed`);
+  }
   return run.config;
 }
 
 function nodeAt(run: Run): WorkflowNode {
   const node = run.cursor < 0 ? undefined : workflowOf(run).nodes[run.cursor];
-  if (!node) throw new Error(`run ${run.runId} has no node at cursor ${run.cursor}`);
+  if (!node) {
+    throw new Error(`run ${run.runId} has no node at cursor ${run.cursor}`);
+  }
   return node;
 }
 
 function tierOf(config: RunConfig, agent: CurrentAgent): Tier {
   const tier = agent.role === undefined ? undefined : config.roles[agent.role];
-  if (!tier) throw new Error(`no tier for role '${agent.role}'`);
+  if (!tier) {
+    throw new Error(`no tier for role '${agent.role}'`);
+  }
   return tier;
 }
 
 function allowedOf(state: WorkflowState, dotted: string): string[] {
   const allowed = readPath(state, dotted.replace(/^state\./, ""));
-  if (!Array.isArray(allowed) || allowed.length === 0 || !allowed.every((a) => typeof a === "string")) throw new Error(`allowedFrom ${dotted} is not a list of answers`);
+  if (!Array.isArray(allowed) || allowed.length === 0 || !allowed.every((answer) => typeof answer === "string")) {
+    throw new Error(`allowedFrom ${dotted} is not a list of answers`);
+  }
   return allowed;
 }
 
@@ -975,9 +1134,13 @@ function agentsOf(run: Run, node: WorkflowNode): Agent[] | null {
 
 function currentAgent(run: Run, node: WorkflowNode): CurrentAgent {
   const agents = agentsOf(run, node);
-  if (!agents) return { id: node.localId ?? node.id, role: node.role, agentName: node.agent };
+  if (!agents) {
+    return { id: node.localId ?? node.id, role: node.role, agentName: node.agent };
+  }
   const agent = agents[run.agentIndex ?? 0];
-  if (!agent) throw new Error(`node ${node.path} has no agent ${run.agentIndex ?? 0}`);
+  if (!agent) {
+    throw new Error(`node ${node.path} has no agent ${run.agentIndex ?? 0}`);
+  }
   return { ...agent, role: agent.role ?? node.role, agentName: agent.agentName ?? node.agent };
 }
 
@@ -988,7 +1151,9 @@ function singleOrMixed(sources: Set<string>): string {
 
 function costSourceSummary(ledger: LedgerRecord[]): string {
   const sources = new Set<CostSource>(ledger.filter((r) => r.kind === "llm").map((r) => r.costSource));
-  if (sources.size === 0) return "none";
+  if (sources.size === 0) {
+    return "none";
+  }
   return singleOrMixed(sources);
 }
 
@@ -1027,7 +1192,9 @@ export function costFooter(run: Pick<Run, "config" | "proposal" | "ledger" | "st
   const t = runTotals(run);
   const max = run.config?.budget.maxCostUsd ?? run.proposal.budget.maxCostUsd;
   const perNode: Record<string, number> = {};
-  for (const r of run.ledger) perNode[r.nodePath] = round((perNode[r.nodePath] ?? 0) + (r.costUsd ?? 0));
+  for (const r of run.ledger) {
+    perNode[r.nodePath] = round((perNode[r.nodePath] ?? 0) + (r.costUsd ?? 0));
+  }
   return {
     costUsd: round(t.costUsd),
     budgetUsd: max,
@@ -1036,8 +1203,15 @@ export function costFooter(run: Pick<Run, "config" | "proposal" | "ledger" | "st
     steps: t.steps,
     perNode,
     source: costSourceSummary(run.ledger),
-    warnings: [...run.thresholdsHit.map((h) => `budget threshold: ${h}`), ...(run.events ?? []).filter((e) => e.type === "node_completed" && String(e.result ?? "").includes("required step switched off")).map((e) => `required step switched off: ${String(e.node)}`)],
+    warnings: footerWarnings(run),
   };
+}
+
+/** The budget thresholds a run has hit and the required steps it ran with their switch off. */
+function footerWarnings(run: Pick<Run, "thresholdsHit"> & { events?: Run["events"] }): string[] {
+  const thresholds = run.thresholdsHit.map((level) => `budget threshold: ${level}`);
+  const switchedOff = (run.events ?? []).filter((event) => event.type === "node_completed" && String(event.result ?? "").includes("required step switched off")).map((event) => `required step switched off: ${String(event.node)}`);
+  return [...thresholds, ...switchedOff];
 }
 
 /** The cost report of a run by node, agent, tier and model. It only reads the run, so the viewer uses it without a factory. */
@@ -1084,14 +1258,18 @@ export function runReport(run: Run): Report {
         agentEntry,
       ];
       targets.forEach(count);
-      if (r.costSource === "unknown") targets.forEach(countUnknown);
+      if (r.costSource === "unknown") {
+        targets.forEach(countUnknown);
+      }
     }
     harnessCostUsd += r.harnessCostUsd ?? 0;
   }
   for (const [nodePath, entry] of Object.entries(byNode)) {
     entry.costUsd = round(entry.costUsd);
     const agentTiers = new Set(Object.values(entry.byAgent).map((x) => x.tier));
-    if (agentTiers.size > 1) Object.assign(entry, { tier: "mixed", model: "mixed" });
+    if (agentTiers.size > 1) {
+      Object.assign(entry, { tier: "mixed", model: "mixed" });
+    }
     for (const agentEntry of Object.values(entry.byAgent)) {
       agentEntry.costUsd = round(agentEntry.costUsd);
       agentEntry.costSource = singleOrMixed(new Set(agentEntry.sources));
@@ -1099,7 +1277,11 @@ export function runReport(run: Run): Report {
     }
     entry.costSource = singleOrMixed(new Set(run.ledger.filter((r) => r.nodePath === nodePath).map((r) => r.costSource)));
   }
-  for (const totals of [byTier, byModel]) for (const [key, value] of Object.entries(totals)) totals[key] = round(value);
+  for (const totals of [byTier, byModel]) {
+    for (const [key, value] of Object.entries(totals)) {
+      totals[key] = round(value);
+    }
+  }
   return {
     runId: run.runId,
     status: run.status,

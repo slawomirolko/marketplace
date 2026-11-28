@@ -16260,7 +16260,7 @@ var Factory = class {
 	}
 	restore() {
 		const dir = path.join(this.dataDir, "runs");
-		for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".json"))) {
+		for (const file of fs.readdirSync(dir).filter((name) => name.endsWith(".json"))) {
 			const run = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8"));
 			this.runs.set(run.runId, run);
 			if (run.idempotencyKey) this.idempotency.set(run.idempotencyKey, run.runId);
@@ -16298,10 +16298,10 @@ var Factory = class {
 			timedOut: false
 		});
 		return new Promise((resolve) => {
-			const done = (r) => {
+			const done = (changed) => {
 				clearTimeout(timer);
 				resolve({
-					run: r,
+					run: changed,
 					timedOut: false
 				});
 			};
@@ -16390,7 +16390,7 @@ var Factory = class {
 				roles: Object.fromEntries(Object.entries(definition.roles ?? {}).map(([role, tier]) => [role, defaults.roles[role] ?? tier]))
 			},
 			config: null,
-			cursor: definition.nodes.findIndex((n) => n.id === definition.entry),
+			cursor: definition.nodes.findIndex((candidate) => candidate.id === definition.entry),
 			visits: { [definition.entry]: 1 },
 			nodeTurn: 0,
 			steps: 0,
@@ -16479,10 +16479,9 @@ var Factory = class {
 	submit(runId, nodePath, output, usage = {}, agentId = void 0) {
 		const run = this.get(runId);
 		if (nodePath === "@supervisor") return this.submitSupervisor(run, output, usage);
-		const items = run.pendingWorkItems ?? (run.pendingWork ? [run.pendingWork] : []);
-		const work = items.find((w) => w.nodePath === nodePath && (!agentId || w.agentId === agentId));
+		const work = findPendingWork(run, nodePath, agentId);
 		if (run.status !== "waiting_for_client" || !work) {
-			if (run.ledger.find((r) => r.nodePath === nodePath && r.backend === "delegate" && (!agentId || r.agentId === agentId))) return {
+			if (run.ledger.find((record) => record.nodePath === nodePath && record.backend === "delegate" && (!agentId || record.agentId === agentId))) return {
 				run,
 				duplicate: true
 			};
@@ -16496,22 +16495,7 @@ var Factory = class {
 		} catch (error) {
 			return this.rejectOutput(run, node, work, error);
 		}
-		this.event(run, "agent_completed", {
-			node: node.path,
-			agentId: work.agentId,
-			backend: "delegate"
-		});
-		const left = items.filter((w) => w !== work);
-		run.pendingWorkItems = left;
-		run.pendingWork = left[0] ?? null;
-		if (left.length === 0) {
-			run.status = "running";
-			this.event(run, "node_completed", {
-				node: node.path,
-				backend: "delegate"
-			});
-			this.advance(run, node);
-		}
+		this.completeWorkItem(run, node, work);
 		this.checkpoint(run);
 		this.schedule(run);
 		return {
@@ -16606,15 +16590,11 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 			this.event(run, "budget_exceeded", { ratio });
 			return false;
 		}
-		if (ratio >= infoRatio && !run.thresholdsHit.includes("info")) {
-			run.thresholdsHit.push("info");
-			this.event(run, "budget_threshold", {
-				level: "info",
-				ratio
-			});
-		}
-		if (ratio >= pauseRatio && !run.thresholdsHit.includes("pause")) {
-			run.thresholdsHit.push("pause");
+		if (hitThreshold(run, "info", ratio, infoRatio)) this.event(run, "budget_threshold", {
+			level: "info",
+			ratio
+		});
+		if (hitThreshold(run, "pause", ratio, pauseRatio)) {
 			this.askUser(run, {
 				id: BUDGET_PAUSE_QUESTION,
 				text: `The factory run has used ${Math.round(ratio * 100)}% of its budget. Continue or stop?`,
@@ -16635,10 +16615,10 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 			role: node.role,
 			agentName: node.agent
 		}];
-		return agents.map((a) => ({
-			...a,
-			role: a.role ?? node.role,
-			agentName: a.agentName ?? node.agent
+		return agents.map((agent) => ({
+			...agent,
+			role: agent.role ?? node.role,
+			agentName: agent.agentName ?? node.agent
 		}));
 	}
 	view(run, node) {
@@ -16652,7 +16632,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 		const scope = run.scopes?.[node.scope];
 		if (!scope) throw new Error(`node ${node.path} runs before its call ${node.scope} entered`);
 		const prefix = `${node.scope}#${scope.iteration}:`;
-		const answers = Object.fromEntries(Object.entries(run.answers).filter(([k]) => k.startsWith(prefix)).map(([k, v]) => [k.slice(prefix.length), v]));
+		const answers = Object.fromEntries(Object.entries(run.answers).filter(([questionId]) => questionId.startsWith(prefix)).map(([questionId, answer]) => [questionId.slice(prefix.length), answer]));
 		run.state ??= {};
 		return {
 			state: run.state[node.scope] ?? (run.state[node.scope] = {}),
@@ -16675,7 +16655,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 		};
 		const input = {
 			...run.input ?? {},
-			...Object.fromEntries(Object.entries(spec.input).map(([k, v]) => [k, mustache.render(v, context)]))
+			...Object.fromEntries(Object.entries(spec.input).map(([key, template]) => [key, mustache.render(template, context)]))
 		};
 		run.scopes ??= {};
 		const iteration = (run.scopes[node.id]?.iteration ?? 0) + 1;
@@ -16686,8 +16666,8 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 		run.state ??= {};
 		run.state[node.id] = {};
 		const inner = `${node.id}/`;
-		for (const k of Object.keys(run.visits ?? {})) if (k.startsWith(inner)) delete run.visits[k];
-		for (const k of Object.keys(run.nodeAgents ?? {})) if (k.startsWith(inner)) delete run.nodeAgents[k];
+		for (const key of Object.keys(run.visits ?? {})) if (key.startsWith(inner)) delete run.visits[key];
+		for (const key of Object.keys(run.nodeAgents ?? {})) if (key.startsWith(inner)) delete run.nodeAgents[key];
 		this.event(run, "node_completed", {
 			node: node.path,
 			result: `call ${spec.workflow} #${iteration}`,
@@ -16744,7 +16724,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 			input: view.input,
 			switches: run.input?.switches ?? {}
 		};
-		const edge = workflow.edges.filter((e) => e.from === node.id).find((e) => e.when === void 0 || evaluateWhen(e.when, context));
+		const edge = workflow.edges.filter((candidate) => candidate.from === node.id).find((candidate) => candidate.when === void 0 || evaluateWhen(candidate.when, context));
 		if (!edge) throw new Error(`no edge from ${node.id} matches the run state`);
 		run.nodeTurn = 0;
 		run.agentIndex = 0;
@@ -16759,11 +16739,11 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 		}
 		run.visits ??= {};
 		const visits = (run.visits[edge.to] ?? 0) + 1;
-		const limit = workflow.nodes.find((n) => n.id === edge.to)?.maxVisits ?? workflow.maxCycleIterations;
+		const limit = workflow.nodes.find((candidate) => candidate.id === edge.to)?.maxVisits ?? workflow.maxCycleIterations;
 		if (visits > limit) throw new Error(`node ${edge.to} would run ${visits} times; the workflow allows ${limit}`);
 		run.visits[edge.to] = visits;
 		if (run.nodeAgents) delete run.nodeAgents[edge.to];
-		run.cursor = workflow.nodes.findIndex((n) => n.id === edge.to);
+		run.cursor = workflow.nodes.findIndex((candidate) => candidate.id === edge.to);
 	}
 	moveWorkspace(run, node, target) {
 		if (!target || target === run.workspace) return;
@@ -16787,174 +16767,15 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 			return;
 		}
 		const visit = run.visits?.[node.id] ?? 1;
-		if (run.nodeTurn === 0 && !run.events.some((e) => e.type === "node_started" && e.node === node.path && e.visit === visit)) this.event(run, "node_started", {
+		if (run.nodeTurn === 0 && !run.events.some((event) => event.type === "node_started" && event.node === node.path && event.visit === visit)) this.event(run, "node_started", {
 			node: node.path,
 			visit
 		});
-		if (node.kind === "interrupt") {
-			if (!node.question) throw new Error(`interrupt node ${node.path} has no question`);
-			const view = this.view(run, node);
-			const context = withEach({
-				goal: run.goal,
-				input: view.input,
-				state: view.state,
-				answers: view.answers
-			});
-			const { allowedFrom, ...fixed } = node.question;
-			const question = {
-				...fixed,
-				id: view.prefix + mustache.render(node.question.id, context),
-				text: mustache.render(node.question.text, context),
-				...allowedFrom ? { allowed: allowedOf(view.state, allowedFrom) } : {}
-			};
-			const answer = run.answers[question.id];
-			if (answer === void 0) {
-				this.askUser(run, {
-					...question,
-					node: node.path
-				}, node.askedBy ?? []);
-				this.event(run, "needs_input", {
-					node: node.path,
-					questionId: question.id
-				});
-				return;
-			}
-			view.state[view.key] = { answer };
-			this.event(run, "node_completed", {
-				node: node.path,
-				answer
-			});
-			this.advance(run, node);
-			return;
+		switch (node.kind) {
+			case "interrupt": return this.stepInterrupt(run, node);
+			case "script": return this.stepScript(run, node);
+			default: return this.stepAgents(run, node);
 		}
-		if (node.kind === "script") {
-			run.steps += 1;
-			const started = Date.now();
-			if (node.enterScope) {
-				this.enterScope(run, node);
-				this.advance(run, node);
-				return;
-			}
-			if (!node.script) throw new Error(`script node ${node.path} has no operation`);
-			const view = this.view(run, node);
-			const result = await node.script({
-				input: view.input,
-				state: view.state,
-				exec: this.executors.exec,
-				goal: run.goal,
-				answers: view.answers,
-				cwd: workspace(run),
-				nodeId: view.key
-			});
-			view.state[view.key] = result.state;
-			if (result.workspace) this.moveWorkspace(run, node, result.workspace);
-			this.appendLedger(run, {
-				nodePath: node.path,
-				agentId: node.id,
-				kind: "script",
-				tier: null,
-				model: null,
-				backend: "script",
-				turn: 1,
-				inputTokens: 0,
-				outputTokens: 0,
-				costUsd: 0,
-				costSource: "measured",
-				durationMs: Date.now() - started,
-				output: result.output ?? null
-			});
-			this.event(run, "node_completed", {
-				node: node.path,
-				result: (String(result.output ?? "").split(/\r?\n/)[0] ?? "").slice(0, OUTPUT_PREVIEW_CHARS),
-				...result.metrics ? { metrics: result.metrics } : {}
-			});
-			this.advance(run, node);
-			return;
-		}
-		const config = configOf(run);
-		const backend = config.backend.kind;
-		const askNow = backend === "fake" ? run.nodeTurn === node.askAfterTurn : true;
-		if (node.question && askNow && run.answers[node.question.id] === void 0) {
-			this.askUser(run, {
-				...node.question,
-				node: node.path
-			}, [node.path]);
-			this.event(run, "needs_input", {
-				node: node.path,
-				questionId: node.question.id
-			});
-			return;
-		}
-		if (node.agentsFrom && run.nodeAgents?.[node.id] === void 0) {
-			run.nodeAgents ??= {};
-			const selected = node.agentsFrom(this.view(run, node).state);
-			run.nodeAgents[node.id] = selected;
-			if (node.freshResults) {
-				const view = this.view(run, node);
-				delete view.state[view.key];
-			}
-			this.event(run, "agents_selected", {
-				node: node.path,
-				agents: selected.map((a) => a.id)
-			});
-		}
-		if (agentsOf(run, node)?.length === 0 || node.skipIf?.(this.view(run, node).state)) {
-			this.event(run, "node_skipped", {
-				node: node.path,
-				reason: node.skipReason ?? "no work"
-			});
-			this.advance(run, node);
-			return;
-		}
-		if (backend === "cli") return this.runCliNode(run, node);
-		if (backend === "delegate") {
-			const items = this.nodeAgents(run, node).map((agent) => {
-				const tier = tierOf(config, agent);
-				const definition = agent.agentName ? readMarketplaceAgent(agent.agentName) : void 0;
-				return {
-					nodePath: node.path,
-					agentId: agent.id,
-					tier,
-					model: config.tiers[tier],
-					prompt: this.prompt(run, node, agent),
-					...definition ? {
-						agentName: definition.name,
-						agentDescription: definition.description,
-						agentInstructions: definition.prompt
-					} : {},
-					tools: node.tools ?? ["read"],
-					dirs: this.dirs(run, node, agent),
-					...run.workspace ? { cwd: run.workspace } : {}
-				};
-			});
-			run.pendingWorkItems = items;
-			run.pendingWork = items[0] ?? null;
-			run.status = "waiting_for_client";
-			for (const item of items) this.event(run, "work_offered", {
-				node: node.path,
-				agentId: item.agentId,
-				tier: item.tier
-			});
-			return;
-		}
-		const agent = currentAgent(run, node);
-		const tier = tierOf(config, agent);
-		const turn = run.nodeTurn + 1;
-		const usage = fakeModelTurn(tier, turn, run.agentIndex ?? 0);
-		run.steps += 1;
-		run.nodeTurn = turn;
-		this.appendLedger(run, {
-			nodePath: node.path,
-			agentId: agent.id,
-			kind: "llm",
-			tier,
-			model: config.tiers[tier],
-			backend: "fake",
-			turn,
-			...usage,
-			costSource: "measured"
-		});
-		if (node.turns !== void 0 && turn >= node.turns) this.finishAgent(run, node, { turns: turn });
 	}
 	finishAgent(run, node, details) {
 		const agent = currentAgent(run, node);
@@ -16976,8 +16797,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 		this.advance(run, node);
 	}
 	async runCliNode(run, node) {
-		const config = configOf(run);
-		const { cli } = config.backend;
+		const { cli } = configOf(run).backend;
 		const executor = cli ? this.executors[cli] : void 0;
 		if (!executor) throw new Error(`no executor for cli backend '${cli}' in this factory process`);
 		const agents = this.nodeAgents(run, node);
@@ -16985,53 +16805,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 		const failures = [];
 		for (let i = 0; i < agents.length && run.status === "running"; i += limit) {
 			const batch = agents.slice(i, i + limit);
-			(await Promise.allSettled(batch.map(async (agent) => {
-				const tier = tierOf(config, agent);
-				const model = config.tiers[tier];
-				this.event(run, "agent_started", {
-					node: node.path,
-					agentId: agent.id,
-					tier
-				});
-				this.checkpoint(run);
-				const result = await executor({
-					model,
-					prompt: this.prompt(run, node, agent),
-					agent: agent.agentName,
-					cwd: workspace(run),
-					configDir: run.input?.agentConfigDir,
-					tools: node.tools ?? ["read"],
-					dirs: this.dirs(run, node, agent)
-				});
-				run.steps += 1;
-				if (!result.ok) {
-					failures.push(`${agent.id}: ${result.error}`);
-					this.event(run, "agent_failed", {
-						node: node.path,
-						agentId: agent.id,
-						error: result.error,
-						...result.malformedLines ? { malformedLines: result.malformedLines } : {}
-					});
-					return;
-				}
-				for (const entry of cliEntries(result, {
-					nodePath: node.path,
-					agentId: agent.id,
-					agentName: agent.agentName ?? null,
-					tier,
-					requestedModel: model,
-					cli,
-					keepOutput: true
-				})) this.appendLedger(run, entry);
-				this.storeParsed(run, node, agent.id, result.text ?? "");
-				this.event(run, "agent_completed", {
-					node: node.path,
-					agentId: agent.id,
-					backend: `cli:${cli}`,
-					...result.malformedLines ? { malformedLines: result.malformedLines } : {}
-				});
-				this.checkpoint(run);
-			}))).forEach((outcome, index) => {
+			(await Promise.allSettled(batch.map((agent) => this.runCliAgent(run, node, agent, executor, failures)))).forEach((outcome, index) => {
 				if (outcome.status === "rejected") {
 					const agentId = batch[index]?.id;
 					failures.push(`${agentId}: ${errorMessage(outcome.reason)}`);
@@ -17227,7 +17001,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 			currentNode: node?.path ?? null,
 			pendingQuestion: run.pendingQuestion,
 			pendingWork: run.status === "waiting_for_client" ? run.pendingWork : void 0,
-			pendingWorkItems: run.status === "waiting_for_client" ? run.pendingWorkItems ?? (run.pendingWork ? [run.pendingWork] : []) : void 0,
+			pendingWorkItems: run.status === "waiting_for_client" ? pendingItems(run) : void 0,
 			retryAfterMs: run.status === "running" ? 2e3 : null,
 			next: supervisorWork ? loadFactoryConfig().supervisor?.hostHint ?? nextHint(run) : nextHint(run),
 			proposal: run.status === "needs_confirmation" ? run.proposal : void 0,
@@ -17262,7 +17036,264 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 		].includes(e.type))) lines.push(`  event ${e.type} ${e.node ?? e.questionId ?? e.level ?? ""}`);
 		return lines.join("\n");
 	}
+	/** An interrupt step asks its question once and, when the answer is in, stores it and moves on. */
+	stepInterrupt(run, node) {
+		if (!node.question) throw new Error(`interrupt node ${node.path} has no question`);
+		const view = this.view(run, node);
+		const context = withEach({
+			goal: run.goal,
+			input: view.input,
+			state: view.state,
+			answers: view.answers
+		});
+		const { allowedFrom, ...fixed } = node.question;
+		const question = {
+			...fixed,
+			id: view.prefix + mustache.render(node.question.id, context),
+			text: mustache.render(node.question.text, context),
+			...allowedFrom ? { allowed: allowedOf(view.state, allowedFrom) } : {}
+		};
+		const answer = run.answers[question.id];
+		if (answer === void 0) {
+			this.askUser(run, {
+				...question,
+				node: node.path
+			}, node.askedBy ?? []);
+			this.event(run, "needs_input", {
+				node: node.path,
+				questionId: question.id
+			});
+			return;
+		}
+		view.state[view.key] = { answer };
+		this.event(run, "node_completed", {
+			node: node.path,
+			answer
+		});
+		this.advance(run, node);
+	}
+	/** A script step either enters a call scope or runs its operation and records it in the ledger at no cost. */
+	async stepScript(run, node) {
+		run.steps += 1;
+		const started = Date.now();
+		if (node.enterScope) {
+			this.enterScope(run, node);
+			this.advance(run, node);
+			return;
+		}
+		if (!node.script) throw new Error(`script node ${node.path} has no operation`);
+		const view = this.view(run, node);
+		const result = await node.script({
+			input: view.input,
+			state: view.state,
+			exec: this.executors.exec,
+			goal: run.goal,
+			answers: view.answers,
+			cwd: workspace(run),
+			nodeId: view.key
+		});
+		view.state[view.key] = result.state;
+		if (result.workspace) this.moveWorkspace(run, node, result.workspace);
+		this.appendLedger(run, {
+			nodePath: node.path,
+			agentId: node.id,
+			kind: "script",
+			tier: null,
+			model: null,
+			backend: "script",
+			turn: 1,
+			inputTokens: 0,
+			outputTokens: 0,
+			costUsd: 0,
+			costSource: "measured",
+			durationMs: Date.now() - started,
+			output: result.output ?? null
+		});
+		this.event(run, "node_completed", {
+			node: node.path,
+			result: (String(result.output ?? "").split(/\r?\n/)[0] ?? "").slice(0, OUTPUT_PREVIEW_CHARS),
+			...result.metrics ? { metrics: result.metrics } : {}
+		});
+		this.advance(run, node);
+	}
+	/** An llm step asks its question first, selects its agents, skips when there is no work, then hands the agents to the run's backend. */
+	async stepAgents(run, node) {
+		const config = configOf(run);
+		const backend = config.backend.kind;
+		const askNow = backend === "fake" ? run.nodeTurn === node.askAfterTurn : true;
+		if (node.question && askNow && run.answers[node.question.id] === void 0) {
+			this.askUser(run, {
+				...node.question,
+				node: node.path
+			}, [node.path]);
+			this.event(run, "needs_input", {
+				node: node.path,
+				questionId: node.question.id
+			});
+			return;
+		}
+		if (node.agentsFrom && run.nodeAgents?.[node.id] === void 0) {
+			run.nodeAgents ??= {};
+			const selected = node.agentsFrom(this.view(run, node).state);
+			run.nodeAgents[node.id] = selected;
+			if (node.freshResults) {
+				const view = this.view(run, node);
+				delete view.state[view.key];
+			}
+			this.event(run, "agents_selected", {
+				node: node.path,
+				agents: selected.map((agent) => agent.id)
+			});
+		}
+		if (agentsOf(run, node)?.length === 0 || node.skipIf?.(this.view(run, node).state)) {
+			this.event(run, "node_skipped", {
+				node: node.path,
+				reason: node.skipReason ?? "no work"
+			});
+			this.advance(run, node);
+			return;
+		}
+		if (backend === "cli") return this.runCliNode(run, node);
+		if (backend === "delegate") {
+			this.offerDelegateWork(run, node, config);
+			return;
+		}
+		this.stepFake(run, node, config);
+	}
+	/** In delegate mode the run waits while the client runs one work item per agent of the step. */
+	offerDelegateWork(run, node, config) {
+		const items = this.nodeAgents(run, node).map((agent) => {
+			const tier = tierOf(config, agent);
+			const definition = agent.agentName ? readMarketplaceAgent(agent.agentName) : void 0;
+			return {
+				nodePath: node.path,
+				agentId: agent.id,
+				tier,
+				model: config.tiers[tier],
+				prompt: this.prompt(run, node, agent),
+				...definition ? {
+					agentName: definition.name,
+					agentDescription: definition.description,
+					agentInstructions: definition.prompt
+				} : {},
+				tools: node.tools ?? ["read"],
+				dirs: this.dirs(run, node, agent),
+				...run.workspace ? { cwd: run.workspace } : {}
+			};
+		});
+		run.pendingWorkItems = items;
+		run.pendingWork = items[0] ?? null;
+		run.status = "waiting_for_client";
+		for (const item of items) this.event(run, "work_offered", {
+			node: node.path,
+			agentId: item.agentId,
+			tier: item.tier
+		});
+	}
+	/** The fake backend takes one turn per tick and finishes the agent after the step's turns. */
+	stepFake(run, node, config) {
+		const agent = currentAgent(run, node);
+		const tier = tierOf(config, agent);
+		const turn = run.nodeTurn + 1;
+		const usage = fakeModelTurn(tier, turn, run.agentIndex ?? 0);
+		run.steps += 1;
+		run.nodeTurn = turn;
+		this.appendLedger(run, {
+			nodePath: node.path,
+			agentId: agent.id,
+			kind: "llm",
+			tier,
+			model: config.tiers[tier],
+			backend: "fake",
+			turn,
+			...usage,
+			costSource: "measured"
+		});
+		if (node.turns !== void 0 && turn >= node.turns) this.finishAgent(run, node, { turns: turn });
+	}
+	/** Records a delegate agent's work as done; when it was the step's last item the run moves on. */
+	completeWorkItem(run, node, work) {
+		this.event(run, "agent_completed", {
+			node: node.path,
+			agentId: work.agentId,
+			backend: "delegate"
+		});
+		const left = pendingItems(run).filter((item) => item !== work);
+		run.pendingWorkItems = left;
+		run.pendingWork = left[0] ?? null;
+		if (left.length === 0) {
+			run.status = "running";
+			this.event(run, "node_completed", {
+				node: node.path,
+				backend: "delegate"
+			});
+			this.advance(run, node);
+		}
+	}
+	/** Runs one agent of a CLI step; a failed result is added to failures, not thrown. */
+	async runCliAgent(run, node, agent, executor, failures) {
+		const config = configOf(run);
+		const cli = config.backend.cli;
+		const tier = tierOf(config, agent);
+		const model = config.tiers[tier];
+		this.event(run, "agent_started", {
+			node: node.path,
+			agentId: agent.id,
+			tier
+		});
+		this.checkpoint(run);
+		const result = await executor({
+			model,
+			prompt: this.prompt(run, node, agent),
+			agent: agent.agentName,
+			cwd: workspace(run),
+			configDir: run.input?.agentConfigDir,
+			tools: node.tools ?? ["read"],
+			dirs: this.dirs(run, node, agent)
+		});
+		run.steps += 1;
+		if (!result.ok) {
+			failures.push(`${agent.id}: ${result.error}`);
+			this.event(run, "agent_failed", {
+				node: node.path,
+				agentId: agent.id,
+				error: result.error,
+				...result.malformedLines ? { malformedLines: result.malformedLines } : {}
+			});
+			return;
+		}
+		for (const entry of cliEntries(result, {
+			nodePath: node.path,
+			agentId: agent.id,
+			agentName: agent.agentName ?? null,
+			tier,
+			requestedModel: model,
+			cli,
+			keepOutput: true
+		})) this.appendLedger(run, entry);
+		this.storeParsed(run, node, agent.id, result.text ?? "");
+		this.event(run, "agent_completed", {
+			node: node.path,
+			agentId: agent.id,
+			backend: `cli:${cli}`,
+			...result.malformedLines ? { malformedLines: result.malformedLines } : {}
+		});
+		this.checkpoint(run);
+	}
 };
+/** The work items a run waits for: pendingWorkItems, or the single pendingWork when no list is set. */
+function pendingItems(run) {
+	return run.pendingWorkItems ?? (run.pendingWork ? [run.pendingWork] : []);
+}
+function findPendingWork(run, nodePath, agentId) {
+	return pendingItems(run).find((item) => item.nodePath === nodePath && (!agentId || item.agentId === agentId));
+}
+/** True the first time the cost ratio reaches a budget threshold; the threshold is then recorded as hit. */
+function hitThreshold(run, level, ratio, thresholdRatio) {
+	if (!(ratio >= thresholdRatio) || run.thresholdsHit.includes(level)) return false;
+	run.thresholdsHit.push(level);
+	return true;
+}
 function supervisorView(record) {
 	const { work: _work, ...view } = record;
 	return view;
@@ -17321,26 +17352,26 @@ function delegateEntry(work, output, usage) {
 	};
 }
 function cliEntries(result, context) {
-	return (result.usageByModel ?? []).map((u) => {
-		const priced = priceUsage(u.model, u.tokens, u.cacheWriteTtlKnown);
+	return (result.usageByModel ?? []).map((usage) => {
+		const priced = priceUsage(usage.model, usage.tokens, usage.cacheWriteTtlKnown);
 		return {
 			nodePath: context.nodePath,
 			agentId: context.agentId,
 			kind: "llm",
 			tier: context.tier,
-			model: u.model,
+			model: usage.model,
 			requestedModel: context.requestedModel,
 			backend: `cli:${context.cli}`,
 			turn: 1,
 			harnessTurns: result.turns,
-			inputTokens: u.tokens.input,
-			outputTokens: u.tokens.output,
-			cacheReadTokens: u.tokens.cacheRead,
-			cacheWrite5mTokens: u.tokens.cacheWrite5m,
-			cacheWrite1hTokens: u.tokens.cacheWrite1h,
+			inputTokens: usage.tokens.input,
+			outputTokens: usage.tokens.output,
+			cacheReadTokens: usage.tokens.cacheRead,
+			cacheWrite5mTokens: usage.tokens.cacheWrite5m,
+			cacheWrite1hTokens: usage.tokens.cacheWrite1h,
 			costUsd: priced.costUsd,
 			costSource: priced.costSource,
-			harnessCostUsd: u.harnessCostUsd,
+			harnessCostUsd: usage.harnessCostUsd,
 			durationMs: result.durationMs,
 			outputPreview: String(result.text ?? "").slice(0, OUTPUT_PREVIEW_CHARS),
 			output: context.keepOutput ? result.text ?? null : null,
@@ -17364,7 +17395,7 @@ function tierOf(config, agent) {
 }
 function allowedOf(state, dotted) {
 	const allowed = readPath(state, dotted.replace(/^state\./, ""));
-	if (!Array.isArray(allowed) || allowed.length === 0 || !allowed.every((a) => typeof a === "string")) throw new Error(`allowedFrom ${dotted} is not a list of answers`);
+	if (!Array.isArray(allowed) || allowed.length === 0 || !allowed.every((answer) => typeof answer === "string")) throw new Error(`allowedFrom ${dotted} is not a list of answers`);
 	return allowed;
 }
 function agentsOf(run, node) {
@@ -17431,8 +17462,14 @@ function costFooter(run) {
 		steps: t.steps,
 		perNode,
 		source: costSourceSummary(run.ledger),
-		warnings: [...run.thresholdsHit.map((h) => `budget threshold: ${h}`), ...(run.events ?? []).filter((e) => e.type === "node_completed" && String(e.result ?? "").includes("required step switched off")).map((e) => `required step switched off: ${String(e.node)}`)]
+		warnings: footerWarnings(run)
 	};
+}
+/** The budget thresholds a run has hit and the required steps it ran with their switch off. */
+function footerWarnings(run) {
+	const thresholds = run.thresholdsHit.map((level) => `budget threshold: ${level}`);
+	const switchedOff = (run.events ?? []).filter((event) => event.type === "node_completed" && String(event.result ?? "").includes("required step switched off")).map((event) => `required step switched off: ${String(event.node)}`);
+	return [...thresholds, ...switchedOff];
 }
 /** The cost report of a run by node, agent, tier and model. It only reads the run, so the viewer uses it without a factory. */
 function runReport(run) {
