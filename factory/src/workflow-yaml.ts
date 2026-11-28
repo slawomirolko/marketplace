@@ -286,10 +286,15 @@ export function loadWorkflowFile(file: string): Workflow {
   return buildWorkflow(readSpec(file), file);
 }
 
+/** The workflow files of a folder, sorted: names ending in .yaml or .yml. */
+export function listWorkflowFiles(dir: string): string[] {
+  return fs.readdirSync(dir).filter((file) => /\.ya?ml$/.test(file)).sort();
+}
+
 function readSpecDir(dir: string): { specs: Map<string, WorkflowSpec>; files: Map<string, string> } {
   const specs = new Map<string, WorkflowSpec>();
   const files = new Map<string, string>();
-  for (const file of fs.readdirSync(dir).filter((f) => /.ya?ml$/.test(f)).sort()) {
+  for (const file of listWorkflowFiles(dir)) {
     const full = path.join(dir, file);
     const spec = readSpec(full);
     if (specs.has(spec.name)) throw new Error(`${file}: workflow name ${spec.name} is used twice`);
@@ -322,5 +327,5 @@ export function loadWorkflowDir(dir: string): Map<string, Workflow> {
 }
 
 export function loadWorkflowSpecs(dir: string): WorkflowSpec[] {
-  return fs.readdirSync(dir).filter((f) => /.ya?ml$/.test(f)).sort().map((f) => readSpec(path.join(dir, f)));
+  return listWorkflowFiles(dir).map((f) => readSpec(path.join(dir, f)));
 }

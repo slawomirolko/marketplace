@@ -1,4 +1,4 @@
-import { C as registerDataSource, S as defaultDataDir, T as __toESM, a as projectScopedInput, b as FACTORY_DIR, c as hostExec, d as parseBackend, f as parseCli, g as require_ajv, h as require_dist, i as viewerUrlFor, l as Factory, o as projectsAction, s as cliExecutor, u as errorMessage, v as homeEnvNote } from "./viewer-routes.mjs";
+import { C as defaultDataDir, E as __toESM, _ as require_ajv, c as cliExecutor, d as errorMessage, f as parseBackend, g as require_dist, i as viewerUrlFor, l as hostExec, o as projectScopedInput, p as parseCli, s as projectsAction, u as Factory, w as registerDataSource, x as FACTORY_DIR, y as homeEnvNote } from "./viewer-routes.mjs";
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
@@ -15196,7 +15196,7 @@ function createFactoryTools(factory, publicUrl) {
 			...factory.status(factory.get(runId))
 		})));
 		server.registerTool("factory_submit", {
-			description: "Delegate mode only. Submit the output of pendingWork and the usage of the subagent that ran it. If pendingWork has an agentId, pass the same agentId. If the subagent result shows a session id (for example <subagent sessionID=\"ses_...\">), always pass it as usage.childSessionId. The factory reads the exact token usage from that session. Add token numbers only if you saw them. Do not send token numbers that you did not see.",
+			description: "Delegate mode only. Submit the output of pendingWork and the usage of the subagent that ran it. If pendingWork has an agentId, pass the same agentId. If the subagent result shows a session id (for example <subagent sessionID=\"ses_...\">), pass it as usage.childSessionId; the factory stores it with the ledger record and does not read usage from it. Report the token numbers you saw in usage, because the cost of the step comes only from them. Do not send token numbers that you did not see.",
 			inputSchema: {
 				runId: string(),
 				nodePath: string(),

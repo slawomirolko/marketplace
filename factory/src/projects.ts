@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadFactoryConfig } from "./config.ts";
-import { homeDataDir } from "./paths.ts";
+import { homeDataDir, readJsonFile } from "./paths.ts";
 import type { ProjectsConfig, RunInput } from "./types.ts";
 
 /** A local project that uses the marketplace. Only the id and the folder are stored; everything else is read from the folder when needed. */
@@ -34,15 +34,15 @@ export function projectsFile(): string {
   return process.env.FACTORY_PROJECTS_FILE ?? path.join(homeDataDir(), "projects.json");
 }
 
+/** The registry; a missing file is an empty one. A file that cannot be read or parsed is an error, so no change ever overwrites the projects it holds. */
 export function readRegistry(file = projectsFile()): ProjectRegistry {
-  try {
-    const raw = JSON.parse(fs.readFileSync(file, "utf8")) as Partial<ProjectRegistry>;
-    const projects = Array.isArray(raw.projects) ? raw.projects.filter((p): p is Project => !!p && typeof p.id === "string" && ID.test(p.id) && typeof p.path === "string") : [];
-    const roots = Array.isArray(raw.roots) ? raw.roots.filter((r): r is string => typeof r === "string") : [];
-    return { schemaVersion: 1, roots, projects };
-  } catch {
+  const raw = readJsonFile<Partial<ProjectRegistry>>(file);
+  if (raw === undefined) {
     return { schemaVersion: 1, roots: [], projects: [] };
   }
+  const projects = Array.isArray(raw.projects) ? raw.projects.filter((p): p is Project => !!p && typeof p.id === "string" && ID.test(p.id) && typeof p.path === "string") : [];
+  const roots = Array.isArray(raw.roots) ? raw.roots.filter((r): r is string => typeof r === "string") : [];
+  return { schemaVersion: 1, roots, projects };
 }
 
 function writeRegistry(registry: ProjectRegistry, file = projectsFile()): ProjectRegistry {

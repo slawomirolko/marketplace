@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describeAgent, marketplaceDir } from "./marketplace-agents.ts";
+import { FACTORY_DIR } from "./paths.ts";
 import { loadWorkflowSpecs } from "./workflow-yaml.ts";
 import type { HostExec, WorkflowSpec } from "./types.ts";
 
@@ -36,7 +37,6 @@ export interface MarketplaceScan {
   broken: { workflow: string; node: string; name: string }[];
 }
 
-const FACTORY_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const LOCK_FILE = path.join(FACTORY_DIR, "workflows.lock.json");
 const SOURCE_FILE = /agents\/opencode\/[a-z0-9-]+\.md|plugins\/[a-z0-9-]+\/agents\/[a-z0-9-]+\.md|skills\/(?:\*|[a-z0-9-]+)\/[a-z0-9-]+(?:\/SKILL\.md)?/g;
 

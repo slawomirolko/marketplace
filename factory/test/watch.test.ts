@@ -8,7 +8,8 @@ import path from "node:path";
 import test from "node:test";
 import { Factory } from "../src/engine.ts";
 import { hostExec } from "../src/cli-backend.ts";
-import { checkWatch, knownProjects, projectsFile } from "../src/watch.ts";
+import { checkWatch, knownProjects, knownProjectsFile } from "../src/watch.ts";
+import { addProject, projectsFile } from "../src/projects.ts";
 import type { WatchSpec } from "../src/watch.ts";
 import { apiMiddleware, createDataApi } from "../app/data.ts";
 
@@ -39,6 +40,7 @@ edges:
   - { from: fail-it, to: END }
 `);
 process.env.FACTORY_WORKFLOWS_DIR = workflows;
+process.env.FACTORY_PROJECTS_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "factory-watch-registry-")), "projects.json");
 
 const stubCli = async () => ({ ok: true, text: "", turns: 1 });
 
@@ -47,7 +49,7 @@ function setup() {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "factory-watch-project-"));
   fs.writeFileSync(path.join(project, "marker"), "");
   fs.writeFileSync(path.join(project, "items.json"), JSON.stringify({ changed: [{ artifact: "skill:sample", hash: "aaa" }] }));
-  fs.writeFileSync(projectsFile(dataDir), JSON.stringify({ dirs: [project] }));
+  fs.writeFileSync(knownProjectsFile(dataDir), JSON.stringify({ dirs: [project] }));
   const factory = new Factory(dataDir, { backend: "delegate", executors: { exec: hostExec, opencode: stubCli as never } });
   return { dataDir, project, factory };
 }
@@ -130,10 +132,33 @@ test("known projects come from projects.json and from every run's input.project"
   assert.deepEqual(knownProjects(dataDir), [path.resolve(other), project].sort());
 });
 
-test("known projects also come from the project registry format of projects.json", () => {
+test("known projects also come from the project registry, wherever it lives", () => {
   const { dataDir, project } = setup();
-  fs.writeFileSync(projectsFile(dataDir), JSON.stringify({ schemaVersion: 1, roots: [], projects: [{ id: "sample-app", path: project }, { id: "broken" }] }));
-  assert.deepEqual(knownProjects(dataDir), [path.resolve(project)]);
+  fs.rmSync(knownProjectsFile(dataDir));
+  const registered = fs.mkdtempSync(path.join(os.tmpdir(), "factory-watch-registered-"));
+  addProject({ path: registered });
+  try {
+    assert.notEqual(path.dirname(projectsFile()), dataDir, "the registry is not in the data directory");
+    assert.deepEqual(knownProjects(dataDir), [path.resolve(registered)]);
+  } finally {
+    fs.rmSync(projectsFile(), { force: true });
+  }
+});
+
+test("a run the watch cannot confirm is cancelled, the other items still start and the counts are kept", async () => {
+  const { dataDir, project } = setup();
+  items(project, [{ artifact: "skill:first", hash: "aaa" }, { artifact: "skill:second", hash: "bbb" }]);
+  const noOpencode = new Factory(dataDir, { backend: "delegate", executors: { exec: hostExec } });
+  const logs: string[] = [];
+  const context = { factory: noOpencode, dataDir, marketplace: dataDir, exec: hostExec, log: (message: string) => logs.push(message) };
+  await checkWatch(watch, context);
+  assert.deepEqual(await checkWatch(watch, context), [], "no run could be confirmed");
+  const runs = [...noOpencode.runs.values()];
+  assert.equal(runs.length, 2, "the first failure does not stop the loop");
+  assert.deepEqual(runs.map((run) => run.status), ["cancelled", "cancelled"]);
+  assert.match(logs.join(" "), /could not confirm run .*no executor for cli backend 'opencode'/);
+  const state = JSON.parse(fs.readFileSync(path.join(dataDir, "watches", `${watch.id}.json`), "utf8")) as { seen: Record<string, number> };
+  assert.deepEqual(Object.values(state.seen), [2, 2], "the counts of this check are saved");
 });
 
 function call(api: ReturnType<typeof createDataApi>, method: string, url: string, headers: Record<string, string> = {}) {

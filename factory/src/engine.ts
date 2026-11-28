@@ -399,7 +399,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 
   cancel(runId: string): Run {
     const run = this.get(runId);
-    if (!["done", "stopped", "failed"].includes(run.status)) {
+    if (!ENDED.has(run.status)) {
       run.status = "cancelled";
       this.event(run, "run_cancelled");
       this.checkpoint(run);
@@ -594,9 +594,8 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
       const view = this.view(run, node);
       const result = await node.script({ input: view.input, state: view.state, exec: this.executors.exec, goal: run.goal, answers: view.answers, cwd: workspace(run), nodeId: view.key });
       view.state[view.key] = result.state;
-      if (result.workspace && result.workspace !== run.workspace) {
-        run.workspace = result.workspace;
-        this.event(run, "workspace_changed", { node: node.path, workspace: result.workspace });
+      if (result.workspace) {
+        this.moveWorkspace(run, node, result.workspace);
       }
       this.appendLedger(run, { nodePath: node.path, agentId: node.id, kind: "script", tier: null, model: null, backend: "script", turn: 1, inputTokens: 0, outputTokens: 0, costUsd: 0, costSource: "measured", durationMs: Date.now() - started, output: result.output ?? null });
       this.event(run, "node_completed", { node: node.path, result: (String(result.output ?? "").split(/\r?\n/)[0] ?? "").slice(0, 200), ...(result.metrics ? { metrics: result.metrics } : {}) });
@@ -683,8 +682,9 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
     const agents = this.nodeAgents(run, node);
     const limit = node.parallel ?? PARALLEL_AGENTS;
     const failures: string[] = [];
-    for (let i = 0; i < agents.length; i += limit) {
-      await Promise.all(agents.slice(i, i + limit).map(async (agent) => {
+    for (let i = 0; i < agents.length && run.status === "running"; i += limit) {
+      const batch = agents.slice(i, i + limit);
+      const outcomes = await Promise.allSettled(batch.map(async (agent) => {
         const tier = tierOf(config, agent);
         const model = config.tiers[tier];
         this.event(run, "agent_started", { node: node.path, agentId: agent.id, tier });
@@ -701,6 +701,16 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
         this.event(run, "agent_completed", { node: node.path, agentId: agent.id, backend: `cli:${cli}` });
         this.checkpoint(run);
       }));
+      outcomes.forEach((outcome, index) => {
+        if (outcome.status === "rejected") {
+          const agentId = batch[index]?.id;
+          failures.push(`${agentId}: ${errorMessage(outcome.reason)}`);
+          this.event(run, "agent_failed", { node: node.path, agentId, error: errorMessage(outcome.reason) });
+        }
+      });
+    }
+    if (run.status !== "running") {
+      return;
     }
     if (failures.length) {
       run.status = "failed";

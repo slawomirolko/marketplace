@@ -126,7 +126,7 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
       "factory_submit",
       {
         description:
-          "Delegate mode only. Submit the output of pendingWork and the usage of the subagent that ran it. If pendingWork has an agentId, pass the same agentId. If the subagent result shows a session id (for example <subagent sessionID=\"ses_...\">), always pass it as usage.childSessionId. The factory reads the exact token usage from that session. Add token numbers only if you saw them. Do not send token numbers that you did not see.",
+          "Delegate mode only. Submit the output of pendingWork and the usage of the subagent that ran it. If pendingWork has an agentId, pass the same agentId. If the subagent result shows a session id (for example <subagent sessionID=\"ses_...\">), pass it as usage.childSessionId; the factory stores it with the ledger record and does not read usage from it. Report the token numbers you saw in usage, because the cost of the step comes only from them. Do not send token numbers that you did not see.",
         inputSchema: {
           runId: z.string(),
           nodePath: z.string(),

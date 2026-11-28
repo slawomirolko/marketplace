@@ -50,8 +50,8 @@ projects:
   # The viewer's Analyze button runs the status workflow on this CLI backend.
   statusBackend: { kind: cli, cli: opencode }
 
-# Interval watches. Each one runs its command per known project (projects.json in the
-# data dir plus every run's input.project), and starts one run of its workflow per item
+# Interval watches. Each one runs its command per known project (the registered projects,
+# the `dirs` list of projects.json in the data dir and every run's input.project), and starts one run of its workflow per item
 # that stayed the same for stableChecks checks. The run stops at its first question,
 # so nothing happens until you answer it in the viewer. The viewer process runs them.
 watches:

@@ -2,15 +2,13 @@ import { homeEnvNote } from "./home-env.ts";
 import http from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { Factory, errorMessage, parseBackend, parseCli } from "./engine.ts";
 import { cliExecutor, hostExec } from "./cli-backend.ts";
 import type { CliName, Executors } from "./types.ts";
 import type { DefaultBackend } from "./engine.ts";
 import { allowedHostsFor, failRequest, viewerHandler } from "./viewer-routes.ts";
 import { bearerMatches } from "./bearer.ts";
-import { registerDataSource } from "./paths.ts";
+import { DEFAULT_VIEWER_PORT, registerDataSource, viewerOptions } from "./paths.ts";
 import { createFactoryTools } from "./tools.ts";
 import { loadFactoryConfig } from "./config.ts";
 
@@ -19,11 +17,10 @@ if (settingsNote) {
   console.error(settingsNote);
 }
 
-const PORT = Number(process.env.FACTORY_PORT ?? 7340);
+const PORT = Number(process.env.FACTORY_PORT ?? DEFAULT_VIEWER_PORT);
 const HOST = process.env.FACTORY_HOST ?? "127.0.0.1";
 const TOKEN = process.env.FACTORY_TOKEN;
 const DATA_DIR = process.env.FACTORY_DATA_DIR ?? "/data";
-const FACTORY_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC_URL = process.env.FACTORY_PUBLIC_URL ?? `http://127.0.0.1:${PORT}`;
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 /** Beyond loopback anyone on the network can reach the viewer, so its POST actions (update, projects, answer) need the bearer token there. */
@@ -48,10 +45,7 @@ const executors: Executors = { exec: hostExec, ...(STATUS_CLI ? { [STATUS_CLI]: 
 registerDataSource(DATA_DIR);
 const factory = new Factory(DATA_DIR, { backend: DEFAULT_BACKEND, executors, ...(CLI ? { cli: CLI } : {}) });
 const viewer = viewerHandler({
-  viewerDir: process.env.FACTORY_VIEWER_DIR ?? path.join(FACTORY_DIR, "app", "dist"),
-  dataDir: DATA_DIR,
-  factoryDir: FACTORY_DIR,
-  configFile: path.join(FACTORY_DIR, "spec", "examples", "valid", "factory-config.json"),
+  ...viewerOptions(DATA_DIR),
   allowedHosts: allowedHostsFor(PUBLIC_URL, PORT),
   factory,
 });

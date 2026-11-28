@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 import { validate } from "./spec.ts";
-import { expandWorkflowDir, loadWorkflowDir } from "./workflow-yaml.ts";
+import { expandWorkflowDir, listWorkflowFiles, loadWorkflowDir } from "./workflow-yaml.ts";
 import { stateReferenceErrors } from "./state-refs.ts";
 import { describeAgent } from "./marketplace-agents.ts";
 import type { WorkflowSpec } from "./types.ts";
@@ -16,14 +16,14 @@ export interface WorkflowCheck {
 
 export function checkWorkflows(dir: string, agentExists: (name: string) => boolean = (name) => describeAgent(name) !== null): WorkflowCheck {
   const errors: string[] = [];
-  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".yaml")).sort();
+  const files = listWorkflowFiles(dir);
   const specs: WorkflowSpec[] = [];
   for (const file of files) {
     try {
       const spec = parseYaml(fs.readFileSync(path.join(dir, file), "utf8")) as WorkflowSpec;
       const result = validate("workflow", spec);
       if (!result.valid) errors.push(...result.errors.map((e) => `${file}: ${e}`));
-      if (spec.name !== file.replace(/\.yaml$/, "")) errors.push(`${file}: name ${spec.name} does not match the file name`);
+      if (spec.name !== file.replace(/\.ya?ml$/, "")) errors.push(`${file}: name ${spec.name} does not match the file name`);
       if (!spec.description) errors.push(`${file}: workflow has no description`);
       for (const node of spec.nodes ?? []) {
         if (!node.description) errors.push(`${file}: node ${node.id} has no description`);

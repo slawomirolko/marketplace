@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { evaluateWhen, loadWorkflowDir, loadWorkflowFile, negateWhen } from "../src/workflow-yaml.ts";
+import { evaluateWhen, listWorkflowFiles, loadWorkflowDir, loadWorkflowFile, loadWorkflowSpecs, negateWhen } from "../src/workflow-yaml.ts";
 import { claudeAgentsFile, claudeTools, describeAgent, marketplaceDir, readMarketplaceAgent } from "../src/marketplace-agents.ts";
 import { operationNamed } from "../src/ops.ts";
 
@@ -480,4 +480,13 @@ edges:
   assert.equal(create.workspace?.({ goal: "", input: {}, state: {}, agent: { id: "create" } }), "");
   const stop = operationNamed("builtin.stop")!;
   await assert.rejects(stop({ state: { create: { create: { path: "/tmp/wt" } }, checks: { flow: "PASS", test: "BLOCKED" } }, input: { taskId: "t1" }, answers: {}, args: { reason: "stopped in {{state.create.create.path}} for {{input.taskId}}: {{#each.state.checks}}{{key}}={{value}} {{/each.state.checks}}" } } as never), { message: "stopped in /tmp/wt for t1: flow=PASS test=BLOCKED" });
+});
+
+test("a workflow folder holds only .yaml and .yml files; a name that merely ends in yaml is not a workflow", () => {
+  const dir = path.dirname(writeYaml(VALID));
+  fs.writeFileSync(path.join(dir, "notes.xyaml"), "not: [a workflow");
+  fs.writeFileSync(path.join(dir, "backup-yml"), "not: [a workflow");
+  assert.deepEqual(listWorkflowFiles(dir), ["flow.yaml"]);
+  assert.deepEqual([...loadWorkflowDir(dir).keys()], ["two-steps"]);
+  assert.deepEqual(loadWorkflowSpecs(dir).map((spec) => spec.name), ["two-steps"]);
 });

@@ -10,6 +10,7 @@ import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { parse as parseYaml } from "yaml";
 import { bearerMatches } from "../src/bearer.ts";
 import { viewerHandler } from "../src/viewer-routes.ts";
 
@@ -103,6 +104,28 @@ test("the HTTP server on loopback keeps the viewer actions as the run page proce
   const { port, child } = await startServer("127.0.0.1");
   try {
     assert.notEqual(await request(port, "POST", "/viewer/api/projects", { "x-factory-action": "projects", "content-type": "application/json" }), 401);
+  } finally {
+    child.kill();
+  }
+});
+
+function requestJson(port: number, urlPath: string): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    http
+      .get({ host: "127.0.0.1", port, path: urlPath, headers: { host: `127.0.0.1:${port}` } }, (response) => {
+        let body = "";
+        response.on("data", (chunk) => (body += chunk));
+        response.on("end", () => resolve(JSON.parse(body)));
+      })
+      .on("error", reject);
+  });
+}
+
+test("the HTTP server's run page reads the same factory config as the run page process", async () => {
+  const { port, child } = await startServer("127.0.0.1");
+  try {
+    const expected = parseYaml(fs.readFileSync(path.join(factoryDir, "config", "factory.yaml"), "utf8")) as unknown;
+    assert.deepEqual(await requestJson(port, "/viewer/api/config"), expected);
   } finally {
     child.kill();
   }

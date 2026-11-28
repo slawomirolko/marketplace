@@ -20,7 +20,7 @@ after a person says so. A person always merges or closes the PR.
 
 1. Install skills or agents, then run once in the project's marketplace checkout:
    `node scripts/olko-marketplace-lock.mjs init --project <project> --marketplace <marketplace checkout>`.
-2. The factory knows a project when a factory run used it (`input.project`) or when it is listed in `projects.json` in the factory data directory.
+2. The factory knows a project when it is registered in the project registry (`~/.skill-factory/projects.json`, or the file named by `FACTORY_PROJECTS_FILE`), when a factory run used it (`input.project`), or when it is in the `dirs` list of `projects.json` in the factory data directory.
 3. Edit an installed artifact in the project. After two checks without further change, the viewer asks.
 4. `no`: the content hash is recorded as rejected; the same content is never offered again.
 5. `ok`: the factory runs the steps in the background with the watch's CLI backend (set `FACTORY_WATCH_MODEL` in the factory's environment to pick the model for every tier, for example the model your OpenCode agents use): stage (adapter hunks stay out), optimize, sanitize gate, plan, publish (draft PR, label `upstream-candidate`). The PR is recorded as pending in the lock.

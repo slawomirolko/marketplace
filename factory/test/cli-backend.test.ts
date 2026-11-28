@@ -11,6 +11,7 @@ import { opencodeConfigDir } from "../src/marketplace-agents.ts";
 
 interface Probe {
   argv: string[];
+  cwd: string;
   env: Record<string, string | null>;
 }
 
@@ -20,9 +21,11 @@ const probeScript = path.join(fakeDir, "fake-cli.js");
 fs.writeFileSync(
   probeScript,
   [
-    `const probe = { argv: process.argv.slice(2), env: Object.fromEntries(${JSON.stringify(PROBED_ENV)}.map((name) => [name, process.env[name] ?? null])) };`,
+    `const probe = { argv: process.argv.slice(2), cwd: process.cwd(), env: Object.fromEntries(${JSON.stringify(PROBED_ENV)}.map((name) => [name, process.env[name] ?? null])) };`,
     "const text = JSON.stringify(probe);",
-    "if (process.argv[2] === 'run') {",
+    "if (process.env.FACTORY_FAKE_BARE_ERROR) {",
+    "  process.stdout.write(JSON.stringify({ type: 'error' }) + '\\n');",
+    "} else if (process.argv[2] === 'run') {",
     "  process.stdout.write(JSON.stringify({ type: 'text', sessionID: 'ses_probe', part: { type: 'text', text } }) + '\\n');",
     "  process.stdout.write(JSON.stringify({ type: 'step_finish', part: { type: 'step-finish', tokens: { input: 1, output: 1 }, cost: 0 } }) + '\\n');",
     "} else {",
@@ -113,4 +116,34 @@ test("a generated OpenCode agent may only leave its workspace for the node's ext
   assert.equal(permissionOf(opencodeConfigDir(definition, ["read"])).external_directory, "deny", "no extra directories, no access outside the workspace");
   const extra = path.join(os.tmpdir(), "factory-extra-probe");
   assert.deepEqual(permissionOf(opencodeConfigDir(definition, ["read"], [extra])).external_directory, { "*": "deny", [path.join(extra, "*")]: "allow" });
+});
+
+test("the shared CLI work folder comes back after the temp cleaner removed it", async () => {
+  const first = await cliExecutor("claude")({ model: "sonnet", prompt: "hi" });
+  assert.ok(first.ok, first.error ?? "the CLI failed");
+  const { cwd } = probeOf(first.text);
+  assert.match(path.basename(cwd), /^factory-cli-/);
+  fs.rmSync(cwd, { recursive: true, force: true });
+  const second = await cliExecutor("claude")({ model: "sonnet", prompt: "hi" });
+  assert.ok(second.ok, second.error ?? "the CLI failed after its work folder was removed");
+  assert.ok(fs.existsSync(path.join(probeOf(second.text).cwd, "opencode.json")), "the work folder keeps its empty OpenCode config");
+});
+
+test("a CLI that is not installed fails the request instead of crashing the process", async () => {
+  const emptyPath = fs.mkdtempSync(path.join(os.tmpdir(), "factory-empty-path-"));
+  try {
+    for (const cli of ["claude", "opencode"] as const) {
+      const result = await cliExecutor(cli)({ model: "sonnet", prompt: "hi", env: { PATH: emptyPath, Path: emptyPath } });
+      assert.equal(result.ok, false, cli);
+      assert.match(result.error ?? "", /ENOENT/, cli);
+    }
+  } finally {
+    fs.rmSync(emptyPath, { recursive: true, force: true });
+  }
+});
+
+test("an OpenCode error event without details still fails the request with a message", async () => {
+  const result = await cliExecutor("opencode")({ model: "sonnet", prompt: "hi", env: { FACTORY_FAKE_BARE_ERROR: "1" } });
+  assert.equal(result.ok, false);
+  assert.match(result.error ?? "", /error/);
 });

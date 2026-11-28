@@ -33,13 +33,28 @@ export function sourcesFile(): string {
   return path.join(homeDataDir(), "sources.json");
 }
 
-export function readSources(): string[] {
+/** The parsed JSON of a file, or undefined when the file does not exist. Any other read or parse failure throws with the file name. */
+export function readJsonFile<T>(file: string): T | undefined {
+  let text: string;
   try {
-    const dirs = (JSON.parse(fs.readFileSync(sourcesFile(), "utf8")) as { dirs?: unknown }).dirs;
-    return Array.isArray(dirs) ? dirs.filter((d): d is string => typeof d === "string") : [];
-  } catch {
-    return [];
+    text = fs.readFileSync(file, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
   }
+  try {
+    return JSON.parse(text) as T;
+  } catch (error) {
+    throw new Error(`${file} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/** The registered data folders; a missing list is empty, and a list that cannot be parsed throws, so registerDataSource never overwrites it. */
+export function readSources(): string[] {
+  const dirs = readJsonFile<{ dirs?: unknown }>(sourcesFile())?.dirs;
+  return Array.isArray(dirs) ? dirs.filter((d): d is string => typeof d === "string") : [];
 }
 
 export function registerDataSource(dataDir: string): void {

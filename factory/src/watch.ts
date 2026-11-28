@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import Mustache from "mustache";
 import { loadFactoryConfig } from "./config.ts";
+import { listProjects } from "./projects.ts";
 import type { CliName, ExecResult, RunInput } from "./types.ts";
 import type { Factory } from "./engine.ts";
 
@@ -62,17 +63,15 @@ function writeJson(file: string, value: unknown): void {
   fs.renameSync(temp, file);
 }
 
-export function projectsFile(dataDir: string): string {
+/** The older list of watched folders, `{ "dirs": [...] }` in the data directory. Registered projects live in the project registry (projects.ts projectsFile()). */
+export function knownProjectsFile(dataDir: string): string {
   return path.join(dataDir, "projects.json");
 }
 
-/** Projects the factory knows: the ones listed in projects.json (`dirs`, or the registry's `projects[].path`) and every run's input.project. */
+/** Projects the factory knows: the registered projects, the folders in the data directory's `dirs` list and every run's input.project. */
 export function knownProjects(dataDir: string): string[] {
-  const file = readJson<{ dirs?: unknown; projects?: unknown }>(projectsFile(dataDir), {});
-  const listed = [
-    ...(Array.isArray(file.dirs) ? file.dirs : []),
-    ...(Array.isArray(file.projects) ? file.projects.map((p) => (p && typeof p === "object" ? (p as { path?: unknown }).path : undefined)) : []),
-  ];
+  const file = readJson<{ dirs?: unknown }>(knownProjectsFile(dataDir), {});
+  const listed = [...listProjects().map((project) => project.path), ...(Array.isArray(file.dirs) ? file.dirs : [])];
   const dirs = new Set<string>(listed.filter((d): d is string => typeof d === "string").map((d) => path.resolve(d)));
   const runsDir = path.join(dataDir, "runs");
   if (fs.existsSync(runsDir)) {
@@ -129,7 +128,13 @@ export async function checkWatch(watch: WatchSpec, context: WatchContext): Promi
       if (reused) continue;
       // The config never names a model; FACTORY_WATCH_MODEL picks one model for every tier of watch runs.
       const model = process.env.FACTORY_WATCH_MODEL;
-      factory.confirm(run.runId, { backend: watch.backend, ...(model ? { tierModels: { low: model, medium: model, high: model } } : {}) });
+      try {
+        factory.confirm(run.runId, { backend: watch.backend, ...(model ? { tierModels: { low: model, medium: model, high: model } } : {}) });
+      } catch (error) {
+        factory.cancel(run.runId);
+        log(`watch ${watch.id}: could not confirm run ${run.runId}, cancelled it: ${error instanceof Error ? error.message : String(error)}`);
+        continue;
+      }
       started.push(run.runId);
       log(`watch ${watch.id}: started run ${run.runId}`);
     }

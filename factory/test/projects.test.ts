@@ -12,7 +12,7 @@ process.env.FACTORY_HOME_DIR = home;
 const { addProject, addRoot, discoverProjects, listProjects, projectById, projectInput, projectScopedInput, projectsAction, projectsCli, projectsFile, readRegistry, removeProject, removeRoot, suggestId } = await import("../src/projects.ts");
 const { apiMiddleware, createDataApi, parseProjectsAction, statusFileOf } = await import("../app/data.ts");
 const { loadFactoryConfig, projectsOf, withStatusCli, DEFAULT_PROJECTS } = await import("../src/config.ts");
-const { loadHomeEnv } = await import("../src/paths.ts");
+const { loadHomeEnv, readSources, registerDataSource } = await import("../src/paths.ts");
 const { validate } = await import("../src/spec.ts");
 const { Factory, loadedWorkflows } = await import("../src/engine.ts");
 
@@ -37,10 +37,35 @@ test("the registry lives in the factory home and starts empty", () => {
   reset();
   assert.equal(projectsFile(), path.join(home, "projects.json"));
   assert.deepEqual(readRegistry(), { schemaVersion: 1, roots: [], projects: [] });
-  fs.writeFileSync(projectsFile(), "not json");
-  assert.deepEqual(listProjects(), []);
   fs.writeFileSync(projectsFile(), JSON.stringify({ projects: [{ id: "Bad Id", path: "x" }, { id: "ok", path: "y" }, null], roots: ["r", 3] }));
   assert.deepEqual(readRegistry(), { schemaVersion: 1, roots: ["r"], projects: [{ id: "ok", path: "y" }] });
+});
+
+test("a registry that cannot be read is an error and is never overwritten", () => {
+  reset();
+  const ws = workspace();
+  fs.writeFileSync(projectsFile(), "{ \"projects\": [ { \"id\": \"kept\", \"path\": ");
+  assert.throws(() => listProjects(), /projects\.json/);
+  assert.throws(() => addProject({ path: folder(ws, "new-app") }), /projects\.json/);
+  assert.throws(() => addRoot(ws), /projects\.json/);
+  assert.throws(() => removeRoot(ws), /projects\.json/);
+  assert.equal(fs.readFileSync(projectsFile(), "utf8"), "{ \"projects\": [ { \"id\": \"kept\", \"path\": ", "the damaged file is left for the user to repair");
+  reset();
+});
+
+test("a data source list that cannot be read is an error and is never overwritten", () => {
+  const sources = path.join(home, "sources.json");
+  fs.writeFileSync(sources, "{ \"dirs\": [");
+  try {
+    assert.throws(() => registerDataSource(workspace()), /sources\.json/);
+    assert.equal(fs.readFileSync(sources, "utf8"), "{ \"dirs\": [");
+  } finally {
+    fs.rmSync(sources, { force: true });
+  }
+  const dataDir = workspace();
+  registerDataSource(dataDir);
+  assert.deepEqual(readSources(), [path.resolve(dataDir)], "a missing list starts empty");
+  fs.rmSync(sources, { force: true });
 });
 
 test("add, find and remove projects; ids are unique kebab-case and folders are registered once", () => {

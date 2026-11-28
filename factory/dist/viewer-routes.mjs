@@ -49,7 +49,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 var __toCommonJS = (mod) => __hasOwnProp.call(mod, "module.exports") ? mod["module.exports"] : __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var __require = /* #__PURE__ */ (() => createRequire(import.meta.url))();
 // src/paths.ts
-var FACTORY_DIR$1 = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+var FACTORY_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 var VIEWER_HEALTH = "skill-factory-viewer";
 var DEFAULT_VIEWER_PORT = 7340;
 function defaultDataDir() {
@@ -69,13 +69,25 @@ function loadHomeEnv(file = path.join(homeDataDir(), ".env")) {
 function sourcesFile() {
 	return path.join(homeDataDir(), "sources.json");
 }
-function readSources() {
+/** The parsed JSON of a file, or undefined when the file does not exist. Any other read or parse failure throws with the file name. */
+function readJsonFile(file) {
+	let text;
 	try {
-		const dirs = JSON.parse(fs.readFileSync(sourcesFile(), "utf8")).dirs;
-		return Array.isArray(dirs) ? dirs.filter((d) => typeof d === "string") : [];
-	} catch {
-		return [];
+		text = fs.readFileSync(file, "utf8");
+	} catch (error) {
+		if (error.code === "ENOENT") return;
+		throw error;
 	}
+	try {
+		return JSON.parse(text);
+	} catch (error) {
+		throw new Error(`${file} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+	}
+}
+/** The registered data folders; a missing list is empty, and a list that cannot be parsed throws, so registerDataSource never overwrites it. */
+function readSources() {
+	const dirs = readJsonFile(sourcesFile())?.dirs;
+	return Array.isArray(dirs) ? dirs.filter((d) => typeof d === "string") : [];
 }
 function registerDataSource(dataDir) {
 	const dir = path.resolve(dataDir);
@@ -87,10 +99,10 @@ function registerDataSource(dataDir) {
 }
 function viewerOptions(dataDir) {
 	return {
-		viewerDir: process.env.FACTORY_VIEWER_DIR ?? path.join(FACTORY_DIR$1, "app", "dist"),
+		viewerDir: process.env.FACTORY_VIEWER_DIR ?? path.join(FACTORY_DIR, "app", "dist"),
 		dataDir,
-		factoryDir: FACTORY_DIR$1,
-		configFile: process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR$1, "config", "factory.yaml")
+		factoryDir: FACTORY_DIR,
+		configFile: process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR, "config", "factory.yaml")
 	};
 }
 // src/home-env.ts
@@ -15509,10 +15521,14 @@ function buildWorkflow(spec, file) {
 		...spec.roles ? { roles: spec.roles } : {}
 	};
 }
+/** The workflow files of a folder, sorted: names ending in .yaml or .yml. */
+function listWorkflowFiles(dir) {
+	return fs.readdirSync(dir).filter((file) => /\.ya?ml$/.test(file)).sort();
+}
 function readSpecDir(dir) {
 	const specs = /* @__PURE__ */ new Map();
 	const files = /* @__PURE__ */ new Map();
-	for (const file of fs.readdirSync(dir).filter((f) => /.ya?ml$/.test(f)).sort()) {
+	for (const file of listWorkflowFiles(dir)) {
 		const full = path.join(dir, file);
 		const spec = readSpec(full);
 		if (specs.has(spec.name)) throw new Error(`${file}: workflow name ${spec.name} is used twice`);
@@ -15537,7 +15553,7 @@ function loadWorkflowDir(dir) {
 	return workflows;
 }
 function loadWorkflowSpecs(dir) {
-	return fs.readdirSync(dir).filter((f) => /.ya?ml$/.test(f)).sort().map((f) => readSpec(path.join(dir, f)));
+	return listWorkflowFiles(dir).map((f) => readSpec(path.join(dir, f)));
 }
 // src/config.ts
 var DEFAULT_MEMORY_LAYER = "olko-memory-layer";
@@ -15576,7 +15592,7 @@ function memoryLayerOf(raw) {
 	return raw?.memoryLayer ?? "olko-memory-layer";
 }
 function configFile() {
-	return process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR$1, "config", "factory.yaml");
+	return process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR, "config", "factory.yaml");
 }
 function loadFactoryConfig(file = configFile()) {
 	const raw = (0, import_dist.parse)(fs.readFileSync(file, "utf8"));
@@ -15625,7 +15641,7 @@ var CLAUDE_ALL_TOOLS = [
 	"NotebookEdit"
 ];
 function marketplaceDir() {
-	return process.env.FACTORY_MARKETPLACE_DIR ?? path.join(FACTORY_DIR$1, "..");
+	return process.env.FACTORY_MARKETPLACE_DIR ?? path.join(FACTORY_DIR, "..");
 }
 function readFrontmatter(file) {
 	const match = fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n").match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
@@ -16213,7 +16229,7 @@ function parseCli(value) {
 }
 var workflows;
 function workflowsDir() {
-	return process.env.FACTORY_WORKFLOWS_DIR ?? path.join(FACTORY_DIR$1, "workflows");
+	return process.env.FACTORY_WORKFLOWS_DIR ?? path.join(FACTORY_DIR, "workflows");
 }
 function loadedWorkflows() {
 	workflows ??= loadWorkflowDir(workflowsDir());
@@ -16559,11 +16575,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 	}
 	cancel(runId) {
 		const run = this.get(runId);
-		if (![
-			"done",
-			"stopped",
-			"failed"
-		].includes(run.status)) {
+		if (!ENDED.has(run.status)) {
 			run.status = "cancelled";
 			this.event(run, "run_cancelled");
 			this.checkpoint(run);
@@ -16846,13 +16858,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 				nodeId: view.key
 			});
 			view.state[view.key] = result.state;
-			if (result.workspace && result.workspace !== run.workspace) {
-				run.workspace = result.workspace;
-				this.event(run, "workspace_changed", {
-					node: node.path,
-					workspace: result.workspace
-				});
-			}
+			if (result.workspace) this.moveWorkspace(run, node, result.workspace);
 			this.appendLedger(run, {
 				nodePath: node.path,
 				agentId: node.id,
@@ -16988,51 +16994,65 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 		const agents = this.nodeAgents(run, node);
 		const limit = node.parallel ?? PARALLEL_AGENTS;
 		const failures = [];
-		for (let i = 0; i < agents.length; i += limit) await Promise.all(agents.slice(i, i + limit).map(async (agent) => {
-			const tier = tierOf(config, agent);
-			const model = config.tiers[tier];
-			this.event(run, "agent_started", {
-				node: node.path,
-				agentId: agent.id,
-				tier
-			});
-			this.checkpoint(run);
-			const result = await executor({
-				model,
-				prompt: this.prompt(run, node, agent),
-				agent: agent.agentName,
-				cwd: workspace(run),
-				configDir: run.input?.agentConfigDir,
-				tools: node.tools ?? ["read"],
-				dirs: this.dirs(run, node, agent)
-			});
-			run.steps += 1;
-			if (!result.ok) {
-				failures.push(`${agent.id}: ${result.error}`);
-				this.event(run, "agent_failed", {
+		for (let i = 0; i < agents.length && run.status === "running"; i += limit) {
+			const batch = agents.slice(i, i + limit);
+			(await Promise.allSettled(batch.map(async (agent) => {
+				const tier = tierOf(config, agent);
+				const model = config.tiers[tier];
+				this.event(run, "agent_started", {
 					node: node.path,
 					agentId: agent.id,
-					error: result.error
+					tier
 				});
-				return;
-			}
-			for (const entry of cliEntries(result, {
-				nodePath: node.path,
-				agentId: agent.id,
-				agentName: agent.agentName ?? null,
-				tier,
-				requestedModel: model,
-				cli,
-				keepOutput: true
-			})) this.appendLedger(run, entry);
-			this.storeParsed(run, node, agent.id, result.text ?? "");
-			this.event(run, "agent_completed", {
-				node: node.path,
-				agentId: agent.id,
-				backend: `cli:${cli}`
+				this.checkpoint(run);
+				const result = await executor({
+					model,
+					prompt: this.prompt(run, node, agent),
+					agent: agent.agentName,
+					cwd: workspace(run),
+					configDir: run.input?.agentConfigDir,
+					tools: node.tools ?? ["read"],
+					dirs: this.dirs(run, node, agent)
+				});
+				run.steps += 1;
+				if (!result.ok) {
+					failures.push(`${agent.id}: ${result.error}`);
+					this.event(run, "agent_failed", {
+						node: node.path,
+						agentId: agent.id,
+						error: result.error
+					});
+					return;
+				}
+				for (const entry of cliEntries(result, {
+					nodePath: node.path,
+					agentId: agent.id,
+					agentName: agent.agentName ?? null,
+					tier,
+					requestedModel: model,
+					cli,
+					keepOutput: true
+				})) this.appendLedger(run, entry);
+				this.storeParsed(run, node, agent.id, result.text ?? "");
+				this.event(run, "agent_completed", {
+					node: node.path,
+					agentId: agent.id,
+					backend: `cli:${cli}`
+				});
+				this.checkpoint(run);
+			}))).forEach((outcome, index) => {
+				if (outcome.status === "rejected") {
+					const agentId = batch[index]?.id;
+					failures.push(`${agentId}: ${errorMessage(outcome.reason)}`);
+					this.event(run, "agent_failed", {
+						node: node.path,
+						agentId,
+						error: errorMessage(outcome.reason)
+					});
+				}
 			});
-			this.checkpoint(run);
-		}));
+		}
+		if (run.status !== "running") return;
 		if (failures.length) {
 			run.status = "failed";
 			this.event(run, "node_failed", {
@@ -17599,8 +17619,15 @@ var CLAUDE_ISOLATION = [
 	"--disable-slash-commands",
 	"--strict-mcp-config"
 ];
-var workDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-cli-"));
-fs.writeFileSync(path.join(workDir, "opencode.json"), "{}\n");
+var workDir;
+/** The neutral folder a CLI runs in when the node has no workspace. It is made on first use and made again when the temp cleaner removed it, since its age never changes. */
+function cliWorkDir() {
+	if (workDir === void 0 || !fs.existsSync(workDir)) {
+		workDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-cli-"));
+		fs.writeFileSync(path.join(workDir, "opencode.json"), "{}\n");
+	}
+	return workDir;
+}
 /** The environment of every child process: no harness variables, no factory token and none of the settings loaded from the factory home's .env. */
 function cleanEnv() {
 	const withheld = /* @__PURE__ */ new Set(["FACTORY_TOKEN", ...homeEnv.loaded]);
@@ -17624,7 +17651,7 @@ function killTree(pid, fallback) {
 		"/F"
 	], { stdio: "ignore" }).on("error", fallback);
 }
-function spawnCli(command, args, stdinText, { cwd = workDir, env = {} } = {}) {
+function spawnCli(command, args, stdinText, { cwd = cliWorkDir(), env = {} } = {}) {
 	return new Promise((resolve) => {
 		const started = Date.now();
 		const childEnv = {
@@ -17733,7 +17760,7 @@ async function runClaude(model, prompt, { agent: named, definition, cwd, tools =
 	];
 	const agentFile = args[args.indexOf("--agents") + 1];
 	const res = await spawnCli("claude", args, prompt, {
-		cwd: cwd ?? workDir,
+		cwd: cwd ?? cliWorkDir(),
 		env
 	}).finally(() => {
 		if (agent && agentFile) removeTempDir(path.dirname(agentFile));
@@ -17795,7 +17822,7 @@ async function runOpencode(model, prompt, { agent: named, definition, cwd, confi
 	];
 	const agentDir = configDir ?? (agent ? opencodeConfigDir(definition ?? agent, tools, dirs) : void 0);
 	const res = await spawnCli("opencode", args, prompt, {
-		cwd: cwd ?? workDir,
+		cwd: cwd ?? cliWorkDir(),
 		env: {
 			...env,
 			...agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {}
@@ -17832,7 +17859,7 @@ async function runOpencode(model, prompt, { agent: named, definition, cwd, confi
 	}
 	if (error || steps === 0) return {
 		ok: false,
-		error: error ? JSON.stringify(error.error).slice(0, 300) : `opencode exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${res.stderr.slice(-300)}`,
+		error: error ? JSON.stringify(error.error ?? error).slice(0, 300) : `opencode exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${res.stderr.slice(-300)}`,
 		durationMs: res.durationMs,
 		timedOut: res.timedOut
 	};
@@ -17935,22 +17962,20 @@ var SKIP = /* @__PURE__ */ new Set([
 function projectsFile() {
 	return process.env.FACTORY_PROJECTS_FILE ?? path.join(homeDataDir(), "projects.json");
 }
+/** The registry; a missing file is an empty one. A file that cannot be read or parsed is an error, so no change ever overwrites the projects it holds. */
 function readRegistry(file = projectsFile()) {
-	try {
-		const raw = JSON.parse(fs.readFileSync(file, "utf8"));
-		const projects = Array.isArray(raw.projects) ? raw.projects.filter((p) => !!p && typeof p.id === "string" && ID.test(p.id) && typeof p.path === "string") : [];
-		return {
-			schemaVersion: 1,
-			roots: Array.isArray(raw.roots) ? raw.roots.filter((r) => typeof r === "string") : [],
-			projects
-		};
-	} catch {
-		return {
-			schemaVersion: 1,
-			roots: [],
-			projects: []
-		};
-	}
+	const raw = readJsonFile(file);
+	if (raw === void 0) return {
+		schemaVersion: 1,
+		roots: [],
+		projects: []
+	};
+	const projects = Array.isArray(raw.projects) ? raw.projects.filter((p) => !!p && typeof p.id === "string" && ID.test(p.id) && typeof p.path === "string") : [];
+	return {
+		schemaVersion: 1,
+		roots: Array.isArray(raw.roots) ? raw.roots.filter((r) => typeof r === "string") : [],
+		projects
+	};
 }
 function writeRegistry(registry, file = projectsFile()) {
 	fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -17977,6 +18002,9 @@ function suggestId(dir, taken) {
 	let id = start;
 	for (let n = 2; used.has(id); n += 1) id = `${start}-${n}`;
 	return id;
+}
+function listProjects(file = projectsFile()) {
+	return readRegistry(file).projects;
 }
 function projectById(id, file = projectsFile()) {
 	const project = readRegistry(file).projects.find((p) => p.id === id);
@@ -18196,7 +18224,6 @@ function workflowsThatRan(specs, root, startedNodes) {
 	return [...ran].sort();
 }
 // src/sources-lock.ts
-var FACTORY_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 var LOCK_FILE = path.join(FACTORY_DIR, "workflows.lock.json");
 var SOURCE_FILE = /agents\/opencode\/[a-z0-9-]+\.md|plugins\/[a-z0-9-]+\/agents\/[a-z0-9-]+\.md|skills\/(?:\*|[a-z0-9-]+)\/[a-z0-9-]+(?:\/SKILL\.md)?/g;
 function resolveSkill(ref, marketplace) {
@@ -18884,4 +18911,4 @@ function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHost
 		return true;
 	};
 }
-export { registerDataSource as C, defaultDataDir as S, __toESM as T, mustache as _, projectScopedInput as a, FACTORY_DIR$1 as b, hostExec as c, parseBackend as d, parseCli as f, require_ajv as g, require_dist as h, viewerUrlFor as i, Factory as l, loadFactoryConfig as m, failRequest as n, projectsAction as o, marketplaceDir as p, viewerHandler as r, cliExecutor as s, allowedHostsFor as t, errorMessage as u, homeEnvNote as v, viewerOptions as w, VIEWER_HEALTH as x, DEFAULT_VIEWER_PORT as y };
+export { defaultDataDir as C, __toESM as E, VIEWER_HEALTH as S, viewerOptions as T, require_ajv as _, listProjects as a, DEFAULT_VIEWER_PORT as b, cliExecutor as c, errorMessage as d, parseBackend as f, require_dist as g, loadFactoryConfig as h, viewerUrlFor as i, hostExec as l, marketplaceDir as m, failRequest as n, projectScopedInput as o, parseCli as p, viewerHandler as r, projectsAction as s, allowedHostsFor as t, Factory as u, mustache as v, registerDataSource as w, FACTORY_DIR as x, homeEnvNote as y };

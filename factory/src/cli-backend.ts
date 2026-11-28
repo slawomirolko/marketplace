@@ -67,8 +67,16 @@ export interface SessionUsage {
   harnessCostUsd?: number | null;
 }
 
-const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-cli-"));
-fs.writeFileSync(path.join(workDir, "opencode.json"), "{}\n");
+let workDir: string | undefined;
+
+/** The neutral folder a CLI runs in when the node has no workspace. It is made on first use and made again when the temp cleaner removed it, since its age never changes. */
+function cliWorkDir(): string {
+  if (workDir === undefined || !fs.existsSync(workDir)) {
+    workDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-cli-"));
+    fs.writeFileSync(path.join(workDir, "opencode.json"), "{}\n");
+  }
+  return workDir;
+}
 
 /** The environment of every child process: no harness variables, no factory token and none of the settings loaded from the factory home's .env. */
 function cleanEnv(): Record<string, string | undefined> {
@@ -97,7 +105,7 @@ function killTree(pid: number | undefined, fallback: () => void): void {
   spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" }).on("error", fallback);
 }
 
-function spawnCli(command: string, args: string[], stdinText?: string, { cwd = workDir, env = {} }: { cwd?: string; env?: Record<string, string> } = {}): Promise<SpawnResult> {
+function spawnCli(command: string, args: string[], stdinText?: string, { cwd = cliWorkDir(), env = {} }: { cwd?: string; env?: Record<string, string> } = {}): Promise<SpawnResult> {
   return new Promise((resolve) => {
     const started = Date.now();
     const childEnv = { ...cleanEnv(), PWD: cwd, ...env };
@@ -160,7 +168,7 @@ async function runClaude(model: string, prompt: string, { agent: named, definiti
     ? ["-p", "--model", model, "--output-format", "json", ...CLAUDE_ISOLATION, ...claudeAgentArgs(agent, tools, dirs, definition)]
     : ["-p", "--model", model, "--output-format", "json", ...CLAUDE_ISOLATION, "--max-turns", "2", "--disallowedTools", CLAUDE_DISALLOWED];
   const agentFile = args[args.indexOf("--agents") + 1];
-  const res = await spawnCli("claude", args, prompt, { cwd: cwd ?? workDir, env }).finally(() => {
+  const res = await spawnCli("claude", args, prompt, { cwd: cwd ?? cliWorkDir(), env }).finally(() => {
     if (agent && agentFile) removeTempDir(path.dirname(agentFile));
   });
   let out: ClaudeOutput;
@@ -194,7 +202,7 @@ async function runOpencode(model: string, prompt: string, { agent: named, defini
   }
   const args = ["run", "--standalone", "--archived", "--format", "json", "-m", id, ...(agent ? ["--agent", agent] : [])];
   const agentDir = configDir ?? (agent ? opencodeConfigDir(definition ?? agent, tools, dirs) : undefined);
-  const res = await spawnCli("opencode", args, prompt, { cwd: cwd ?? workDir, env: { ...env, ...(agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {}) } }).finally(() => {
+  const res = await spawnCli("opencode", args, prompt, { cwd: cwd ?? cliWorkDir(), env: { ...env, ...(agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {}) } }).finally(() => {
     if (agentDir && !configDir) removeTempDir(agentDir);
   });
   const events = parseEvents(res.stdout);
@@ -217,7 +225,7 @@ async function runOpencode(model: string, prompt: string, { agent: named, defini
     }
     if (p.type === "text") text = p.text ?? text;
   }
-  if (error || steps === 0) return { ok: false, error: error ? JSON.stringify(error.error).slice(0, 300) : `opencode exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${res.stderr.slice(-300)}`, durationMs: res.durationMs, timedOut: res.timedOut };
+  if (error || steps === 0) return { ok: false, error: error ? JSON.stringify(error.error ?? error).slice(0, 300) : `opencode exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${res.stderr.slice(-300)}`, durationMs: res.durationMs, timedOut: res.timedOut };
   const sessionId = events.find((e) => e.sessionID)?.sessionID ?? null;
   return { ok: true, text, turns: steps, sessionId, harnessCostUsd, usageByModel: [{ model: id, tokens, cacheWriteTtlKnown: false, harnessCostUsd }], durationMs: res.durationMs };
 }

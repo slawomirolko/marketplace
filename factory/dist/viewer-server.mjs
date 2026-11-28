@@ -1,4 +1,4 @@
-import { S as defaultDataDir, _ as mustache, c as hostExec, l as Factory, m as loadFactoryConfig, n as failRequest, p as marketplaceDir, r as viewerHandler, s as cliExecutor, t as allowedHostsFor, v as homeEnvNote, w as viewerOptions, x as VIEWER_HEALTH } from "./viewer-routes.mjs";
+import { C as defaultDataDir, S as VIEWER_HEALTH, T as viewerOptions, a as listProjects, c as cliExecutor, h as loadFactoryConfig, l as hostExec, m as marketplaceDir, n as failRequest, r as viewerHandler, t as allowedHostsFor, u as Factory, v as mustache, y as homeEnvNote } from "./viewer-routes.mjs";
 import path from "node:path";
 import fs from "node:fs";
 import http from "node:http";
@@ -20,13 +20,14 @@ function writeJson(file, value) {
 	fs.writeFileSync(temp, `${JSON.stringify(value, null, 2)}\n`);
 	fs.renameSync(temp, file);
 }
-function projectsFile(dataDir) {
+/** The older list of watched folders, `{ "dirs": [...] }` in the data directory. Registered projects live in the project registry (projects.ts projectsFile()). */
+function knownProjectsFile(dataDir) {
 	return path.join(dataDir, "projects.json");
 }
-/** Projects the factory knows: the ones listed in projects.json (`dirs`, or the registry's `projects[].path`) and every run's input.project. */
+/** Projects the factory knows: the registered projects, the folders in the data directory's `dirs` list and every run's input.project. */
 function knownProjects(dataDir) {
-	const file = readJson(projectsFile(dataDir), {});
-	const listed = [...Array.isArray(file.dirs) ? file.dirs : [], ...Array.isArray(file.projects) ? file.projects.map((p) => p && typeof p === "object" ? p.path : void 0) : []];
+	const file = readJson(knownProjectsFile(dataDir), {});
+	const listed = [...listProjects().map((project) => project.path), ...Array.isArray(file.dirs) ? file.dirs : []];
 	const dirs = new Set(listed.filter((d) => typeof d === "string").map((d) => path.resolve(d)));
 	const runsDir = path.join(dataDir, "runs");
 	if (fs.existsSync(runsDir)) for (const file of fs.readdirSync(runsDir).filter((f) => f.endsWith(".json"))) {
@@ -91,14 +92,20 @@ async function checkWatch(watch, context) {
 			});
 			if (reused) continue;
 			const model = process.env.FACTORY_WATCH_MODEL;
-			factory.confirm(run.runId, {
-				backend: watch.backend,
-				...model ? { tierModels: {
-					low: model,
-					medium: model,
-					high: model
-				} } : {}
-			});
+			try {
+				factory.confirm(run.runId, {
+					backend: watch.backend,
+					...model ? { tierModels: {
+						low: model,
+						medium: model,
+						high: model
+					} } : {}
+				});
+			} catch (error) {
+				factory.cancel(run.runId);
+				log(`watch ${watch.id}: could not confirm run ${run.runId}, cancelled it: ${error instanceof Error ? error.message : String(error)}`);
+				continue;
+			}
 			started.push(run.runId);
 			log(`watch ${watch.id}: started run ${run.runId}`);
 		}
