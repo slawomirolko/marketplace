@@ -246,7 +246,7 @@ function sanitizeEnv(extra = {}) {
   return env;
 }
 
-function sanitize(stage, project, terms = [], { config = {}, env = {}, args = [] } = {}) {
+function sanitize(stage, project, terms = ["placeholderterm"], { config = {}, env = {}, args = [] } = {}) {
   const termsFile = path.join(tmp("terms"), "terms.json");
   fs.writeFileSync(termsFile, JSON.stringify({ leakTerms: terms, ...config }));
   return node(sanitizeScript, ["--path", stage, "--project", project, "--terms-file", termsFile, "--json", ...args], marketplaceRoot, sanitizeEnv(env));

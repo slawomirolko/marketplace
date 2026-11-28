@@ -10,7 +10,7 @@ after a person says so. A person always merges or closes the PR.
 |------|------|
 | `.agents/marketplace.lock.json` (in the project) | Provenance per installed artifact: marketplace version, source commit, content hash without the project adapter (`project.md`, `*.local.*`, the agent `model:` line). Commit it with the project. |
 | `scripts/olko-marketplace-lock.mjs` | `init` writes the lock (finds the base version in marketplace history), `status` lists changed artifacts, `record` stores a pending PR or a rejected content hash. |
-| `scripts/olko-sanitize.mjs` | Blocking gate: names derived from the project (git remote owner and repository, package names, directory name) and private terms (see [Forbidden terms](#forbidden-terms)). Reports `#n`, never the value. Exit 0 clean, 2 blocked, 1 failed. |
+| `scripts/olko-sanitize.mjs` | Blocking gate, see [Sanitize gate](#sanitize-gate). Exit 0 clean, 2 blocked, 1 failed. |
 | `scripts/olko-upstream-plan.mjs` | Deterministic PR plan: `open`, `append` (open draft PR on the same base) or `skip` (duplicate, rejected, adapter-only). |
 | `olko-marketplace-upstream` (agent and skill) | `stage`, `optimize` and `publish` steps. Draft PRs only; deny rules for merge, ready, reviewers and `gh api`. |
 | Factory watch `marketplace-upstream` | Every 10 minutes, per known project with a lock, runs `status`. A change whose hash is the same in two checks starts one `olko-marketplace-upstream` run. |
@@ -31,6 +31,19 @@ after a person says so. A person always merges or closes the PR.
 - The marketplace is public. The sanitize gate blocks the run before anything leaves the machine; nothing is pushed when it finds a hit.
 - The viewer accepts an answer only with its own request header (`x-factory-action: answer`), from a local origin and an allowed host, and only for runs its own process owns.
 - Use a GitHub token limited to the marketplace repository (contents and pull requests). The flow never needs admin or workflow scopes.
+
+## Sanitize gate
+
+`scripts/olko-sanitize.mjs` blocks (exit 2) when a file name or line holds:
+
+- a name derived from the project: every non-generic segment and the host of each git remote URL, the repository name (from `git rev-parse --git-common-dir`, so a worktree folder is not mistaken for it), the worktree and project folder names, package names, and the split parts of each (`billing-portal` also adds `billing` and `portal`);
+- a private term (see [Forbidden terms](#forbidden-terms));
+- a secret pattern: GitHub tokens, AWS access keys, Slack tokens, private key blocks, JWTs, connection strings with a password, email addresses outside placeholder domains, internal host names (`.internal`, `.corp`, `.lan`, `.local`);
+- a binary file (UTF-16 with a byte order mark is decoded and scanned), or a symlink or other non-regular entry.
+
+Matching folds Unicode (NFKC), drops zero-width characters and ignores case and the separators `-`, `_`, `.` and whitespace, so `BillingPortal`, `billing_portal` and `billing portal` all match, also inside longer words. A derived term shorter than four characters is not checked; the gate prints a warning with the count.
+
+The gate fails closed (exit 1) when the project has no usable git remote or no private term is configured; `--allow-no-config` scans without them. Output never holds a value: a term is `#n`, a secret `#secret:<label>`, an error a fixed code such as `E_NO_TERMS`, and a file whose name holds a hit `#file<n>`.
 
 ## Forbidden terms
 
