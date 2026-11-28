@@ -412,6 +412,8 @@ export interface ProjectOverview {
   projects: ProjectSummary[];
   statusWorkflow: string;
   statusWorkflowInstalled: boolean;
+  mergeWorkflow: string;
+  mergeWorkflowInstalled: boolean;
   canAnalyze: boolean;
 }
 
@@ -465,6 +467,14 @@ export interface ProjectStatusView {
   data: ProjectStatusData | null;
 }
 
+/** One checkbox of a multiple question: an id to send back, what it is, its expandable detail and whether it starts checked. */
+export interface PendingItem {
+  id: string;
+  label: string;
+  detail: string;
+  checked: boolean;
+}
+
 /** A question of a run the viewer process owns, with the answers it allows. */
 export interface PendingDecision {
   runId: string;
@@ -473,4 +483,7 @@ export interface PendingDecision {
   questionId: string;
   text: string;
   allowed: string[];
+  /** A multiple question is answered with `none` or the checked item ids joined by commas. */
+  multiple?: boolean;
+  items?: PendingItem[];
 }

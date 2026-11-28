@@ -110,4 +110,72 @@ describe("PendingDecisions", () => {
 
     expect(opened).toEqual([decision.runId]);
   });
+
+  describe("a multiple question", () => {
+    const mergeQuestion: PendingDecision = {
+      runId: "r-0000merg",
+      goal: "Merge updates of sample-app",
+      workflow: "olko-marketplace-merge",
+      questionId: "q-merge",
+      text: "Which updates should be applied?",
+      allowed: ["skill:sample-a", "skill:sample-b"],
+      multiple: true,
+      items: [
+        { id: "skill:sample-a", label: "skill sample-a: clean merge", detail: "@@ -1 +1 @@\n-old line\n+new line", checked: true },
+        { id: "skill:sample-b", label: "skill sample-b: 1 conflict", detail: "conflict reason", checked: false },
+      ],
+    };
+
+    function serveMerge(answers: string[]) {
+      server.use(
+        http.get(API.pending, () => HttpResponse.json([mergeQuestion])),
+        http.post(API.answer(mergeQuestion.runId), ({ request }) => {
+          answers.push(new URL(request.url).searchParams.get("answer") ?? "");
+          return HttpResponse.json([]);
+        }),
+      );
+    }
+
+    test("a multiple question renders checkboxes and sends the checked ids", async () => {
+      const answers: string[] = [];
+      serveMerge(answers);
+      const user = userEvent.setup();
+      render(<PendingDecisions onOpenRun={() => undefined} />);
+
+      const first = await screen.findByTestId("merge-item-skill:sample-a");
+      const second = screen.getByTestId("merge-item-skill:sample-b");
+      expect(first).toBeChecked();
+      expect(second).not.toBeChecked();
+      expect(screen.getByText("skill sample-b: 1 conflict")).toBeInTheDocument();
+      expect(screen.getByText(/-old line/)).toBeInTheDocument();
+      await user.click(second);
+      await user.click(screen.getByTestId("apply-selected"));
+
+      expect(answers).toEqual(["skill:sample-a,skill:sample-b"]);
+      await waitFor(() => expect(screen.queryByText(/Waiting for your decision/)).not.toBeInTheDocument());
+    });
+
+    test("Apply selected sends none when nothing is checked", async () => {
+      const answers: string[] = [];
+      serveMerge(answers);
+      const user = userEvent.setup();
+      render(<PendingDecisions onOpenRun={() => undefined} />);
+
+      await user.click(await screen.findByTestId("merge-item-skill:sample-a"));
+      await user.click(screen.getByTestId("apply-selected"));
+
+      expect(answers).toEqual(["none"]);
+    });
+
+    test("Apply none sends none", async () => {
+      const answers: string[] = [];
+      serveMerge(answers);
+      const user = userEvent.setup();
+      render(<PendingDecisions onOpenRun={() => undefined} />);
+
+      await user.click(await screen.findByTestId("apply-none"));
+
+      expect(answers).toEqual(["none"]);
+    });
+  });
 });

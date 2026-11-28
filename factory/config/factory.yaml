@@ -59,6 +59,7 @@ projects:
   markers: [.agents/skill-config.md, .agents/skills, .opencode/agents, .claude/skills, .claude/agents]
   maxDepth: 3
   statusWorkflow: olko-project-status
+  mergeWorkflow: olko-marketplace-merge
   # The viewer's Analyze button runs the status workflow on this CLI backend.
   statusBackend: { kind: cli, cli: opencode }
 

@@ -18,6 +18,19 @@ const LOCAL_REF = "HEAD";
 /** The harness of the skills and agents of a marketplace source checkout. */
 const SOURCE_HARNESS = "source";
 
+/** Why Merge updates is off for these artifacts, or null when one of them can be merged. */
+export function mergeBlocker(artifacts: ProjectArtifact[] | undefined): string | null {
+  if (!artifacts) {
+    return "Check the status first: the merge needs to know which skills and agents differ from the marketplace.";
+  }
+  const mergeable = artifacts.some((artifact) => artifact.harness !== SOURCE_HARNESS && (artifact.state === "outdated" || (artifact.state === "modified" && artifact.upstreamMoved === true)));
+  return mergeable ? null : "Nothing to merge: no installed skill or agent is outdated, or modified with a newer marketplace version. A marketplace source checkout is never merged.";
+}
+
+export function mergeNote(projectId: string, text: string): string {
+  return `Merge of ${projectId} ${text}`;
+}
+
 export function checkNote(projectId: string, text: string): string {
   return `Status check of ${projectId} ${text}`;
 }

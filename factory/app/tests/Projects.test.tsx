@@ -10,12 +10,16 @@ type Posted = Record<string, string>;
 /** The started status run every analyze action answers with. */
 const STARTED_RUN = "r-0000000s";
 
+/** The started merge run every merge action answers with. */
+const MERGE_RUN = "r-0000000m";
+
 /** The answer of each project action; an action not listed answers with an empty root list. */
 const actionReplies: Record<string, (body: Posted) => Response> = {
   discover: () => HttpResponse.json({ candidates: [{ path: "/src/sample-new", suggestedId: "sample-new", markers: [".agents/skills"] }] }),
   add: (body) => HttpResponse.json({ project: { id: body.id || "sample-x", path: body.path } }),
   remove: (body) => HttpResponse.json({ project: { id: body.id } }),
   analyze: () => HttpResponse.json({ runId: STARTED_RUN, status: "running", reused: false }),
+  merge: () => HttpResponse.json({ runId: MERGE_RUN, status: "running", reused: false }),
 };
 
 interface ServeOptions {
@@ -162,6 +166,55 @@ describe("Projects", () => {
     expect(screen.getByRole("button", { name: "Re-check status" })).toBeEnabled();
     await waitFor(() => expect(statusCalls).toBe(3));
     expect(runCalls).toBe(2);
+  });
+
+  test("Merge updates is enabled only with mergeable rows", async () => {
+    const mergeable = [
+      withData({ artifacts: [artifact({ state: "outdated" })] }),
+      withData({ artifacts: [artifact({ state: "modified", upstreamMoved: true })] }),
+    ];
+    for (const view of mergeable) {
+      serve({ statuses: { "sample-app": view, "sample-web": null } });
+      const { unmount } = render(<Projects onShowRuns={() => {}} />);
+      await screen.findByRole("table");
+      expect(screen.getByTestId("merge-updates")).toBeEnabled();
+      unmount();
+    }
+    const notMergeable = [
+      withData({ artifacts: [artifact({ harness: "source", state: "outdated" })] }),
+      withData({ artifacts: [artifact({ state: "modified" })] }),
+      withData({ artifacts: [artifact({ state: "current" })] }),
+    ];
+    for (const view of notMergeable) {
+      serve({ statuses: { "sample-app": view, "sample-web": null } });
+      const { unmount } = render(<Projects onShowRuns={() => {}} />);
+      await screen.findByRole("table");
+      const button = screen.getByTestId("merge-updates");
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute("title", expect.stringMatching(/./));
+      unmount();
+    }
+  });
+
+  test("Merge updates starts the merge workflow and re-checks the status when the run finishes", async () => {
+    const posted = serve();
+    let runCalls = 0;
+    server.use(
+      http.get(API.anyRun, ({ params }) => {
+        runCalls += 1;
+        return HttpResponse.json({ run: { runId: params.runId, status: runCalls < 2 ? "running" : "done" } });
+      }),
+    );
+    const user = userEvent.setup();
+    render(<Projects onShowRuns={() => {}} pollMs={10} />);
+    await screen.findByRole("table");
+
+    await user.click(screen.getByTestId("merge-updates"));
+
+    expect(await screen.findByText(`Started the merge of sample-app (run ${MERGE_RUN}).`)).toBeInTheDocument();
+    expect(screen.getByTestId("merge-updates")).toBeDisabled();
+    await waitFor(() => expect(posted).toEqual([{ action: "merge", id: "sample-app" }, { action: "analyze", id: "sample-app" }]));
+    expect(await screen.findByText(`Started the status check of sample-app (run ${STARTED_RUN}).`)).toBeInTheDocument();
   });
 
   test("a status run already in progress keeps Check status disabled, and a failed run is reported", async () => {

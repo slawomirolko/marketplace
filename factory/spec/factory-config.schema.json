@@ -145,6 +145,10 @@
           "description": "The workflow whose latest finished run gives a project's status in the viewer.",
           "$ref": "#/$defs/name"
         },
+        "mergeWorkflow": {
+          "description": "The workflow the viewer's Merge updates button starts to merge marketplace updates into a project.",
+          "$ref": "#/$defs/name"
+        },
         "statusBackend": {
           "description": "The CLI backend that runs the status workflow when the viewer's Analyze button starts it.",
           "type": "object",

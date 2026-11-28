@@ -19,7 +19,7 @@ export interface FactoryConfig {
 export type ProjectSettings = Required<Omit<ProjectsConfig, "statusBackend">> & Pick<ProjectsConfig, "statusBackend">;
 
 export const DEFAULT_MEMORY_LAYER = "olko-memory-layer";
-export const DEFAULT_PROJECTS: ProjectSettings = { markers: [".agents/skill-config.md", ".agents/skills", ".opencode/agents", ".claude/skills", ".claude/agents"], maxDepth: 3, statusWorkflow: "olko-project-status" };
+export const DEFAULT_PROJECTS: ProjectSettings = { markers: [".agents/skill-config.md", ".agents/skills", ".opencode/agents", ".claude/skills", ".claude/agents"], maxDepth: 3, statusWorkflow: "olko-project-status", mergeWorkflow: "olko-marketplace-merge" };
 
 /** Project discovery settings from a parsed config file, with defaults. */
 export function projectsOf(raw: { projects?: ProjectsConfig } | null | undefined): ProjectSettings {

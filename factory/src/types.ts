@@ -522,6 +522,8 @@ export interface ProjectsConfig {
   markers?: string[];
   maxDepth?: number;
   statusWorkflow?: string;
+  /** The workflow the viewer starts to merge marketplace updates into a project. */
+  mergeWorkflow?: string;
   /** The CLI backend that runs the status workflow when the viewer starts it. */
   statusBackend?: { kind: "cli"; cli: CliName };
 }

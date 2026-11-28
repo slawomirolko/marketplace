@@ -5,7 +5,7 @@ import { ANALYZE_POLL_MS } from "./projects/analyze.ts";
 import { ProjectHead } from "./projects/ProjectHead.tsx";
 import { ProjectList } from "./projects/ProjectList.tsx";
 import { RootFolders } from "./projects/RootFolders.tsx";
-import { checkNote } from "./projects/status-text.ts";
+import { checkNote, mergeBlocker, mergeNote } from "./projects/status-text.ts";
 import { StatusView } from "./projects/StatusView.tsx";
 import { useAnalyzePolling } from "./projects/useAnalyzePolling.ts";
 import { useProjectActions } from "./projects/useProjectActions.ts";
@@ -21,10 +21,13 @@ export function Projects({ onShowRuns, pollMs = ANALYZE_POLL_MS }: { onShowRuns:
   const [note, setNote] = useState<string | null>(null);
   const [statusVersion, setStatusVersion] = useState(0);
 
-  const { analyzing, analyzeState, started, adoptRunning } = useAnalyzePolling(pollMs, (notes) => {
+  const { analyzing, analyzeState, analyzeKind, started, adoptRunning } = useAnalyzePolling(pollMs, (notes, merged) => {
     setNote(notes);
     setStatusVersion((version) => version + 1);
     void load();
+    for (const projectId of merged) {
+      void analyze(projectId);
+    }
   });
 
   const load = useCallback(async () => {
@@ -59,6 +62,12 @@ export function Projects({ onShowRuns, pollMs = ANALYZE_POLL_MS }: { onShowRuns:
       return result.reused ? checkNote(projectId, `is already running (run ${result.runId}).`) : `Started the status check of ${projectId} (run ${result.runId}).`;
     });
 
+  const merge = (projectId: string) =>
+    act({ action: "merge", id: projectId }, (result: { runId: string; status: string; reused: boolean }) => {
+      started(projectId, result.runId, result.status, "merge");
+      return result.reused ? mergeNote(projectId, `is already running (run ${result.runId}).`) : `Started the merge of ${projectId} (run ${result.runId}).`;
+    });
+
   const discover = () =>
     act({ action: "discover" }, (result: { candidates: ProjectCandidate[] }) => {
       setCandidates(result.candidates);
@@ -66,7 +75,10 @@ export function Projects({ onShowRuns, pollMs = ANALYZE_POLL_MS }: { onShowRuns:
     });
 
   const selected = overview?.projects.find((project) => project.id === selectedId) ?? null;
-  const selectedRun = selected ? analyzing[selected.id] : undefined;
+  const selectedRunId = selected ? analyzing[selected.id] : undefined;
+  const selectedMerging = selected ? analyzeKind[selected.id] === "merge" : false;
+  const selectedRun = selectedMerging ? undefined : selectedRunId;
+  const mergingRun = selectedMerging ? selectedRunId : undefined;
   const rows = useMemo(() => (status?.data?.artifacts ?? []).filter((artifact) => !stateFilter || artifact.state === stateFilter), [status, stateFilter]);
 
   if (!overview) {
@@ -90,7 +102,7 @@ export function Projects({ onShowRuns, pollMs = ANALYZE_POLL_MS }: { onShowRuns:
         {!selected && <p className="muted">Select a project.</p>}
         {selected && (
           <>
-            <ProjectHead project={selected} overview={overview} checkingRun={selectedRun} checkingState={analyzeState[selected.id]} hasStatus={Boolean(status || selected.status)} busy={busy} act={act} onAnalyze={(projectId) => void analyze(projectId)} onShowRuns={onShowRuns} />
+            <ProjectHead project={selected} overview={overview} checkingRun={selectedRun} checkingState={analyzeState[selected.id]} mergingRun={mergingRun} mergeBlocker={mergeBlocker(status?.data?.artifacts)} hasStatus={Boolean(status || selected.status)} busy={busy} act={act} onAnalyze={(projectId) => void analyze(projectId)} onMerge={(projectId) => void merge(projectId)} onShowRuns={onShowRuns} />
             {!overview.statusWorkflowInstalled && (
               <p className="warn">
                 The <code>{overview.statusWorkflow}</code> workflow is not installed, so the project status cannot be checked.
@@ -101,7 +113,7 @@ export function Projects({ onShowRuns, pollMs = ANALYZE_POLL_MS }: { onShowRuns:
                 This viewer cannot start runs. Start the <code>{overview.statusWorkflow}</code> workflow with <code>projectId: {selected.id}</code> (factory_start).
               </p>
             )}
-            {statusMissing && !selectedRun && <p className="muted">Not checked yet. Check status compares the installed skills and agents with the marketplace.</p>}
+            {statusMissing && !selectedRunId && <p className="muted">Not checked yet. Check status compares the installed skills and agents with the marketplace.</p>}
             {status?.data && <StatusView view={status} data={status.data} rows={rows} stateFilter={stateFilter} onStateFilter={setStateFilter} />}
             {status && !status.data && <p className="warn">The status file of run {status.runId} is missing.</p>}
           </>

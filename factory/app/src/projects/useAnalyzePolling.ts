@@ -1,27 +1,35 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ProjectSummary } from "../types.ts";
-import { FINISHED, finishNote, pollRuns } from "./analyze.ts";
+import { FINISHED, finishNote, mergeFinishNote, pollRuns } from "./analyze.ts";
 import type { PolledRun } from "./analyze.ts";
+
+/** What a polled run does for its project: a status check, or a merge of marketplace updates. */
+export type RunKind = "status" | "merge";
 
 export interface AnalyzePolling {
   /** The running status-check run of each project, by project id. */
   analyzing: Record<string, string>;
   /** The last polled run status of each project's status check. */
   analyzeState: Record<string, string>;
-  /** Records a status check the viewer just started (or found already running). */
-  started: (projectId: string, runId: string, status: string) => void;
+  /** Whether each polled project run is a status check or a merge. */
+  analyzeKind: Record<string, RunKind>;
+  /** Records a run the viewer just started (or found already running): a status check unless `kind` says merge. */
+  started: (projectId: string, runId: string, status: string, kind?: RunKind) => void;
   /** Takes over the status checks the server reports as running that this page does not poll yet. */
   adoptRunning: (projects: ProjectSummary[]) => void;
 }
 
 /**
- * Polls the running status checks every `pollMs`. When some end, their notes are joined and passed to `onSettled`
- * (once per run); while none end, the poll is scheduled again.
+ * Polls the running status checks and merges every `pollMs`. When some end, their notes are joined and passed to
+ * `onSettled` (once per run) with the projects whose merge finished, which need a new status check; while none end,
+ * the poll is scheduled again.
  */
-export function useAnalyzePolling(pollMs: number, onSettled: (notes: string) => void): AnalyzePolling {
+export function useAnalyzePolling(pollMs: number, onSettled: (notes: string, merged: string[]) => void): AnalyzePolling {
   const [analyzing, setAnalyzing] = useState<Record<string, string>>({});
   const [analyzeState, setAnalyzeState] = useState<Record<string, string>>({});
+  const [analyzeKind, setAnalyzeKind] = useState<Record<string, RunKind>>({});
   const [pollTick, setPollTick] = useState(0);
+  const mergeRuns = useRef(new Set<string>());
   /** Runs already reported as finished are neither polled nor reported again. */
   const finishedRuns = useRef(new Set<string>());
   const mounted = useRef(true);
@@ -36,7 +44,11 @@ export function useAnalyzePolling(pollMs: number, onSettled: (notes: string) => 
     };
   }, []);
 
-  const started = useCallback((projectId: string, runId: string, status: string) => {
+  const started = useCallback((projectId: string, runId: string, status: string, kind: RunKind = "status") => {
+    if (kind === "merge") {
+      mergeRuns.current.add(runId);
+    }
+    setAnalyzeKind((current) => ({ ...current, [projectId]: kind }));
     setAnalyzing((current) => ({ ...current, [projectId]: runId }));
     setAnalyzeState((current) => ({ ...current, [projectId]: status }));
   }, []);
@@ -58,12 +70,13 @@ export function useAnalyzePolling(pollMs: number, onSettled: (notes: string) => 
       for (const run of finished) {
         finishedRuns.current.add(run.runId);
       }
-      const notes = await Promise.all(finished.map((run) => finishNote(run.projectId, run.runId, run.status)));
+      const notes = await Promise.all(finished.map((run) => (mergeRuns.current.has(run.runId) ? mergeFinishNote(run.projectId, run.runId, run.status) : finishNote(run.projectId, run.runId, run.status))));
+      const merged = finished.filter((run) => mergeRuns.current.has(run.runId) && run.status === "done").map((run) => run.projectId);
       if (!mounted.current) {
         return;
       }
       setAnalyzing((current) => Object.fromEntries(Object.entries(current).filter(([projectId]) => !finished.some((run) => run.projectId === projectId))));
-      settled.current(notes.join(" "));
+      settled.current(notes.join(" "), merged);
     };
     const timer = setTimeout(() => {
       void pollRuns(entries).then(async (results) => {
@@ -85,5 +98,5 @@ export function useAnalyzePolling(pollMs: number, onSettled: (notes: string) => 
     };
   }, [analyzing, pollTick, pollMs]);
 
-  return { analyzing, analyzeState, started, adoptRunning };
+  return { analyzing, analyzeState, analyzeKind, started, adoptRunning };
 }

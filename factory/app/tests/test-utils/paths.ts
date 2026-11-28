@@ -1,6 +1,9 @@
 /** The workflow the project status checks run, as the API reports it. */
 export const STATUS_WORKFLOW = "olko-project-status";
 
+/** The workflow that merges marketplace updates into a project, as the API reports it. */
+export const MERGE_WORKFLOW = "olko-marketplace-merge";
+
 /** The viewer API routes the tests serve with MSW. */
 export const API = {
   workflows: "/api/workflows",

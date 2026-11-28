@@ -22,7 +22,7 @@ import type { MarketplaceScan, UpdateResult } from "./sources-lock.ts";
 import { execFileSync } from "node:child_process";
 import { hostExec } from "./cli-backend.ts";
 import type { AgentInfo } from "./marketplace-agents.ts";
-import type { Coverage, FactoryConfigFile, QuestionItem, Report, Run, WorkflowSpec } from "./types.ts";
+import type { Coverage, FactoryConfigFile, QuestionItem, Report, Run, RunInput, WorkflowSpec } from "./types.ts";
 
 const RUN_ID = /^r-[a-f0-9]{8}$/;
 
@@ -107,7 +107,7 @@ export interface DataApi {
   run(runId: string): RunDetail | null;
   stale(): MarketplaceScan;
   update(): Promise<UpdateResult & MarketplaceScan>;
-  projects(): { roots: string[]; projects: ProjectView[]; statusWorkflow: string; statusWorkflowInstalled: boolean; canAnalyze: boolean };
+  projects(): { roots: string[]; projects: ProjectView[]; statusWorkflow: string; statusWorkflowInstalled: boolean; mergeWorkflow: string; mergeWorkflowInstalled: boolean; canAnalyze: boolean };
   projectStatus(id: string): ProjectStatusView | null;
   projectsAction(request: ViewerProjectsRequest): object;
   pending(): PendingDecision[];
@@ -142,17 +142,17 @@ function readBody(req: ApiRequest): Promise<unknown> {
   });
 }
 
-/** A project action from the viewer: a registry action, or analyze, which starts the status workflow for one project. */
-export type ViewerProjectsRequest = Omit<ProjectsActionRequest, "action"> & { action: ProjectsActionRequest["action"] | "analyze" };
+/** A project action from the viewer: a registry action, analyze (starts the status workflow for one project) or merge (starts the merge workflow). */
+export type ViewerProjectsRequest = Omit<ProjectsActionRequest, "action"> & { action: ProjectsActionRequest["action"] | "analyze" | "merge" };
 
-const PROJECT_ACTIONS = new Set(["add", "remove", "add_root", "remove_root", "discover", "analyze"]);
+const PROJECT_ACTIONS = new Set(["add", "remove", "add_root", "remove_root", "discover", "analyze", "merge"]);
 const IN_PROGRESS = new Set<Run["status"]>(["needs_confirmation", "running", "waiting_for_user", "waiting_for_client"]);
 
 /** A project action from the viewer: only the known fields, only strings. */
 export function parseProjectsAction(body: unknown): ViewerProjectsRequest {
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("the request body must be a JSON object");
   const b = body as Record<string, unknown>;
-  if (typeof b.action !== "string" || !PROJECT_ACTIONS.has(b.action)) throw new Error("action must be add, remove, add_root, remove_root, discover or analyze");
+  if (typeof b.action !== "string" || !PROJECT_ACTIONS.has(b.action)) throw new Error("action must be add, remove, add_root, remove_root, discover, analyze or merge");
   const text = (name: string) => {
     const value = b[name];
     if (value === undefined || value === "") return undefined;
@@ -347,13 +347,15 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo, factory }
     },
 
     projects() {
-      const statusWorkflow = projectsOf(readConfig()).statusWorkflow;
+      const { statusWorkflow, mergeWorkflow } = projectsOf(readConfig());
       const registry = readRegistry();
       const runs = projectRuns();
       return {
         roots: registry.roots,
         statusWorkflow,
         statusWorkflowInstalled: loadedWorkflows().has(statusWorkflow),
+        mergeWorkflow,
+        mergeWorkflowInstalled: loadedWorkflows().has(mergeWorkflow),
         canAnalyze: Boolean(factory),
         projects: registry.projects.map((p) => {
           const own = runs.filter((r) => r.run.input?.projectId === p.id);
@@ -372,20 +374,29 @@ export function createDataApi({ factoryDir, dataDir, configFile, demo, factory }
 
     projectsAction(request) {
       if (request.action === "analyze") return analyze(request.id ?? "");
+      if (request.action === "merge") return merge(request.id ?? "");
       return projectsAction({ ...request, action: request.action });
     },
   };
 
   function analyze(id: string): { runId: string; status: Run["status"]; reused: boolean } {
+    return startProjectRun(id, projectsOf(readConfig()).statusWorkflow, `Status of project ${id}`, {});
+  }
+
+  function merge(id: string): { runId: string; status: Run["status"]; reused: boolean } {
+    const scoped = projectScopedInput(id, {});
+    return startProjectRun(id, projectsOf(readConfig()).mergeWorkflow, `Merge marketplace updates into project ${id}`, { marketplace: scoped.marketplace ?? marketplaceDir() });
+  }
+
+  function startProjectRun(id: string, workflow: string, goal: string, extra: RunInput): { runId: string; status: Run["status"]; reused: boolean } {
     if (!factory) throw new Error("this viewer cannot start runs; open the viewer of the factory server");
-    const statusWorkflow = projectsOf(readConfig()).statusWorkflow;
-    if (!loadedWorkflows().has(statusWorkflow)) throw new Error(`workflow ${statusWorkflow} is not installed`);
-    const input = projectScopedInput(id, {});
-    const active = activeStatus(projectRuns().filter((r) => r.run.input?.projectId === id), statusWorkflow);
+    if (!loadedWorkflows().has(workflow)) throw new Error(`workflow ${workflow} is not installed`);
+    const input = projectScopedInput(id, extra);
+    const active = activeStatus(projectRuns().filter((r) => r.run.input?.projectId === id), workflow);
     if (active) return { runId: active.runId, status: active.status, reused: true };
     const { statusBackend } = loadFactoryConfig().projects;
     if (!statusBackend && factory.defaultConfig.backend.kind === "delegate") throw new Error("the status workflow needs a CLI backend: set projects.statusBackend in the factory config");
-    const { run } = factory.start(`Status of project ${id}`, undefined, { workflow: statusWorkflow, input });
+    const { run } = factory.start(goal, undefined, { workflow, input });
     const started = factory.confirm(run.runId, statusBackend ? { backend: statusBackend } : {});
     return { runId: started.runId, status: started.status, reused: false };
   }

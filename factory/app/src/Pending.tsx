@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { API, LIVE_REFRESH_MS, messageOf, postAction, requestJson } from "./api.ts";
+import { ItemChoice } from "./ItemChoice.tsx";
 import type { PendingDecision } from "./types.ts";
 
 /** Questions of runs the viewer process owns (for example runs started by a watch), with one button per allowed answer. */
@@ -62,13 +63,17 @@ export function PendingDecisions({ onOpenRun }: { onOpenRun: (runId: string) => 
               </button>
             </div>
             <pre className="question-text">{item.text}</pre>
-            <div className="pending-actions">
-              {item.allowed.map((choice) => (
-                <button key={choice} type="button" data-testid={`pending-answer-${item.runId}-${choice}`} disabled={busy === item.runId} onClick={() => void answer(item, choice)}>
-                  {choice}
-                </button>
-              ))}
-            </div>
+            {item.multiple && item.items ? (
+              <ItemChoice key={`${item.runId}:${item.questionId}`} items={item.items} busy={busy === item.runId} onAnswer={(choice) => void answer(item, choice)} />
+            ) : (
+              <div className="pending-actions">
+                {item.allowed.map((choice) => (
+                  <button key={choice} type="button" data-testid={`pending-answer-${item.runId}-${choice}`} disabled={busy === item.runId} onClick={() => void answer(item, choice)}>
+                    {choice}
+                  </button>
+                ))}
+              </div>
+            )}
           </li>
         ))}
       </ul>

@@ -1,6 +1,6 @@
 import { getJson, messageOf } from "../api.ts";
 import type { ProjectStatusView } from "../types.ts";
-import { checkNote, verdictOf } from "./status-text.ts";
+import { checkNote, mergeNote, verdictOf } from "./status-text.ts";
 
 /** Run statuses after which a status check is over. */
 export const FINISHED = new Set(["done", "stopped", "cancelled", "failed"]);
@@ -26,6 +26,11 @@ export function pollRuns(entries: [projectId: string, runId: string][]): Promise
       }
     }),
   );
+}
+
+/** The note shown when a merge run ends: a finished merge says the status is checked again. */
+export function mergeFinishNote(projectId: string, runId: string, runStatus: string): string {
+  return runStatus === "done" ? mergeNote(projectId, `finished (run ${runId}). Checking the status again.`) : mergeNote(projectId, `${runStatus} (run ${runId}).`);
 }
 
 /** The note shown when a status check ends: its verdict when it is done, else how it ended. */

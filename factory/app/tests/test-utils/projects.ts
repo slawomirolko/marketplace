@@ -1,5 +1,5 @@
 import type { ProjectArtifact, ProjectOverview, ProjectStatusView, ProjectSummary } from "../../src/types.ts";
-import { STATUS_WORKFLOW } from "./paths.ts";
+import { MERGE_WORKFLOW, STATUS_WORKFLOW } from "./paths.ts";
 
 /** A current sample skill installed for the agents harness; `extra` changes its state, versions or links. */
 export function artifact(extra: Partial<ProjectArtifact>): ProjectArtifact {
@@ -11,6 +11,8 @@ export const projectList: ProjectOverview = {
   roots: ["/src"],
   statusWorkflow: STATUS_WORKFLOW,
   statusWorkflowInstalled: true,
+  mergeWorkflow: MERGE_WORKFLOW,
+  mergeWorkflowInstalled: true,
   canAnalyze: true,
   projects: [
     { id: "sample-app", path: "/src/sample-app", exists: true, runs: 2, analyzing: null, status: { runId: "r-0000000a", createdAt: null, summary: "1 current", counts: { current: 1, outdated: 1, missing: 1 } } },

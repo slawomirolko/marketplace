@@ -14867,7 +14867,8 @@ var DEFAULT_PROJECTS = {
 		".claude/agents"
 	],
 	maxDepth: 3,
-	statusWorkflow: "olko-project-status"
+	statusWorkflow: "olko-project-status",
+	mergeWorkflow: "olko-marketplace-merge"
 };
 /** Project discovery settings from a parsed config file, with defaults. */
 function projectsOf(raw) {
@@ -18954,7 +18955,8 @@ var PROJECT_ACTIONS = /* @__PURE__ */ new Set([
 	"add_root",
 	"remove_root",
 	"discover",
-	"analyze"
+	"analyze",
+	"merge"
 ]);
 var IN_PROGRESS = /* @__PURE__ */ new Set([
 	"needs_confirmation",
@@ -18966,7 +18968,7 @@ var IN_PROGRESS = /* @__PURE__ */ new Set([
 function parseProjectsAction(body) {
 	if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("the request body must be a JSON object");
 	const b = body;
-	if (typeof b.action !== "string" || !PROJECT_ACTIONS.has(b.action)) throw new Error("action must be add, remove, add_root, remove_root, discover or analyze");
+	if (typeof b.action !== "string" || !PROJECT_ACTIONS.has(b.action)) throw new Error("action must be add, remove, add_root, remove_root, discover, analyze or merge");
 	const text = (name) => {
 		const value = b[name];
 		if (value === void 0 || value === "") return void 0;
@@ -19165,13 +19167,15 @@ function createDataApi({ factoryDir, dataDir, configFile, demo, factory }) {
 			};
 		},
 		projects() {
-			const statusWorkflow = projectsOf(readConfig()).statusWorkflow;
+			const { statusWorkflow, mergeWorkflow } = projectsOf(readConfig());
 			const registry = readRegistry();
 			const runs = projectRuns();
 			return {
 				roots: registry.roots,
 				statusWorkflow,
 				statusWorkflowInstalled: loadedWorkflows().has(statusWorkflow),
+				mergeWorkflow,
+				mergeWorkflowInstalled: loadedWorkflows().has(mergeWorkflow),
 				canAnalyze: Boolean(factory),
 				projects: registry.projects.map((p) => {
 					const own = runs.filter((r) => r.run.input?.projectId === p.id);
@@ -19204,6 +19208,7 @@ function createDataApi({ factoryDir, dataDir, configFile, demo, factory }) {
 		},
 		projectsAction(request) {
 			if (request.action === "analyze") return analyze(request.id ?? "");
+			if (request.action === "merge") return merge(request.id ?? "");
 			return projectsAction({
 				...request,
 				action: request.action
@@ -19211,11 +19216,17 @@ function createDataApi({ factoryDir, dataDir, configFile, demo, factory }) {
 		}
 	};
 	function analyze(id) {
+		return startProjectRun(id, projectsOf(readConfig()).statusWorkflow, `Status of project ${id}`, {});
+	}
+	function merge(id) {
+		const scoped = projectScopedInput(id, {});
+		return startProjectRun(id, projectsOf(readConfig()).mergeWorkflow, `Merge marketplace updates into project ${id}`, { marketplace: scoped.marketplace ?? marketplaceDir() });
+	}
+	function startProjectRun(id, workflow, goal, extra) {
 		if (!factory) throw new Error("this viewer cannot start runs; open the viewer of the factory server");
-		const statusWorkflow = projectsOf(readConfig()).statusWorkflow;
-		if (!loadedWorkflows().has(statusWorkflow)) throw new Error(`workflow ${statusWorkflow} is not installed`);
-		const input = projectScopedInput(id, {});
-		const active = activeStatus(projectRuns().filter((r) => r.run.input?.projectId === id), statusWorkflow);
+		if (!loadedWorkflows().has(workflow)) throw new Error(`workflow ${workflow} is not installed`);
+		const input = projectScopedInput(id, extra);
+		const active = activeStatus(projectRuns().filter((r) => r.run.input?.projectId === id), workflow);
 		if (active) return {
 			runId: active.runId,
 			status: active.status,
@@ -19223,8 +19234,8 @@ function createDataApi({ factoryDir, dataDir, configFile, demo, factory }) {
 		};
 		const { statusBackend } = loadFactoryConfig().projects;
 		if (!statusBackend && factory.defaultConfig.backend.kind === "delegate") throw new Error("the status workflow needs a CLI backend: set projects.statusBackend in the factory config");
-		const { run } = factory.start(`Status of project ${id}`, void 0, {
-			workflow: statusWorkflow,
+		const { run } = factory.start(goal, void 0, {
+			workflow,
 			input
 		});
 		const started = factory.confirm(run.runId, statusBackend ? { backend: statusBackend } : {});

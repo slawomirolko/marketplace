@@ -303,6 +303,34 @@ test("the viewer's analyze action starts the status workflow for a project once,
   assert.match((refused.body as { error: string }).error, /cannot start runs/);
 });
 
+test("merge action starts olko-marketplace-merge for the project", async () => {
+  reset();
+  const app = folder(workspace(), "app");
+  addProject({ path: app, id: "sample-app" });
+  const dataDir = workspace();
+  const stub = async () => ({ ok: true, text: "{}", turns: 1 });
+  const factory = new Factory(dataDir, { backend: "delegate", executors: { opencode: stub as never } });
+  const data = createDataApi({ factoryDir, dataDir, configFile: path.join(factoryDir, "config", "factory.yaml"), demo: false, factory });
+  const call = apiCall(data);
+  const headers = { "x-factory-action": "projects", origin: ALLOWED_ORIGIN };
+
+  const listed = data.projects();
+  assert.equal(listed.mergeWorkflow, "olko-marketplace-merge");
+  assert.equal(listed.mergeWorkflowInstalled, true);
+  const first = await call("POST", "/api/projects", { headers, body: { action: "merge", id: "sample-app" } });
+  assert.equal(first.status, 200);
+  const started = first.body as { runId: string; reused: boolean };
+  assert.equal(started.reused, false);
+  const run = factory.get(started.runId);
+  assert.equal(run.workflow, "olko-marketplace-merge");
+  assert.equal(run.input?.projectId, "sample-app");
+  assert.equal(run.input?.project, app);
+  assert.equal(typeof run.input?.marketplace, "string");
+  assert.deepEqual(run.config?.backend, { kind: "cli", cli: "opencode" });
+  assert.equal((await call("POST", "/api/projects", { headers, body: { action: "merge", id: "nope" } })).status, 400);
+  assert.deepEqual(parseProjectsAction({ action: "merge", id: "sample-app" }), { action: "merge", id: "sample-app" });
+});
+
 test("analyze refuses a missing status workflow and a delegate backend without a status backend", async () => {
   reset();
   const app = folder(workspace(), "app");
