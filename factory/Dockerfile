@@ -23,10 +23,11 @@ RUN safe-chain pnpm install --frozen-lockfile --prod --filter skill-factory
 COPY src ./src
 COPY spec ./spec
 COPY workflows ./workflows
+COPY workflows.lock.json ./
 COPY config ./config
-COPY app/csp.ts app/data.ts ./app/
 COPY app/dist ./app/dist
-COPY test ./test
+COPY test/scenario.ts test/restart.ts ./test/
+COPY test/helpers/poll.ts ./test/helpers/
 COPY py ./py
 COPY run-tests.sh ./
 RUN sed -i 's/\r$//' run-tests.sh && chmod +x run-tests.sh && chown -R poc /app
