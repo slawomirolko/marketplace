@@ -132,17 +132,21 @@ function spawnCli(command: string, args: string[], stdinText?: string, { cwd = c
   });
 }
 
-function parseEvents(stdout: string): OpencodeEvent[] {
+/** The JSON events of an OpenCode run, one per line, and how many lines were not JSON and so were dropped. */
+function parseEvents(stdout: string): { events: OpencodeEvent[]; malformedLines: number } {
   const events: OpencodeEvent[] = [];
+  let malformedLines = 0;
   for (const line of stdout.trim().split("\n").filter(Boolean)) {
     try {
       const event = JSON.parse(line) as OpencodeEvent | null;
-      if (event) events.push(event);
+      if (event) {
+        events.push(event);
+      }
     } catch {
-      continue;
+      malformedLines += 1;
     }
   }
-  return events;
+  return { events, malformedLines };
 }
 
 type AgentRunOptions = Omit<CliRequest, "model" | "prompt">;
@@ -205,7 +209,7 @@ async function runOpencode(model: string, prompt: string, { agent: named, defini
   const res = await spawnCli("opencode", args, prompt, { cwd: cwd ?? cliWorkDir(), env: { ...env, ...(agentDir ? { OPENCODE_CONFIG_DIR: agentDir } : {}) } }).finally(() => {
     if (agentDir && !configDir) removeTempDir(agentDir);
   });
-  const events = parseEvents(res.stdout);
+  const { events, malformedLines } = parseEvents(res.stdout);
   const error = events.find((e) => e.type === "error");
   const tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite5m: 0, cacheWrite1h: 0, reasoning: 0 };
   let steps = 0;
@@ -225,9 +229,13 @@ async function runOpencode(model: string, prompt: string, { agent: named, defini
     }
     if (p.type === "text") text = p.text ?? text;
   }
-  if (error || steps === 0) return { ok: false, error: error ? JSON.stringify(error.error ?? error).slice(0, 300) : `opencode exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${res.stderr.slice(-300)}`, durationMs: res.durationMs, timedOut: res.timedOut };
+  const dropped = malformedLines > 0 ? { malformedLines } : {};
+  if (error || steps === 0) {
+    const reason = error ? JSON.stringify(error.error ?? error).slice(0, 300) : `opencode exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${res.stderr.slice(-300)}`;
+    return { ok: false, error: malformedLines > 0 ? `${reason} (${malformedLines} malformed output lines dropped)` : reason, durationMs: res.durationMs, timedOut: res.timedOut, ...dropped };
+  }
   const sessionId = events.find((e) => e.sessionID)?.sessionID ?? null;
-  return { ok: true, text, turns: steps, sessionId, harnessCostUsd, usageByModel: [{ model: id, tokens, cacheWriteTtlKnown: false, harnessCostUsd }], durationMs: res.durationMs };
+  return { ok: true, text, turns: steps, sessionId, harnessCostUsd, usageByModel: [{ model: id, tokens, cacheWriteTtlKnown: false, harnessCostUsd }], durationMs: res.durationMs, ...dropped };
 }
 
 export async function opencodeSessionUsage(sessionId: string): Promise<SessionUsage> {

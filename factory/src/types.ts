@@ -152,6 +152,8 @@ export interface CliResult {
   usageByModel?: ModelUsage[];
   durationMs?: number;
   timedOut?: boolean;
+  /** Output lines that were not JSON and so were left out of the parsed events. */
+  malformedLines?: number;
 }
 
 export type CliExecutor = (request: CliRequest) => Promise<CliResult>;

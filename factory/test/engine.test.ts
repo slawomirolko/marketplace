@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
 import type { CliRequest, CliResult, Run } from "../src/types.ts";
 
 const workflows = fs.mkdtempSync(path.join(os.tmpdir(), "factory-engine-workflows-"));
@@ -194,4 +195,60 @@ test("a script that moves the workspace to a folder records the move once", asyn
   assert.equal(run.status, "done");
   assert.equal(run.workspace, target);
   assert.deepEqual(run.events.filter((event) => event.type === "workspace_changed").map((event) => event.workspace), [target]);
+});
+
+function deadPid(): number {
+  return spawnSync(process.execPath, ["-e", ""]).pid ?? 0;
+}
+
+function rewriteRun(dir: string, runId: string, change: (run: Run) => void): void {
+  const file = path.join(dir, "runs", `${runId}.json`);
+  const run = JSON.parse(fs.readFileSync(file, "utf8")) as Run;
+  change(run);
+  fs.writeFileSync(file, JSON.stringify(run));
+}
+
+async function capturedErrors(action: () => Promise<void>): Promise<string[]> {
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (...parts: unknown[]) => {
+    lines.push(parts.map(String).join(" "));
+  };
+  try {
+    await action();
+  } finally {
+    console.error = original;
+  }
+  return lines;
+}
+
+test("a restart records run_recovered for each rescheduled run and for a reset supervisor", () => {
+  const dir = dataDir();
+  const first = new Factory(dir, { backend: "fake" });
+  const { run } = first.start("recover goal", undefined, { workflow: "single" });
+  const ownerPid = deadPid();
+  rewriteRun(dir, run.runId, (stored) => {
+    Object.assign(stored, { status: "running", config: stored.proposal, ownerPid, supervisor: { status: "running", agent: SUPERVISOR_AGENT ?? "supervisor" } });
+  });
+  const second = new Factory(dir, { backend: "fake" });
+  const recovered = second.get(run.runId).events.filter((event) => event.type === "run_recovered");
+  assert.deepEqual(recovered.map((event) => ({ node: event.node, previousOwnerPid: event.previousOwnerPid })), [
+    { node: undefined, previousOwnerPid: ownerPid },
+    { node: "@supervisor", previousOwnerPid: ownerPid },
+  ]);
+  second.cancel(run.runId);
+});
+
+test("a run that fails in its step logs one line with the run id and the error", async () => {
+  const dir = dataDir();
+  const first = new Factory(dir, { backend: "fake" });
+  const { run } = first.start("failing goal", undefined, { workflow: "single" });
+  rewriteRun(dir, run.runId, (stored) => {
+    Object.assign(stored, { status: "running", ownerPid: deadPid() });
+  });
+  const errors = await capturedErrors(async () => {
+    const second = new Factory(dir, { backend: "fake" });
+    await until(() => second.get(run.runId).status === "failed", "the run to fail");
+  });
+  assert.deepEqual(errors.filter((line) => line.includes(run.runId)), [`run ${run.runId} failed: run ${run.runId} is not confirmed`]);
 });

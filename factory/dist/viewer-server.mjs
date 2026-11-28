@@ -63,14 +63,14 @@ async function checkWatch(watch, context) {
 		if (!command) continue;
 		const result = await exec(command, args, { cwd: project });
 		if (result.code !== 0) {
-			log(`watch ${watch.id}: command failed in a project (exit ${result.code})`);
+			log(`watch ${watch.id}: command failed in project ${view.projectName} (exit ${result.code})`);
 			continue;
 		}
 		let output;
 		try {
 			output = JSON.parse(result.stdout);
 		} catch {
-			log(`watch ${watch.id}: command output is not JSON`);
+			log(`watch ${watch.id}: command output in project ${view.projectName} is not JSON`);
 			continue;
 		}
 		for (const item of itemsOf(output, watch.items)) {
@@ -103,7 +103,7 @@ async function checkWatch(watch, context) {
 				});
 			} catch (error) {
 				factory.cancel(run.runId);
-				log(`watch ${watch.id}: could not confirm run ${run.runId}, cancelled it: ${error instanceof Error ? error.message : String(error)}`);
+				log(`watch ${watch.id}: could not confirm run ${run.runId} for project ${view.projectName}, cancelled it: ${error instanceof Error ? error.message : String(error)}`);
 				continue;
 			}
 			started.push(run.runId);
@@ -115,6 +115,7 @@ async function checkWatch(watch, context) {
 }
 /** Runs every configured watch now and then every `everyMinutes`. Returns a function that stops them. */
 function startWatches(watches, context) {
+	context.log?.(watches.length === 0 ? "watches: none started" : `watches: ${watches.map((watch) => `${watch.id} every ${watch.everyMinutes} min`).join(", ")}`);
 	const timers = [];
 	for (const watch of watches) {
 		let running = false;

@@ -23,6 +23,9 @@ fs.writeFileSync(
   [
     `const probe = { argv: process.argv.slice(2), cwd: process.cwd(), env: Object.fromEntries(${JSON.stringify(PROBED_ENV)}.map((name) => [name, process.env[name] ?? null])) };`,
     "const text = JSON.stringify(probe);",
+    "if (process.env.FACTORY_FAKE_MALFORMED) {",
+    "  process.stdout.write('not json\\n');",
+    "}",
     "if (process.env.FACTORY_FAKE_BARE_ERROR) {",
     "  process.stdout.write(JSON.stringify({ type: 'error' }) + '\\n');",
     "} else if (process.argv[2] === 'run') {",
@@ -146,4 +149,14 @@ test("an OpenCode error event without details still fails the request with a mes
   const result = await cliExecutor("opencode")({ model: "sonnet", prompt: "hi", env: { FACTORY_FAKE_BARE_ERROR: "1" } });
   assert.equal(result.ok, false);
   assert.match(result.error ?? "", /error/);
+});
+
+test("OpenCode output lines that are not JSON are counted and named in the result", async () => {
+  const succeeded = await cliExecutor("opencode")({ model: "sonnet", prompt: "hi", env: { FACTORY_FAKE_MALFORMED: "1" } });
+  assert.ok(succeeded.ok, succeeded.error ?? "the CLI failed");
+  assert.equal(succeeded.malformedLines, 1);
+  const failed = await cliExecutor("opencode")({ model: "sonnet", prompt: "hi", env: { FACTORY_FAKE_MALFORMED: "1", FACTORY_FAKE_BARE_ERROR: "1" } });
+  assert.equal(failed.ok, false);
+  assert.equal(failed.malformedLines, 1);
+  assert.match(failed.error ?? "", /1 malformed output lines dropped/);
 });

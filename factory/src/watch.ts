@@ -92,14 +92,14 @@ export async function checkWatch(watch: WatchSpec, context: WatchContext): Promi
     if (!command) continue;
     const result = await exec(command, args, { cwd: project });
     if (result.code !== 0) {
-      log(`watch ${watch.id}: command failed in a project (exit ${result.code})`);
+      log(`watch ${watch.id}: command failed in project ${view.projectName} (exit ${result.code})`);
       continue;
     }
     let output: unknown;
     try {
       output = JSON.parse(result.stdout);
     } catch {
-      log(`watch ${watch.id}: command output is not JSON`);
+      log(`watch ${watch.id}: command output in project ${view.projectName} is not JSON`);
       continue;
     }
     for (const item of itemsOf(output, watch.items)) {
@@ -117,7 +117,7 @@ export async function checkWatch(watch: WatchSpec, context: WatchContext): Promi
         factory.confirm(run.runId, { backend: watch.backend, ...(model ? { tierModels: { low: model, medium: model, high: model } } : {}) });
       } catch (error) {
         factory.cancel(run.runId);
-        log(`watch ${watch.id}: could not confirm run ${run.runId}, cancelled it: ${error instanceof Error ? error.message : String(error)}`);
+        log(`watch ${watch.id}: could not confirm run ${run.runId} for project ${view.projectName}, cancelled it: ${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
       started.push(run.runId);
@@ -130,6 +130,7 @@ export async function checkWatch(watch: WatchSpec, context: WatchContext): Promi
 
 /** Runs every configured watch now and then every `everyMinutes`. Returns a function that stops them. */
 export function startWatches(watches: WatchSpec[], context: WatchContext): () => void {
+  context.log?.(watches.length === 0 ? "watches: none started" : `watches: ${watches.map((watch) => `${watch.id} every ${watch.everyMinutes} min`).join(", ")}`);
   const timers: NodeJS.Timeout[] = [];
   for (const watch of watches) {
     let running = false;

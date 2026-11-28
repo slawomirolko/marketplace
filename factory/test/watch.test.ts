@@ -8,7 +8,7 @@ import path from "node:path";
 import test from "node:test";
 import { Factory } from "../src/engine.ts";
 import { hostExec } from "../src/cli-backend.ts";
-import { checkWatch, knownProjects, knownProjectsFile } from "../src/watch.ts";
+import { checkWatch, knownProjects, knownProjectsFile, startWatches } from "../src/watch.ts";
 import { addProject, projectsFile } from "../src/projects.ts";
 import type { WatchSpec } from "../src/types.ts";
 import { apiMiddleware, createDataApi } from "../src/viewer-data.ts";
@@ -159,6 +159,15 @@ test("a run the watch cannot confirm is cancelled, the other items still start a
   assert.match(logs.join(" "), /could not confirm run .*no executor for cli backend 'opencode'/);
   const state = JSON.parse(fs.readFileSync(path.join(dataDir, "watches", `${watch.id}.json`), "utf8")) as { seen: Record<string, number> };
   assert.deepEqual(Object.values(state.seen), [2, 2], "the counts of this check are saved");
+});
+
+test("starting the watches logs which watches run, or that none do", () => {
+  const { dataDir, factory } = setup();
+  const logs: string[] = [];
+  const context = { factory, dataDir, marketplace: dataDir, exec: hostExec, log: (message: string) => logs.push(message) };
+  startWatches([], context)();
+  startWatches([{ ...watch, projectsWhen: "no-such-marker" }], context)();
+  assert.deepEqual(logs.slice(0, 2), ["watches: none started", "watches: sample every 10 min"]);
 });
 
 function call(api: ReturnType<typeof createDataApi>, method: string, url: string, headers: Record<string, string> = {}) {

@@ -16210,9 +16210,18 @@ var Factory = class {
 			const run = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8"));
 			this.runs.set(run.runId, run);
 			if (run.idempotencyKey) this.idempotency.set(run.idempotencyKey, run.runId);
-			if (run.status === "running" && !ownedByOtherProcess(run)) this.schedule(run);
+			const previousOwnerPid = run.ownerPid ?? null;
+			if (run.status === "running" && !ownedByOtherProcess(run)) {
+				this.event(run, "run_recovered", { previousOwnerPid });
+				this.checkpoint(run);
+				this.schedule(run);
+			}
 			if (run.supervisor?.status === "running" && !ownedByOtherProcess(run)) {
 				run.supervisor.status = "pending";
+				this.event(run, "run_recovered", {
+					node: SUPERVISOR_PATH,
+					previousOwnerPid
+				});
 				this.checkpoint(run);
 			}
 		}
@@ -16526,6 +16535,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 			} catch (error) {
 				run.status = "failed";
 				this.event(run, "run_failed", { error: errorMessage(error) });
+				console.error(`run ${run.runId} failed: ${errorMessage(error)}`);
 			} finally {
 				this.busy.delete(run.runId);
 			}
@@ -16952,7 +16962,8 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 					this.event(run, "agent_failed", {
 						node: node.path,
 						agentId: agent.id,
-						error: result.error
+						error: result.error,
+						...result.malformedLines ? { malformedLines: result.malformedLines } : {}
 					});
 					return;
 				}
@@ -16969,7 +16980,8 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 				this.event(run, "agent_completed", {
 					node: node.path,
 					agentId: agent.id,
-					backend: `cli:${cli}`
+					backend: `cli:${cli}`,
+					...result.malformedLines ? { malformedLines: result.malformedLines } : {}
 				});
 				this.checkpoint(run);
 			}))).forEach((outcome, index) => {
@@ -17710,15 +17722,20 @@ function spawnCli(command, args, stdinText, { cwd = cliWorkDir(), env = {} } = {
 		child.stdin.end(stdinText ?? "");
 	});
 }
+/** The JSON events of an OpenCode run, one per line, and how many lines were not JSON and so were dropped. */
 function parseEvents(stdout) {
 	const events = [];
+	let malformedLines = 0;
 	for (const line of stdout.trim().split("\n").filter(Boolean)) try {
 		const event = JSON.parse(line);
 		if (event) events.push(event);
 	} catch {
-		continue;
+		malformedLines += 1;
 	}
-	return events;
+	return {
+		events,
+		malformedLines
+	};
 }
 function removeTempDir(dir) {
 	if (path.dirname(path.resolve(dir)) === path.resolve(os.tmpdir())) fs.rmSync(dir, {
@@ -17848,7 +17865,7 @@ async function runOpencode(model, prompt, { agent: named, definition, cwd, confi
 	}).finally(() => {
 		if (agentDir && !configDir) removeTempDir(agentDir);
 	});
-	const events = parseEvents(res.stdout);
+	const { events, malformedLines } = parseEvents(res.stdout);
 	const error = events.find((e) => e.type === "error");
 	const tokens = {
 		input: 0,
@@ -17875,12 +17892,17 @@ async function runOpencode(model, prompt, { agent: named, definition, cwd, confi
 		}
 		if (p.type === "text") text = p.text ?? text;
 	}
-	if (error || steps === 0) return {
-		ok: false,
-		error: error ? JSON.stringify(error.error ?? error).slice(0, 300) : `opencode exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${res.stderr.slice(-300)}`,
-		durationMs: res.durationMs,
-		timedOut: res.timedOut
-	};
+	const dropped = malformedLines > 0 ? { malformedLines } : {};
+	if (error || steps === 0) {
+		const reason = error ? JSON.stringify(error.error ?? error).slice(0, 300) : `opencode exit ${res.code}${res.timedOut ? " (timed out)" : ""}: ${res.stderr.slice(-300)}`;
+		return {
+			ok: false,
+			error: malformedLines > 0 ? `${reason} (${malformedLines} malformed output lines dropped)` : reason,
+			durationMs: res.durationMs,
+			timedOut: res.timedOut,
+			...dropped
+		};
+	}
 	const sessionId = events.find((e) => e.sessionID)?.sessionID ?? null;
 	return {
 		ok: true,
@@ -17894,7 +17916,8 @@ async function runOpencode(model, prompt, { agent: named, definition, cwd, confi
 			cacheWriteTtlKnown: false,
 			harnessCostUsd
 		}],
-		durationMs: res.durationMs
+		durationMs: res.durationMs,
+		...dropped
 	};
 }
 function cliExecutor(cli) {

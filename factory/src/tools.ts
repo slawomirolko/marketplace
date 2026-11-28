@@ -19,6 +19,7 @@ export interface ToolMetrics {
   throttledCalls: number;
   waitCalls: number;
   throttledWaitCalls: number;
+  failedCalls: number;
 }
 
 export interface FactoryTools {
@@ -45,6 +46,7 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
   let throttledCalls = 0;
   let waitCalls = 0;
   let throttledWaitCalls = 0;
+  let failedCalls = 0;
 
   async function delayIfTooSoon(lastCallAt: Map<string, number>, runId: string): Promise<boolean> {
     const now = Date.now();
@@ -70,11 +72,14 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
     return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: message }) }] };
   }
 
-  function guarded<A>(handler: (args: A) => object | Promise<object>): (args: A) => Promise<CallToolResult> {
+  /** Wraps a tool handler: its result becomes the reply, and a thrown error becomes an error reply that is counted and logged with the tool name. */
+  function guarded<A>(toolName: string, handler: (args: A) => object | Promise<object>): (args: A) => Promise<CallToolResult> {
     return async (args) => {
       try {
         return reply(await handler(args));
       } catch (error) {
+        failedCalls += 1;
+        console.error(`tool ${toolName} failed: ${errorMessage(error)}`);
         return fail(errorMessage(error));
       }
     };
@@ -95,7 +100,7 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
           idempotencyKey: z.string().optional(),
         },
       },
-      guarded(({ goal, workflow, input, projectId, idempotencyKey }) => {
+      guarded("factory_start", ({ goal, workflow, input, projectId, idempotencyKey }) => {
         const runInput = { ...(input?.repo ? { repo: input.repo } : {}), ...(input?.pr ? { pr: input.pr } : {}), ...(input?.fresh ? { fresh: true } : {}), ...(input?.plan ? { plan: input.plan } : {}), ...(input?.criteria ? { criteria: input.criteria } : {}), ...(input?.project ? { project: longPath(input.project) } : {}), ...(input?.marketplace ? { marketplace: longPath(input.marketplace) } : {}), ...(input?.artifacts ? { artifacts: input.artifacts } : {}), ...(input?.target ? { target: longPath(input.target) } : {}), ...(input?.targetName ? { targetName: input.targetName } : {}), ...(input?.olko ? { olko: longPath(input.olko) } : {}), ...(input?.user ? { user: longPath(input.user) } : {}), ...(input?.stateDir ? { stateDir: path.resolve(input.stateDir) } : {}), ...(input?.switches ? { switches: input.switches } : {}), ...(input?.idea ? { idea: input.idea } : {}), ...(input?.route ? { route: input.route } : {}), ...(input?.featureId ? { featureId: input.featureId } : {}), ...(input?.base ? { base: input.base } : {}), ...(input?.taskId ? { taskId: input.taskId } : {}), ...(input?.adopt ? { adopt: true } : {}), ...(input?.workflowsDir ? { workflowsDir: longPath(input.workflowsDir) } : {}) };
         const { run, reused } = factory.start(goal, idempotencyKey, { ...(workflow ? { workflow } : {}), input: projectScopedInput(projectId, runInput) });
         return { ...factory.status(run), reused, next: "Show the proposal to the user. After the user replies, call factory_confirm." };
@@ -118,7 +123,7 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
             .optional(),
         },
       },
-      guarded(({ runId, overrides }) => factory.status(factory.confirm(runId, overrides))),
+      guarded("factory_confirm", ({ runId, overrides }) => factory.status(factory.confirm(runId, overrides))),
     );
 
     server.registerTool(
@@ -127,7 +132,7 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
         description: "Delegate mode only. Get pendingWork: the node work that you must run now (prompt, tier and model). The result is null when there is no work.",
         inputSchema: { runId: z.string() },
       },
-      guarded(({ runId }) => ({ pendingWork: factory.next(runId), ...factory.status(factory.get(runId)) })),
+      guarded("factory_next", ({ runId }) => ({ pendingWork: factory.next(runId), ...factory.status(factory.get(runId)) })),
     );
 
     server.registerTool(
@@ -153,7 +158,7 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
             .optional(),
         },
       },
-      guarded(({ runId, nodePath, agentId, output, usage }) => {
+      guarded("factory_submit", ({ runId, nodePath, agentId, output, usage }) => {
         const { run, duplicate } = factory.submit(runId, nodePath, output, usage, agentId);
         return { ...factory.status(run), duplicate };
       }),
@@ -166,7 +171,7 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
           "Get the current status of a factory run. This call returns immediately. The cost fields show the cost and budget of this factory run, not of your own session. The run has ended when status is done, stopped, cancelled or failed. To wait for progress, call factory_wait. Do not call factory_status in a loop. The server delays calls that come sooner than the minimum interval.",
         inputSchema: { runId: z.string() },
       },
-      guarded(async ({ runId }) => {
+      guarded("factory_status", async ({ runId }) => {
         await throttle(runId);
         return factory.status(factory.get(runId));
       }),
@@ -179,7 +184,7 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
           "Wait until the run needs the user (waiting_for_user), needs you to run node work in delegate mode (waiting_for_client), the run ends, or timeoutSec passes. Use this tool instead of polling. The run has ended when status is done, stopped, cancelled or failed. After that, stop calling factory_wait. On waiting_for_user, ask the user pendingQuestion.text. Then send the user's answer with factory_answer. On waiting_for_client, run pendingWork and call factory_submit. If the result has status 'running' and timedOut is true, call factory_wait again. When the run is not running, the server delays calls that come sooner than the minimum interval.",
         inputSchema: { runId: z.string(), timeoutSec: z.number().int().min(1).max(MAX_WAIT_SEC).optional() },
       },
-      guarded(async ({ runId, timeoutSec }) => {
+      guarded("factory_wait", async ({ runId, timeoutSec }) => {
         if (factory.get(runId).status !== "running" && (await delayIfTooSoon(lastIdleWaitAt, runId))) throttledWaitCalls += 1;
         const { run, timedOut } = await factory.waitForChange(runId, (timeoutSec ?? DEFAULT_WAIT_SEC) * 1000);
         waitCalls += 1;
@@ -193,7 +198,7 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
         description: "Send the user's answer to the pending question of a factory run (pendingQuestion). If you send the same questionId and answer again, the call has no new effect and returns duplicate: true.",
         inputSchema: { runId: z.string(), questionId: z.string(), answer: z.string() },
       },
-      guarded(({ runId, questionId, answer }) => {
+      guarded("factory_answer", ({ runId, questionId, answer }) => {
         const { run, duplicate } = factory.answer(runId, questionId, answer);
         return { ...factory.status(run), duplicate };
       }),
@@ -202,13 +207,13 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
     server.registerTool(
       "factory_report",
       { description: "Get the steps, tokens and cost of a factory run for each node, agent, tier and model. The cost is the factory run cost, not the cost of your own session. Call this tool after the run has ended. The result has viewerUrl: a local page that shows the whole flow and the cost of each agent. Show viewerUrl to the user.", inputSchema: { runId: z.string() } },
-      guarded(({ runId }) => factory.report(factory.get(runId))),
+      guarded("factory_report", ({ runId }) => factory.report(factory.get(runId))),
     );
 
     server.registerTool(
       "factory_trace",
       { description: "Get the trace tree of a factory run: nodes, turns, tokens, factory run cost and events.", inputSchema: { runId: z.string() } },
-      guarded(({ runId }) => {
+      guarded("factory_trace", ({ runId }) => {
         const run = factory.get(runId);
         return { trace: factory.trace(run), events: run.events, cost: factory.footer(run) };
       }),
@@ -221,7 +226,7 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
           "Get the steps to install this factory permanently in a harness, so that every new session starts it. Call this tool when the user asks how to install, add or set up the factory. Without harness, the tool uses the harness that is connected now. Show the steps to the user. Run the commands only after the user agrees, because they change the user's harness configuration.",
         inputSchema: { harness: z.enum(HARNESSES).optional() },
       },
-      guarded(({ harness }) => installGuide(harness, server.server.getClientVersion()?.name)),
+      guarded("factory_install_guide", ({ harness }) => installGuide(harness, server.server.getClientVersion()?.name)),
     );
 
     server.registerTool(
@@ -235,17 +240,17 @@ export function createFactoryTools(factory: Factory, publicUrl: string): Factory
           marketplace: z.string().min(1).optional(),
         },
       },
-      guarded(({ action, path: dir, id, marketplace }) => projectsAction({ action, ...(dir ? { path: dir } : {}), ...(id ? { id } : {}), ...(marketplace ? { marketplace } : {}) })),
+      guarded("factory_projects", ({ action, path: dir, id, marketplace }) => projectsAction({ action, ...(dir ? { path: dir } : {}), ...(id ? { id } : {}), ...(marketplace ? { marketplace } : {}) })),
     );
 
     server.registerTool(
       "factory_cancel",
       { description: "Cancel a factory run. Call this tool when the user asks to stop the run.", inputSchema: { runId: z.string() } },
-      guarded(({ runId }) => factory.status(factory.cancel(runId))),
+      guarded("factory_cancel", ({ runId }) => factory.status(factory.cancel(runId))),
     );
 
     return server;
   }
 
-  return { buildServer, metrics: () => ({ statusCalls, throttledCalls, waitCalls, throttledWaitCalls }) };
+  return { buildServer, metrics: () => ({ statusCalls, throttledCalls, waitCalls, throttledWaitCalls, failedCalls }) };
 }

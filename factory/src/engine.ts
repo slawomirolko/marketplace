@@ -181,9 +181,15 @@ export class Factory {
       const run = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8")) as Run;
       this.runs.set(run.runId, run);
       if (run.idempotencyKey) this.idempotency.set(run.idempotencyKey, run.runId);
-      if (run.status === "running" && !ownedByOtherProcess(run)) this.schedule(run);
+      const previousOwnerPid = run.ownerPid ?? null;
+      if (run.status === "running" && !ownedByOtherProcess(run)) {
+        this.event(run, "run_recovered", { previousOwnerPid });
+        this.checkpoint(run);
+        this.schedule(run);
+      }
       if (run.supervisor?.status === "running" && !ownedByOtherProcess(run)) {
         run.supervisor.status = "pending";
+        this.event(run, "run_recovered", { node: SUPERVISOR_PATH, previousOwnerPid });
         this.checkpoint(run);
       }
     }
@@ -423,6 +429,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
       } catch (error) {
         run.status = "failed";
         this.event(run, "run_failed", { error: errorMessage(error) });
+        console.error(`run ${run.runId} failed: ${errorMessage(error)}`);
       } finally {
         this.busy.delete(run.runId);
       }
@@ -697,12 +704,12 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
         run.steps += 1;
         if (!result.ok) {
           failures.push(`${agent.id}: ${result.error}`);
-          this.event(run, "agent_failed", { node: node.path, agentId: agent.id, error: result.error });
+          this.event(run, "agent_failed", { node: node.path, agentId: agent.id, error: result.error, ...(result.malformedLines ? { malformedLines: result.malformedLines } : {}) });
           return;
         }
         for (const entry of cliEntries(result, { nodePath: node.path, agentId: agent.id, agentName: agent.agentName ?? null, tier, requestedModel: model, cli: cli as CliName, keepOutput: true })) this.appendLedger(run, entry);
         this.storeParsed(run, node, agent.id, result.text ?? "");
-        this.event(run, "agent_completed", { node: node.path, agentId: agent.id, backend: `cli:${cli}` });
+        this.event(run, "agent_completed", { node: node.path, agentId: agent.id, backend: `cli:${cli}`, ...(result.malformedLines ? { malformedLines: result.malformedLines } : {}) });
         this.checkpoint(run);
       }));
       outcomes.forEach((outcome, index) => {

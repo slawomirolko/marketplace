@@ -38,3 +38,27 @@ test("factory_start names no workflow itself and lists the inputs each workflow 
   assert.match(perWorkflow.join(""), /^- olko-marketplace-skill-sync: project, the absolute path of the local project/m);
   assert.match(perWorkflow.join(""), /^- olko-claude-sync: target and targetName/m);
 });
+
+test("a tool call that fails is counted in the metrics and logged with the tool name", async () => {
+  const factory = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-tools-")), { backend: "delegate" });
+  const tools = createFactoryTools(factory, "http://127.0.0.1:7340");
+  const server = tools.buildServer();
+  const client = new Client({ name: "tools-test", version: "1.0.0" });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (...parts: unknown[]) => {
+    lines.push(parts.map(String).join(" "));
+  };
+  try {
+    const result = await client.callTool({ name: "factory_cancel", arguments: { runId: "r-missing" } });
+    assert.equal(result.isError, true);
+  } finally {
+    console.error = original;
+    await client.close();
+    await server.close();
+  }
+  assert.equal(tools.metrics().failedCalls, 1);
+  assert.deepEqual(lines, ["tool factory_cancel failed: unknown runId r-missing"]);
+});

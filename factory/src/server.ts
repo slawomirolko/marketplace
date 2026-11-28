@@ -116,6 +116,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     await server.connect(transport);
     await transport.handleRequest(req, res, body);
   } catch (error) {
+    console.error(`/mcp request failed: ${errorMessage(error)}`);
     if (!res.headersSent) res.writeHead(500).end(JSON.stringify({ error: errorMessage(error) }));
   }
 }

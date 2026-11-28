@@ -71,6 +71,8 @@ curl -s -H "Authorization: Bearer $FACTORY_TOKEN" http://127.0.0.1:7340/metrics
 
 `throttledWaitCalls` counts `factory_wait` calls on a run that is not running that came closer than the minimum interval (500 ms). A value above 0 means the client kept calling after the run ended.
 
+`failedCalls` counts tool calls that returned an error; the server also writes each one to stderr with the tool name.
+
 ## Results after the tool text update (2026-11-10)
 
 Tool descriptions and `next` hints were rewritten from the prompt optimizer review. One or two runs per row, so these show behaviour, not rates.
