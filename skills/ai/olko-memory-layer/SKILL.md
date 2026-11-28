@@ -35,11 +35,11 @@ review and approval rules. Remove the memory copy only after the skill update
 is approved, applied, and verified. If the user declines, keep one memory
 entry and merge duplicates.
 
-Before writing, check any configured memory limit and its unit. If memory
-exceeds the limit, remove stale or superseded lessons first, then duplicates,
-then low-value or non-reusable lessons. Use age only to break ties between
-lessons of similar value. Do not delete a valid lesson only because it is old.
-Do not invent a limit when none is configured. If memory tooling is
+Before writing, check any configured memory limit and its unit. When a block
+exceeds its limit, run AUDIT MODE on that block and follow its verdicts; never
+prune ad hoc. If no lesson qualifies, ask whether to raise the limit or promote
+a lesson, and never delete a valid lesson only because it is old. Do not invent
+a limit when none is configured. If memory tooling is
 unavailable, stop and ask the user. Name the exact fix: the permission rule to
 allow, or the skill or tool to install. Continue without memory only if the
 user says so, and report that learning was skipped. Do not create a fallback
