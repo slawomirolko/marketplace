@@ -1,5 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
+import { FLOW_HEIGHT, FLOW_WIDTH } from "../testUtils/flow-size.ts";
 import { server } from "../testUtils/server.ts";
 
 class ResizeObserverStub {
@@ -25,8 +26,8 @@ class DOMMatrixReadOnlyStub {
 globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
 globalThis.DOMMatrixReadOnly = DOMMatrixReadOnlyStub as unknown as typeof DOMMatrixReadOnly;
 Object.defineProperties(HTMLElement.prototype, {
-  offsetWidth: { configurable: true, get: () => 800 },
-  offsetHeight: { configurable: true, get: () => 600 },
+  offsetWidth: { configurable: true, get: () => FLOW_WIDTH },
+  offsetHeight: { configurable: true, get: () => FLOW_HEIGHT },
 });
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));

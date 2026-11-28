@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Report, RunStatusView } from "../src/types.ts";
+import { pollUntil } from "./helpers/poll.ts";
 
 type Payload = RunStatusView & Partial<Omit<Report, keyof RunStatusView>>;
 
@@ -14,13 +15,11 @@ await client.connect(
 );
 const call = async (name: string, args: Record<string, unknown>) => (await client.callTool({ name, arguments: args })).structuredContent as Payload;
 
-async function pollUntil(runId: string, statuses: string[]): Promise<Payload> {
-  for (let i = 0; i < 500; i += 1) {
-    const s = await call("factory_status", { runId });
-    if (statuses.includes(s.status)) return s;
-    await new Promise((r) => setTimeout(r, 30));
-  }
-  throw new Error("timeout");
+/** factory_status goes over HTTP and the restarted server replays the run, so a wide interval and limit. */
+const STATUS_POLL = { intervalMs: 30, timeoutMs: 15000 };
+
+function statusReaches(runId: string, statuses: string[]): Promise<Payload> {
+  return pollUntil(() => call("factory_status", { runId }), statuses, STATUS_POLL);
 }
 
 if (phase === "begin") {
@@ -31,9 +30,9 @@ if (phase === "begin") {
   try {
     const mid = await call("factory_status", { runId: runIdArg });
     console.log(`      after restart: status=${mid.status} node=${mid.currentNode} steps=${mid.cost.steps}`);
-    await pollUntil(runIdArg, ["waiting_for_user"]);
+    await statusReaches(runIdArg, ["waiting_for_user"]);
     await call("factory_answer", { runId: runIdArg, questionId: "q-endpoint", answer: "extend" });
-    const done = await pollUntil(runIdArg, ["done"]);
+    const done = await statusReaches(runIdArg, ["done"]);
     const report = await call("factory_report", { runId: runIdArg });
     assert.equal(done.cost.steps, 13);
     assert.equal(report.byNode?.["hello/plan"]?.steps, 3);

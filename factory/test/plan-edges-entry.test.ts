@@ -1,23 +1,16 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import test from "node:test";
+import { driveWorkflow, fencedJson, stoppedBy, type PlanRun } from "./helpers/plan-driver.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
-const { Factory } = await import("../src/engine.ts");
 const { missingEdges } = await import("./edge-coverage.ts");
 
-const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
-const FENCE = "`".repeat(3);
-const RUNS: ReturnType<InstanceType<typeof Factory>["get"]>[] = [];
+const json = (body: unknown): string => fencedJson(body, "Reply.");
+
+const RUNS: PlanRun[] = [];
 const UNREACHABLE: Record<string, string> = {
   "entry-stop -> END": "entry-stop is a builtin.stop step: it always fails the run, so its edge to END is never taken",
 };
-
-function json(body: unknown): string {
-  return `Reply.\n${FENCE}json\n${JSON.stringify(body)}\n${FENCE}`;
-}
 
 const CONTEXT = json({
   feature: { title: "Approval gate", goal: "A gated op waits for the user", criteria: ["A gated op does not run before the answer"] },
@@ -27,34 +20,9 @@ const CONTEXT = json({
 const PASSED = json({ ok: true, featureId: "f-1", featureDir: "plans/features/f-1", feature: "F", tasks: "T1", taskIds: ["T1"], criteria: "AC1", reason: "" });
 const FAILED = json({ ok: false, featureId: "", featureDir: "", feature: "", tasks: "", taskIds: [], criteria: "", reason: "no Feature context" });
 
-function stoppedBy(run: { status: string; events: { error?: unknown }[] }, reason: RegExp): boolean {
-  return run.status === "failed" && run.events.some((e) => reason.test(String(e.error ?? "")));
-}
-
 async function drive(tracker: boolean, gate: string) {
-  const factory = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-edges-entry-")), { backend: "delegate" });
-  const { run } = factory.start("plan entry", undefined, { workflow: "olko-plan-entry", input: { project: "/repo", featureId: "f-1", switches: { tracker } } });
-  factory.confirm(run.runId);
-  const prompts: Record<string, string[]> = {};
-  for (let i = 0; i < 500; i++) {
-    const view = factory.status(factory.get(run.runId));
-    if (ENDED.has(view.status)) break;
-    assert.notEqual(view.status, "waiting_for_user", `the entry asked the user: ${JSON.stringify(view.pendingQuestion)}`);
-    if (view.status === "waiting_for_client") {
-      for (const work of view.pendingWorkItems ?? []) {
-        const step = work.nodePath.split("/").pop()!;
-        (prompts[step] ??= []).push(work.prompt);
-        const output = step === "context" ? CONTEXT : step === "feature" ? gate : undefined;
-        if (output === undefined) throw new Error(`unexpected step ${step}`);
-        factory.submit(run.runId, work.nodePath, output, { model: "claude-haiku-5-5", inputTokens: 10, outputTokens: 10 }, work.agentId);
-      }
-    } else {
-      await new Promise((r) => setTimeout(r, 5));
-    }
-  }
-  const done = factory.get(run.runId);
-  RUNS.push(done);
-  return { done, prompts };
+  const reply = ({ step }: { step: string }) => (step === "context" ? CONTEXT : step === "feature" ? gate : undefined);
+  return driveWorkflow({ workflow: "olko-plan-entry", goal: "plan entry", input: { project: "/repo", featureId: "f-1", switches: { tracker } }, tempPrefix: "factory-plan-edges-entry-", reply, runs: RUNS });
 }
 
 test("with the tracker on, the entry gate sees the Feature and Task criteria read from the tracker and passes", async () => {

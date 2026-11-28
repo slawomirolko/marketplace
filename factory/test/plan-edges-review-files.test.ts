@@ -1,17 +1,14 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import test from "node:test";
+import { driveWorkflow, fencedJson, stoppedBy, type PlanRun } from "./helpers/plan-driver.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
-const { Factory } = await import("../src/engine.ts");
 const { missingEdges } = await import("./edge-coverage.ts");
 
+const json = (body: unknown): string => fencedJson(body, "Done.");
+
 const WORKFLOW = "olko-plan-review-files";
-const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
-const FENCE = "`".repeat(3);
-const RUNS: ReturnType<InstanceType<typeof Factory>["get"]>[] = [];
+const RUNS: PlanRun[] = [];
 
 const FINDING = "plan: step 2 | design.kiss | medium | two lists for one queue | keep one list";
 const VIOLATION = "plan: step 3 | logs plain text | ADR-0007 asks for structured logs";
@@ -20,10 +17,6 @@ const OVERLAP = { topic: "logging.format", adrs: ["ADR-0007", "ADR-0009"], paths
 const PR_FINDING = "src/a.ts:12 | bugs.null | high | null not checked | add a guard";
 const PR_SECOND = "src/a.ts:30 | style.name | nit | short name | rename";
 const ITEM = (index: number) => ({ index, path: "src/a.ts", line: 10 + index, comments: [{ id: `t${index}`, kind: "thread", author: "reviewer", url: `https://example.invalid/${index}`, body: `comment ${index}` }] });
-
-function json(body: unknown): string {
-  return `Done.\n${FENCE}json\n${JSON.stringify(body)}\n${FENCE}`;
-}
 
 function files(count: number): string {
   return json({ files: Array.from({ length: count }, (_, i) => ({ path: i === 0 ? "plans/f1/implementation.md" : `plans/f1/tasks/T${i}-implementation.md`, criteria: "AC1: decline runs no op" })) });
@@ -75,42 +68,12 @@ const DEFAULTS: Record<string, string> = {
   "fb-report": "CI pass, one fix, one reply posted.",
 };
 
-function stoppedBy(run: { status: string; events: { error?: unknown }[] }, reason: RegExp): boolean {
-  return run.status === "failed" && run.events.some((e) => reason.test(String(e.error ?? "")));
-}
-
 function noQuestion(id: string): string {
   throw new Error(`unexpected question ${id}`);
 }
 
 async function drive(reply: (step: string, visit: number) => string | undefined, answer: (id: string) => string = noQuestion) {
-  const factory = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-review-files-")), { backend: "delegate" });
-  const { run } = factory.start("review plan files", undefined, { workflow: WORKFLOW, input: { project: "/repo" } });
-  factory.confirm(run.runId);
-  const prompts: Record<string, string[]> = {};
-  const asked: string[] = [];
-  for (let i = 0; i < 2000; i++) {
-    const view = factory.status(factory.get(run.runId));
-    if (ENDED.has(view.status)) break;
-    if (view.status === "waiting_for_user") {
-      const id = view.pendingQuestion!.id;
-      asked.push(id);
-      factory.answer(run.runId, id, answer(id));
-    } else if (view.status === "waiting_for_client") {
-      for (const work of view.pendingWorkItems ?? []) {
-        const step = work.nodePath.split("/").pop()!;
-        const visit = (prompts[step] ??= []).push(work.prompt);
-        const output = reply(step, visit) ?? DEFAULTS[step];
-        if (output === undefined) throw new Error(`unexpected step ${step}`);
-        factory.submit(run.runId, work.nodePath, output, { model: "claude-haiku-5-5", inputTokens: 10, outputTokens: 10 }, work.agentId);
-      }
-    } else {
-      await new Promise((r) => setTimeout(r, 5));
-    }
-  }
-  const done = factory.get(run.runId);
-  RUNS.push(done);
-  return { done, prompts, asked };
+  return driveWorkflow({ workflow: WORKFLOW, goal: "review plan files", input: { project: "/repo" }, tempPrefix: "factory-plan-review-files-", reply: (work) => reply(work.step, work.visit) ?? DEFAULTS[work.step], answer, runs: RUNS });
 }
 
 test("two plan files without confirmed findings are each reviewed on the PLAN route and nothing is folded", async () => {

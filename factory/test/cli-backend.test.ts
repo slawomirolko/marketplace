@@ -5,6 +5,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { withEnv } from "./helpers/env.ts";
+import { tempDir } from "./helpers/temp.ts";
 import { cliExecutor, hostExec } from "../src/cli-backend.ts";
 import { homeEnv } from "../src/home-env.ts";
 import { opencodeConfigDir } from "../src/cli-agents.ts";
@@ -16,7 +18,7 @@ interface Probe {
 }
 
 const PROBED_ENV = ["FACTORY_TOKEN", "FACTORY_HOME_SECRET_PROBE", "FACTORY_KEPT_PROBE"];
-const fakeDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory fake cli "));
+const fakeDir = tempDir("factory fake cli ");
 const probeScript = path.join(fakeDir, "fake-cli.js");
 fs.writeFileSync(
   probeScript,
@@ -49,7 +51,6 @@ const originalPath = process.env.PATH;
 process.env.PATH = `${fakeDir}${path.delimiter}${originalPath ?? ""}`;
 test.after(() => {
   process.env.PATH = originalPath;
-  fs.rmSync(fakeDir, { recursive: true, force: true });
 });
 
 const definition = { name: "probe-agent", description: "probe", prompt: "probe" };
@@ -59,7 +60,7 @@ function probeOf(text: string | undefined): Probe {
 }
 
 test("a folder with spaces and cmd.exe metacharacters reaches the CLI as one --add-dir argument", async () => {
-  const awkward = fs.mkdtempSync(path.join(os.tmpdir(), "factory dir & more ^ %(x) "));
+  const awkward = tempDir("factory dir & more ^ %(x) ");
   try {
     const result = await cliExecutor("claude")({ model: "sonnet", prompt: "hi", definition, dirs: [awkward] });
     assert.ok(result.ok, result.error ?? "the CLI failed");
@@ -90,23 +91,19 @@ test("an extra directory must be an existing absolute folder", async () => {
 
 test("the factory token and the settings from the factory home's .env do not reach agent CLIs or host commands", async () => {
   const loaded = homeEnv.loaded;
-  process.env.FACTORY_TOKEN = "token-probe";
-  process.env.FACTORY_HOME_SECRET_PROBE = "home-secret";
-  process.env.FACTORY_KEPT_PROBE = "kept";
   homeEnv.loaded = [...loaded, "FACTORY_HOME_SECRET_PROBE"];
   try {
-    for (const cli of ["claude", "opencode"] as const) {
-      const result = await cliExecutor(cli)({ model: "sonnet", prompt: "hi" });
-      assert.ok(result.ok, result.error ?? "the CLI failed");
-      assert.deepEqual(probeOf(result.text).env, { FACTORY_TOKEN: null, FACTORY_HOME_SECRET_PROBE: null, FACTORY_KEPT_PROBE: "kept" }, cli);
-    }
-    const exec = await hostExec(process.execPath, [probeScript]);
-    assert.deepEqual(probeOf((JSON.parse(exec.stdout) as { result: string }).result).env, { FACTORY_TOKEN: null, FACTORY_HOME_SECRET_PROBE: null, FACTORY_KEPT_PROBE: "kept" }, "builtin.exec");
+    await withEnv({ FACTORY_TOKEN: "token-probe", FACTORY_HOME_SECRET_PROBE: "home-secret", FACTORY_KEPT_PROBE: "kept" }, async () => {
+      for (const cli of ["claude", "opencode"] as const) {
+        const result = await cliExecutor(cli)({ model: "sonnet", prompt: "hi" });
+        assert.ok(result.ok, result.error ?? "the CLI failed");
+        assert.deepEqual(probeOf(result.text).env, { FACTORY_TOKEN: null, FACTORY_HOME_SECRET_PROBE: null, FACTORY_KEPT_PROBE: "kept" }, cli);
+      }
+      const exec = await hostExec(process.execPath, [probeScript]);
+      assert.deepEqual(probeOf((JSON.parse(exec.stdout) as { result: string }).result).env, { FACTORY_TOKEN: null, FACTORY_HOME_SECRET_PROBE: null, FACTORY_KEPT_PROBE: "kept" }, "builtin.exec");
+    });
   } finally {
     homeEnv.loaded = loaded;
-    delete process.env.FACTORY_TOKEN;
-    delete process.env.FACTORY_HOME_SECRET_PROBE;
-    delete process.env.FACTORY_KEPT_PROBE;
   }
 });
 
@@ -133,7 +130,7 @@ test("the shared CLI work folder comes back after the temp cleaner removed it", 
 });
 
 test("a CLI that is not installed fails the request instead of crashing the process", async () => {
-  const emptyPath = fs.mkdtempSync(path.join(os.tmpdir(), "factory-empty-path-"));
+  const emptyPath = tempDir("factory-empty-path-");
   try {
     for (const cli of ["claude", "opencode"] as const) {
       const result = await cliExecutor(cli)({ model: "sonnet", prompt: "hi", env: { PATH: emptyPath, Path: emptyPath } });

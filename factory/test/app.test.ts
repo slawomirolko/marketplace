@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ALLOWED_HOSTS, callerFor } from "./helpers/data-api.ts";
+import { tempDir } from "./helpers/temp.ts";
 import { createDataApi, apiMiddleware } from "../src/viewer-data.ts";
 import type { DataApi } from "../src/viewer-data.ts";
 import type { Run } from "../src/types.ts";
@@ -45,7 +46,7 @@ const factoryDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
 const configFile = path.join(factoryDir, "spec", "examples", "valid", "factory-config.json");
 
 function api(demo: boolean): DataApi {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-app-"));
+  const dataDir = tempDir("factory-app-");
   return createDataApi({ factoryDir, dataDir, configFile, demo });
 }
 
@@ -229,18 +230,8 @@ test("unknown cost is shown as unknown, missing cost as not run", () => {
   assert.equal(formatUsd({ costUsd: 0.1234567, costSource: "measured" } as Cost), "$0.123457");
 });
 
-interface ApiCallResult {
-  status: number | "next";
-  body?: unknown;
-}
-
 function apiCall(data: DataApi) {
-  const middleware = apiMiddleware(data, new Set(["127.0.0.1:7340"]));
-  return (method: string, url: string) =>
-    new Promise<ApiCallResult>((resolve) => {
-      const res = { writeHead: (status: number) => ({ end: (body: string) => resolve({ status, body: JSON.parse(body) }) }) };
-      middleware({ method, url }, res, () => resolve({ status: "next" }));
-    });
+  return callerFor(apiMiddleware(data, ALLOWED_HOSTS));
 }
 
 test("api returns the run list and a run detail as JSON", async () => {
@@ -510,7 +501,7 @@ test("agents served to the viewer carry the memory-layer flag for the skill the 
   const agents = api(false).agents();
   assert.equal(agents["olko-review-orchestrator"]?.memoryLayer, true, "declares olko-memory-layer in permission.skill");
   assert.equal(agents["olko-workflow-mapper"]?.memoryLayer, false, "declares no memory skill");
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-app-"));
+  const dataDir = tempDir("factory-app-");
   const custom = path.join(dataDir, "config.json");
   fs.writeFileSync(custom, JSON.stringify({ ...JSON.parse(fs.readFileSync(configFile, "utf8")), memoryLayer: "olko-agents-optimizer" }));
   const renamed = createDataApi({ factoryDir, dataDir, configFile: custom, demo: false }).agents();

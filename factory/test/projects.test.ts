@@ -1,12 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
+import { ALLOWED_HOSTS, ALLOWED_ORIGIN, callerFor } from "./helpers/data-api.ts";
+import { withEnv } from "./helpers/env.ts";
+import { tempDir } from "./helpers/temp.ts";
 
-const home = fs.mkdtempSync(path.join(os.tmpdir(), "factory-projects-home-"));
+const home = tempDir("factory-projects-home-");
 process.env.FACTORY_HOME_DIR = home;
 
 const { addProject, addRoot, discoverProjects, listProjects, projectById, projectInput, projectScopedInput, projectsAction, projectsCli, projectsFile, readRegistry, removeProject, removeRoot, suggestId } = await import("../src/projects.ts");
@@ -30,7 +32,7 @@ function folder(...parts: string[]): string {
 }
 
 function workspace(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "factory-projects-ws-"));
+  return tempDir("factory-projects-ws-");
 }
 
 test("the registry lives in the factory home and starts empty", () => {
@@ -185,31 +187,8 @@ test("the project status workflow is one script-runner step that reads the proje
   assert.match(fs.readFileSync(path.join(factoryDir, "workflows", "olko-workflow-sync.yaml"), "utf8"), /\{\{#input\.artifacts\}\} `--only \{\{\.\}\}`\{\{\/input\.artifacts\}\}/);
 });
 
-type ApiCallResult = { status: number | "next"; body?: unknown };
-
 function apiCall(data: ReturnType<typeof createDataApi>) {
-  const middleware = apiMiddleware(data, new Set(["127.0.0.1:7340"]));
-  return (method: string, url: string, options: { headers?: Record<string, string>; body?: unknown } = {}) =>
-    new Promise<ApiCallResult>((resolve) => {
-      const res = { writeHead: (status: number) => ({ end: (body: string) => resolve({ status, body: JSON.parse(body) }) }) };
-      const listeners: Record<string, ((chunk?: unknown) => void)[]> = {};
-      const req = {
-        method,
-        url,
-        headers: options.headers ?? {},
-        on(event: string, listener: (chunk?: unknown) => void) {
-          (listeners[event] ??= []).push(listener);
-          if (event === "end") {
-            queueMicrotask(() => {
-              if (options.body !== undefined) for (const l of listeners.data ?? []) l(typeof options.body === "string" ? options.body : JSON.stringify(options.body));
-              for (const l of listeners.end ?? []) l();
-            });
-          }
-          return req;
-        },
-      };
-      middleware(req, res, () => resolve({ status: "next" }));
-    });
+  return callerFor(apiMiddleware(data, ALLOWED_HOSTS));
 }
 
 function writeRun(dataDir: string, runId: string, run: Record<string, unknown>): void {
@@ -244,7 +223,7 @@ test("the viewer lists projects with their latest status, shows the status file 
   assert.equal(runs.find((r) => r.runId === "r-0000000a")?.projectId, "sample-app");
   assert.equal(runs.find((r) => r.runId === "r-0000000c")?.projectId, null);
 
-  const headers = { "x-factory-action": "projects", origin: "http://127.0.0.1:7340" };
+  const headers = { "x-factory-action": "projects", origin: ALLOWED_ORIGIN };
   assert.equal((await call("POST", "/api/projects", { body: { action: "discover", path: ws } })).status, 403, "needs the viewer header");
   assert.equal((await call("POST", "/api/projects", { headers: { ...headers, origin: "https://example.com" }, body: { action: "discover" } })).status, 403);
   const added = await call("POST", "/api/projects", { headers, body: { action: "add", path: folder(ws, "web"), id: "sample-web" } });
@@ -291,7 +270,7 @@ test("the viewer's analyze action starts the status workflow for a project once,
   const factory = new Factory(dataDir, { backend: "delegate", executors: { opencode: stub as never } });
   const data = createDataApi({ factoryDir, dataDir, configFile: path.join(factoryDir, "config", "factory.yaml"), demo: false, factory });
   const call = apiCall(data);
-  const headers = { "x-factory-action": "projects", origin: "http://127.0.0.1:7340" };
+  const headers = { "x-factory-action": "projects", origin: ALLOWED_ORIGIN };
 
   const listed = data.projects();
   assert.equal(listed.statusWorkflowInstalled, true);
@@ -329,7 +308,7 @@ test("analyze refuses a missing status workflow and a delegate backend without a
   addProject({ path: app, id: "sample-app" });
   const dataDir = workspace();
   const factory = new Factory(dataDir, { backend: "delegate" });
-  const headers = { "x-factory-action": "projects", origin: "http://127.0.0.1:7340" };
+  const headers = { "x-factory-action": "projects", origin: ALLOWED_ORIGIN };
   const missing = path.join(workspace(), "factory.yaml");
   fs.writeFileSync(missing, fs.readFileSync(path.join(factoryDir, "config", "factory.yaml"), "utf8").replace("statusWorkflow: olko-project-status", "statusWorkflow: sample-missing"));
   const missingApi = createDataApi({ factoryDir, dataDir, configFile: missing, demo: false, factory });
@@ -338,14 +317,11 @@ test("analyze refuses a missing status workflow and a delegate backend without a
 
   const noBackend = path.join(workspace(), "factory.yaml");
   fs.writeFileSync(noBackend, fs.readFileSync(path.join(factoryDir, "config", "factory.yaml"), "utf8").replace(/\n\s*statusBackend:.*\n/, "\n"));
-  process.env.FACTORY_CONFIG = noBackend;
-  try {
+  withEnv({ FACTORY_CONFIG: noBackend }, () => {
     const api = createDataApi({ factoryDir, dataDir, configFile: noBackend, demo: false, factory });
     assert.throws(() => api.projectsAction({ action: "analyze", id: "sample-app" }), /needs a CLI backend: set projects.statusBackend/);
     assert.equal(factory.runs.size, 0, "no run is created");
-  } finally {
-    delete process.env.FACTORY_CONFIG;
-  }
+  });
   assert.deepEqual(parseProjectsAction({ action: "analyze", id: "sample-app" }), { action: "analyze", id: "sample-app" });
 });
 
@@ -367,14 +343,14 @@ test("the start-up note names the loaded settings and never their values", async
     homeEnv.loaded = [];
     assert.equal(homeEnvNote(), null, "nothing loaded, nothing to say");
     homeEnv.loaded = ["FACTORY_STATUS_CLI", "FACTORY_TOKEN"];
-    process.env.FACTORY_TOKEN_PROBE = "secret-value";
-    const note = homeEnvNote() ?? "";
-    assert.match(note, /FACTORY_STATUS_CLI, FACTORY_TOKEN$/);
-    assert.ok(note.includes(homeEnv.file));
-    assert.ok(!note.includes("secret-value"));
+    withEnv({ FACTORY_TOKEN_PROBE: "secret-value" }, () => {
+      const note = homeEnvNote() ?? "";
+      assert.match(note, /FACTORY_STATUS_CLI, FACTORY_TOKEN$/);
+      assert.ok(note.includes(homeEnv.file));
+      assert.ok(!note.includes("secret-value"));
+    });
   } finally {
     homeEnv.loaded = loaded;
-    delete process.env.FACTORY_TOKEN_PROBE;
   }
 });
 
@@ -386,15 +362,11 @@ test("FACTORY_STATUS_CLI from the factory home's .env picks the status backend o
 
   const envFile = path.join(workspace(), ".env");
   fs.writeFileSync(envFile, ["# device settings", "FACTORY_STATUS_CLI=claude", "FACTORY_SAMPLE_SET=from-file", ""].join("\n"));
-  process.env.FACTORY_SAMPLE_SET = "from-environment";
-  try {
+  withEnv({ FACTORY_SAMPLE_SET: "from-environment", FACTORY_STATUS_CLI: undefined }, () => {
     assert.deepEqual(loadHomeEnv(envFile), ["FACTORY_STATUS_CLI"], "a variable already in the environment wins");
     assert.equal(process.env.FACTORY_SAMPLE_SET, "from-environment");
     assert.deepEqual(loadFactoryConfig().projects.statusBackend, { kind: "cli", cli: "claude" });
-  } finally {
-    delete process.env.FACTORY_STATUS_CLI;
-    delete process.env.FACTORY_SAMPLE_SET;
-  }
+  });
   assert.deepEqual(loadHomeEnv(path.join(workspace(), "missing.env")), []);
   assert.deepEqual(loadHomeEnv(), [], "the factory home has no .env in the tests");
 });

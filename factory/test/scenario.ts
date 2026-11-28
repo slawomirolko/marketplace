@@ -5,6 +5,7 @@ import http from "node:http";
 import type { IncomingHttpHeaders } from "node:http";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { Report, RunStatusView } from "../src/types.ts";
+import { pollUntil } from "./helpers/poll.ts";
 
 type Payload = Partial<RunStatusView> & Partial<Omit<Report, keyof RunStatusView>> & {
   runId: string;
@@ -53,15 +54,14 @@ async function call(client: Client, name: string, args: Record<string, unknown>)
   return { payload, isError: Boolean(res.isError) };
 }
 
-async function pollUntil(client: Client, runId: string, statuses: string[], timeoutMs = 10000): Promise<Payload> {
-  const started = Date.now();
-  for (;;) {
-    const { payload } = await call(client, "factory_status", { runId });
-    assert.ok(payload.cost, "every status response carries the cost footer");
-    if (payload.status && statuses.includes(payload.status)) return payload;
-    if (Date.now() - started > timeoutMs) throw new Error(`timeout waiting for ${statuses}, last=${payload.status}`);
-    await new Promise((r) => setTimeout(r, 30));
-  }
+/** factory_status goes over HTTP: slower than in-process polling, so a wider interval and limit. */
+const STATUS_POLL = { intervalMs: 30, timeoutMs: 10000 };
+
+function statusReaches(client: Client, runId: string, statuses: string[]): Promise<Payload> {
+  return pollUntil(async () => (await call(client, "factory_status", { runId })).payload, statuses, {
+    ...STATUS_POLL,
+    check: (payload) => assert.ok(payload.cost, "every status response carries the cost footer"),
+  });
 }
 
 const client = await connect();
@@ -95,7 +95,7 @@ await check("start is idempotent for the same key", async () => {
 await check("confirm starts run asynchronously and it pauses on the node question", async () => {
   const { payload } = await call(client, "factory_confirm", { runId });
   assert.equal(payload.status, "running");
-  const waiting = await pollUntil(client, runId, ["waiting_for_user"]);
+  const waiting = await statusReaches(client, runId, ["waiting_for_user"]);
   assert.equal(waiting.pendingQuestion?.id, "q-endpoint");
   assert.equal(waiting.currentNode, "hello/build/implement");
   assert.ok((waiting.cost?.costUsd ?? 0) > 0, "cost already visible while waiting");
@@ -112,7 +112,7 @@ await check("answer resumes the same node; repeated answer is idempotent", async
   assert.equal(first.payload.duplicate, false);
   const second = await call(client, "factory_answer", { runId, questionId: "q-endpoint", answer: "extend" });
   assert.equal(second.payload.duplicate, true);
-  const done = await pollUntil(client, runId, ["done", "stopped", "cancelled"]);
+  const done = await statusReaches(client, runId, ["done", "stopped", "cancelled"]);
   assert.equal(done.status, "done");
 });
 
@@ -144,16 +144,16 @@ await check("budget: info at 50%, pause at 80% asks the user, 'stop' stops the r
   const { payload } = await call(client, "factory_start", { goal: "budget test" });
   const id = payload.runId;
   await call(client, "factory_confirm", { runId: id, overrides: { budget: { maxCostUsd: 0.45 } } });
-  let state = await pollUntil(client, id, ["waiting_for_user", "done", "stopped"]);
+  let state = await statusReaches(client, id, ["waiting_for_user", "done", "stopped"]);
   if (state.pendingQuestion?.id === "q-endpoint") {
     await call(client, "factory_answer", { runId: id, questionId: "q-endpoint", answer: "new" });
-    state = await pollUntil(client, id, ["waiting_for_user", "done", "stopped"]);
+    state = await statusReaches(client, id, ["waiting_for_user", "done", "stopped"]);
   }
   assert.equal(state.pendingQuestion?.id, "q-budget-pause", `expected budget pause, got ${state.status}`);
   assert.ok(state.cost?.warnings.includes("budget threshold: info"));
   assert.ok((state.cost?.budgetRatio ?? 0) >= 0.8);
   await call(client, "factory_answer", { runId: id, questionId: "q-budget-pause", answer: "stop" });
-  const end = await pollUntil(client, id, ["stopped", "done"]);
+  const end = await statusReaches(client, id, ["stopped", "done"]);
   assert.equal(end.status, "stopped");
 });
 

@@ -1,15 +1,11 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import test from "node:test";
+import { driveWorkflow, type PlanRun } from "./helpers/plan-driver.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
-const { Factory } = await import("../src/engine.ts");
 const { missingEdges } = await import("./edge-coverage.ts");
 
-const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
-const RUNS: ReturnType<InstanceType<typeof Factory>["get"]>[] = [];
+const RUNS: PlanRun[] = [];
 const REPLIES: Record<string, string> = {
   triage: "no tracker change",
   "knowledge-final": "Update notes/approval-gate.md for the gated op mechanism.",
@@ -20,31 +16,7 @@ const REPLIES: Record<string, string> = {
 };
 
 async function drive(switches: { tracker: boolean; editor: boolean }) {
-  const factory = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-edges-finalize-")), { backend: "delegate" });
-  const { run } = factory.start("plan finalize", undefined, { workflow: "olko-plan-finalize", input: { project: "/repo", switches } });
-  factory.confirm(run.runId);
-  const prompts: Record<string, string[]> = {};
-  const order: string[] = [];
-  for (let i = 0; i < 500; i++) {
-    const view = factory.status(factory.get(run.runId));
-    if (ENDED.has(view.status)) break;
-    assert.notEqual(view.status, "waiting_for_user", `finalize asked the user: ${JSON.stringify(view.pendingQuestion)}`);
-    if (view.status === "waiting_for_client") {
-      for (const work of view.pendingWorkItems ?? []) {
-        const step = work.nodePath.split("/").pop()!;
-        (prompts[step] ??= []).push(work.prompt);
-        order.push(step);
-        const output = REPLIES[step];
-        if (output === undefined) throw new Error(`unexpected step ${step}`);
-        factory.submit(run.runId, work.nodePath, output, { model: "claude-haiku-5-5", inputTokens: 10, outputTokens: 10 }, work.agentId);
-      }
-    } else {
-      await new Promise((r) => setTimeout(r, 5));
-    }
-  }
-  const done = factory.get(run.runId);
-  RUNS.push(done);
-  return { done, prompts, order };
+  return driveWorkflow({ workflow: "olko-plan-finalize", goal: "plan finalize", input: { project: "/repo", switches }, tempPrefix: "factory-plan-edges-finalize-", reply: ({ step }) => REPLIES[step], runs: RUNS });
 }
 
 test("with the tracker and editor switches on, the triage runs first and the plan folder opens before the completion report", async () => {

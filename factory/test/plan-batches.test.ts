@@ -1,27 +1,13 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { tempDir } from "./helpers/temp.ts";
+import { FENCE, applied, driveWorkflow, questions } from "./helpers/plan-driver.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
-const { Factory, loadedWorkflows } = await import("../src/engine.ts");
+const { loadedWorkflows } = await import("../src/engine.ts");
 const { loadWorkflowDir } = await import("../src/workflow-yaml.ts");
-
-const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
-const FENCE = "`".repeat(3);
-
-function questions(prefix: string, count: number): string {
-  const items = Array.from({ length: count }, (_, i) => ({ text: `${prefix} ${i + 1}\n1. keep (recommended)\n2. change\n3. drop` }));
-  return `Batch.\n${FENCE}json\n${JSON.stringify({ questions: items })}\n${FENCE}`;
-}
-
-function applied(changes: string[], areas: string[]): string {
-  return `Applied.
-${FENCE}json
-${JSON.stringify({ changes, areas })}
-${FENCE}`;
-}
 
 function commonReply(step: string): string | undefined {
   if (step === "stack") return "stack | none";
@@ -31,33 +17,8 @@ function commonReply(step: string): string | undefined {
 }
 
 async function drive(workflow: string, reply: (step: string, visit: number, agentId?: string) => string | undefined, answerFor: (id: string) => string) {
-  const factory = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-batches-")), { backend: "delegate" });
-  const { run } = factory.start("plan batches", undefined, { workflow, input: { project: "/repo" } });
-  factory.confirm(run.runId);
-  const prompts: Record<string, string[]> = {};
-  const asked: string[] = [];
-  const agents: Record<string, string[]> = {};
-  for (let i = 0; i < 5000; i++) {
-    const view = factory.status(factory.get(run.runId));
-    if (ENDED.has(view.status)) break;
-    if (view.status === "waiting_for_user") {
-      const id = view.pendingQuestion!.id;
-      asked.push(id);
-      factory.answer(run.runId, id, answerFor(id));
-    } else if (view.status === "waiting_for_client") {
-      for (const work of view.pendingWorkItems ?? []) {
-        const step = work.nodePath.split("/").pop()!;
-        (prompts[step] ??= []).push(work.prompt);
-        (agents[step] ??= []).push(work.agentId);
-        const output = reply(step, prompts[step].length, work.agentId) ?? commonReply(step);
-        if (output === undefined) throw new Error(`unexpected step ${step}`);
-        factory.submit(run.runId, work.nodePath, output, { model: "claude-haiku-5-5", inputTokens: 10, outputTokens: 10 }, work.agentId);
-      }
-    } else {
-      await new Promise((r) => setTimeout(r, 5));
-    }
-  }
-  return { done: factory.get(run.runId), prompts, asked, agents };
+  const { done, prompts, asked, agents } = await driveWorkflow({ workflow, goal: "plan batches", input: { project: "/repo" }, tempPrefix: "factory-plan-batches-", reply: (work) => reply(work.step, work.visit, work.agentId) ?? commonReply(work.step), answer: answerFor });
+  return { done, prompts, asked, agents };
 }
 
 test("a grill batch is recorded in tracker.md by one step after every question of the batch is answered, and the next batch starts a new list", async () => {
@@ -103,7 +64,7 @@ test("re-validation runs only the workers whose area the applied answers changed
 // olko-plan-readiness runs as a group inside olko-plan-documentation and reads the Feature (featureDir, taskIds)
 // that olko-plan-entry put in the shared state. This wrapper supplies that Feature state for one Task.
 function withFeatureWrapper(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-readiness-wrapper-"));
+  const dir = tempDir("factory-plan-readiness-wrapper-");
   const source = path.join(import.meta.dirname, "..", "workflows");
   for (const file of fs.readdirSync(source)) if (file.endsWith(".yaml")) fs.copyFileSync(path.join(source, file), path.join(dir, file));
   fs.writeFileSync(

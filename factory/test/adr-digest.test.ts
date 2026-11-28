@@ -1,48 +1,43 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import test from "node:test";
+import { ENDED, FENCE, driveRun } from "./helpers/plan-driver.ts";
+import { tempDir } from "./helpers/temp.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
 
 type Handler = (prompt: string) => string;
-const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
 
-const json = (value: unknown) => "```json\n" + JSON.stringify(value) + "\n```";
+const json = (value: unknown) => `${FENCE}json\n${JSON.stringify(value)}\n${FENCE}`;
 
 async function drive(factory: any, runId: string, agents: Record<string, Handler>, answers: Record<string, string>): Promise<{ run: any; prompts: any; questions: any[] }> {
-  const prompts: Record<string, string[]> = {};
   const questions: { id: string; text: string }[] = [];
-  for (let i = 0; i < 2000; i++) {
-    const run = factory.get(runId);
-    if (ENDED.has(run.status)) return { run, prompts, questions };
-    if (run.status === "waiting_for_client") {
-      for (const item of run.pendingWorkItems ?? [run.pendingWork]) {
-        const id = item.nodePath.split("/").pop();
-        const handler = agents[id];
-        if (!handler) throw new Error(`no scripted output for ${item.nodePath}`);
-        (prompts[id] ??= []).push(item.prompt);
-        factory.submit(runId, item.nodePath, handler(item.prompt), {}, item.agentId);
+  const { done, prompts } = await driveRun(factory, runId, {
+    usage: {},
+    reply: ({ nodePath, step, prompt }) => {
+      const handler = agents[step];
+      if (!handler) {
+        throw new Error(`no scripted output for ${nodePath}`);
       }
-      continue;
-    }
-    if (run.status === "waiting_for_user") {
-      const q = run.pendingQuestion;
-      questions.push({ id: q.id, text: q.text });
-      const key = Object.keys(answers).find((k) => q.id.endsWith(k));
-      if (!key) throw new Error(`no scripted answer for ${q.id}: ${q.text}`);
-      factory.answer(runId, q.id, answers[key]);
-      continue;
-    }
-    await new Promise((r) => setTimeout(r, 5));
+      return handler(prompt);
+    },
+    answer: (id, question) => {
+      questions.push({ id, text: question.text });
+      const key = Object.keys(answers).find((suffix) => id.endsWith(suffix));
+      if (!key) {
+        throw new Error(`no scripted answer for ${id}: ${question.text}`);
+      }
+      return answers[key]!;
+    },
+  });
+  if (!ENDED.has(done.status)) {
+    throw new Error("the run did not end");
   }
-  throw new Error("the run did not end");
+  return { run: done, prompts, questions };
 }
 
 async function newFactory() {
   const { Factory } = await import("../src/engine.ts");
-  return new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-adr-")), { backend: "delegate" });
+  return new Factory(tempDir("factory-adr-"), { backend: "delegate" });
 }
 
 const BLOCKED = { topic: "logging.format", adrs: ["ADR-0001", "ADR-0002"], paths: ["src/Api/A.cs"] };
@@ -124,7 +119,7 @@ test("plan rules: an overlapping topic waits for your answer, and your answer an
 });
 
 test("store reconcile: batches, then groups found after the front matter, one question each; writes only after an approval; skip and stop write nothing", async () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), "adr-project-"));
+  const project = tempDir("adr-project-");
   const factory = await newFactory();
   const { run } = factory.start("reconcile", undefined, { workflow: "olko-adr-store-reconcile", input: { project } });
   factory.confirm(run.runId);
@@ -161,7 +156,7 @@ test("store reconcile: batches, then groups found after the front matter, one qu
 });
 
 test("store reconcile: a project without a store stops after the inventory", async () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), "adr-empty-"));
+  const project = tempDir("adr-empty-");
   const factory = await newFactory();
   const { run } = factory.start("reconcile", undefined, { workflow: "olko-adr-store-reconcile", input: { project } });
   factory.confirm(run.runId);

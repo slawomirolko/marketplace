@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { tempDir } from "./helpers/temp.ts";
 import { z } from "zod";
 import { expandWorkflowDir, loadWorkflowDir } from "../src/workflow-yaml.ts";
 import { stateReferenceErrors } from "../src/state-refs.ts";
 import { contractJson, missingField, OPERATION_CONTRACTS } from "../src/contract.ts";
 
 function workflowDir(files: Record<string, string>): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "state-refs-"));
+  const dir = tempDir("state-refs-");
   for (const [name, text] of Object.entries(files)) fs.writeFileSync(path.join(dir, name), text);
   return dir;
 }

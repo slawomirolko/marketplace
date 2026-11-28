@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { withEnv } from "./helpers/env.ts";
+import { tempDir } from "./helpers/temp.ts";
 import { SUPERVISOR_PATH, parseSupervisorLine, summarizeRun } from "../src/run-summary.ts";
 import type { CliRequest, CliResult, LedgerRecord, Run, RunEvent } from "../src/types.ts";
 
@@ -120,13 +121,12 @@ test("the post-run agent, its prompt, host hint and verdict line come from confi
 });
 
 test("without a supervisor section in the config no post-run agent runs", async () => {
-  const config = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "factory-no-supervisor-")), "factory.yaml");
+  const config = path.join(tempDir("factory-no-supervisor-"), "factory.yaml");
   const lines = fs.readFileSync(path.join(import.meta.dirname, "..", "config", "factory.yaml"), "utf8").split(/\r?\n/);
   const start = lines.indexOf("supervisor:");
   const end = lines.findIndex((line, index) => index > start && /^\S/.test(line));
   fs.writeFileSync(config, [...lines.slice(0, start), ...lines.slice(end)].join("\n"));
-  process.env.FACTORY_CONFIG = config;
-  try {
+  await withEnv({ FACTORY_CONFIG: config }, async () => {
     assert.equal(loadFactoryConfig().supervisor, undefined);
     const factory = factoryWith({ backend: "fake" });
     const { run } = factory.start("unsupervised fake run");
@@ -135,13 +135,11 @@ test("without a supervisor section in the config no post-run agent runs", async 
     assert.equal(ended.status, "done");
     assert.equal(ended.supervisor, undefined);
     assert.equal(ended.ledger.filter((record) => record.nodePath === SUPERVISOR_PATH).length, 0);
-  } finally {
-    delete process.env.FACTORY_CONFIG;
-  }
+  });
 });
 
 function factoryWith(options: ConstructorParameters<typeof Factory>[1]): FactoryType {
-  return new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-supervisor-")), options);
+  return new Factory(tempDir("factory-supervisor-"), options);
 }
 
 async function finish(factory: FactoryType, runId: string): Promise<Run> {

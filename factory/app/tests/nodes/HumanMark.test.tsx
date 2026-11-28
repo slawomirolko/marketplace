@@ -1,16 +1,9 @@
-import { askingWorkflow, fireEvent, renderFlow, screen, within } from "../testUtils/index.ts";
+import { askingWorkflow, fireEvent, nodeTitled, renderFlow, screen, within } from "../testUtils/index.ts";
 
 const CLICK = "Click to see the questions and your answers in this run";
 
-function node(title: string): HTMLElement {
-  const heading = screen.getByText(title, { selector: ".card-title" });
-  const box = heading.closest<HTMLElement>(".card, .group");
-  if (!box) throw new Error(`no node titled ${title}`);
-  return box;
-}
-
 function icon(title: string): HTMLElement | null {
-  return within(node(title)).queryByRole("button", { name: new RegExp(CLICK) });
+  return within(nodeTitled(title)).queryByRole("button", { name: new RegExp(CLICK) });
 }
 
 function flow(options: Parameters<typeof renderFlow>[0] = {}) {
@@ -65,7 +58,7 @@ describe("HumanMark", () => {
   test("an expanded team relays in its header and the asking member asks through its own permission", () => {
     flow({ expanded: ["asking/team"] });
 
-    expect(node("team")).toHaveClass("group");
+    expect(nodeTitled("team")).toHaveClass("group");
     expect(icon("team")).toHaveClass("human-relays");
     const one = icon("one");
     expect(one).toHaveClass("human-asks");
@@ -99,7 +92,7 @@ describe("HumanMark", () => {
     const onNodeClick = vi.fn();
     flow({ state: { openQuestions }, onNodeClick });
 
-    fireEvent.click(node("plan"));
+    fireEvent.click(nodeTitled("plan"));
 
     expect(onNodeClick).toHaveBeenCalledTimes(1);
     expect(openQuestions).not.toHaveBeenCalled();

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { withEnv } from "./helpers/env.ts";
+import { tempDir } from "./helpers/temp.ts";
 import { evaluateWhen } from "../src/when.ts";
 import { listWorkflowFiles, loadWorkflowDir, loadWorkflowFile, loadWorkflowSpecs, negateWhen } from "../src/workflow-yaml.ts";
 import { claudeAgentsFile, claudeTools } from "../src/cli-agents.ts";
@@ -10,7 +11,7 @@ import { describeAgent, marketplaceDir, readMarketplaceAgent } from "../src/mark
 import { operationNamed } from "../src/ops.ts";
 
 function writeYaml(text: string): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-yaml-"));
+  const dir = tempDir("workflow-yaml-");
   const file = path.join(dir, "flow.yaml");
   fs.writeFileSync(file, text);
   return file;
@@ -89,7 +90,7 @@ test("an interrupt may name several llm steps of its workflow", () => {
 });
 
 function partsDir(files: Record<string, string>): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-parts-"));
+  const dir = tempDir("workflow-parts-");
   for (const [name, text] of Object.entries(files)) fs.writeFileSync(path.join(dir, `${name}.yaml`), text);
   return dir;
 }
@@ -243,7 +244,7 @@ test("a marketplace skill becomes agent instructions that name the skill directo
 });
 
 test("a YAML node with skill, tools, dirs and a question with allowedFrom loads", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-yaml-"));
+  const dir = tempDir("workflow-yaml-");
   const file = path.join(dir, "flow.yaml");
   fs.writeFileSync(file, `
 name: skill-node
@@ -290,23 +291,18 @@ test("an agent's declared skills are read from the marketplace checkout, not fro
 });
 
 test("a changed agent or skill in the marketplace reaches the next run without a factory restart", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "factory-marketplace-"));
+  const root = tempDir("factory-marketplace-");
   const source = marketplaceDir();
   for (const rel of ["agents/opencode/olko-review-bugs-lens.md", "agents/opencode/index.json", "skills/caveman/caveman/SKILL.md"]) {
     fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
     fs.copyFileSync(path.join(source, rel), path.join(root, rel));
   }
-  const previous = process.env.FACTORY_MARKETPLACE_DIR;
-  process.env.FACTORY_MARKETPLACE_DIR = root;
-  try {
+  withEnv({ FACTORY_MARKETPLACE_DIR: root }, () => {
     const read = () => JSON.parse(fs.readFileSync(claudeAgentsFile("olko-review-bugs-lens"), "utf8"))["olko-review-bugs-lens"].prompt as string;
     assert.ok(!read().includes("Changed rule"));
     fs.appendFileSync(path.join(root, "agents/opencode/olko-review-bugs-lens.md"), "\nChanged rule.\n");
     assert.ok(read().includes("Changed rule"));
-  } finally {
-    if (previous === undefined) delete process.env.FACTORY_MARKETPLACE_DIR;
-    else process.env.FACTORY_MARKETPLACE_DIR = previous;
-  }
+  });
 });
 
 test("a Claude Code plugin agent loads with its plugin root and its namespaced preloaded skills from the marketplace", () => {
@@ -320,7 +316,7 @@ test("a Claude Code plugin agent loads with its plugin root and its namespaced p
 });
 
 test("an agent lists the scripts of the skills it loads, and a skill its own, without test files", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "factory-marketplace-"));
+  const root = tempDir("factory-marketplace-");
   const write = (rel: string, text: string) => {
     fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
     fs.writeFileSync(path.join(root, rel), text);
@@ -331,20 +327,15 @@ test("an agent lists the scripts of the skills it loads, and a skill its own, wi
   write("skills/demo/sync/scripts/watch.Tests.ps1", "");
   write("skills/demo/plain/SKILL.md", "---\ndescription: plain\n---\nbody\n");
   write("agents/opencode/syncer.md", "---\ndescription: syncer\npermission:\n  skill:\n    sync: allow\n    plain: allow\n---\nbody\n");
-  const previous = process.env.FACTORY_MARKETPLACE_DIR;
-  process.env.FACTORY_MARKETPLACE_DIR = root;
-  try {
+  withEnv({ FACTORY_MARKETPLACE_DIR: root }, () => {
     assert.deepEqual(describeAgent("syncer")?.scripts, [{ skill: "sync", name: "sync.mjs", file: "skills/demo/sync/scripts/sync.mjs" }]);
     assert.deepEqual(describeAgent("sync")?.scripts, [{ skill: "sync", name: "sync.mjs", file: "skills/demo/sync/scripts/sync.mjs" }]);
     assert.deepEqual(describeAgent("plain")?.scripts, []);
-  } finally {
-    if (previous === undefined) delete process.env.FACTORY_MARKETPLACE_DIR;
-    else process.env.FACTORY_MARKETPLACE_DIR = previous;
-  }
+  });
 });
 
 test("an agent that may ask the user itself names its permission: OpenCode question allow or the AskUserQuestion tool", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "factory-marketplace-"));
+  const root = tempDir("factory-marketplace-");
   const write = (rel: string, text: string) => {
     fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
     fs.writeFileSync(path.join(root, rel), text);
@@ -354,22 +345,17 @@ test("an agent that may ask the user itself names its permission: OpenCode quest
   write("plugins/demo/agents/claude-asker.md", "---\nname: claude-asker\ndescription: asks\ntools: Read, Bash, AskUserQuestion\n---\nbody\n");
   write("plugins/demo/agents/claude-reader.md", "---\nname: claude-reader\ndescription: reads\ntools: Read, Grep\n---\nbody\n");
   write("skills/demo/plain/SKILL.md", "---\ndescription: plain\n---\nbody\n");
-  const previous = process.env.FACTORY_MARKETPLACE_DIR;
-  process.env.FACTORY_MARKETPLACE_DIR = root;
-  try {
+  withEnv({ FACTORY_MARKETPLACE_DIR: root }, () => {
     assert.equal(describeAgent("asker")?.asks, "question: allow");
     assert.equal(describeAgent("silent")?.asks, null);
     assert.equal(describeAgent("claude-asker")?.asks, "AskUserQuestion tool");
     assert.equal(describeAgent("claude-reader")?.asks, null);
     assert.equal(describeAgent("plain")?.asks, null);
-  } finally {
-    if (previous === undefined) delete process.env.FACTORY_MARKETPLACE_DIR;
-    else process.env.FACTORY_MARKETPLACE_DIR = previous;
-  }
+  });
 });
 
 test("an agent has the memory layer attached when it declares the configured memory skill", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "factory-marketplace-"));
+  const root = tempDir("factory-marketplace-");
   const write = (rel: string, text: string) => {
     fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
     fs.writeFileSync(path.join(root, rel), text);
@@ -380,23 +366,18 @@ test("an agent has the memory layer attached when it declares the configured mem
   write("agents/opencode/denied.md", "---\ndescription: denied\npermission:\n  skill:\n    olko-memory-layer: deny\n    notes: allow\n---\nbody\n");
   write("agents/opencode/listed.md", "---\ndescription: listed\n---\nbody\n");
   write("agents/opencode/index.json", JSON.stringify({ agents: [{ name: "listed", skills: ["notes"] }] }));
-  const previous = process.env.FACTORY_MARKETPLACE_DIR;
-  process.env.FACTORY_MARKETPLACE_DIR = root;
-  try {
+  withEnv({ FACTORY_MARKETPLACE_DIR: root }, () => {
     assert.equal(describeAgent("rememberer")?.memoryLayer, true);
     assert.equal(describeAgent("denied")?.memoryLayer, false, "a denied skill is not attached");
     assert.equal(describeAgent("olko-memory-layer")?.memoryLayer, false, "the memory skill itself is not an agent with memory");
     assert.equal(describeAgent("rememberer", "notes")?.memoryLayer, false);
     assert.equal(describeAgent("denied", "notes")?.memoryLayer, true, "the memory skill name comes from the caller");
     assert.equal(describeAgent("listed", "notes")?.memoryLayer, true, "a skill listed in index.json counts too");
-  } finally {
-    if (previous === undefined) delete process.env.FACTORY_MARKETPLACE_DIR;
-    else process.env.FACTORY_MARKETPLACE_DIR = previous;
-  }
+  });
 });
 
 test("a switched subgraph gets a gate: switch on enters it, switch off goes straight to its exits", async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-yaml-"));
+  const dir = tempDir("workflow-yaml-");
   fs.writeFileSync(path.join(dir, "tracker.yaml"), `
 name: tracker-steps
 version: 1.0.0
@@ -432,7 +413,7 @@ edges:
 });
 
 test("a group inlines another YAML file with its node ids unchanged and rejects an id used twice", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-yaml-"));
+  const dir = tempDir("workflow-yaml-");
   fs.writeFileSync(path.join(dir, "questions.yaml"), `
 name: questions
 version: 1.0.0

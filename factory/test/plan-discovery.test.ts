@@ -1,22 +1,16 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import test from "node:test";
+import { until } from "./helpers/poll.ts";
+import { tempDir } from "./helpers/temp.ts";
+import { driveWorkflow, fencedJson, stoppedBy, type PlanRun } from "./helpers/plan-driver.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
 const { Factory } = await import("../src/engine.ts");
 const { missingEdges } = await import("./edge-coverage.ts");
 
-const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
-const FENCE = "`".repeat(3);
 const RECOMMENDED = "Use your recommended answer for every question.";
 const BLOCKER = "blocker | grill-with-docs cannot be loaded";
-const RUNS: ReturnType<InstanceType<typeof Factory>["get"]>[] = [];
-
-function stoppedBy(run: { status: string; events: { error?: unknown }[] }, reason: RegExp): boolean {
-  return run.status === "failed" && run.events.some((e) => reason.test(String(e.error ?? "")));
-}
+const RUNS: PlanRun[] = [];
 
 function defaultAnswer(id: string): string {
   return id.includes("draft-review") ? "approve" : RECOMMENDED;
@@ -30,37 +24,19 @@ function draft(questions: string[], decisions: string[]): string {
     tasks: [{ id: "T1", title: "Approval question", criteria: ["AC1: decline runs no op"] }],
     hierarchy: "- Feature: Approval gate\n  - T1: Approval question",
   };
-  return `Draft.\n${FENCE}json\n${JSON.stringify(body)}\n${FENCE}`;
+  return fencedJson(body, "Draft.");
 }
 
 async function drive(reply: (step: string, visit: number) => string | undefined, { tracker = false, answer = defaultAnswer }: { tracker?: boolean; answer?: (id: string) => string } = {}) {
-  const factory = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-discovery-")), { backend: "delegate" });
-  const { run } = factory.start("plan discovery", undefined, { workflow: "olko-plan-discovery", input: { project: "/repo", idea: "approval gate", switches: { tracker } } });
-  factory.confirm(run.runId);
-  const prompts: Record<string, string[]> = {};
-  const asked: string[] = [];
-  for (let i = 0; i < 500; i++) {
-    const view = factory.status(factory.get(run.runId));
-    if (ENDED.has(view.status)) break;
-    if (view.status === "waiting_for_user") {
-      const id = view.pendingQuestion!.id;
-      asked.push(id);
-      factory.answer(run.runId, id, answer(id));
-    } else if (view.status === "waiting_for_client") {
-      for (const work of view.pendingWorkItems ?? []) {
-        const step = work.nodePath.split("/").pop()!;
-        const visit = (prompts[step] ??= []).push(work.prompt);
-        const output = reply(step, visit) ?? (step === "review-grill" ? "Approve or revise?" : undefined);
-        if (output === undefined) throw new Error(`unexpected step ${step}`);
-        factory.submit(run.runId, work.nodePath, output, { model: "claude-haiku-5-5", inputTokens: 10, outputTokens: 10 }, work.agentId);
-      }
-    } else {
-      await new Promise((r) => setTimeout(r, 5));
-    }
-  }
-  const done = factory.get(run.runId);
-  RUNS.push(done);
-  return { done, prompts, asked };
+  return driveWorkflow({
+    workflow: "olko-plan-discovery",
+    goal: "plan discovery",
+    input: { project: "/repo", idea: "approval gate", switches: { tracker } },
+    tempPrefix: "factory-plan-discovery-",
+    reply: (work) => reply(work.step, work.visit) ?? (work.step === "review-grill" ? "Approve or revise?" : undefined),
+    answer,
+    runs: RUNS,
+  });
 }
 
 test("the consistency check and the grill see the Feature and Task criteria, and the writer sees the questions the answer refers to", async () => {
@@ -131,15 +107,10 @@ test("a reply the parser rejects is asked for once more with the error, and the 
 });
 
 test("a second rejected reply in a row fails the run", async () => {
-  const factory = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-discovery-")), { backend: "delegate" });
+  const factory = new Factory(tempDir("factory-plan-discovery-"), { backend: "delegate" });
   const { run } = factory.start("plan discovery", undefined, { workflow: "olko-plan-discovery", input: { project: "/repo", idea: "approval gate", switches: { tracker: false } } });
   factory.confirm(run.runId);
-  let work = factory.next(run.runId);
-  for (let i = 0; i < 200 && !work; i++) {
-    await new Promise((r) => setTimeout(r, 5));
-    work = factory.next(run.runId);
-  }
-  assert.ok(work, "the draft work is offered");
+  const work = await until(() => factory.next(run.runId), "the draft work to be offered");
   factory.submit(run.runId, work.nodePath, "no block", {}, work.agentId);
   assert.equal(factory.get(run.runId).status, "waiting_for_client");
   assert.throws(() => factory.submit(run.runId, work.nodePath, "still no block", {}, work.agentId), /no ```json block/);
@@ -213,7 +184,7 @@ function emptyDraft(part: "feature" | "tasks"): string {
   const body = JSON.parse(draft([], ["L1: only script ops are gated"]).split("\n")[2]!);
   if (part === "feature") body.feature = { title: "", goal: "", criteria: [] };
   else body.tasks = [];
-  return `Draft.\n${FENCE}json\n${JSON.stringify(body)}\n${FENCE}`;
+  return fencedJson(body, "Draft.");
 }
 
 test("a final draft without a Feature title or without a Task goes back to the writer before the review", async () => {

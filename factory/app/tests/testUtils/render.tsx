@@ -13,6 +13,7 @@ import { agentScripts, buildLevel } from "../../src/tree.ts";
 import type { FlowNode } from "../../src/layout.ts";
 import type { Workflow } from "../../src/types.ts";
 import { agents, mainWorkflow } from "./data.ts";
+import { FLOW_HEIGHT, FLOW_WIDTH } from "./flow-size.ts";
 
 export function viewerState(overrides: Partial<ViewerState> = {}): ViewerState {
   return {
@@ -59,7 +60,7 @@ export function renderFlow({ workflows = [mainWorkflow], root = "main", expanded
   return render(
     <ViewerContext.Provider value={full}>
       <ReactFlowProvider>
-        <div style={{ width: 800, height: 600 }}>
+        <div style={{ width: FLOW_WIDTH, height: FLOW_HEIGHT }}>
           <ReactFlow nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} {...(onNodeClick ? { onNodeClick } : {})} />
         </div>
       </ReactFlowProvider>

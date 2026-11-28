@@ -1,6 +1,10 @@
 export * from "@testing-library/react";
 export { default as userEvent } from "@testing-library/user-event";
 export * from "./data.ts";
+export * from "./deferred.ts";
+export * from "./flow-size.ts";
 export * from "./handlers.ts";
+export * from "./nodes.ts";
+export * from "./paths.ts";
 export * from "./render.tsx";
 export * from "./server.ts";

@@ -1,16 +1,14 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { driveWorkflow, fencedJson, stoppedBy, type PlanRun } from "./helpers/plan-driver.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
-const { Factory } = await import("../src/engine.ts");
 const { loadWorkflowDir } = await import("../src/workflow-yaml.ts");
 
-const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
-const FENCE = "`".repeat(3);
+const json = (body: unknown): string => fencedJson(body, "Done.");
+
 const BLOCKER = "blocker | grill-with-docs cannot be loaded";
 const PASS = "consistency | pass | 0 | none";
 const FAIL = "consistency | fail | 1 | stack.md misses a dependency";
@@ -19,13 +17,9 @@ const PHASES = ["olko-plan-discovery", "olko-plan-entry", "olko-plan-package", "
 const UNREACHABLE: Record<string, string> = {
   "entry-stop -> investigate": "entry-stop is a builtin.stop node: it always throws and fails the run, so its exit edge never fires",
 };
-const RUNS: ReturnType<InstanceType<typeof Factory>["get"]>[] = [];
+const RUNS: PlanRun[] = [];
 
 type Reply = (nodePath: string, step: string, visit: number) => string | undefined;
-
-function json(body: unknown): string {
-  return `Done.\n${FENCE}json\n${JSON.stringify(body)}\n${FENCE}`;
-}
 
 const QUESTION = { text: "Problem: scope\n1. keep (recommended)\n2. widen\n3. drop" };
 const AUDITOR = { id: "dotnet", agentName: "olko-dotnet-auditor" };
@@ -73,38 +67,17 @@ function answerOf(id: string, route: string): string {
 }
 
 async function drive(input: { route?: string }, reply: Reply = () => undefined, { answerRoute = "planning" }: { answerRoute?: string } = {}) {
-  const factory = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-edges-top-")), { backend: "delegate" });
-  const { run } = factory.start("plan documentation", undefined, { workflow: "olko-plan-documentation", input: { project: "/repo", idea: "approval gate", featureId: "f1", ...input, switches: { tracker: false, editor: false } } });
-  factory.confirm(run.runId);
-  const visits: Record<string, number> = {};
-  const asked: string[] = [];
-  for (let i = 0; i < 2000; i++) {
-    const view = factory.status(factory.get(run.runId));
-    if (ENDED.has(view.status)) break;
-    if (view.status === "waiting_for_user") {
-      const id = view.pendingQuestion!.id;
-      asked.push(id);
-      factory.answer(run.runId, id, answerOf(id, answerRoute));
-    } else if (view.status === "waiting_for_client") {
-      for (const work of view.pendingWorkItems ?? []) {
-        const step = work.nodePath.split("/").pop()!;
-        const visit = (visits[`${work.nodePath}#${work.agentId}`] ?? 0) + 1;
-        visits[`${work.nodePath}#${work.agentId}`] = visit;
-        const output = reply(work.nodePath, step, visit) ?? DEFAULTS[step];
-        if (output === undefined) throw new Error(`unexpected step ${work.nodePath}`);
-        factory.submit(run.runId, work.nodePath, output, { model: "claude-haiku-5-5", inputTokens: 10, outputTokens: 10 }, work.agentId);
-      }
-    } else {
-      await new Promise((r) => setTimeout(r, 1));
-    }
-  }
-  const done = factory.get(run.runId);
-  RUNS.push(done);
+  const { done, asked } = await driveWorkflow({
+    workflow: "olko-plan-documentation",
+    goal: "plan documentation",
+    input: { project: "/repo", idea: "approval gate", featureId: "f1", ...input, switches: { tracker: false, editor: false } },
+    tempPrefix: "factory-plan-edges-top-",
+    visitKey: ({ nodePath, agentId }) => `${nodePath}#${agentId}`,
+    reply: (work) => reply(work.nodePath, work.step, work.visit) ?? DEFAULTS[work.step],
+    answer: (id) => answerOf(id, answerRoute),
+    runs: RUNS,
+  });
   return { done, asked, edges: done.events.filter((e) => e.type === "edge_taken").map((e) => `${e.from} -> ${e.to}`) };
-}
-
-function stoppedBy(run: { status: string; events: { error?: unknown }[] }, reason: RegExp): boolean {
-  return run.status === "failed" && run.events.some((e) => reason.test(String(e.error ?? "")));
 }
 
 function linkingEdges(): string[] {

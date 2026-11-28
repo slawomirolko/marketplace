@@ -1,14 +1,10 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import test from "node:test";
+import { driveWorkflow } from "./helpers/plan-driver.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
-const { Factory } = await import("../src/engine.ts");
 
 const GATE = "olko-plan-gate";
-const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
 
 function replyFor(nodePath: string, checks: number, passOnCheck: number): string {
   const step = nodePath.split("/").pop();
@@ -20,27 +16,14 @@ function replyFor(nodePath: string, checks: number, passOnCheck: number): string
 }
 
 async function driveGate(passOnCheck: number) {
-  const factory = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-gate-")), { backend: "delegate" });
-  const { run } = factory.start("check the plan package", undefined, { workflow: GATE, input: { project: "/repo", featureDir: "plans/features/f1" } });
-  factory.confirm(run.runId);
-  const prompts: Record<string, string[]> = {};
   let checks = 0;
-  for (let i = 0; i < 2000; i++) {
-    const view = factory.status(factory.get(run.runId));
-    if (ENDED.has(view.status)) break;
-    assert.notEqual(view.status, "waiting_for_user", `the gate asked the user: ${JSON.stringify(view.pendingQuestion)}`);
-    if (view.status === "waiting_for_client") {
-      for (const work of view.pendingWorkItems ?? []) {
-        const step = work.nodePath.split("/").pop()!;
-        (prompts[step] ??= []).push(work.prompt);
-        if (step === "consistency") checks += 1;
-        factory.submit(run.runId, work.nodePath, replyFor(work.nodePath, checks, passOnCheck), { model: "claude-haiku-5-5", inputTokens: 10, outputTokens: 10 }, work.agentId);
-      }
-    } else {
-      await new Promise((r) => setTimeout(r, 5));
+  const reply = ({ nodePath, step }: { nodePath: string; step: string }) => {
+    if (step === "consistency") {
+      checks += 1;
     }
-  }
-  const done = factory.get(run.runId);
+    return replyFor(nodePath, checks, passOnCheck);
+  };
+  const { done, prompts } = await driveWorkflow({ workflow: GATE, goal: "check the plan package", input: { project: "/repo", featureDir: "plans/features/f1" }, tempPrefix: "factory-plan-gate-", reply });
   const started = (step: string) => done.events.filter((e: any) => e.type === "node_started" && e.node === `${GATE}/${step}`).length;
   return { done, prompts, started };
 }

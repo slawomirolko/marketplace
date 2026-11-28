@@ -1,16 +1,14 @@
 // The MCP tool descriptions promise only what the factory does.
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import test from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { tempDir } from "./helpers/temp.ts";
 import { Factory } from "../src/engine.ts";
 import { createFactoryTools } from "../src/tools.ts";
 
 async function toolDescription(name: string): Promise<string> {
-  const factory = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-tools-")), { backend: "delegate" });
+  const factory = new Factory(tempDir("factory-tools-"), { backend: "delegate" });
   const server = createFactoryTools(factory, "http://127.0.0.1:7340").buildServer();
   const client = new Client({ name: "tools-test", version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -40,7 +38,7 @@ test("factory_start names no workflow itself and lists the inputs each workflow 
 });
 
 test("a tool call that fails is counted in the metrics and logged with the tool name", async () => {
-  const factory = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-tools-")), { backend: "delegate" });
+  const factory = new Factory(tempDir("factory-tools-"), { backend: "delegate" });
   const tools = createFactoryTools(factory, "http://127.0.0.1:7340");
   const server = tools.buildServer();
   const client = new Client({ name: "tools-test", version: "1.0.0" });

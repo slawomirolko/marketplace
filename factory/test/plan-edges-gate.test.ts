@@ -1,18 +1,14 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import test from "node:test";
+import { driveWorkflow, type PlanRun } from "./helpers/plan-driver.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
-const { Factory } = await import("../src/engine.ts");
 const { missingEdges } = await import("./edge-coverage.ts");
 
 const GATE = "olko-plan-gate";
-const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
 const PASS = "consistency | pass | 0 | none";
 const FAIL = "consistency | fail | 1 | stack.md misses the queue dependency";
-const RUNS: ReturnType<InstanceType<typeof Factory>["get"]>[] = [];
+const RUNS: PlanRun[] = [];
 
 /** Replies like a gate whose consistency check passes on check `passOnCheck` (1-based). */
 function gateReply(passOnCheck: number) {
@@ -26,32 +22,7 @@ function gateReply(passOnCheck: number) {
 }
 
 async function drive(reply: (step: string, visit: number) => string | undefined) {
-  const factory = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-edges-gate-")), { backend: "delegate" });
-  const { run } = factory.start("plan gate", undefined, { workflow: GATE, input: { project: "/repo", featureDir: "plans/features/f1" } });
-  factory.confirm(run.runId);
-  const prompts: Record<string, string[]> = {};
-  const asked: string[] = [];
-  for (let i = 0; i < 2000; i++) {
-    const view = factory.status(factory.get(run.runId));
-    if (ENDED.has(view.status)) break;
-    if (view.status === "waiting_for_user") {
-      asked.push(view.pendingQuestion!.id);
-      factory.answer(run.runId, view.pendingQuestion!.id, "1");
-    } else if (view.status === "waiting_for_client") {
-      for (const work of view.pendingWorkItems ?? []) {
-        const step = work.nodePath.split("/").pop()!;
-        const visit = (prompts[step] ??= []).push(work.prompt);
-        const output = reply(step, visit);
-        if (output === undefined) throw new Error(`unexpected step ${step}`);
-        factory.submit(run.runId, work.nodePath, output, { model: "claude-haiku-5-5", inputTokens: 10, outputTokens: 10 }, work.agentId);
-      }
-    } else {
-      await new Promise((r) => setTimeout(r, 5));
-    }
-  }
-  const done = factory.get(run.runId);
-  RUNS.push(done);
-  return { done, prompts, asked };
+  return driveWorkflow({ workflow: GATE, goal: "plan gate", input: { project: "/repo", featureDir: "plans/features/f1" }, tempPrefix: "factory-plan-edges-gate-", reply: (work) => reply(work.step, work.visit), answer: () => "1", runs: RUNS });
 }
 
 test("a plan that passes the first check ends the gate without a correction", async () => {

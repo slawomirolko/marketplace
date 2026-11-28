@@ -2,17 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { git } from "./helpers/processes.ts";
+import { tempDir } from "./helpers/temp.ts";
 import { buildLock, staleWorkflows, updateMarketplace } from "../src/sources-lock.ts";
 import { hostExec } from "../src/cli-backend.ts";
 
-function git(cwd: string, ...args: string[]): string {
-  return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" }).trim();
-}
-
 function repo(): { origin: string; clone: string } {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "factory-lock-"));
+  const root = tempDir("factory-lock-");
   const origin = path.join(root, "origin");
   fs.mkdirSync(path.join(origin, "agents", "opencode"), { recursive: true });
   fs.writeFileSync(path.join(origin, "agents", "opencode", "olko-a.md"), "---\nmode: primary\n---\nstep one\n");

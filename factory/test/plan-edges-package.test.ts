@@ -1,18 +1,14 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import test from "node:test";
+import { driveWorkflow, type PlanRun } from "./helpers/plan-driver.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
-const { Factory } = await import("../src/engine.ts");
 const { missingEdges } = await import("./edge-coverage.ts");
 
 const PACKAGE = "olko-plan-package";
-const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
 const PASS = "consistency | pass | 0 | none";
 const FAIL = "consistency | fail | 1 | business.md promises an export the Tasks leave out";
-const RUNS: ReturnType<InstanceType<typeof Factory>["get"]>[] = [];
+const RUNS: PlanRun[] = [];
 
 /** Replies like a package run whose gate check passes on check `passOnCheck` (1-based). */
 function packageReply(passOnCheck: number) {
@@ -29,34 +25,7 @@ function packageReply(passOnCheck: number) {
 }
 
 async function drive(reply: (step: string, visit: number, agentId?: string) => string | undefined) {
-  const factory = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-edges-package-")), { backend: "delegate" });
-  const { run } = factory.start("plan package", undefined, { workflow: PACKAGE, input: { project: "/repo" } });
-  factory.confirm(run.runId);
-  const prompts: Record<string, string[]> = {};
-  const agents: Record<string, string[]> = {};
-  const asked: string[] = [];
-  for (let i = 0; i < 2000; i++) {
-    const view = factory.status(factory.get(run.runId));
-    if (ENDED.has(view.status)) break;
-    if (view.status === "waiting_for_user") {
-      asked.push(view.pendingQuestion!.id);
-      factory.answer(run.runId, view.pendingQuestion!.id, "1");
-    } else if (view.status === "waiting_for_client") {
-      for (const work of view.pendingWorkItems ?? []) {
-        const step = work.nodePath.split("/").pop()!;
-        const visit = (prompts[step] ??= []).push(work.prompt);
-        (agents[step] ??= []).push(String(work.agentId));
-        const output = reply(step, visit, work.agentId);
-        if (output === undefined) throw new Error(`unexpected step ${step}`);
-        factory.submit(run.runId, work.nodePath, output, { model: "claude-haiku-5-5", inputTokens: 10, outputTokens: 10 }, work.agentId);
-      }
-    } else {
-      await new Promise((r) => setTimeout(r, 5));
-    }
-  }
-  const done = factory.get(run.runId);
-  RUNS.push(done);
-  return { done, prompts, agents, asked };
+  return driveWorkflow({ workflow: PACKAGE, goal: "plan package", input: { project: "/repo" }, tempPrefix: "factory-plan-edges-package-", reply: (work) => reply(work.step, work.visit, work.agentId), answer: () => "1", runs: RUNS });
 }
 
 test("the five investigators feed the business writer and the plan editor, and a consistent package passes the gate at once", async () => {

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import os from "node:os";
+import { tempDir } from "./helpers/temp.ts";
 import { validate } from "../src/spec.ts";
 import { DEFAULT_MEMORY_LAYER, loadFactoryConfig } from "../src/config.ts";
 
@@ -37,7 +37,7 @@ test("config rejects an api backend that would hold a literal key", () => {
 });
 
 test("config names the memory-layer skill, olko-memory-layer when it is left out", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-config-"));
+  const dir = tempDir("factory-config-");
   const write = (name: string, config: object) => {
     const file = path.join(dir, name);
     fs.writeFileSync(file, JSON.stringify(config));

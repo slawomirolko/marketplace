@@ -1,13 +1,14 @@
 import { http, HttpResponse } from "msw";
 import { agents, config, mainWorkflow, RUN_ID, runDetail, runListItem } from "./data.ts";
+import { API, STATUS_WORKFLOW } from "./paths.ts";
 
 export const handlers = [
-  http.get("/api/workflows", () => HttpResponse.json([mainWorkflow])),
-  http.get("/api/agents", () => HttpResponse.json(agents)),
-  http.get("/api/config", () => HttpResponse.json(config)),
-  http.get("/api/projects", () => HttpResponse.json({ roots: [], projects: [], statusWorkflow: "olko-project-status", statusWorkflowInstalled: true, canAnalyze: true })),
-  http.get("/api/stale", () => HttpResponse.json({ marketplace: "", stale: [] })),
-  http.get("/api/pending", () => HttpResponse.json([])),
-  http.get("/api/runs", () => HttpResponse.json([runListItem])),
-  http.get(`/api/runs/${RUN_ID}`, () => HttpResponse.json(runDetail)),
+  http.get(API.workflows, () => HttpResponse.json([mainWorkflow])),
+  http.get(API.agents, () => HttpResponse.json(agents)),
+  http.get(API.config, () => HttpResponse.json(config)),
+  http.get(API.projects, () => HttpResponse.json({ roots: [], projects: [], statusWorkflow: STATUS_WORKFLOW, statusWorkflowInstalled: true, canAnalyze: true })),
+  http.get(API.stale, () => HttpResponse.json({ marketplace: "", stale: [] })),
+  http.get(API.pending, () => HttpResponse.json([])),
+  http.get(API.runs, () => HttpResponse.json([runListItem])),
+  http.get(API.run(RUN_ID), () => HttpResponse.json(runDetail)),
 ];

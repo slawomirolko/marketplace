@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { tempDir } from "./helpers/temp.ts";
 
 const script = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "install-opencode.ts");
 
@@ -14,7 +14,7 @@ function install(file: string): Record<string, unknown> {
 }
 
 test("installer adds the factory next to existing servers in the shape the file already uses, keeps a backup, and is idempotent", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-install-"));
+  const dir = tempDir("factory-install-");
   const flat = path.join(dir, "flat.json");
   fs.writeFileSync(flat, JSON.stringify({ model: "x", mcp: { playwright: { type: "local", command: ["npx", "pw"] } } }));
   const updated = install(flat) as { model: string; mcp: Record<string, { command: string[] }> };

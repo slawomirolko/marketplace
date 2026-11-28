@@ -6,9 +6,11 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
+import { until } from "./helpers/poll.ts";
+import { tempDir } from "./helpers/temp.ts";
 import type { CliRequest, CliResult, Run } from "../src/types.ts";
 
-const workflows = fs.mkdtempSync(path.join(os.tmpdir(), "factory-engine-workflows-"));
+const workflows = tempDir("factory-engine-workflows-");
 fs.writeFileSync(
   path.join(workflows, "parallel.yaml"),
   `
@@ -76,22 +78,12 @@ type Executor = (request: CliRequest) => Promise<CliResult>;
 const SUPERVISOR_RESULT: CliResult = { ok: true, text: "supervise | ok | none | none" };
 
 function dataDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "factory-engine-data-"));
+  return tempDir("factory-engine-data-");
 }
 
 function cliFactory(executor: Executor): FactoryType {
   const withSupervisor: Executor = async (request) => (request.agent === SUPERVISOR_AGENT ? SUPERVISOR_RESULT : executor(request));
   return new Factory(dataDir(), { backend: "cli", cli: "claude", executors: { claude: withSupervisor } });
-}
-
-async function until(check: () => boolean, what: string): Promise<void> {
-  for (let i = 0; i < 500; i++) {
-    if (check()) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  throw new Error(`timed out waiting for ${what}`);
 }
 
 function eventTypes(run: Run): string[] {
@@ -190,7 +182,7 @@ test("a script that moves the workspace to a folder that does not exist fails th
 });
 
 test("a script that moves the workspace to a folder records the move once", async () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "factory-engine-workspace-"));
+  const target = tempDir("factory-engine-workspace-");
   const run = await moveTo(target);
   assert.equal(run.status, "done");
   assert.equal(run.workspace, target);

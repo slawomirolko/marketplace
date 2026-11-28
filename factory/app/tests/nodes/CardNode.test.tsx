@@ -1,10 +1,4 @@
-import { renderFlow, screen, within } from "../testUtils/index.ts";
-
-function card(title: string): HTMLElement {
-  const node = screen.getByText(title, { selector: ".card-title" }).closest<HTMLElement>(".card");
-  if (!node) throw new Error(`no card titled ${title}`);
-  return node;
-}
+import { card, renderFlow, screen, within } from "../testUtils/index.ts";
 
 describe("CardNode", () => {
   test("draws one box per script of the agent inside the agent's card", () => {

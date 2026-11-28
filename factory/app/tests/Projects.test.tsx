@@ -3,13 +3,13 @@ import { App } from "../src/App.tsx";
 import { Projects } from "../src/Projects.tsx";
 import { actionOf, countsText, fetchNoteOf, remoteNameOf, verdictOf, versionText } from "../src/projects/status-text.ts";
 import type { ProjectArtifact, ProjectOverview, ProjectStatusView } from "../src/types.ts";
-import { fireEvent, render, screen, server, userEvent, waitFor, within } from "./testUtils/index.ts";
+import { API, deferred, fireEvent, render, screen, server, STATUS_WORKFLOW, userEvent, waitFor, within } from "./testUtils/index.ts";
 
 const artifact = (extra: Partial<ProjectArtifact>): ProjectArtifact => ({ id: "skill:sample-skill", kind: "skill", name: "sample-skill", harness: "agents", location: ".agents/skills/sample-skill", state: "current", installed: "1.0.0", current: "1.0.0", files: [], workflows: [], ...extra });
 
 const list: ProjectOverview = {
   roots: ["/src"],
-  statusWorkflow: "olko-project-status",
+  statusWorkflow: STATUS_WORKFLOW,
   statusWorkflowInstalled: true,
   canAnalyze: true,
   projects: [
@@ -49,12 +49,12 @@ type Posted = Record<string, string>;
 
 function serve(posted: Posted[] = [], statuses: Record<string, ProjectStatusView | null> = { "sample-app": status, "sample-web": null }, projects: ProjectOverview = list) {
   server.use(
-    http.get("/api/projects", () => HttpResponse.json(projects)),
-    http.get("/api/projects/:id/status", ({ params }) => {
+    http.get(API.projects, () => HttpResponse.json(projects)),
+    http.get(API.projectStatus, ({ params }) => {
       const view = statuses[String(params.id)];
       return view ? HttpResponse.json(view) : HttpResponse.json({ error: "none" }, { status: 404 });
     }),
-    http.post("/api/projects", async ({ request }) => {
+    http.post(API.projects, async ({ request }) => {
       if (request.headers.get("x-factory-action") !== "projects") return HttpResponse.json({ error: "forbidden" }, { status: 403 });
       const body = (await request.json()) as Posted;
       posted.push(body);
@@ -140,12 +140,12 @@ describe("Projects", () => {
     let statusCalls = 0;
     let runCalls = 0;
     server.use(
-      http.get("/api/projects/:id/status", async () => {
+      http.get(API.projectStatus, async () => {
         statusCalls += 1;
         await new Promise((resolve) => setTimeout(resolve, SLOW_STATUS_MS));
         return HttpResponse.json(status);
       }),
-      http.get("/api/runs/:runId", ({ params }) => {
+      http.get(API.anyRun, ({ params }) => {
         runCalls += 1;
         return HttpResponse.json({ run: { runId: params.runId, status: runCalls < 2 ? "running" : "done" } });
       }),
@@ -168,29 +168,29 @@ describe("Projects", () => {
 
   test("a status run already in progress keeps Check status disabled, and a failed run is reported", async () => {
     serve([], { "sample-busy": null }, { ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: "r-0000000t", status: null }] });
-    server.use(http.get("/api/runs/:runId", () => HttpResponse.json({ error: "gone" }, { status: 404 })));
+    server.use(http.get(API.anyRun, () => HttpResponse.json({ error: "gone" }, { status: 404 })));
     render(<Projects onShowRuns={() => {}} pollMs={10} />);
     expect(await screen.findByRole("button", { name: /^Checking…/ })).toBeDisabled();
     expect(screen.queryByText("Not checked yet. Check status compares the installed skills and agents with the marketplace.")).not.toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Checking… (unknown)" })).toBeDisabled();
-    server.use(http.get("/api/runs/:runId", () => HttpResponse.json({ run: { status: "failed" } })));
+    server.use(http.get(API.anyRun, () => HttpResponse.json({ run: { status: "failed" } })));
     expect(await screen.findByText("Status check of sample-busy failed (run r-0000000t).")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Check status" })).toBeEnabled();
   });
 
   test("leaving the page while a finished check reads its status reloads nothing afterwards", async () => {
     serve([], { "sample-busy": null }, { ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: "r-0000000t", status: null }] });
-    let release = () => {};
+    const release = deferred();
     let statusAsked = false;
     let listCalls = 0;
     server.use(
-      http.get("/api/runs/:runId", () => HttpResponse.json({ run: { status: "done" } })),
-      http.get("/api/projects/:id/status", async () => {
+      http.get(API.anyRun, () => HttpResponse.json({ run: { status: "done" } })),
+      http.get(API.projectStatus, async () => {
         statusAsked = true;
-        await new Promise<void>((resolve) => (release = resolve));
+        await release.promise;
         return HttpResponse.json({ error: "none" }, { status: 404 });
       }),
-      http.get("/api/projects", () => {
+      http.get(API.projects, () => {
         listCalls += 1;
         return HttpResponse.json({ ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: "r-0000000t", status: null }] });
       }),
@@ -199,7 +199,7 @@ describe("Projects", () => {
     await waitFor(() => expect(statusAsked).toBe(true));
     const callsBefore = listCalls;
     unmount();
-    release();
+    release.resolve();
     await new Promise((resolve) => setTimeout(resolve, SLOW_STATUS_MS));
     expect(listCalls).toBe(callsBefore);
   });
@@ -207,7 +207,7 @@ describe("Projects", () => {
   test("an already running status check is reused, and a start error is shown", async () => {
     const projects = { ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: null, status: null }, { id: "sample-bad", path: "/x", exists: true, runs: 0, analyzing: null, status: null }] };
     serve([], { "sample-busy": null, "sample-bad": null }, projects);
-    server.use(http.get("/api/runs/:runId", () => HttpResponse.json({ run: { status: "running" } })));
+    server.use(http.get(API.anyRun, () => HttpResponse.json({ run: { status: "running" } })));
     const user = userEvent.setup();
     render(<Projects onShowRuns={() => {}} pollMs={10} />);
     await user.click(await screen.findByRole("button", { name: "Check status" }));
@@ -281,7 +281,7 @@ describe("Projects", () => {
   });
 
   test("an empty list invites adding a project, and discovery needs a root", async () => {
-    server.use(http.get("/api/projects", () => HttpResponse.json({ roots: [], projects: [], statusWorkflow: "olko-project-status", statusWorkflowInstalled: true, canAnalyze: true })));
+    server.use(http.get(API.projects, () => HttpResponse.json({ roots: [], projects: [], statusWorkflow: STATUS_WORKFLOW, statusWorkflowInstalled: true, canAnalyze: true })));
     render(<Projects onShowRuns={() => {}} />);
     expect(await screen.findByText(/No project yet/)).toBeInTheDocument();
     expect(screen.getByText("Select a project.")).toBeInTheDocument();
@@ -374,8 +374,8 @@ describe("Projects", () => {
   test("a finished check whose status cannot be read still reports the run", async () => {
     serve([], { "sample-app": null }, { ...list, projects: [{ id: "sample-app", path: "/src/sample-app", exists: true, runs: 1, analyzing: "r-0000000u", status: null }] });
     server.use(
-      http.get("/api/runs/:runId", () => HttpResponse.json({ run: { status: "done" } })),
-      http.get("/api/projects/:id/status", () => HttpResponse.json({ error: "broken" }, { status: 500 })),
+      http.get(API.anyRun, () => HttpResponse.json({ run: { status: "done" } })),
+      http.get(API.projectStatus, () => HttpResponse.json({ error: "broken" }, { status: 500 })),
     );
     render(<Projects onShowRuns={() => {}} pollMs={10} />);
     expect(await screen.findByText("Status check of sample-app finished (run r-0000000u); its status could not be read: /projects/sample-app/status: 500 (broken).")).toBeInTheDocument();
@@ -383,7 +383,7 @@ describe("Projects", () => {
 
   test("a project action that fails with an HTML page shows its status", async () => {
     serve();
-    server.use(http.post("/api/projects", () => new HttpResponse("<html>bad gateway</html>", { status: 502 })));
+    server.use(http.post(API.projects, () => new HttpResponse("<html>bad gateway</html>", { status: 502 })));
     const user = userEvent.setup();
     render(<Projects onShowRuns={() => {}} />);
 
@@ -396,18 +396,17 @@ describe("Projects", () => {
     const analyzing = { ...list, projects: [{ id: "sample-busy", path: "/src/sample-busy", exists: true, runs: 1, analyzing: "r-0000000t", status: null }] };
     serve([], { "sample-busy": null }, analyzing);
     let polls = 0;
-    let pollStarted = () => {};
-    const started = new Promise<void>((resolve) => (pollStarted = resolve));
+    const started = deferred();
     server.use(
-      http.get("/api/runs/:runId", async () => {
+      http.get(API.anyRun, async () => {
         polls += 1;
-        pollStarted();
+        started.resolve();
         await new Promise((resolve) => setTimeout(resolve, 300));
         return HttpResponse.json({ run: { status: "failed" } });
       }),
     );
     render(<Projects onShowRuns={() => {}} pollMs={10} />);
-    await started;
+    await started.promise;
 
     fireEvent.change(screen.getByRole("textbox", { name: "Root folder" }), { target: { value: "/more" } });
     fireEvent.click(screen.getByRole("button", { name: "Add root" }));
@@ -423,7 +422,7 @@ describe("Projects", () => {
   });
 
   test("a failed project list load is shown", async () => {
-    server.use(http.get("/api/projects", () => HttpResponse.json({ error: "x" }, { status: 500 })));
+    server.use(http.get(API.projects, () => HttpResponse.json({ error: "x" }, { status: 500 })));
     render(<Projects onShowRuns={() => {}} />);
     expect(await screen.findByText("/projects: 500 (x)")).toBeInTheDocument();
   });

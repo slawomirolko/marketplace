@@ -1,26 +1,27 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { tempDir } from "./helpers/temp.ts";
+import { driveWorkflow, fencedJson, type PlanRun } from "./helpers/plan-driver.ts";
 
 process.env.FACTORY_TURN_DELAY_MS = "0";
-const { Factory, loadedWorkflows } = await import("../src/engine.ts");
+const { loadedWorkflows } = await import("../src/engine.ts");
 const { loadWorkflowDir } = await import("../src/workflow-yaml.ts");
 const { missingEdges } = await import("./edge-coverage.ts");
 
+const json = (body: unknown): string => fencedJson(body, "Reply.");
+
 const WRAPPER = "test-plan-readiness-edges";
-const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
-const FENCE = "`".repeat(3);
 const TASKS = ["T-1", "T-2"];
-const RUNS: ReturnType<InstanceType<typeof Factory>["get"]>[] = [];
+const RUNS: PlanRun[] = [];
 
 type Gate = "gate-cleanup" | "gate-blocker";
 type Scenario = { blockers?: number[]; rejectAll?: boolean; failingGate?: Gate };
 
 /** Registers a wrapper that supplies the Feature state the readiness phase reads, then runs olko-plan-readiness as a group with its own node ids. */
 function registerWrapper(): void {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-edges-readiness-wrapper-"));
+  const dir = tempDir("factory-plan-edges-readiness-wrapper-");
   const source = path.join(import.meta.dirname, "..", "workflows");
   for (const file of fs.readdirSync(source)) if (file.endsWith(".yaml")) fs.copyFileSync(path.join(source, file), path.join(dir, file));
   fs.writeFileSync(
@@ -57,10 +58,6 @@ function registerWrapper(): void {
 
 registerWrapper();
 
-function json(body: unknown): string {
-  return `Reply.\n${FENCE}json\n${JSON.stringify(body)}\n${FENCE}`;
-}
-
 function questions(count: number, round: number): string {
   return json({ questions: Array.from({ length: count }, (_, i) => ({ text: `Blocker GAP-${round}.${i + 1}\n1. accept (recommended)\n2. correct\n3. keep blocking` })) });
 }
@@ -84,33 +81,20 @@ function reply(key: string, visit: number, last: Record<string, string>, { block
 }
 
 async function drive(scenario: Scenario = {}) {
-  const factory = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-plan-edges-readiness-")), { backend: "delegate" });
-  const { run } = factory.start("plan readiness", undefined, { workflow: WRAPPER, input: { project: "/repo" } });
-  factory.confirm(run.runId);
-  const prompts: Record<string, string[]> = {};
   const last: Record<string, string> = {};
-  const asked: string[] = [];
-  for (let i = 0; i < 5000; i++) {
-    const view = factory.status(factory.get(run.runId));
-    if (ENDED.has(view.status)) break;
-    if (view.status === "waiting_for_user") {
-      const id = view.pendingQuestion!.id;
-      asked.push(id);
-      factory.answer(run.runId, id, "1");
-    } else if (view.status === "waiting_for_client") {
-      for (const work of view.pendingWorkItems ?? []) {
-        const key = work.nodePath.slice(WRAPPER.length + 1);
-        const visit = (prompts[key] ??= []).push(work.prompt);
-        const output = (last[key] = reply(key, visit, last, scenario));
-        factory.submit(run.runId, work.nodePath, output, { model: "claude-haiku-5-5", inputTokens: 10, outputTokens: 10 }, work.agentId);
-      }
-    } else {
-      await new Promise((r) => setTimeout(r, 5));
-    }
-  }
-  const done = factory.get(run.runId);
-  RUNS.push(done);
-  return { done, prompts, asked };
+  return driveWorkflow({
+    workflow: WRAPPER,
+    goal: "plan readiness",
+    input: { project: "/repo" },
+    tempPrefix: "factory-plan-edges-readiness-",
+    visitKey: ({ nodePath }) => nodePath.slice(WRAPPER.length + 1),
+    reply: ({ nodePath, visit }) => {
+      const key = nodePath.slice(WRAPPER.length + 1);
+      return (last[key] = reply(key, visit, last, scenario));
+    },
+    answer: () => "1",
+    runs: RUNS,
+  });
 }
 
 test("when every plan is ready after the cleanup, each Task manifest is written and validated once and nothing is asked", async () => {

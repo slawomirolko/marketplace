@@ -3,9 +3,11 @@
 // stub cli executor. No network, no real model, no real GitHub.
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { ALLOWED_HOSTS } from "./helpers/data-api.ts";
+import { runReaches } from "./helpers/poll.ts";
+import { tempDir } from "./helpers/temp.ts";
 import { Factory } from "../src/engine.ts";
 import { hostExec } from "../src/cli-backend.ts";
 import { checkWatch, knownProjects, knownProjectsFile, startWatches } from "../src/watch.ts";
@@ -13,7 +15,7 @@ import { addProject, projectsFile } from "../src/projects.ts";
 import type { WatchSpec } from "../src/types.ts";
 import { apiMiddleware, createDataApi } from "../src/viewer-data.ts";
 
-const workflows = fs.mkdtempSync(path.join(os.tmpdir(), "factory-watch-workflows-"));
+const workflows = tempDir("factory-watch-workflows-");
 fs.writeFileSync(path.join(workflows, "watched.yaml"), `
 name: watched
 version: 1.0.0
@@ -40,13 +42,13 @@ edges:
   - { from: fail-it, to: END }
 `);
 process.env.FACTORY_WORKFLOWS_DIR = workflows;
-process.env.FACTORY_PROJECTS_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "factory-watch-registry-")), "projects.json");
+process.env.FACTORY_PROJECTS_FILE = path.join(tempDir("factory-watch-registry-"), "projects.json");
 
 const stubCli = async () => ({ ok: true, text: "", turns: 1 });
 
 function setup() {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-watch-data-"));
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), "factory-watch-project-"));
+  const dataDir = tempDir("factory-watch-data-");
+  const project = tempDir("factory-watch-project-");
   fs.writeFileSync(path.join(project, "marker"), "");
   fs.writeFileSync(path.join(project, "items.json"), JSON.stringify({ changed: [{ artifact: "skill:sample", hash: "aaa" }] }));
   fs.writeFileSync(knownProjectsFile(dataDir), JSON.stringify({ dirs: [project] }));
@@ -69,15 +71,6 @@ const watch: WatchSpec = {
   backend: { kind: "cli", cli: "opencode" },
 };
 
-async function until(factory: Factory, runId: string, statuses: string[]) {
-  for (let i = 0; i < 500; i++) {
-    const run = factory.get(runId);
-    if (statuses.includes(run.status)) return run;
-    await new Promise((r) => setTimeout(r, 10));
-  }
-  throw new Error(`run did not reach ${statuses.join("|")}: ${factory.get(runId).status}`);
-}
-
 function items(project: string, changed: unknown[]) {
   fs.writeFileSync(path.join(project, "items.json"), JSON.stringify({ changed }));
 }
@@ -88,7 +81,7 @@ test("a watch starts one run only after the item stayed the same for stableCheck
   assert.deepEqual(await checkWatch(watch, context), [], "first sight is not stable yet");
   const started = await checkWatch(watch, context);
   assert.equal(started.length, 1);
-  const run = await until(factory, started[0]!, ["waiting_for_user"]);
+  const run = await runReaches(factory, started[0]!, ["waiting_for_user"]);
   assert.equal(run.pendingQuestion?.id, "q-watched");
   assert.deepEqual(run.pendingQuestion?.allowed, ["ok", "no"]);
   assert.equal(run.input?.project, project);
@@ -126,16 +119,16 @@ test("a watch ignores projects without the marker file and survives a failing co
 
 test("known projects come from projects.json and from every run's input.project", () => {
   const { dataDir, project, factory } = setup();
-  const other = fs.mkdtempSync(path.join(os.tmpdir(), "factory-watch-other-"));
+  const other = tempDir("factory-watch-other-");
   const { run } = factory.start("goal", undefined, { workflow: "watched", input: { project: other } });
   assert.ok(run.runId);
-  assert.deepEqual(knownProjects(dataDir), [path.resolve(other), project].sort());
+  assert.deepEqual(knownProjects(dataDir).map((dir) => path.resolve(dir)), [path.resolve(other), path.resolve(project)].sort());
 });
 
 test("known projects also come from the project registry, wherever it lives", () => {
   const { dataDir, project } = setup();
   fs.rmSync(knownProjectsFile(dataDir));
-  const registered = fs.mkdtempSync(path.join(os.tmpdir(), "factory-watch-registered-"));
+  const registered = tempDir("factory-watch-registered-");
   addProject({ path: registered });
   try {
     assert.notEqual(path.dirname(projectsFile()), dataDir, "the registry is not in the data directory");
@@ -171,8 +164,10 @@ test("starting the watches logs which watches run, or that none do", () => {
 });
 
 function call(api: ReturnType<typeof createDataApi>, method: string, url: string, headers: Record<string, string> = {}) {
-  return new Promise<{ status: number; body: unknown }>((resolve) => {
-    void apiMiddleware(api, new Set(["127.0.0.1:7340"]))({ method, url, headers }, { writeHead: (status) => ({ end: (body: string) => resolve({ status, body: JSON.parse(body) }) }) }, () => resolve({ status: 404, body: null }));
+  return new Promise<{ status: number; body: unknown }>((resolve, reject) => {
+    Promise.resolve()
+      .then(() => apiMiddleware(api, ALLOWED_HOSTS)({ method, url, headers }, { writeHead: (status) => ({ end: (body: string) => resolve({ status, body: JSON.parse(body) }) }) }, () => resolve({ status: 404, body: null })))
+      .catch(reject);
   });
 }
 
@@ -181,7 +176,7 @@ test("the viewer lists and answers only runs of its own process, and only with i
   const context = { factory, dataDir, marketplace: dataDir, exec: hostExec };
   await checkWatch(watch, context);
   const [runId] = await checkWatch(watch, context);
-  await until(factory, runId!, ["waiting_for_user"]);
+  await runReaches(factory, runId!, ["waiting_for_user"]);
   const api = createDataApi({ factoryDir: path.join(import.meta.dirname, ".."), dataDir, configFile: path.join(import.meta.dirname, "..", "config", "factory.yaml"), demo: false, factory });
 
   const pending = await call(api, "GET", "/api/pending");
@@ -195,11 +190,11 @@ test("the viewer lists and answers only runs of its own process, and only with i
   const answered = await call(api, "POST", url, { "x-factory-action": "answer", origin: "http://127.0.0.1:7340" });
   assert.equal(answered.status, 200);
   assert.deepEqual(answered.body, []);
-  const done = await until(factory, runId!, ["done", "failed"]);
+  const done = await runReaches(factory, runId!, ["done", "failed"]);
   assert.equal(done.status, "done");
   assert.deepEqual((done.state?.["run-it"] as { json: unknown }).json, { artifact: "skill:sample" }, "builtin.exec parsed the command's JSON");
 
-  const foreign = new Factory(fs.mkdtempSync(path.join(os.tmpdir(), "factory-watch-foreign-")), { backend: "delegate" });
+  const foreign = new Factory(tempDir("factory-watch-foreign-"), { backend: "delegate" });
   const noFactory = createDataApi({ factoryDir: path.join(import.meta.dirname, ".."), dataDir, configFile: path.join(import.meta.dirname, "..", "config", "factory.yaml"), demo: false, factory: foreign });
   assert.equal((await call(noFactory, "POST", url, { "x-factory-action": "answer" })).status, 409, "a run of another process cannot be answered here");
 });
@@ -209,8 +204,8 @@ test("builtin.exec fails the run on an exit code outside okCodes", async () => {
   const context = { factory, dataDir, marketplace: dataDir, exec: hostExec };
   await checkWatch(watch, context);
   const [runId] = await checkWatch(watch, context);
-  await until(factory, runId!, ["waiting_for_user"]);
+  await runReaches(factory, runId!, ["waiting_for_user"]);
   factory.answer(runId!, "q-watched", "no");
-  const run = await until(factory, runId!, ["done", "failed"]);
+  const run = await runReaches(factory, runId!, ["done", "failed"]);
   assert.equal(run.status, "failed");
 });

@@ -2,14 +2,14 @@
 // the viewer API cannot change anything without the token when the server listens beyond loopback,
 // and the bearer token is compared in constant time.
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import type { ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { withEnv } from "./helpers/env.ts";
+import { startServer, stopServer, type RunningServer } from "./helpers/processes.ts";
+import { tempDir } from "./helpers/temp.ts";
 import { parse as parseYaml } from "yaml";
 import { bearerMatches } from "../src/bearer.ts";
 import { viewerHandler } from "../src/viewer-routes.ts";
@@ -17,32 +17,15 @@ import { viewerHandler } from "../src/viewer-routes.ts";
 const factoryDir = path.join(import.meta.dirname, "..");
 const TOKEN = "server-test-token";
 
-function freePort(): Promise<number> {
-  return new Promise((resolve) => {
-    const probe = http.createServer().listen(0, "127.0.0.1", () => {
-      const { port } = probe.address() as AddressInfo;
-      probe.close(() => resolve(port));
-    });
+/** Starts src/server.ts with temp data and home folders on a free port, the fake backend and the test token. */
+function startFactoryServer(host: string): Promise<RunningServer> {
+  const dataDir = tempDir("factory-server-data-");
+  const homeDir = tempDir("factory-server-home-");
+  return startServer({
+    args: [path.join(factoryDir, "src", "server.ts")],
+    envFor: (port) => ({ ...process.env, FACTORY_HOST: host, FACTORY_PORT: String(port), FACTORY_TOKEN: TOKEN, FACTORY_DATA_DIR: dataDir, FACTORY_HOME_DIR: homeDir, FACTORY_BACKEND: "fake", FACTORY_PUBLIC_URL: `http://127.0.0.1:${port}` }),
+    ready: "listening",
   });
-}
-
-async function startServer(host: string): Promise<{ port: number; child: ChildProcess }> {
-  const port = await freePort();
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-server-data-"));
-  const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-server-home-"));
-  const child = spawn(process.execPath, ["--experimental-strip-types", path.join(factoryDir, "src", "server.ts")], {
-    env: { ...process.env, FACTORY_HOST: host, FACTORY_PORT: String(port), FACTORY_TOKEN: TOKEN, FACTORY_DATA_DIR: dataDir, FACTORY_HOME_DIR: homeDir, FACTORY_BACKEND: "fake", FACTORY_PUBLIC_URL: `http://127.0.0.1:${port}` },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  await new Promise<void>((resolve, reject) => {
-    child.stdout?.on("data", (chunk) => {
-      if (String(chunk).includes("listening")) {
-        resolve();
-      }
-    });
-    child.on("exit", (code) => reject(new Error(`server exited ${code}`)));
-  });
-  return { port, child };
 }
 
 function request(port: number, method: string, urlPath: string, headers: Record<string, string> = {}): Promise<number> {
@@ -68,7 +51,7 @@ test("a malformed escape in a viewer path is a 400, not a crash", async () => {
   const server = http.createServer();
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
-  const handle = viewerHandler({ viewerDir: factoryDir, dataDir: fs.mkdtempSync(path.join(os.tmpdir(), "factory-viewer-")), factoryDir, configFile: path.join(factoryDir, "config", "factory.yaml"), allowedHosts: new Set([`127.0.0.1:${port}`]) });
+  const handle = viewerHandler({ viewerDir: factoryDir, dataDir: tempDir("factory-viewer-"), factoryDir, configFile: path.join(factoryDir, "config", "factory.yaml"), allowedHosts: new Set([`127.0.0.1:${port}`]) });
   server.on("request", (req, res) => {
     if (!handle(req, res)) {
       res.writeHead(404).end();
@@ -84,7 +67,8 @@ test("a malformed escape in a viewer path is a 400, not a crash", async () => {
 });
 
 test("the HTTP server on a non-loopback address survives a malformed path and needs the token for viewer changes", async () => {
-  const { port, child } = await startServer("0.0.0.0");
+  const server = await startFactoryServer("0.0.0.0");
+  const { port } = server;
   try {
     assert.equal(await request(port, "GET", "/viewer/%E0"), 400);
     assert.equal(await request(port, "GET", "/health"), 200, "the server is still up");
@@ -96,16 +80,17 @@ test("the HTTP server on a non-loopback address survives a malformed path and ne
     assert.equal(await request(port, "GET", "/metrics", { authorization: "Bearer server-test-tokeX" }), 401);
     assert.equal(await request(port, "GET", "/metrics", { authorization: `Bearer ${TOKEN}` }), 200);
   } finally {
-    child.kill();
+    await stopServer(server);
   }
 });
 
 test("the HTTP server on loopback keeps the viewer actions as the run page process does", async () => {
-  const { port, child } = await startServer("127.0.0.1");
+  const server = await startFactoryServer("127.0.0.1");
+  const { port } = server;
   try {
     assert.notEqual(await request(port, "POST", "/viewer/api/projects", { "x-factory-action": "projects", "content-type": "application/json" }), 401);
   } finally {
-    child.kill();
+    await stopServer(server);
   }
 });
 
@@ -122,12 +107,13 @@ function requestJson(port: number, urlPath: string): Promise<unknown> {
 }
 
 test("the HTTP server's run page reads the same factory config as the run page process", async () => {
-  const { port, child } = await startServer("127.0.0.1");
+  const server = await startFactoryServer("127.0.0.1");
+  const { port } = server;
   try {
     const expected = parseYaml(fs.readFileSync(path.join(factoryDir, "config", "factory.yaml"), "utf8")) as unknown;
     assert.deepEqual(await requestJson(port, "/viewer/api/config"), expected);
   } finally {
-    child.kill();
+    await stopServer(server);
   }
 });
 
@@ -163,7 +149,7 @@ test("viewer actions are accepted only from the viewer's own host and port", asy
       res.writeHead(404).end();
     }
   });
-  handle = viewerHandler({ viewerDir: factoryDir, dataDir: fs.mkdtempSync(path.join(os.tmpdir(), "factory-viewer-")), factoryDir, configFile: path.join(factoryDir, "config", "factory.yaml"), allowedHosts: new Set([`127.0.0.1:${server.port}`]) });
+  handle = viewerHandler({ viewerDir: factoryDir, dataDir: tempDir("factory-viewer-"), factoryDir, configFile: path.join(factoryDir, "config", "factory.yaml"), allowedHosts: new Set([`127.0.0.1:${server.port}`]) });
   try {
     const action = { "x-factory-action": "projects", "content-type": "application/json" };
     assert.equal(await request(server.port, "POST", "/viewer/api/projects", { ...action, origin: "http://localhost:5173" }), 403, "another local dev server");
@@ -177,13 +163,14 @@ test("viewer actions are accepted only from the viewer's own host and port", asy
 });
 
 test("the HTTP server beyond loopback says that viewer changes are read-only without the token", async () => {
-  const { port, child } = await startServer("0.0.0.0");
+  const server = await startFactoryServer("0.0.0.0");
+  const { port } = server;
   try {
     const refused = await requestText(port, "POST", "/viewer/api/update", { "x-factory-action": "update" });
     assert.equal(refused.status, 401);
     assert.match((JSON.parse(refused.body) as { error: string }).error, /read-only/);
   } finally {
-    child.kill();
+    await stopServer(server);
   }
 });
 
@@ -192,10 +179,7 @@ interface DevMiddleware {
 }
 
 test("the dev server goes through the viewer handler with its guards and reads the real factory config", async () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-dev-data-"));
-  const previous = process.env.FACTORY_DATA_DIR;
-  process.env.FACTORY_DATA_DIR = dataDir;
-  try {
+  await withEnv({ FACTORY_DATA_DIR: tempDir("factory-dev-data-") }, async () => {
     const { default: viteConfig } = await import("../app/vite.config.ts");
     const resolved = (typeof viteConfig === "function" ? viteConfig({ command: "serve", mode: "development" }) : viteConfig) as { base: string; server: { port: number }; plugins: unknown[] };
     assert.equal(resolved.base, "/viewer/", "dev serves the API under the same prefix as production");
@@ -226,11 +210,5 @@ test("the dev server goes through the viewer handler with its guards and reads t
     } finally {
       await server.close();
     }
-  } finally {
-    if (previous === undefined) {
-      delete process.env.FACTORY_DATA_DIR;
-    } else {
-      process.env.FACTORY_DATA_DIR = previous;
-    }
-  }
+  });
 });

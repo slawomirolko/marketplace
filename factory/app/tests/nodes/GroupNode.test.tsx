@@ -1,10 +1,4 @@
-import { fireEvent, renderFlow, screen, within } from "../testUtils/index.ts";
-
-function group(title: string): HTMLElement {
-  const node = screen.getByText(title, { selector: ".card-title" }).closest<HTMLElement>(".group");
-  if (!node) throw new Error(`no group titled ${title}`);
-  return node;
-}
+import { fireEvent, group, renderFlow, screen, within } from "../testUtils/index.ts";
 
 describe("GroupNode", () => {
   test("an expanded team shows its header and draws its members inside", () => {

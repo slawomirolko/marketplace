@@ -2,7 +2,7 @@ import { http, HttpResponse } from "msw";
 import { PendingDecisions } from "../src/Pending.tsx";
 import { READ_ONLY_NOTE } from "../src/api.ts";
 import type { PendingDecision } from "../src/types.ts";
-import { render, screen, server, userEvent, waitFor } from "./testUtils/index.ts";
+import { API, render, screen, server, userEvent, waitFor } from "./testUtils/index.ts";
 
 const decision: PendingDecision = {
   runId: "r-0000abcd",
@@ -24,8 +24,8 @@ describe("PendingDecisions", () => {
   test("shows each waiting question with one button per allowed answer and posts the chosen one", async () => {
     const posted: { url: string; action: string | null }[] = [];
     server.use(
-      http.get("/api/pending", () => HttpResponse.json([decision])),
-      http.post(`/api/runs/${decision.runId}/answer`, ({ request }) => {
+      http.get(API.pending, () => HttpResponse.json([decision])),
+      http.post(API.answer(decision.runId), ({ request }) => {
         posted.push({ url: request.url, action: request.headers.get("x-factory-action") });
         return HttpResponse.json([]);
       }),
@@ -47,8 +47,8 @@ describe("PendingDecisions", () => {
 
   test("shows the server's error and keeps the question when the answer is refused", async () => {
     server.use(
-      http.get("/api/pending", () => HttpResponse.json([decision])),
-      http.post(`/api/runs/${decision.runId}/answer`, () => HttpResponse.json({ error: "answer it in the session that owns it" }, { status: 409 })),
+      http.get(API.pending, () => HttpResponse.json([decision])),
+      http.post(API.answer(decision.runId), () => HttpResponse.json({ error: "answer it in the session that owns it" }, { status: 409 })),
     );
     const user = userEvent.setup();
     render(<PendingDecisions onOpenRun={() => undefined} />);
@@ -61,8 +61,8 @@ describe("PendingDecisions", () => {
 
   test("an answer that fails with an HTML page shows its status", async () => {
     server.use(
-      http.get("/api/pending", () => HttpResponse.json([decision])),
-      http.post(`/api/runs/${decision.runId}/answer`, () => new HttpResponse("<html>bad gateway</html>", { status: 502 })),
+      http.get(API.pending, () => HttpResponse.json([decision])),
+      http.post(API.answer(decision.runId), () => new HttpResponse("<html>bad gateway</html>", { status: 502 })),
     );
     const user = userEvent.setup();
     render(<PendingDecisions onOpenRun={() => undefined} />);
@@ -74,8 +74,8 @@ describe("PendingDecisions", () => {
 
   test("an answer refused for the missing token says that the viewer is read-only", async () => {
     server.use(
-      http.get("/api/pending", () => HttpResponse.json([decision])),
-      http.post(`/api/runs/${decision.runId}/answer`, () => HttpResponse.json({ error: "unauthorized" }, { status: 401 })),
+      http.get(API.pending, () => HttpResponse.json([decision])),
+      http.post(API.answer(decision.runId), () => HttpResponse.json({ error: "unauthorized" }, { status: 401 })),
     );
     const user = userEvent.setup();
     render(<PendingDecisions onOpenRun={() => undefined} />);
@@ -86,14 +86,14 @@ describe("PendingDecisions", () => {
   });
 
   test("a failing pending list is named instead of looking like no question", async () => {
-    server.use(http.get("/api/pending", () => HttpResponse.json({ error: "runs folder unreadable" }, { status: 500 })));
+    server.use(http.get(API.pending, () => HttpResponse.json({ error: "runs folder unreadable" }, { status: 500 })));
     render(<PendingDecisions onOpenRun={() => undefined} />);
 
     expect(await screen.findByText("Could not load the pending decisions: /pending: 500 (runs folder unreadable)")).toBeInTheDocument();
   });
 
   test("opens the run when its id is clicked", async () => {
-    server.use(http.get("/api/pending", () => HttpResponse.json([decision])));
+    server.use(http.get(API.pending, () => HttpResponse.json([decision])));
     const opened: string[] = [];
     const user = userEvent.setup();
     render(<PendingDecisions onOpenRun={(id) => opened.push(id)} />);

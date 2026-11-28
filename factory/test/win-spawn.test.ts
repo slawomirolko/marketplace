@@ -3,9 +3,9 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { tempDir } from "./helpers/temp.ts";
 import { escapeCmdArgument, escapeCmdCommand, escapeShimArgument, resolveExecutable, spawnPlan } from "../src/win-spawn.ts";
 
 const NASTY_ARGUMENTS = [
@@ -58,7 +58,7 @@ test("off Windows the command runs directly with its arguments untouched", () =>
 });
 
 test("on Windows a command is found on PATH in PATHEXT order; an .exe runs directly and a .cmd shim through cmd.exe", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-win-spawn-"));
+  const dir = tempDir("factory-win-spawn-");
   try {
     fs.writeFileSync(path.join(dir, "tool.cmd"), "@echo off\n");
     fs.writeFileSync(path.join(dir, "native.exe"), "");
@@ -84,7 +84,7 @@ const LEGACY_NPM_SHIM = ["@IF EXIST \"%~dp0\\node.exe\" (", '  "%~dp0\\node.exe"
 
 for (const [style, shim] of [["current", NPM_SHIM], ["legacy", LEGACY_NPM_SHIM]] as const) {
   test(`on Windows a ${style} npm shim in a folder with a space receives every argument unchanged`, { skip: process.platform !== "win32" }, () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "factory win spawn "));
+    const dir = tempDir("factory win spawn ");
     try {
       fs.writeFileSync(path.join(dir, "print-args.js"), "process.stdout.write(JSON.stringify(process.argv.slice(2)));\n");
       fs.writeFileSync(path.join(dir, "print-args.cmd"), shim);

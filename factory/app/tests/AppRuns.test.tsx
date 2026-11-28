@@ -2,7 +2,7 @@ import { http, HttpResponse, delay } from "msw";
 import { App } from "../src/App.tsx";
 import { READ_ONLY_NOTE } from "../src/api.ts";
 import type { RunDetail, RunListItem } from "../src/types.ts";
-import { act, fireEvent, render, report, run, RUN_ID, runDetail, runListItem, screen, server, userEvent, waitFor } from "./testUtils/index.ts";
+import { act, API, deferred, fireEvent, render, report, run, RUN_ID, runDetail, runListItem, screen, server, userEvent, waitFor } from "./testUtils/index.ts";
 
 const OTHER_ID = "r-0000bbbb";
 const otherItem: RunListItem = { ...runListItem, runId: OTHER_ID, goal: "the other run" };
@@ -17,8 +17,8 @@ function runPicker(): HTMLSelectElement {
 
 function serveRuns(list: RunListItem[], details: Record<string, () => Response | Promise<Response>>): void {
   server.use(
-    http.get("/api/runs", () => HttpResponse.json(list)),
-    ...Object.entries(details).map(([id, respond]) => http.get(`/api/runs/${encodeURIComponent(id)}`, respond)),
+    http.get(API.runs, () => HttpResponse.json(list)),
+    ...Object.entries(details).map(([id, respond]) => http.get(API.run(id), respond)),
   );
 }
 
@@ -43,7 +43,7 @@ describe("App in runs mode", () => {
   });
 
   test("a failed run list is reported without hiding the viewer", async () => {
-    server.use(http.get("/api/runs", () => new HttpResponse("<html>bad gateway</html>", { status: 502 })));
+    server.use(http.get(API.runs, () => new HttpResponse("<html>bad gateway</html>", { status: 502 })));
     render(<App />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("/runs: 502");
@@ -69,7 +69,7 @@ describe("App in runs mode", () => {
   });
 
   test("without runs nothing fabricated is drawn", async () => {
-    server.use(http.get("/api/runs", () => HttpResponse.json([])));
+    server.use(http.get(API.runs, () => HttpResponse.json([])));
     render(<App />);
 
     expect(await screen.findByText(/No run selected\. Pick a run/)).toBeInTheDocument();
@@ -88,15 +88,13 @@ describe("App in runs mode", () => {
     afterEach(() => vi.useRealTimers());
 
     test("a refresh that returns after a switch to another run does not replace it", async () => {
-      let release: () => void = () => {};
+      const release = deferred();
       let liveCalls = 0;
       serveRuns([runListItem, otherItem], {
         [RUN_ID]: async () => {
           liveCalls += 1;
           if (liveCalls > 1) {
-            await new Promise<void>((resolve) => {
-              release = resolve;
-            });
+            await release.promise;
           }
           return HttpResponse.json(liveDetail);
         },
@@ -112,7 +110,7 @@ describe("App in runs mode", () => {
       await waitFor(() => expect(liveCalls).toBe(2));
       fireEvent.change(runPicker(), { target: { value: OTHER_ID } });
       await screen.findByRole("heading", { name: `Run ${OTHER_ID}` });
-      act(() => release());
+      act(() => release.resolve());
 
       await pause(50);
       expect(screen.getByRole("heading", { name: `Run ${OTHER_ID}` })).toBeInTheDocument();
@@ -141,7 +139,7 @@ describe("App in runs mode", () => {
   test("a run opened from a pending decision stays selected, whatever filter was set", async () => {
     window.history.replaceState(null, "", "/?mode=workflows&workflow=main&project=sample-app");
     serveRuns([runListItem, otherItem], { [RUN_ID]: () => HttpResponse.json(runDetail), [OTHER_ID]: () => HttpResponse.json(otherDetail) });
-    server.use(http.get("/api/pending", () => HttpResponse.json([{ runId: OTHER_ID, goal: "the other run", workflow: "main", questionId: "q", text: "Go on?", allowed: ["yes"] }])));
+    server.use(http.get(API.pending, () => HttpResponse.json([{ runId: OTHER_ID, goal: "the other run", workflow: "main", questionId: "q", text: "Go on?", allowed: ["yes"] }])));
     const user = userEvent.setup();
     render(<App />);
 
@@ -160,9 +158,9 @@ describe("App load notes", () => {
   test("agents, projects and changed sources that fail to load are named, not shown as none", async () => {
     window.history.replaceState(null, "", "/");
     server.use(
-      http.get("/api/agents", () => HttpResponse.json({ error: "no marketplace" }, { status: 500 })),
-      http.get("/api/projects", () => HttpResponse.json({ error: "bad registry" }, { status: 500 })),
-      http.get("/api/stale", () => HttpResponse.json({ error: "no lock" }, { status: 500 })),
+      http.get(API.agents, () => HttpResponse.json({ error: "no marketplace" }, { status: 500 })),
+      http.get(API.projects, () => HttpResponse.json({ error: "bad registry" }, { status: 500 })),
+      http.get(API.stale, () => HttpResponse.json({ error: "no lock" }, { status: 500 })),
     );
     render(<App />);
 
@@ -172,7 +170,7 @@ describe("App load notes", () => {
   });
 
   test("an update that fails with an HTML page shows its status", async () => {
-    server.use(http.post("/api/update", () => new HttpResponse("<html>bad gateway</html>", { status: 502 })));
+    server.use(http.post(API.update, () => new HttpResponse("<html>bad gateway</html>", { status: 502 })));
     const user = userEvent.setup();
     render(<App />);
 
@@ -182,7 +180,7 @@ describe("App load notes", () => {
   });
 
   test("an update refused for the missing token says that the viewer is read-only", async () => {
-    server.use(http.post("/api/update", () => HttpResponse.json({ error: "unauthorized" }, { status: 401 })));
+    server.use(http.post(API.update, () => HttpResponse.json({ error: "unauthorized" }, { status: 401 })));
     const user = userEvent.setup();
     render(<App />);
 
