@@ -80,11 +80,11 @@ Classify each DELETE-ELIGIBLE lesson in this order, stopping at the first hit:
    Propose the edit folding both into one rule: the owning agent definition via
    `olko-agents-optimizer`, or the skill via `olko-skill-optimizer`. Delete the
    old line only after that edit is approved and applied.
-3. `PROMOTE` — no carrier anywhere, generic, verified on at least two dates.
+3. `SUPERSEDED` — current code, docs or a newer lesson contradicts it. Remove it
+   and cite the evidence.
+4. `PROMOTE` — no carrier anywhere, generic, verified on at least two dates.
    Name the target skill or agent section and the exact sentence; route it as
    in `MERGE`.
-4. `SUPERSEDED` — current code, docs or a newer lesson contradicts it. Remove it
-   and cite the evidence.
 5. `STILL VALID` — keep it, refresh `verified`, and say which carrier is missing.
 
 Report one row per lesson: `file | lesson (8 words) | added | verified |
