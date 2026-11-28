@@ -20,6 +20,35 @@ import { pathToFileURL } from "node:url";
 export const LOCK_SCHEMA_VERSION = 1;
 export const LOCK_PATH = path.join(".agents", "marketplace.lock.json");
 
+/** A skill, agent or category name, or an agent file name: no path separators, no leading dot or underscore. */
+export const NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
+
+/** `skill:<name>` or `agent:<name>` with a valid name; rejects __proto__ and other object keys. */
+export function isArtifactId(id) {
+  if (typeof id !== "string") {
+    return false;
+  }
+  const match = id.match(/^(skill|agent):(.+)$/);
+  return Boolean(match) && NAME_PATTERN.test(match[2]);
+}
+
+/** Joins `parts` under `root` and refuses a result outside it. */
+function insideProject(root, ...parts) {
+  const resolvedRoot = path.resolve(root);
+  const resolved = path.resolve(resolvedRoot, ...parts);
+  if (resolved !== resolvedRoot && !resolved.startsWith(`${resolvedRoot}${path.sep}`)) {
+    throw new Error("An artifact path leaves the project");
+  }
+  return resolved;
+}
+
+function requireName(value) {
+  if (typeof value !== "string" || !NAME_PATTERN.test(value)) {
+    throw new Error("The marketplace lists an invalid artifact name");
+  }
+  return value;
+}
+
 // Files inside an installed skill directory that belong to the project, not to the marketplace.
 export function isAdapterFile(relativePath) {
   const name = relativePath.split("/").pop();
@@ -89,7 +118,9 @@ function installedArtifacts(project, marketplace) {
   const registryPath = path.join(marketplace, "registry.json");
   if (fs.existsSync(registryPath)) {
     for (const skill of readJson(registryPath).skills ?? []) {
-      const local = path.join(project, ".agents", "skills", skill.name);
+      requireName(skill.name);
+      requireName(skill.category);
+      const local = insideProject(project, ".agents", "skills", skill.name);
       if (fs.existsSync(path.join(local, "SKILL.md"))) {
         artifacts.push({ id: `skill:${skill.name}`, kind: "skill", name: skill.name, local, source: `skills/${skill.category}/${skill.name}` });
       }
@@ -98,7 +129,9 @@ function installedArtifacts(project, marketplace) {
   const manifestPath = path.join(marketplace, "agents", "opencode", "index.json");
   if (fs.existsSync(manifestPath)) {
     for (const agent of readJson(manifestPath).agents ?? []) {
-      const local = path.join(project, ".opencode", "agents", agent.file);
+      requireName(agent.name);
+      requireName(agent.file);
+      const local = insideProject(project, ".opencode", "agents", agent.file);
       if (fs.existsSync(local)) {
         artifacts.push({ id: `agent:${agent.name}`, kind: "agent", name: agent.name, local, source: `agents/opencode/${agent.file}` });
       }
@@ -208,7 +241,7 @@ export function init(project, marketplace) {
   for (const artifact of installedArtifacts(project, marketplace)) {
     const entry = lockEntry(marketplace, artifact);
     // Keep decisions already recorded for this artifact.
-    if (previous?.[artifact.id]) {
+    if (previous && Object.hasOwn(previous, artifact.id)) {
       entry.pending = previous[artifact.id].pending ?? null;
       entry.rejected = previous[artifact.id].rejected ?? [];
     }
@@ -219,10 +252,13 @@ export function init(project, marketplace) {
 }
 
 function artifactFromEntry(project, id, entry) {
+  if (!isArtifactId(id) || typeof entry?.source !== "string") {
+    throw new Error("The lock holds an invalid artifact id");
+  }
   const [kind, name] = id.split(":");
   const local = kind === "skill"
-    ? path.join(project, ".agents", "skills", name)
-    : path.join(project, ".opencode", "agents", path.basename(entry.source));
+    ? insideProject(project, ".agents", "skills", name)
+    : insideProject(project, ".opencode", "agents", requireName(path.posix.basename(entry.source)));
   return { id, kind, name, local, source: entry.source };
 }
 
@@ -264,7 +300,9 @@ export function status(project, marketplace) {
 
 export function record(project, artifact, options) {
   const lock = readLock(project);
-  if (!lock?.[artifact]) throw new Error(`Artifact ${artifact} is not in ${LOCK_PATH}`);
+  if (!isArtifactId(artifact) || !lock || !Object.hasOwn(lock, artifact)) {
+    throw new Error(`The artifact is not in ${LOCK_PATH}`);
+  }
   const entry = lock[artifact];
   if (options.clearPending) entry.pending = null;
   if (options.pendingPr) {

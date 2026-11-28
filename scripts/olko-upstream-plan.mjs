@@ -20,7 +20,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { hashFiles, isAdapterFile, readLock } from "./olko-marketplace-lock.mjs";
+import { hashFiles, isAdapterFile, isArtifactId, readLock } from "./olko-marketplace-lock.mjs";
 
 export const LABEL = "upstream-candidate";
 
@@ -76,7 +76,7 @@ export function normalizePr(pr) {
 
 export function plan({ artifact, stage, classification, openPrs, lockEntry }) {
   const [kind, name] = artifact.split(":");
-  if (!["skill", "agent"].includes(kind) || !name) throw new Error("--artifact must be skill:<name> or agent:<name>");
+  if (!isArtifactId(artifact)) throw new Error("--artifact must be skill:<name> or agent:<name>");
   const hunks = classification.hunks ?? [];
   const portable = hunks.filter((hunk) => hunk.kind === "portable");
   const localAdapter = hunks.filter((hunk) => hunk.kind === "adapter").map(({ file, text }) => ({ file, text }));
@@ -107,18 +107,42 @@ export function plan({ artifact, stage, classification, openPrs, lockEntry }) {
   return { ...common, action: "open", branch, title, body: text };
 }
 
+/**
+ * The gh executable to run without a shell. On Windows a bare name would also be looked up in
+ * the working directory, so gh.exe is taken only from an absolute PATH folder.
+ */
+export function resolveGh({ platform = process.platform, env = process.env, cwd = process.cwd() } = {}) {
+  if (platform !== "win32") {
+    return "gh";
+  }
+  const pathValue = env.PATH ?? env.Path ?? "";
+  for (const folder of pathValue.split(";")) {
+    const trimmed = folder.trim().replace(/^"|"$/g, "");
+    if (!path.win32.isAbsolute(trimmed) || path.resolve(trimmed) === path.resolve(cwd)) {
+      continue;
+    }
+    const candidate = path.join(trimmed, "gh.exe");
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  throw new Error("gh.exe was not found in an absolute PATH folder");
+}
+
 function openPrsOf(source) {
   if (!source.startsWith("gh:")) return readJson(source);
-  // A fixed command line, no input in it; the shell lets Windows find gh as .exe or .cmd on PATH.
-  const result = spawnSync(`gh pr list --state open --label ${LABEL} --json number,headRefName,body --limit 100`, { cwd: source.slice(3), encoding: "utf8", shell: true });
+  const args = ["pr", "list", "--state", "open", "--label", LABEL, "--json", "number,headRefName,body", "--limit", "100"];
+  const result = spawnSync(resolveGh(), args, { cwd: source.slice(3), encoding: "utf8", shell: false });
   if (result.status !== 0) throw new Error(`gh pr list failed: ${result.stderr.trim().slice(-300)}`);
   return JSON.parse(result.stdout);
 }
 
 function lockEntryOf(project, artifact) {
-  const entry = readLock(path.resolve(project))?.[artifact];
-  if (!entry) throw new Error(`${artifact} is not in the project's marketplace lock`);
-  return entry;
+  const lock = readLock(path.resolve(project));
+  if (!isArtifactId(artifact) || !lock || !Object.hasOwn(lock, artifact)) {
+    throw new Error("The artifact is not in the project's marketplace lock");
+  }
+  return lock[artifact];
 }
 
 function parseArgs(argv) {

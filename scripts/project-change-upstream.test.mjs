@@ -417,3 +417,55 @@ test("plan lists in the PR body only file names that exist in the stage director
   assert.match(result.body, /Changed files: `workflow\.md`\n/);
   assert.equal(result.body.includes("zebraproject"), false);
 });
+
+test("plan runs gh without a shell and, on Windows, only from an absolute PATH folder", async () => {
+  const { resolveGh } = await import("./olko-upstream-plan.mjs");
+  const source = fs.readFileSync(planScript, "utf8");
+  assert.doesNotMatch(source, /shell:\s*true/);
+
+  const bin = tmp("bin");
+  const planted = tmp("cwd");
+  write(path.join(bin, "gh.exe"), "");
+  write(path.join(planted, "gh.exe"), "");
+  const found = resolveGh({ platform: "win32", env: { PATH: [".", "relative\bin", bin].join(";") }, cwd: planted });
+  assert.equal(found, path.join(bin, "gh.exe"));
+  assert.throws(() => resolveGh({ platform: "win32", env: { PATH: "." }, cwd: planted }));
+  assert.equal(resolveGh({ platform: "linux", env: { PATH: "/usr/bin" }, cwd: planted }), "gh");
+});
+
+test("lock record refuses __proto__ and other invalid artifact ids and leaves the lock unchanged", () => {
+  const market = fixtureMarketplace();
+  const { root } = fixtureProject();
+  json(lock(root, market.root, "init"));
+  const lockFile = path.join(root, ".agents", "marketplace.lock.json");
+  const before = fs.readFileSync(lockFile, "utf8");
+  for (const artifact of ["__proto__", "skill:__proto__", "skill:../sample-skill", "constructor"]) {
+    const result = node(lockScript, ["record", "--project", root, "--artifact", artifact, "--rejected", "a".repeat(64), "--json"]);
+    assert.equal(result.status, 1, `${artifact.length}-char id accepted`);
+  }
+  assert.equal(fs.readFileSync(lockFile, "utf8"), before);
+});
+
+test("lock init refuses registry names that leave the project", () => {
+  const market = fixtureMarketplace();
+  const registryPath = path.join(market.root, "registry.json");
+  const registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
+  registry.skills.push({ name: "../../escape", category: "marketplace", version: "1.0.0" });
+  fs.writeFileSync(registryPath, JSON.stringify(registry));
+  const { root } = fixtureProject();
+  write(path.join(root, "escape", "SKILL.md"), skillV1["SKILL.md"]);
+  const result = lock(root, market.root, "init");
+  assert.equal(result.status, 1);
+  assert.equal(fs.existsSync(path.join(root, ".agents", "marketplace.lock.json")), false);
+});
+
+test("lock status refuses lock ids that leave the project", () => {
+  const market = fixtureMarketplace();
+  const { root } = fixtureProject();
+  json(lock(root, market.root, "init"));
+  const lockFile = path.join(root, ".agents", "marketplace.lock.json");
+  const content = JSON.parse(fs.readFileSync(lockFile, "utf8"));
+  content["skill:../../escape"] = { ...content["skill:sample-skill"] };
+  fs.writeFileSync(lockFile, JSON.stringify(content));
+  assert.equal(lock(root, market.root, "status").status, 1);
+});
