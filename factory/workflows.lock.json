@@ -1,8 +1,8 @@
 {
   "olko-adr-store-reconcile": {
-    "commit": "7aabb50165eba9b076d2fbfce1880edbc69147d8",
+    "commit": "2492470143f77d276e1a0fb27cc32a80290592fe",
     "files": {
-      "agents/opencode/olko-adr-store-reconciler.md": "cfca23f50094166b"
+      "agents/opencode/olko-adr-store-reconciler.md": "0e5ef7e7a1e7e3bf"
     }
   },
   "olko-claude-sync": {
@@ -198,6 +198,12 @@
       "agents/opencode/olko-marketplace-skill-sync-manager.md": "be3eef691e75716b"
     }
   },
+  "olko-marketplace-upstream": {
+    "commit": "2492470143f77d276e1a0fb27cc32a80290592fe",
+    "files": {
+      "agents/opencode/olko-marketplace-upstream.md": "61e752f562064dc4"
+    }
+  },
   "olko-obsidian-knowledge": {
     "commit": "279a1b813a4c982275c506a9ece3710b6b42b7bb",
     "files": {
@@ -323,9 +329,9 @@
     }
   },
   "olko-project-status": {
-    "commit": "627d9d41f6a4b280f41a5a3a51ba8ec48d55fc98",
+    "commit": "2492470143f77d276e1a0fb27cc32a80290592fe",
     "files": {
-      "skills/software-factory/olko-factory-project/SKILL.md": "c8575954d4ddbcaa"
+      "skills/software-factory/olko-factory-project/SKILL.md": "b84837232f136799"
     }
   },
   "olko-review": {
@@ -491,13 +497,13 @@
     }
   },
   "olko-workflow-sync": {
-    "commit": "627d9d41f6a4b280f41a5a3a51ba8ec48d55fc98",
+    "commit": "2492470143f77d276e1a0fb27cc32a80290592fe",
     "files": {
-      "agents/opencode/olko-workflow-mapper.md": "2903c2b1cc85fdc1",
+      "agents/opencode/olko-workflow-mapper.md": "9209139328111932",
       "agents/opencode/olko-workflow-sync-orchestrator.md": "c40450658a04de6c",
       "agents/opencode/olko-workflow-verifier.md": "44115716facc1d6c",
-      "skills/software-factory/olko-factory-workflow-sync/SKILL.md": "84d5f6db25240910",
-      "skills/software-factory/olko-factory-workflow-yaml/SKILL.md": "23092725feb31af6"
+      "skills/software-factory/olko-factory-workflow-sync/SKILL.md": "c90a7c47c2e3d7a9",
+      "skills/software-factory/olko-factory-workflow-yaml/SKILL.md": "7bbb1f8066e2210b"
     }
   }
 }
