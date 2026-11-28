@@ -18962,13 +18962,28 @@ function scan(factoryDir) {
 		exists: (name) => describeAgent(name) !== null
 	});
 }
-function apiMiddleware(api) {
+/**
+* A state-changing request must come from the viewer page itself: the custom header forces a CORS preflight, and
+* the Origin, which browsers send on every cross-origin POST, must be one of the viewer's own hosts with its port.
+*/
+function isViewerAction(req, action, allowedHosts) {
+	if (req.headers?.["x-factory-action"] !== action) return false;
+	const origin = String(req.headers?.origin ?? "");
+	if (!origin) return true;
+	try {
+		const parsed = new URL(origin);
+		return (parsed.protocol === "http:" || parsed.protocol === "https:") && allowedHosts.has(parsed.host.toLowerCase());
+	} catch {
+		return false;
+	}
+}
+/** The viewer API; `allowedHosts` are the viewer's own `host:port` values, the only origins its actions accept. */
+function apiMiddleware(api, allowedHosts) {
 	return async (req, res, next) => {
 		const url = new URL(req.url ?? "/", "http://localhost");
 		const send = (status, body) => res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(body));
 		if (req.method === "POST" && url.pathname === "/api/update") {
-			const origin = String(req.headers?.origin ?? "");
-			if (req.headers?.["x-factory-action"] !== "update" || origin && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin)) return send(403, { error: "update needs the viewer's own request" });
+			if (!isViewerAction(req, "update", allowedHosts)) return send(403, { error: "update needs the viewer's own request" });
 			try {
 				return send(200, await api.update());
 			} catch (error) {
@@ -18976,8 +18991,7 @@ function apiMiddleware(api) {
 			}
 		}
 		if (req.method === "POST" && url.pathname === "/api/projects") {
-			const origin = String(req.headers?.origin ?? "");
-			if (req.headers?.["x-factory-action"] !== "projects" || origin && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin)) return send(403, { error: "projects needs the viewer's own request" });
+			if (!isViewerAction(req, "projects", allowedHosts)) return send(403, { error: "projects needs the viewer's own request" });
 			try {
 				return send(200, api.projectsAction(parseProjectsAction(await readBody(req))));
 			} catch (error) {
@@ -18986,8 +19000,7 @@ function apiMiddleware(api) {
 		}
 		const answerMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/answer$/);
 		if (req.method === "POST" && answerMatch?.[1] !== void 0) {
-			const origin = String(req.headers?.origin ?? "");
-			if (req.headers?.["x-factory-action"] !== "answer" || origin && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin)) return send(403, { error: "an answer needs the viewer's own request" });
+			if (!isViewerAction(req, "answer", allowedHosts)) return send(403, { error: "an answer needs the viewer's own request" });
 			try {
 				return send(200, api.answer(answerMatch[1], url.searchParams.get("question") ?? "", url.searchParams.get("answer") ?? ""));
 			} catch (error) {
@@ -19018,6 +19031,7 @@ function apiMiddleware(api) {
 			}
 			return next();
 		} catch (error) {
+			console.error(`viewer API ${url.pathname} failed: ${errorMessage(error)}`);
 			return send(500, { error: errorMessage(error) });
 		}
 	};
@@ -19062,14 +19076,14 @@ var POST_PATHS = [
 	/^\/viewer\/api\/projects$/,
 	/^\/viewer\/api\/runs\/[^/]+\/answer$/
 ];
-function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHosts, factory }) {
+function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHosts, factory, demo = false, serveStatic = true }) {
 	const api = apiMiddleware(createDataApi({
 		factoryDir,
 		dataDir,
 		configFile,
-		demo: false,
+		demo,
 		...factory ? { factory } : {}
-	}));
+	}), allowedHosts);
 	const csp = cspMiddleware();
 	return (req, res) => {
 		const url = new URL(req.url ?? "/", "http://localhost");
@@ -19100,6 +19114,7 @@ function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHost
 			api(req, res, () => res.writeHead(404, { "content-type": "application/json" }).end(JSON.stringify({ error: "not found" })));
 			return true;
 		}
+		if (!serveStatic) return false;
 		if (!fs.existsSync(path.join(viewerDir, "index.html"))) {
 			res.writeHead(503, { "content-type": "text/plain" }).end("viewer is not built; run the factory setup (node factory/setup.ts)");
 			return true;

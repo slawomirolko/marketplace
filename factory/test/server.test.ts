@@ -130,3 +130,107 @@ test("the HTTP server's run page reads the same factory config as the run page p
     child.kill();
   }
 });
+
+function requestText(port: number, method: string, urlPath: string, headers: Record<string, string> = {}): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const outgoing = http.request({ host: "127.0.0.1", port, method, path: urlPath, headers: { host: `127.0.0.1:${port}`, ...headers } }, (response) => {
+      let body = "";
+      response.on("data", (chunk) => (body += chunk));
+      response.on("end", () => resolve({ status: response.statusCode ?? 0, body }));
+    });
+    outgoing.on("error", reject);
+    outgoing.end();
+  });
+}
+
+async function listen(handle: (req: http.IncomingMessage, res: http.ServerResponse) => void): Promise<{ port: number; close: () => Promise<void> }> {
+  const server = http.createServer(handle);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as AddressInfo;
+  return {
+    port,
+    close: async () => {
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+    },
+  };
+}
+
+test("viewer actions are accepted only from the viewer's own host and port", async () => {
+  let handle: ReturnType<typeof viewerHandler> = () => false;
+  const server = await listen((req, res) => {
+    if (!handle(req, res)) {
+      res.writeHead(404).end();
+    }
+  });
+  handle = viewerHandler({ viewerDir: factoryDir, dataDir: fs.mkdtempSync(path.join(os.tmpdir(), "factory-viewer-")), factoryDir, configFile: path.join(factoryDir, "config", "factory.yaml"), allowedHosts: new Set([`127.0.0.1:${server.port}`]) });
+  try {
+    const action = { "x-factory-action": "projects", "content-type": "application/json" };
+    assert.equal(await request(server.port, "POST", "/viewer/api/projects", { ...action, origin: "http://localhost:5173" }), 403, "another local dev server");
+    assert.equal(await request(server.port, "POST", "/viewer/api/projects", { ...action, origin: `http://127.0.0.1:${server.port + 1}` }), 403, "another port");
+    assert.equal(await request(server.port, "POST", "/viewer/api/update", { "x-factory-action": "update", origin: "http://127.0.0.1" }), 403);
+    assert.equal(await request(server.port, "POST", "/viewer/api/runs/r-00000001/answer?question=q&answer=a", { "x-factory-action": "answer", origin: "null" }), 403);
+    assert.notEqual(await request(server.port, "POST", "/viewer/api/projects", { ...action, origin: `http://127.0.0.1:${server.port}` }), 403, "the viewer page itself");
+  } finally {
+    await server.close();
+  }
+});
+
+test("the HTTP server beyond loopback says that viewer changes are read-only without the token", async () => {
+  const { port, child } = await startServer("0.0.0.0");
+  try {
+    const refused = await requestText(port, "POST", "/viewer/api/update", { "x-factory-action": "update" });
+    assert.equal(refused.status, 401);
+    assert.match((JSON.parse(refused.body) as { error: string }).error, /read-only/);
+  } finally {
+    child.kill();
+  }
+});
+
+interface DevMiddleware {
+  (req: http.IncomingMessage, res: http.ServerResponse, next: () => void): void;
+}
+
+test("the dev server goes through the viewer handler with its guards and reads the real factory config", async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "factory-dev-data-"));
+  const previous = process.env.FACTORY_DATA_DIR;
+  process.env.FACTORY_DATA_DIR = dataDir;
+  try {
+    const { default: viteConfig } = await import("../app/vite.config.ts");
+    const resolved = (typeof viteConfig === "function" ? viteConfig({ command: "serve", mode: "development" }) : viteConfig) as { base: string; server: { port: number }; plugins: unknown[] };
+    assert.equal(resolved.base, "/viewer/", "dev serves the API under the same prefix as production");
+    const plugin = resolved.plugins.flat().find((entry) => (entry as { name?: string } | null)?.name === "factory-data") as { configureServer: (server: unknown) => void };
+    const middlewares: DevMiddleware[] = [];
+    plugin.configureServer({ middlewares: { use: (middleware: DevMiddleware) => middlewares.push(middleware) }, httpServer: null });
+    const devPort = resolved.server.port;
+    const server = await listen((req, res) => {
+      const run = (index: number): void => {
+        const middleware = middlewares[index];
+        if (!middleware) {
+          res.writeHead(404).end("vite");
+          return;
+        }
+        middleware(req, res, () => run(index + 1));
+      };
+      run(0);
+    });
+    try {
+      const devHost = { host: `127.0.0.1:${devPort}` };
+      const config = await requestText(server.port, "GET", "/viewer/api/config", devHost);
+      assert.equal(config.status, 200);
+      assert.deepEqual(JSON.parse(config.body), parseYaml(fs.readFileSync(path.join(factoryDir, "config", "factory.yaml"), "utf8")) as unknown);
+      assert.equal((await requestText(server.port, "GET", "/viewer/api/config", { host: `rebound.example:${devPort}` })).status, 403, "host allow-list");
+      assert.equal((await requestText(server.port, "DELETE", "/viewer/api/runs", devHost)).status, 405, "POST guard");
+      assert.equal((await requestText(server.port, "POST", "/viewer/api/projects", { ...devHost, "x-factory-action": "projects", origin: "http://localhost:5173" })).status, 403, "origin of another local server");
+      assert.equal((await requestText(server.port, "GET", "/viewer/src/main.tsx", devHost)).body, "vite", "the page and its modules stay with vite");
+    } finally {
+      await server.close();
+    }
+  } finally {
+    if (previous === undefined) {
+      delete process.env.FACTORY_DATA_DIR;
+    } else {
+      process.env.FACTORY_DATA_DIR = previous;
+    }
+  }
+});

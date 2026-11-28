@@ -188,7 +188,7 @@ test("the project status workflow is one script-runner step that reads the proje
 type ApiCallResult = { status: number | "next"; body?: unknown };
 
 function apiCall(data: ReturnType<typeof createDataApi>) {
-  const middleware = apiMiddleware(data);
+  const middleware = apiMiddleware(data, new Set(["127.0.0.1:7340"]));
   return (method: string, url: string, options: { headers?: Record<string, string>; body?: unknown } = {}) =>
     new Promise<ApiCallResult>((resolve) => {
       const res = { writeHead: (status: number) => ({ end: (body: string) => resolve({ status, body: JSON.parse(body) }) }) };

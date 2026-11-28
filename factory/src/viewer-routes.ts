@@ -12,6 +12,10 @@ export interface ViewerOptions {
   configFile: string;
   allowedHosts: Set<string>;
   factory?: Factory;
+  /** Writes a fake demo run into an empty data folder (the dev server without FACTORY_DATA_DIR). */
+  demo?: boolean;
+  /** False for the dev server: Vite serves the page and its modules, so only the API is answered here. */
+  serveStatic?: boolean;
 }
 
 const PREFIX = "/viewer";
@@ -55,8 +59,8 @@ export function failRequest(res: ServerResponse, error: unknown): void {
 
 const POST_PATHS = [/^\/viewer\/api\/update$/, /^\/viewer\/api\/projects$/, /^\/viewer\/api\/runs\/[^/]+\/answer$/];
 
-export function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHosts, factory }: ViewerOptions): (req: IncomingMessage, res: ServerResponse) => boolean {
-  const api = apiMiddleware(createDataApi({ factoryDir, dataDir, configFile, demo: false, ...(factory ? { factory } : {}) }));
+export function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHosts, factory, demo = false, serveStatic = true }: ViewerOptions): (req: IncomingMessage, res: ServerResponse) => boolean {
+  const api = apiMiddleware(createDataApi({ factoryDir, dataDir, configFile, demo, ...(factory ? { factory } : {}) }), allowedHosts);
   const csp = cspMiddleware();
 
   return (req, res) => {
@@ -87,6 +91,9 @@ export function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allo
       req.url = `/${relative}${url.search}`;
       api(req, res, () => res.writeHead(404, { "content-type": "application/json" }).end(JSON.stringify({ error: "not found" })));
       return true;
+    }
+    if (!serveStatic) {
+      return false;
     }
     if (!fs.existsSync(path.join(viewerDir, "index.html"))) {
       res.writeHead(503, { "content-type": "text/plain" }).end("viewer is not built; run the factory setup (node factory/setup.ts)");

@@ -181,7 +181,7 @@ interface ApiCallResult {
 }
 
 function apiCall(data: DataApi) {
-  const middleware = apiMiddleware(data);
+  const middleware = apiMiddleware(data, new Set(["127.0.0.1:7340"]));
   return (method: string, url: string) =>
     new Promise<ApiCallResult>((resolve) => {
       const res = { writeHead: (status: number) => ({ end: (body: string) => resolve({ status, body: JSON.parse(body) }) }) };
@@ -199,6 +199,20 @@ test("api returns the run list and a run detail as JSON", async () => {
 test("api answers 404 for an unknown run id", async () => {
   const { data } = await demoRun();
   assert.equal((await apiCall(data)("GET", "/api/runs/nope")).status, 404);
+});
+
+test("a failing API read is logged with its path as well as answered with 500", async () => {
+  const failing = { workflows: () => { throw new Error("workflows folder unreadable"); } } as unknown as DataApi;
+  const logged: string[] = [];
+  const original = console.error;
+  console.error = (message: unknown) => logged.push(String(message));
+  try {
+    const result = await apiCall(failing)("GET", "/api/workflows");
+    assert.equal(result.status, 500);
+  } finally {
+    console.error = original;
+  }
+  assert.deepEqual(logged, ["viewer API /api/workflows failed: workflows folder unreadable"]);
 });
 
 test("api passes non-GET requests and other paths on to the next handler", async () => {

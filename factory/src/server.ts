@@ -26,6 +26,8 @@ const PUBLIC_URL = process.env.FACTORY_PUBLIC_URL ?? `http://127.0.0.1:${PORT}`;
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 /** Beyond loopback anyone on the network can reach the viewer, so its POST actions (update, projects, answer) need the bearer token there. */
 const VIEWER_CHANGES_NEED_TOKEN = !LOOPBACK_HOSTS.has(HOST);
+/** The page never gets the token (anyone who can load it would have it), so on such a server the viewer is read-only. */
+const VIEWER_READ_ONLY = "this viewer is read-only on this address: changes need the factory token, which the page does not get; use the factory tools or the viewer on the factory machine";
 if (!TOKEN) {
   console.error("FACTORY_TOKEN is required");
   process.exit(1);
@@ -74,8 +76,8 @@ function isUnauthorizedViewerChange(req: IncomingMessage): boolean {
   return VIEWER_CHANGES_NEED_TOKEN && req.method === "POST" && (req.url ?? "").startsWith("/viewer/") && !isAuthorized(req);
 }
 
-function sendUnauthorized(res: ServerResponse): void {
-  res.writeHead(401, { "content-type": "application/json" }).end(JSON.stringify({ error: "unauthorized" }));
+function sendUnauthorized(res: ServerResponse, error = "unauthorized"): void {
+  res.writeHead(401, { "content-type": "application/json" }).end(JSON.stringify({ error }));
 }
 
 async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -88,7 +90,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     return;
   }
   if (isUnauthorizedViewerChange(req)) {
-    sendUnauthorized(res);
+    sendUnauthorized(res, VIEWER_READ_ONLY);
     return;
   }
   if (viewer(req, res)) {

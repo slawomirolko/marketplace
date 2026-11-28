@@ -172,7 +172,7 @@ test("starting the watches logs which watches run, or that none do", () => {
 
 function call(api: ReturnType<typeof createDataApi>, method: string, url: string, headers: Record<string, string> = {}) {
   return new Promise<{ status: number; body: unknown }>((resolve) => {
-    void apiMiddleware(api)({ method, url, headers }, { writeHead: (status) => ({ end: (body: string) => resolve({ status, body: JSON.parse(body) }) }) }, () => resolve({ status: 404, body: null }));
+    void apiMiddleware(api, new Set(["127.0.0.1:7340"]))({ method, url, headers }, { writeHead: (status) => ({ end: (body: string) => resolve({ status, body: JSON.parse(body) }) }) }, () => resolve({ status: 404, body: null }));
   });
 }
 

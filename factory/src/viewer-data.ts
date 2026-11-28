@@ -413,13 +413,33 @@ function scan(factoryDir: string): MarketplaceScan {
   return scanMarketplace({ specs, lock: readLock(), marketplace, head, exists: (name) => describeAgent(name) !== null });
 }
 
-export function apiMiddleware(api: DataApi) {
+/**
+ * A state-changing request must come from the viewer page itself: the custom header forces a CORS preflight, and
+ * the Origin, which browsers send on every cross-origin POST, must be one of the viewer's own hosts with its port.
+ */
+function isViewerAction(req: ApiRequest, action: string, allowedHosts: ReadonlySet<string>): boolean {
+  if (req.headers?.["x-factory-action"] !== action) {
+    return false;
+  }
+  const origin = String(req.headers?.origin ?? "");
+  if (!origin) {
+    return true;
+  }
+  try {
+    const parsed = new URL(origin);
+    return (parsed.protocol === "http:" || parsed.protocol === "https:") && allowedHosts.has(parsed.host.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+/** The viewer API; `allowedHosts` are the viewer's own `host:port` values, the only origins its actions accept. */
+export function apiMiddleware(api: DataApi, allowedHosts: ReadonlySet<string>) {
   return async (req: ApiRequest, res: JsonResponse, next: () => unknown): Promise<unknown> => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const send = (status: number, body: unknown) => res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(body));
     if (req.method === "POST" && url.pathname === "/api/update") {
-      const origin = String(req.headers?.origin ?? "");
-      if (req.headers?.["x-factory-action"] !== "update" || (origin && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin))) return send(403, { error: "update needs the viewer's own request" });
+      if (!isViewerAction(req, "update", allowedHosts)) return send(403, { error: "update needs the viewer's own request" });
       try {
         return send(200, await api.update());
       } catch (error) {
@@ -427,8 +447,7 @@ export function apiMiddleware(api: DataApi) {
       }
     }
     if (req.method === "POST" && url.pathname === "/api/projects") {
-      const origin = String(req.headers?.origin ?? "");
-      if (req.headers?.["x-factory-action"] !== "projects" || (origin && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin))) return send(403, { error: "projects needs the viewer's own request" });
+      if (!isViewerAction(req, "projects", allowedHosts)) return send(403, { error: "projects needs the viewer's own request" });
       try {
         return send(200, api.projectsAction(parseProjectsAction(await readBody(req))));
       } catch (error) {
@@ -437,8 +456,7 @@ export function apiMiddleware(api: DataApi) {
     }
     const answerMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/answer$/);
     if (req.method === "POST" && answerMatch?.[1] !== undefined) {
-      const origin = String(req.headers?.origin ?? "");
-      if (req.headers?.["x-factory-action"] !== "answer" || (origin && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin))) return send(403, { error: "an answer needs the viewer's own request" });
+      if (!isViewerAction(req, "answer", allowedHosts)) return send(403, { error: "an answer needs the viewer's own request" });
       try {
         return send(200, api.answer(answerMatch[1], url.searchParams.get("question") ?? "", url.searchParams.get("answer") ?? ""));
       } catch (error) {
@@ -469,6 +487,7 @@ export function apiMiddleware(api: DataApi) {
       }
       return next();
     } catch (error) {
+      console.error(`viewer API ${url.pathname} failed: ${errorMessage(error)}`);
       return send(500, { error: errorMessage(error) });
     }
   };
