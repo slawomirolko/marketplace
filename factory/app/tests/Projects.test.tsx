@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw";
 import { App } from "../src/App.tsx";
-import { Projects, actionOf, countsText, verdictOf, versionText } from "../src/Projects.tsx";
+import { Projects, actionOf, countsText, fetchNoteOf, remoteNameOf, verdictOf, versionText } from "../src/Projects.tsx";
 import type { ProjectArtifact, ProjectList, ProjectStatusView } from "../src/Projects.tsx";
 import { render, screen, server, userEvent, waitFor, within } from "./testUtils/index.ts";
 
@@ -34,6 +34,11 @@ const status: ProjectStatusView = {
     ],
   },
 };
+
+/** The sample status with some of its data replaced. */
+function withData(data: Partial<NonNullable<ProjectStatusView["data"]>>): ProjectStatusView {
+  return { ...status, data: { ...status.data!, ...data } };
+}
 
 type Posted = Record<string, string>;
 
@@ -110,7 +115,7 @@ describe("Projects", () => {
     server.use(
       http.get("/api/projects/:id/status", async () => {
         statusCalls += 1;
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await new Promise((resolve) => setTimeout(resolve, 50)); // keeps "Checking…" visible long enough to assert it
         return HttpResponse.json(status);
       }),
       http.get("/api/runs/:runId", ({ params }) => {
@@ -276,19 +281,19 @@ describe("Projects", () => {
   });
 
   test("a failed fetch is shown next to the remote ref", async () => {
-    serve([], { "sample-app": { ...status, data: { ...status.data!, ref: "origin/main", fetched: false, fetchError: "could not resolve host" } } });
+    serve([], { "sample-app": withData({ ref: "origin/main", fetched: false, fetchError: "could not resolve host" }) });
     render(<Projects onShowRuns={() => {}} />);
     expect(await screen.findByText(/compared with origin\/main 9f8e7d6 \(fetch failed: could not resolve host\)/)).toBeInTheDocument();
   });
 
   test("an unfetched remote ref says the comparison uses the last fetch", async () => {
-    serve([], { "sample-app": { ...status, data: { ...status.data!, ref: "origin/main", fetched: false, fetchError: null } } });
+    serve([], { "sample-app": withData({ ref: "origin/main", fetched: false, fetchError: null }) });
     render(<Projects onShowRuns={() => {}} />);
     expect(await screen.findByText(/compared with origin\/main 9f8e7d6 \(last fetch\)/)).toBeInTheDocument();
   });
 
   test("a project in sync gets a green verdict", async () => {
-    const synced: ProjectStatusView = { ...status, data: { ...status.data!, artifacts: [artifact({}), artifact({ id: "skill:sample-local", name: "sample-local", state: "local-only" })], counts: { current: 1, "local-only": 1 }, workflows: [] } };
+    const synced: ProjectStatusView = withData({ artifacts: [artifact({}), artifact({ id: "skill:sample-local", name: "sample-local", state: "local-only" })], counts: { current: 1, "local-only": 1 }, workflows: [] });
     serve([], { "sample-app": synced });
     render(<Projects onShowRuns={() => {}} />);
     const verdict = await screen.findByRole("region", { name: "Verdict" });
@@ -348,6 +353,17 @@ describe("Projects", () => {
     expect(versionText(artifact({ state: "outdated", installed: null, installedCommit: "aaaaaaa", current: "1.0.0", currentCommit: "bbbbbbb" }))).toBe("commit aaaaaaa → 1.0.0 (bbbbbbb)");
     expect(versionText(artifact({ state: "current", installed: null, installedCommit: "bbbbbbb", current: null, currentCommit: "bbbbbbb" }))).toBe("–");
     expect(versionText(artifact({ state: "removed", lastVersion: null, lastCommit: "ccccccc" }))).toBe("last commit ccccccc");
+    expect(versionText(artifact({ installed: "1.0.0", installedCommit: "aaaaaaa", current: "1.0.0" }))).toBe("1.0.0");
+  });
+
+  test("remote name and fetch note", () => {
+    expect(remoteNameOf("origin/main")).toBe("origin/main");
+    expect(remoteNameOf("HEAD")).toBeNull();
+    expect(remoteNameOf(undefined)).toBeNull();
+    expect(fetchNoteOf({ ref: "origin/main", fetched: false, fetchError: "offline" })).toBe(" (fetch failed: offline)");
+    expect(fetchNoteOf({ ref: "origin/main", fetched: false, fetchError: null })).toBe(" (last fetch)");
+    expect(fetchNoteOf({ ref: "HEAD", fetched: false, fetchError: null })).toBe("");
+    expect(fetchNoteOf({ ref: "origin/main", fetched: true, fetchError: null })).toBe("");
     expect(countsText({ missing: 2, current: 1, removed: 0 })).toBe("1 current · 2 missing");
     expect(countsText(null)).toBe("");
   });

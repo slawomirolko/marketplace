@@ -1,10 +1,10 @@
-import { S as require_ajv, _ as defaultDataDir, a as projectsAction, c as Factory, d as parseCli, h as FACTORY_DIR, i as projectScopedInput, l as errorMessage, o as cliExecutor, r as viewerUrlFor, s as hostExec, u as parseBackend, v as loadHomeEnv, w as __toESM, x as require_dist, y as registerDataSource } from "./viewer-routes.mjs";
-import { spawn } from "node:child_process";
+import { S as registerDataSource, _ as homeEnvNote, a as projectsAction, c as Factory, d as parseCli, h as require_ajv, i as projectScopedInput, l as errorMessage, m as require_dist, o as cliExecutor, r as viewerUrlFor, s as hostExec, u as parseBackend, w as __toESM, x as defaultDataDir, y as FACTORY_DIR } from "./viewer-routes.mjs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import process$1 from "node:process";
 import fs from "node:fs";
 import os from "node:os";
+import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
+import process$1 from "node:process";
 // ../../../../../marketplace-skill-factory/factory/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js
 function getEnumValues(entries) {
 	const numericValues = Object.values(entries).filter((v) => typeof v === "number");
@@ -15312,7 +15312,8 @@ function createFactoryTools(factory, publicUrl) {
 	};
 }
 // src/stdio.ts
-loadHomeEnv();
+var settingsNote = homeEnvNote();
+if (settingsNote) console.error(settingsNote);
 var firstPort = Number(process.env.FACTORY_VIEWER_PORT ?? 7340);
 var dataDir = defaultDataDir();
 var PORTS_TO_TRY = 10;

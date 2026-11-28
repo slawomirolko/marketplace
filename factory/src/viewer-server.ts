@@ -1,3 +1,4 @@
+import { homeEnvNote } from "./home-env.ts";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
@@ -8,9 +9,9 @@ import { cliExecutor, hostExec } from "./cli-backend.ts";
 import { marketplaceDir } from "./marketplace-agents.ts";
 import { loadWatches, startWatches } from "./watch.ts";
 import { loadFactoryConfig } from "./config.ts";
-import { loadHomeEnv } from "./paths.ts";
 
-loadHomeEnv();
+const settingsNote = homeEnvNote();
+if (settingsNote) console.error(settingsNote);
 
 const port = Number(process.env.FACTORY_VIEWER_PORT ?? DEFAULT_VIEWER_PORT);
 const publicUrl = `http://127.0.0.1:${port}`;

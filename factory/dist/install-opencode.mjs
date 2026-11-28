@@ -1,7 +1,7 @@
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import os from "node:os";
+import { fileURLToPath } from "node:url";
 // src/install-opencode.ts
 var self = fileURLToPath(import.meta.url);
 var stdioEntry = path.join(path.dirname(self), `stdio${path.extname(self)}`).replaceAll("\\", "/");

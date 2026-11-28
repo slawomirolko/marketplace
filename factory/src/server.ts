@@ -1,3 +1,4 @@
+import { homeEnvNote } from "./home-env.ts";
 import http from "node:http";
 import type { IncomingMessage } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -8,11 +9,12 @@ import { cliExecutor, hostExec } from "./cli-backend.ts";
 import type { CliName, Executors } from "./types.ts";
 import type { DefaultBackend } from "./engine.ts";
 import { allowedHostsFor, viewerHandler } from "./viewer-routes.ts";
-import { loadHomeEnv, registerDataSource } from "./paths.ts";
+import { registerDataSource } from "./paths.ts";
 import { createFactoryTools } from "./tools.ts";
 import { loadFactoryConfig } from "./config.ts";
 
-loadHomeEnv();
+const settingsNote = homeEnvNote();
+if (settingsNote) console.error(settingsNote);
 
 const PORT = Number(process.env.FACTORY_PORT ?? 7340);
 const HOST = process.env.FACTORY_HOST ?? "127.0.0.1";

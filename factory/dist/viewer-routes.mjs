@@ -1,11 +1,11 @@
 import { createRequire } from "node:module";
-import { execFileSync, spawn } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import fs from "node:fs";
-import crypto, { randomBytes } from "node:crypto";
 import os from "node:os";
+import { fileURLToPath } from "node:url";
 import { parseEnv } from "node:util";
+import { execFileSync, spawn } from "node:child_process";
+import crypto, { randomBytes } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 // \0rolldown/runtime.js
 var __create = Object.create;
@@ -48,6 +48,64 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 }) : target, mod));
 var __toCommonJS = (mod) => __hasOwnProp.call(mod, "module.exports") ? mod["module.exports"] : __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var __require = /* #__PURE__ */ (() => createRequire(import.meta.url))();
+// src/paths.ts
+var FACTORY_DIR$1 = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+var VIEWER_HEALTH = "skill-factory-viewer";
+var DEFAULT_VIEWER_PORT = 7340;
+function defaultDataDir() {
+	return process.env.FACTORY_DATA_DIR ?? homeDataDir();
+}
+function homeDataDir() {
+	return process.env.FACTORY_HOME_DIR ?? path.join(os.homedir(), ".skill-factory");
+}
+/** Device settings: KEY=value lines in the factory home's .env, never in a repository. Variables already set in the environment win. Returns the names it set. */
+function loadHomeEnv(file = path.join(homeDataDir(), ".env")) {
+	if (!fs.existsSync(file)) return [];
+	const values = parseEnv(fs.readFileSync(file, "utf8"));
+	const loaded = Object.keys(values).filter((name) => process.env[name] === void 0);
+	for (const name of loaded) process.env[name] = values[name];
+	return loaded;
+}
+function sourcesFile() {
+	return path.join(homeDataDir(), "sources.json");
+}
+function readSources() {
+	try {
+		const dirs = JSON.parse(fs.readFileSync(sourcesFile(), "utf8")).dirs;
+		return Array.isArray(dirs) ? dirs.filter((d) => typeof d === "string") : [];
+	} catch {
+		return [];
+	}
+}
+function registerDataSource(dataDir) {
+	const dir = path.resolve(dataDir);
+	if (dir === path.resolve(homeDataDir())) return;
+	const dirs = readSources().filter((d) => fs.existsSync(d));
+	if (!dirs.includes(dir)) dirs.push(dir);
+	fs.mkdirSync(homeDataDir(), { recursive: true });
+	fs.writeFileSync(sourcesFile(), `${JSON.stringify({ dirs }, null, 2)}\n`);
+}
+function viewerOptions(dataDir) {
+	return {
+		viewerDir: process.env.FACTORY_VIEWER_DIR ?? path.join(FACTORY_DIR$1, "app", "dist"),
+		dataDir,
+		factoryDir: FACTORY_DIR$1,
+		configFile: process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR$1, "config", "factory.yaml")
+	};
+}
+// src/home-env.ts
+/**
+* Device settings from the factory home's .env. Every entry module imports this module first:
+* ES modules run in import order, so modules that read process.env when they load see these values.
+*/
+var homeEnv = {
+	file: path.join(homeDataDir(), ".env"),
+	loaded: loadHomeEnv()
+};
+/** One line for the start-up log: setting names only, never their values. */
+function homeEnvNote() {
+	return homeEnv.loaded.length ? `factory settings from ${homeEnv.file}: ${homeEnv.loaded.join(", ")}` : null;
+}
 // src/prices.ts
 var PER_MTOK = {
 	"claude-haiku-5-5": {
@@ -15461,51 +15519,6 @@ function loadWorkflowDir(dir) {
 function loadWorkflowSpecs(dir) {
 	return fs.readdirSync(dir).filter((f) => /.ya?ml$/.test(f)).sort().map((f) => readSpec(path.join(dir, f)));
 }
-// src/paths.ts
-var FACTORY_DIR$1 = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-var VIEWER_HEALTH = "skill-factory-viewer";
-var DEFAULT_VIEWER_PORT = 7340;
-function defaultDataDir() {
-	return process.env.FACTORY_DATA_DIR ?? homeDataDir();
-}
-function homeDataDir() {
-	return process.env.FACTORY_HOME_DIR ?? path.join(os.homedir(), ".skill-factory");
-}
-/** Device settings: KEY=value lines in the factory home's .env, never in a repository. Variables already set in the environment win. Returns the names it set. */
-function loadHomeEnv(file = path.join(homeDataDir(), ".env")) {
-	if (!fs.existsSync(file)) return [];
-	const values = parseEnv(fs.readFileSync(file, "utf8"));
-	const loaded = Object.keys(values).filter((name) => process.env[name] === void 0);
-	for (const name of loaded) process.env[name] = values[name];
-	return loaded;
-}
-function sourcesFile() {
-	return path.join(homeDataDir(), "sources.json");
-}
-function readSources() {
-	try {
-		const dirs = JSON.parse(fs.readFileSync(sourcesFile(), "utf8")).dirs;
-		return Array.isArray(dirs) ? dirs.filter((d) => typeof d === "string") : [];
-	} catch {
-		return [];
-	}
-}
-function registerDataSource(dataDir) {
-	const dir = path.resolve(dataDir);
-	if (dir === path.resolve(homeDataDir())) return;
-	const dirs = readSources().filter((d) => fs.existsSync(d));
-	if (!dirs.includes(dir)) dirs.push(dir);
-	fs.mkdirSync(homeDataDir(), { recursive: true });
-	fs.writeFileSync(sourcesFile(), `${JSON.stringify({ dirs }, null, 2)}\n`);
-}
-function viewerOptions(dataDir) {
-	return {
-		viewerDir: process.env.FACTORY_VIEWER_DIR ?? path.join(FACTORY_DIR$1, "app", "dist"),
-		dataDir,
-		factoryDir: FACTORY_DIR$1,
-		configFile: process.env.FACTORY_CONFIG ?? path.join(FACTORY_DIR$1, "config", "factory.yaml")
-	};
-}
 // src/config.ts
 var DEFAULT_MEMORY_LAYER = "olko-memory-layer";
 var DEFAULT_PROJECTS = {
@@ -18736,4 +18749,4 @@ function viewerHandler({ viewerDir, dataDir, factoryDir, configFile, allowedHost
 		return true;
 	};
 }
-export { mustache as C, require_ajv as S, defaultDataDir as _, projectsAction as a, viewerOptions as b, Factory as c, parseCli as d, marketplaceDir as f, VIEWER_HEALTH as g, FACTORY_DIR$1 as h, projectScopedInput as i, errorMessage as l, DEFAULT_VIEWER_PORT as m, viewerHandler as n, cliExecutor as o, loadFactoryConfig as p, viewerUrlFor as r, hostExec as s, allowedHostsFor as t, parseBackend as u, loadHomeEnv as v, __toESM as w, require_dist as x, registerDataSource as y };
+export { viewerOptions as C, registerDataSource as S, homeEnvNote as _, projectsAction as a, VIEWER_HEALTH as b, Factory as c, parseCli as d, marketplaceDir as f, mustache as g, require_ajv as h, projectScopedInput as i, errorMessage as l, require_dist as m, viewerHandler as n, cliExecutor as o, loadFactoryConfig as p, viewerUrlFor as r, hostExec as s, allowedHostsFor as t, parseBackend as u, DEFAULT_VIEWER_PORT as v, __toESM as w, defaultDataDir as x, FACTORY_DIR$1 as y };

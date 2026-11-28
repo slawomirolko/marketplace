@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { spawnSync } from "node:child_process";
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "factory-projects-home-"));
 process.env.FACTORY_HOME_DIR = home;
@@ -321,6 +322,17 @@ test("analyze refuses a missing status workflow and a delegate backend without a
     delete process.env.FACTORY_CONFIG;
   }
   assert.deepEqual(parseProjectsAction({ action: "analyze", id: "sample-app" }), { action: "analyze", id: "sample-app" });
+});
+
+test("every entry module loads the factory home's .env before the modules that read settings on import", () => {
+  for (const entry of ["src/server.ts", "src/stdio.ts", "src/viewer-server.ts", "app/vite.config.ts"]) {
+    const firstImport = fs.readFileSync(path.join(factoryDir, entry), "utf8").split("\n").find((line) => line.startsWith("import "));
+    assert.match(firstImport ?? "", /^import (\{ homeEnvNote \} from )?"(\.\/|\.\.\/src\/)home-env\.ts";$/, `${entry} imports home-env.ts first`);
+  }
+  const probeHome = workspace();
+  fs.writeFileSync(path.join(probeHome, ".env"), "FACTORY_TURN_DELAY_MS=7\n");
+  const probe = spawnSync(process.execPath, ["--experimental-strip-types", "--input-type=module", "-e", `import ${JSON.stringify(pathToFileURL(path.join(factoryDir, "src", "home-env.ts")).href)}; console.log(process.env.FACTORY_TURN_DELAY_MS);`], { encoding: "utf8", env: { ...process.env, FACTORY_HOME_DIR: probeHome } });
+  assert.equal(probe.stdout.trim().split("\n").at(-1), "7", probe.stderr);
 });
 
 test("FACTORY_STATUS_CLI from the factory home's .env picks the status backend on this device", () => {

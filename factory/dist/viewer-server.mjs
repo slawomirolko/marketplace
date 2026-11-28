@@ -1,4 +1,4 @@
-import { C as mustache, _ as defaultDataDir, b as viewerOptions, c as Factory, f as marketplaceDir, g as VIEWER_HEALTH, n as viewerHandler, o as cliExecutor, p as loadFactoryConfig, s as hostExec, t as allowedHostsFor, v as loadHomeEnv } from "./viewer-routes.mjs";
+import { C as viewerOptions, _ as homeEnvNote, b as VIEWER_HEALTH, c as Factory, f as marketplaceDir, g as mustache, n as viewerHandler, o as cliExecutor, p as loadFactoryConfig, s as hostExec, t as allowedHostsFor, x as defaultDataDir } from "./viewer-routes.mjs";
 import path from "node:path";
 import fs from "node:fs";
 import http from "node:http";
@@ -130,7 +130,8 @@ function startWatches(watches, context) {
 	return () => timers.forEach(clearInterval);
 }
 // src/viewer-server.ts
-loadHomeEnv();
+var settingsNote = homeEnvNote();
+if (settingsNote) console.error(settingsNote);
 var port = Number(process.env.FACTORY_VIEWER_PORT ?? 7340);
 var publicUrl = `http://127.0.0.1:${port}`;
 var dataDir = defaultDataDir();

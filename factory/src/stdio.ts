@@ -1,3 +1,4 @@
+import { homeEnvNote } from "./home-env.ts";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -5,9 +6,10 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { Factory, parseBackend, parseCli } from "./engine.ts";
 import { cliExecutor, hostExec } from "./cli-backend.ts";
 import { createFactoryTools } from "./tools.ts";
-import { DEFAULT_VIEWER_PORT, VIEWER_HEALTH, defaultDataDir, loadHomeEnv, registerDataSource } from "./paths.ts";
+import { DEFAULT_VIEWER_PORT, VIEWER_HEALTH, defaultDataDir, registerDataSource } from "./paths.ts";
 
-loadHomeEnv();
+const settingsNote = homeEnvNote();
+if (settingsNote) console.error(settingsNote);
 
 const firstPort = Number(process.env.FACTORY_VIEWER_PORT ?? DEFAULT_VIEWER_PORT);
 const dataDir = defaultDataDir();
