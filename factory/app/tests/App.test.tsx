@@ -2,7 +2,7 @@ import { http, HttpResponse } from "msw";
 import { App } from "../src/App.tsx";
 import { READ_ONLY_NOTE } from "../src/api.ts";
 import type { RunDetail, RunListItem } from "../src/types.ts";
-import { act, API, deferred, findCard, fireEvent, render, report, run, RUN_ID, runDetail, runListItem, screen, server, settleNetwork, userEvent, waitFor, within } from "./test-utils/index.ts";
+import { act, API, deferred, findCard, fireEvent, projectList, projectStatus, render, report, run, RUN_ID, runDetail, runListItem, screen, server, settleNetwork, userEvent, waitFor, within } from "./test-utils/index.ts";
 
 function openWorkflow(name: string): void {
   window.history.replaceState(null, "", `/?mode=workflows&workflow=${name}`);
@@ -301,6 +301,14 @@ describe("App in runs mode", () => {
   });
 });
 
+/** Opens the projects view with one project and returns its Update from marketplace button. */
+async function openUpdateButton(): Promise<HTMLElement> {
+  window.history.replaceState(null, "", "/?mode=projects");
+  server.use(http.get(API.projects, () => HttpResponse.json(projectList)), http.get(API.projectStatus, () => HttpResponse.json(projectStatus)));
+  render(<App />);
+  return screen.findByTestId("update-marketplace");
+}
+
 describe("App load notes", () => {
   beforeEach(() => window.history.replaceState(null, "", "/?mode=workflows&workflow=main"));
 
@@ -321,9 +329,9 @@ describe("App load notes", () => {
   test("an update that fails with an HTML page shows its status", async () => {
     server.use(http.post(API.update, () => new HttpResponse("<html>bad gateway</html>", { status: 502 })));
     const user = userEvent.setup();
-    render(<App />);
+    const button = await openUpdateButton();
 
-    await user.click(await screen.findByRole("button", { name: "Update from marketplace" }));
+    await user.click(button);
 
     expect(await screen.findByText("update failed: 502")).toBeInTheDocument();
   });
@@ -331,10 +339,33 @@ describe("App load notes", () => {
   test("an update refused for the missing token says that the viewer is read-only", async () => {
     server.use(http.post(API.update, () => HttpResponse.json({ error: "unauthorized" }, { status: 401 })));
     const user = userEvent.setup();
-    render(<App />);
+    const button = await openUpdateButton();
 
-    await user.click(await screen.findByRole("button", { name: "Update from marketplace" }));
+    await user.click(button);
 
     expect(await screen.findByText(READ_ONLY_NOTE)).toBeInTheDocument();
+  });
+
+  test("Update from marketplace sits in the project action row, once, and posts the update", async () => {
+    const posted: string[] = [];
+    server.use(
+      http.post(API.update, () => {
+        posted.push("update");
+        return HttpResponse.json({ before: "a".repeat(40), after: "a".repeat(40), changedFiles: [], stale: [] });
+      }),
+    );
+    const user = userEvent.setup();
+    const button = await openUpdateButton();
+
+    expect(screen.getAllByTestId("update-marketplace")).toHaveLength(1);
+    const appHeader = screen.getByRole("heading", { name: "Factory viewer" }).closest("header") as HTMLElement;
+    expect(within(appHeader).queryByTestId("update-marketplace")).not.toBeInTheDocument();
+    expect(button.closest(".project-actions")).toContainElement(screen.getByTestId("merge-updates"));
+    expect(button).toHaveAttribute("title", expect.stringMatching(/^git fetch and fast-forward of .* \(only when it is clean and on main\)/));
+
+    await user.click(button);
+
+    expect(await screen.findByText(/Marketplace already up to date; agents and skills reloaded; 0 workflows have a changed source\./)).toBeInTheDocument();
+    expect(posted).toEqual(["update"]);
   });
 });

@@ -1,5 +1,7 @@
 import type { ProjectOverview, ProjectSummary } from "../types.ts";
 import type { ProjectAction } from "./useProjectActions.ts";
+import { UpdateControl } from "../viewer/UpdateControl.tsx";
+import type { UpdateControlProps } from "../viewer/UpdateControl.tsx";
 
 export interface ProjectHeadProps {
   project: ProjectSummary;
@@ -17,6 +19,8 @@ export interface ProjectHeadProps {
   onAnalyze: (projectId: string) => void;
   onMerge: (projectId: string) => void;
   onShowRuns: (projectId: string) => void;
+  /** The Update from marketplace button of the factory's marketplace checkout, shown with the project actions. */
+  updater?: UpdateControlProps;
 }
 
 function checkButtonText(checkingRun: string | undefined, checkingState: string | undefined, hasStatus: boolean): string {
@@ -27,7 +31,7 @@ function checkButtonText(checkingRun: string | undefined, checkingState: string 
 }
 
 /** The selected project's name and path, with its actions: check status, show its runs, remove it from the list. */
-export function ProjectHead({ project, overview, checkingRun, checkingState, mergingRun, mergeBlocker, hasStatus, busy, act, onAnalyze, onMerge, onShowRuns }: ProjectHeadProps) {
+export function ProjectHead({ project, overview, checkingRun, checkingState, mergingRun, mergeBlocker, hasStatus, busy, act, onAnalyze, onMerge, onShowRuns, updater }: ProjectHeadProps) {
   const remove = () => {
     if (window.confirm(`Remove ${project.id} from the project list? The folder is not touched.`)) {
       void act({ action: "remove", id: project.id }, () => `Removed ${project.id}.`);
@@ -48,6 +52,7 @@ export function ProjectHead({ project, overview, checkingRun, checkingState, mer
             {mergingRun ? "Merging…" : "Merge updates"}
           </button>
         )}
+        {updater && <UpdateControl {...updater} />}
         <button type="button" data-testid="project-runs" onClick={() => onShowRuns(project.id)} disabled={project.runs === 0}>
           Runs ({project.runs})
         </button>

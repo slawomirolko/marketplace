@@ -154,13 +154,13 @@ function Viewer({ liveRefreshMs = LIVE_REFRESH_MS }: AppProps) {
   return (
     <ViewerContext.Provider value={context}>
       <div className="app">
-        <Header showCounts={showCounts} onShowCounts={changeShowCounts} mode={mode} onMode={setMode} updater={{ marketplace, updating, updateNote, stale, onUpdate: update }}>
+        <Header showCounts={showCounts} onShowCounts={changeShowCounts} mode={mode} onMode={setMode} stale={stale}>
           {modeControls()}
         </Header>
         <LoadNotes notes={loadNotes} />
         <PendingDecisions onOpenRun={openRun} />
         {mode === "projects" ? (
-          <Projects onShowRuns={showProjectRuns} />
+          <Projects onShowRuns={showProjectRuns} updater={{ marketplace, updating, updateNote, onUpdate: update }} />
         ) : (
           <main>
             <div className="canvas">

@@ -10,9 +10,10 @@ import { StatusView } from "./projects/StatusView.tsx";
 import { useAnalyzePolling } from "./projects/useAnalyzePolling.ts";
 import { useProjectActions } from "./projects/useProjectActions.ts";
 import { useProjectStatus } from "./projects/useProjectStatus.ts";
+import type { UpdateControlProps } from "./viewer/UpdateControl.tsx";
 import type { ProjectCandidate, ProjectOverview } from "./types.ts";
 
-export function Projects({ onShowRuns, pollMs = ANALYZE_POLL_MS }: { onShowRuns: (projectId: string) => void; pollMs?: number }) {
+export function Projects({ onShowRuns, pollMs = ANALYZE_POLL_MS, updater }: { onShowRuns: (projectId: string) => void; pollMs?: number; updater?: UpdateControlProps }) {
   const [overview, setOverview] = useState<ProjectOverview | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<ProjectCandidate[] | null>(null);
@@ -102,7 +103,7 @@ export function Projects({ onShowRuns, pollMs = ANALYZE_POLL_MS }: { onShowRuns:
         {!selected && <p className="muted">Select a project.</p>}
         {selected && (
           <>
-            <ProjectHead project={selected} overview={overview} checkingRun={selectedRun} checkingState={analyzeState[selected.id]} mergingRun={mergingRun} mergeBlocker={mergeBlocker(status?.data?.artifacts)} hasStatus={Boolean(status || selected.status)} busy={busy} act={act} onAnalyze={(projectId) => void analyze(projectId)} onMerge={(projectId) => void merge(projectId)} onShowRuns={onShowRuns} />
+            <ProjectHead project={selected} overview={overview} checkingRun={selectedRun} checkingState={analyzeState[selected.id]} mergingRun={mergingRun} mergeBlocker={mergeBlocker(status?.data?.artifacts)} hasStatus={Boolean(status || selected.status)} busy={busy} act={act} onAnalyze={(projectId) => void analyze(projectId)} onMerge={(projectId) => void merge(projectId)} onShowRuns={onShowRuns} updater={updater} />
             {!overview.statusWorkflowInstalled && (
               <p className="warn">
                 The <code>{overview.statusWorkflow}</code> workflow is not installed, so the project status cannot be checked.
