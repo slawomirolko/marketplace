@@ -3,6 +3,16 @@ import path from "node:path";
 import fs from "node:fs";
 import http from "node:http";
 // src/watch.ts
+/**
+* Interval watches: a generic trigger that starts workflow runs from a command's output.
+*
+* A watch runs its command once per project every `everyMinutes`, reads a list of
+* items from the command's JSON output, and starts one run of its workflow for each
+* item whose key was seen in `stableChecks` consecutive checks. The run starts with
+* the watch's backend and stops at its first question, so nothing happens until the
+* user answers it. The watch knows no agent or workflow: everything specific lives
+* in config/factory.yaml and in the workflow.
+*/
 var RENDER = (template, view) => mustache.render(template, view, {}, { escape: (value) => String(value) });
 function loadWatches() {
 	return loadFactoryConfig().watches;
@@ -91,6 +101,7 @@ async function checkWatch(watch, context) {
 				input
 			});
 			if (reused) continue;
+			/** The config never names a model; FACTORY_WATCH_MODEL picks one model for every tier of watch runs. */
 			const model = process.env.FACTORY_WATCH_MODEL;
 			try {
 				factory.confirm(run.runId, {
@@ -132,6 +143,7 @@ function startWatches(watches, context) {
 		};
 		tick();
 		const timer = setInterval(() => void tick(), watch.everyMinutes * 6e4);
+		/** The watch timers alone never keep the process alive; the viewer's HTTP server does. */
 		timer.unref();
 		timers.push(timer);
 	}
@@ -143,6 +155,7 @@ if (settingsNote) console.error(settingsNote);
 var port = Number(process.env.FACTORY_VIEWER_PORT ?? 7340);
 var publicUrl = `http://127.0.0.1:${port}`;
 var dataDir = defaultDataDir();
+/** The viewer process outlives the harness sessions, so it owns the interval watches and the runs they start; their questions are answered on the run page. */
 var watches = process.env.FACTORY_WATCHES === "off" ? [] : loadWatches();
 var statusBackend = loadFactoryConfig().projects.statusBackend;
 var executors = Object.fromEntries([...watches.map((watch) => watch.backend.cli), ...statusBackend ? [statusBackend.cli] : []].map((cli) => [cli, cliExecutor(cli)]));

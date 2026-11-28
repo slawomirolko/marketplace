@@ -16081,7 +16081,7 @@ var LOCKED_FILE_CODES = /* @__PURE__ */ new Set([
 	"EBUSY",
 	"EACCES"
 ]);
-/** Renames a file, retrying for a short time while Windows holds the target open for a reader. */
+/** Renames a file, retrying for a short time while Windows holds the target open for a reader. The wait between attempts is synchronous (Atomics.wait) and blocks the event loop, at most about a second in all. */
 function renameWithRetry(from, to, attempts = 10) {
 	for (let attempt = 1;; attempt++) try {
 		fs.renameSync(from, to);
@@ -16091,6 +16091,7 @@ function renameWithRetry(from, to, attempts = 10) {
 		Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20 * attempt);
 	}
 }
+/** Prices per million tokens for the fake backend only: fixed test numbers that make fake runs cost something, not real model prices. */
 var FAKE_PRICE_PER_MTOK = {
 	low: {
 		input: .8,
@@ -18096,7 +18097,7 @@ function removeRoot(dir, file = projectsFile()) {
 		roots: registry.roots.filter((r) => !sameFolder(r, dir))
 	}, file).roots;
 }
-/** A linked git worktree has a `.git` file, not a folder; its main checkout is the project. */
+/** A linked git worktree has a `.git` file, not a folder; its main checkout is the project. The file's `gitdir:` path names `.../worktrees/<name>`, which tells a worktree apart from a submodule, whose `.git` file points into `.../modules/`. */
 function isLinkedWorktree(dir) {
 	const dotGit = path.join(dir, ".git");
 	try {

@@ -117,7 +117,7 @@ export function removeRoot(dir: string, file = projectsFile()): string[] {
   return writeRegistry({ ...registry, roots: registry.roots.filter((r) => !sameFolder(r, dir)) }, file).roots;
 }
 
-/** A linked git worktree has a `.git` file, not a folder; its main checkout is the project. */
+/** A linked git worktree has a `.git` file, not a folder; its main checkout is the project. The file's `gitdir:` path names `.../worktrees/<name>`, which tells a worktree apart from a submodule, whose `.git` file points into `.../modules/`. */
 function isLinkedWorktree(dir: string): boolean {
   const dotGit = path.join(dir, ".git");
   try {

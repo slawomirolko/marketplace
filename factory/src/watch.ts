@@ -1,11 +1,13 @@
-// Interval watches: a generic trigger that starts workflow runs from a command's output.
-//
-// A watch runs its command once per project every `everyMinutes`, reads a list of
-// items from the command's JSON output, and starts one run of its workflow for each
-// item whose key was seen in `stableChecks` consecutive checks. The run starts with
-// the watch's backend and stops at its first question, so nothing happens until the
-// user answers it. The watch knows no agent or workflow: everything specific lives
-// in config/factory.yaml and in the workflow.
+/**
+ * Interval watches: a generic trigger that starts workflow runs from a command's output.
+ *
+ * A watch runs its command once per project every `everyMinutes`, reads a list of
+ * items from the command's JSON output, and starts one run of its workflow for each
+ * item whose key was seen in `stableChecks` consecutive checks. The run starts with
+ * the watch's backend and stops at its first question, so nothing happens until the
+ * user answers it. The watch knows no agent or workflow: everything specific lives
+ * in config/factory.yaml and in the workflow.
+ */
 import fs from "node:fs";
 import path from "node:path";
 import Mustache from "mustache";
@@ -23,7 +25,7 @@ export interface WatchContext {
 }
 
 interface WatchState {
-  // key -> number of consecutive checks that saw it
+  /** Item key to the number of consecutive checks that saw it. */
   seen: Record<string, number>;
 }
 
@@ -111,7 +113,7 @@ export async function checkWatch(watch: WatchSpec, context: WatchContext): Promi
       const input: RunInput = Object.fromEntries(Object.entries(watch.input).map(([name, template]) => [name, RENDER(template, itemView)]));
       const { run, reused } = factory.start(RENDER(watch.goal, itemView), `watch:${watch.id}:${key}`, { workflow: watch.workflow, input });
       if (reused) continue;
-      // The config never names a model; FACTORY_WATCH_MODEL picks one model for every tier of watch runs.
+      /** The config never names a model; FACTORY_WATCH_MODEL picks one model for every tier of watch runs. */
       const model = process.env.FACTORY_WATCH_MODEL;
       try {
         factory.confirm(run.runId, { backend: watch.backend, ...(model ? { tierModels: { low: model, medium: model, high: model } } : {}) });
@@ -147,6 +149,7 @@ export function startWatches(watches: WatchSpec[], context: WatchContext): () =>
     };
     void tick();
     const timer = setInterval(() => void tick(), watch.everyMinutes * 60_000);
+    /** The watch timers alone never keep the process alive; the viewer's HTTP server does. */
     timer.unref();
     timers.push(timer);
   }

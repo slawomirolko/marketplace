@@ -44,7 +44,7 @@ import type {
 
 const LOCKED_FILE_CODES = new Set(["EPERM", "EBUSY", "EACCES"]);
 
-/** Renames a file, retrying for a short time while Windows holds the target open for a reader. */
+/** Renames a file, retrying for a short time while Windows holds the target open for a reader. The wait between attempts is synchronous (Atomics.wait) and blocks the event loop, at most about a second in all. */
 function renameWithRetry(from: string, to: string, attempts = 10): void {
   for (let attempt = 1; ; attempt++) {
     try {
@@ -57,6 +57,7 @@ function renameWithRetry(from: string, to: string, attempts = 10): void {
   }
 }
 
+/** Prices per million tokens for the fake backend only: fixed test numbers that make fake runs cost something, not real model prices. */
 const FAKE_PRICE_PER_MTOK: Record<Tier, { input: number; output: number }> = {
   low: { input: 0.8, output: 4 },
   medium: { input: 3, output: 15 },

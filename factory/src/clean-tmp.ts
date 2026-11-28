@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+/** Names of the temp folders the factory and its tests create (mkdtemp adds the random suffix); nothing else in the temp folder is ever touched. */
 const OWNED = /^(factory-[a-z-]+|harness-agent|workflow-yaml)-[A-Za-z0-9_]{6,}$/;
 
 export interface CleanOptions {
@@ -11,6 +12,10 @@ export interface CleanOptions {
   dryRun?: boolean;
 }
 
+/**
+ * Removes the factory's own temp folders that were not changed for `maxAgeMinutes`, so crashed or killed runs
+ * do not fill the temp folder. A folder still in use (locked on Windows) is reported as failed after a few retries.
+ */
 export function cleanTmp({ root = os.tmpdir(), maxAgeMinutes = 60, dryRun = false }: CleanOptions = {}): { removed: string[]; failed: string[] } {
   const cutoff = Date.now() - maxAgeMinutes * 60000;
   const removed: string[] = [];

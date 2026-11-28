@@ -18,8 +18,7 @@ if (settingsNote) {
 const port = Number(process.env.FACTORY_VIEWER_PORT ?? DEFAULT_VIEWER_PORT);
 const publicUrl = `http://127.0.0.1:${port}`;
 const dataDir = defaultDataDir();
-// The viewer process outlives the harness sessions, so it owns the interval watches and
-// the runs they start; their questions are answered on the run page.
+/** The viewer process outlives the harness sessions, so it owns the interval watches and the runs they start; their questions are answered on the run page. */
 const watches = process.env.FACTORY_WATCHES === "off" ? [] : loadWatches();
 const statusBackend = loadFactoryConfig().projects.statusBackend;
 const executors = Object.fromEntries([...watches.map((watch) => watch.backend.cli), ...(statusBackend ? [statusBackend.cli] : [])].map((cli) => [cli, cliExecutor(cli)]));

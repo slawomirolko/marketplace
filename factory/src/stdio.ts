@@ -27,6 +27,7 @@ async function viewerOn(port: number): Promise<"ours" | "other" | "free"> {
   }
 }
 
+/** Starts the run page as a detached process without stdio, so it outlives this stdio session and keeps serving runs and watches after the harness exits. */
 function startViewer(port: number): void {
   const self = fileURLToPath(import.meta.url);
   const script = path.join(path.dirname(self), `viewer-server${path.extname(self)}`);
