@@ -49,6 +49,9 @@ record in task artifacts.
 
 Run on request to review, clean, compact or promote memory, or when a block
 exceeds its configured limit. Never prune memory during an unrelated task.
+After every memory write, run the audit on the block you changed and report its
+verdicts before finishing, using the audit command named by
+`.agents/skills/olko-memory-layer/project.md` when that file exists.
 
 Age each lesson in two units: days since its newest `added`/`verified` date and
 runs of the owning agent since that date. Run counts alone mislead (one agent
