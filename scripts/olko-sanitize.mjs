@@ -13,7 +13,9 @@
  * "billing-portal", also inside longer words.
  *
  * The gate fails closed: without a remote term or a configured term it exits 1, unless
- * --allow-no-config is given. Output never holds a value. Every hit is one of these labels:
+ * --allow-no-config is given. With --config-only the gate takes no names from the project (a
+ * marketplace source checkout publishing its own content: its folder, repository and remote names
+ * are the marketplace's own); it then fails closed without a configured term. Output never holds a value. Every hit is one of these labels:
  *   #<n>              term n of the sorted term list (derived and configured terms alike)
  *   #secret:<label>   a secret pattern, for example #secret:github-token or #secret:email
  *   #binary           a file that is not text (UTF-16 with a byte order mark is decoded, not blocked)
@@ -31,7 +33,7 @@
  *
  * Usage:
  *   node scripts/olko-sanitize.mjs --project <dir> (--path <stage-dir> | --staged <worktree> | --text <file>)...
- *        [--terms-file <json>] [--allow-no-config] [--json]
+ *        [--terms-file <json>] [--config-only] [--allow-no-config] [--json]
  * Exit codes: 0 clean, 2 blocked by a leak, 1 the script failed.
  */
 
@@ -58,6 +60,8 @@ const ZERO_WIDTH = /[­᠎​-‏⁠-⁤﻿]/g;
 const SEPARATORS = /[-_.\s]+/g;
 const REQUIRED_SOURCES = ["remote", "config"];
 const SOURCES = ["folder", "repository", "remote", "manifest", "config"];
+/** The one term source of a --config-only scan. */
+const CONFIG_SOURCES = ["config"];
 const EMAIL = /[A-Za-z0-9._%+-]+@((?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,})/g;
 const PLACEHOLDER_EMAIL_DOMAIN = /(^|\.)(example\.(com|org|net)|example|invalid|test|localhost)$/i;
 /** Deterministic secret patterns: [label, pattern]. A match blocks; the value is never printed. */
@@ -254,17 +258,22 @@ function configuredTerms(termsFile, collector) {
 
 /**
  * Every term to block, longest first, plus warnings that name sources and counts, never values.
- * Throws E_NO_TERMS when a required source is empty and `allowNoConfig` is not set.
+ * Throws E_NO_TERMS when a required source is empty and `allowNoConfig` is not set. With `configOnly`
+ * no term is derived from the project and the configured terms are the one required source.
  */
-export function collectTerms(project, termsFile, { allowNoConfig = false } = {}) {
+export function collectTerms(project, termsFile, { allowNoConfig = false, configOnly = false } = {}) {
   const collector = createCollector();
-  addName(collector, "folder", path.basename(path.resolve(project)));
-  repositoryTerms(project, collector);
-  remoteTerms(project, collector);
-  manifestTerms(project, collector);
+  if (!configOnly) {
+    addName(collector, "folder", path.basename(path.resolve(project)));
+    repositoryTerms(project, collector);
+    remoteTerms(project, collector);
+    manifestTerms(project, collector);
+  }
   configuredTerms(termsFile, collector);
-  const empty = SOURCES.filter((source) => collector.found.get(source) === 0);
-  const missing = REQUIRED_SOURCES.filter((source) => empty.includes(source));
+  const sources = configOnly ? CONFIG_SOURCES : SOURCES;
+  const required = configOnly ? CONFIG_SOURCES : REQUIRED_SOURCES;
+  const empty = sources.filter((source) => collector.found.get(source) === 0);
+  const missing = required.filter((source) => empty.includes(source));
   if (missing.length > 0 && !allowNoConfig) {
     throw new GateError("E_NO_TERMS", `empty term sources: ${missing.join(", ")}; pass --allow-no-config to scan without them`);
   }
@@ -469,8 +478,8 @@ function textItems(files) {
  * Scans everything that is published: a stage directory (`stage`), the staged commit of a
  * git worktree (`staged`) and text files (`texts`), against the terms of `project`.
  */
-export function scan({ stage, staged, texts = [], project, termsFile, allowNoConfig = false }) {
-  const { terms, warnings } = collectTerms(project, termsFile, { allowNoConfig });
+export function scan({ stage, staged, texts = [], project, termsFile, allowNoConfig = false, configOnly = false }) {
+  const { terms, warnings } = collectTerms(project, termsFile, { allowNoConfig, configOnly });
   const items = [
     ...(stage ? stageItems(stage) : []),
     ...(staged ? stagedCommitItems(staged) : []),
@@ -479,7 +488,7 @@ export function scan({ stage, staged, texts = [], project, termsFile, allowNoCon
   return { ...report(items, terms), warnings };
 }
 
-const USAGE = "--project <dir> (--path <stage-dir> | --staged <git worktree> | --text <file>)... [--terms-file <json>] [--allow-no-config] [--json]";
+const USAGE = "--project <dir> (--path <stage-dir> | --staged <git worktree> | --text <file>)... [--terms-file <json>] [--config-only] [--allow-no-config] [--json]";
 
 function parseArgs(argv) {
   const options = { texts: [] };
@@ -490,6 +499,8 @@ function parseArgs(argv) {
       options.json = true;
     } else if (argument === "--allow-no-config") {
       options.allowNoConfig = true;
+    } else if (argument === "--config-only") {
+      options.configOnly = true;
     } else if (argument === "--text" && index + 1 < argv.length) {
       options.texts.push(argv[++index]);
     } else if (flags[argument] && index + 1 < argv.length) {
@@ -513,6 +524,7 @@ function main() {
     project: path.resolve(options.project),
     termsFile: options.termsFile,
     allowNoConfig: options.allowNoConfig,
+    configOnly: options.configOnly,
   });
   for (const warning of result.warnings) {
     console.error(`warning: ${warning}`);

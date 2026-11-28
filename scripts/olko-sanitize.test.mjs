@@ -291,3 +291,24 @@ test("scans the PR title, body and commit message without printing their file pa
   assert.deepEqual(JSON.parse(result.stdout).hits.map((hit) => [hit.file, hit.line]), [["text#2", 1]]);
   assert.equal(output(result).includes("quokkatext"), false);
 });
+
+test("--config-only takes no names from the checkout itself, still blocks configured terms and fails closed without them", () => {
+  const root = project({ folder: "billing-portal" });
+  const own = stagedWorktree((worktree) => {
+    write(path.join(worktree, "notes.md"), "The billing portal and tapirorg are this checkout's own names.\n");
+  });
+  assert.equal(stagedGate(own, root).status, BLOCKED, "without --config-only the checkout's own names block");
+  const passed = stagedGate(own, root, ["--config-only"]);
+  assert.equal(passed.status, 0, passed.stdout + passed.stderr);
+
+  const leaking = stagedWorktree((worktree) => {
+    write(path.join(worktree, "notes.md"), "Copied from the placeholder term project.\n");
+  });
+  assert.equal(stagedGate(leaking, root, ["--config-only"]).status, BLOCKED);
+
+  const refused = run(["--staged", own, "--project", root, "--config-only", "--json"]);
+  assert.equal(refused.status, FAILED);
+  assert.match(refused.stderr, /E_NO_TERMS/);
+  assert.match(refused.stderr, /config/);
+  assert.equal(run(["--staged", own, "--project", root, "--config-only", "--json", "--allow-no-config"]).status, 0);
+});
