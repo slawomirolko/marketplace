@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { parse as parseYaml } from "yaml";
 import { fencedJson, driveRun, stoppedBy } from "./helpers/plan-driver.ts";
 import type { DriveHandlers } from "./helpers/plan-driver.ts";
 import { tempDir } from "./helpers/temp.ts";
@@ -196,4 +197,33 @@ test("merge run on a CLI backend: resolve runs in the work directory and may lea
   assert.equal(requests[0]?.limitDirs?.[0], out, "the step's own directories limit where the agent may go outside its workspace");
   assert.deepEqual(requests[0]?.limitDirs, requests[0]?.dirs, "besides the work directory only the folders of the skills the agent loads");
   assert.ok(!requests[0]?.limitDirs?.includes(PROJECT) && !requests[0]?.limitDirs?.includes(MARKETPLACE), "neither the project nor the marketplace checkout");
+});
+
+test("only the resolve step of the merge workflow is isolated", () => {
+  const isolated = fs
+    .readdirSync(WORKFLOWS)
+    .filter((file) => file.endsWith(".yaml"))
+    .flatMap((file) => {
+      const workflow = parseYaml(fs.readFileSync(path.join(WORKFLOWS, file), "utf8")) as { name: string; nodes?: { id: string; isolate?: boolean }[] };
+      return (workflow.nodes ?? []).filter((node) => node.isolate === true).map((node) => `${workflow.name}/${node.id}`);
+    });
+  assert.deepEqual(isolated, ["olko-marketplace-merge/resolve"]);
+});
+
+test("a step that lists its own dirs but is not isolated keeps the agent's own permissions on a CLI backend", async () => {
+  const { Factory } = await import("../src/engine.ts");
+  const fake = fakeExec({ approved: { approved: true } });
+  const requests: CliRequest[] = [];
+  const opencode = async (request: CliRequest): Promise<CliResult> => {
+    requests.push(request);
+    return { ok: true, text: fencedJson({ stage: null, classification: null }), turns: 1, usageByModel: [] };
+  };
+  const factory = new Factory(tempDir("upstream-workflow-"), { backend: "cli", cli: "opencode", executors: { exec: fake.exec, opencode } });
+  const { run } = factory.start("upstream", undefined, { workflow: "olko-marketplace-upstream", input: { ...UPSTREAM_INPUT, approved: "true" } });
+  factory.confirm(run.runId, { backend: { kind: "cli", cli: "opencode" } });
+  await driveRun(factory, run.runId, { reply: () => undefined });
+  const stage = requests.find((request) => request.prompt.includes("stage step"));
+  assert.ok(stage, "the stage step ran");
+  assert.ok(stage.dirs?.includes(PROJECT), "the stage step lists the project");
+  assert.equal(stage.limitDirs, undefined, "no folder or tool limit without isolate");
 });

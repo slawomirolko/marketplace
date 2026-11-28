@@ -54,6 +54,10 @@ function workflowGraphErrors(workflow: WorkflowSpec): string[] {
     pairs.add(pair);
   }
   if (!workflow.edges.some((e) => e.to === "END")) errors.push("no edge reaches END");
+  for (const node of workflow.nodes.filter((n) => n.isolate)) {
+    if (node.kind !== "llm") errors.push(`node '${node.id}' sets isolate but is not an llm node`);
+    else if (!node.dirs?.length) errors.push(`node '${node.id}' sets isolate without dirs`);
+  }
   return errors;
 }
 

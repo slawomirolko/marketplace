@@ -282,6 +282,10 @@
           },
           "description": "Mustache templates of extra directories the agent may read or write besides the run workspace."
         },
+        "isolate": {
+          "type": "boolean",
+          "description": "LLM node with dirs only: on the cli backend an agent with its own permissions may leave its workspace only for this node's dirs, the folders of its skills and the temp folder, and loses the edit and bash tools the node does not list. Without it the agent keeps its own front matter."
+        },
         "workspace": {
           "type": "string",
           "minLength": 1,

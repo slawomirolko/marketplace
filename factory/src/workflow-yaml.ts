@@ -94,6 +94,9 @@ function applyOptionalFields(node: WorkflowNode, workflow: WorkflowSpec, spec: W
     const dirs = spec.dirs.map(render);
     node.dirs = (context) => dirs.map((dir) => dir(context)).filter(Boolean);
   }
+  if (spec.isolate) {
+    node.isolate = true;
+  }
   if (spec.workspace) {
     node.workspace = render(spec.workspace);
   }

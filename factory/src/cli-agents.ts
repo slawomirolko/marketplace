@@ -25,7 +25,7 @@ export function claudeAgentsFile(agent: string | AgentDefinition, tools: AgentTo
 
 /**
  * The OpenCode config folder of one agent run. A generated agent may leave its workspace only for `dirs`. A marketplace
- * agent keeps its own front matter; when the step lists its own directories, `limitDirs` (those and the folders of
+ * agent keeps its own front matter; for an isolated step (`isolate: true`), `limitDirs` (its directories and the folders of
  * the skills the agent loads) and the temp folder become its `external_directory` allow list, every other folder is denied,
  * and a tool the step does not give (`edit`, `bash`) is denied.
  */

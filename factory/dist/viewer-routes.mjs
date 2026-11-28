@@ -14850,6 +14850,8 @@ function workflowGraphErrors(workflow) {
 		pairs.add(pair);
 	}
 	if (!workflow.edges.some((e) => e.to === "END")) errors.push("no edge reaches END");
+	for (const node of workflow.nodes.filter((n) => n.isolate)) if (node.kind !== "llm") errors.push(`node '${node.id}' sets isolate but is not an llm node`);
+	else if (!node.dirs?.length) errors.push(`node '${node.id}' sets isolate without dirs`);
 	return errors;
 }
 function configRoleErrors(config) {
@@ -15999,6 +16001,7 @@ function applyOptionalFields(node, workflow, spec) {
 		const dirs = spec.dirs.map(render);
 		node.dirs = (context) => dirs.map((dir) => dir(context)).filter(Boolean);
 	}
+	if (spec.isolate) node.isolate = true;
 	if (spec.workspace) node.workspace = render(spec.workspace);
 	if (spec.agents) node.agents = spec.agents.map((agent) => ({
 		id: agent.id,
@@ -16727,9 +16730,9 @@ var ENDED = /* @__PURE__ */ new Set([
 	"cancelled",
 	"failed"
 ]);
-/** The folders an agent with its own permissions may leave its workspace for: set only when the step lists its own directories. */
-function limitDirs(listed, dirs) {
-	return listed.length > 0 ? { limitDirs: dirs } : {};
+/** The folders an agent with its own permissions may leave its workspace for: set only for an isolated step that lists its own directories. */
+function limitDirs(node, listed, dirs) {
+	return node.isolate && listed.length > 0 ? { limitDirs: dirs } : {};
 }
 function workspace(run) {
 	return run.workspace ?? run.input?.project ?? run.input?.cwd ?? process.env.FACTORY_WORKSPACE ?? process.cwd();
@@ -17619,7 +17622,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
 			configDir: run.input?.agentConfigDir,
 			tools: node.tools ?? ["read"],
 			dirs: this.dirs(run, node, agent),
-			...limitDirs(this.listedDirs(run, node, agent), this.dirs(run, node, agent))
+			...limitDirs(node, this.listedDirs(run, node, agent), this.dirs(run, node, agent))
 		});
 		run.steps += 1;
 		if (!result.ok) {
@@ -17769,7 +17772,7 @@ function claudeAgentsFile(agent, tools = ["read"]) {
 }
 /**
 * The OpenCode config folder of one agent run. A generated agent may leave its workspace only for `dirs`. A marketplace
-* agent keeps its own front matter; when the step lists its own directories, `limitDirs` (those and the folders of
+* agent keeps its own front matter; for an isolated step (`isolate: true`), `limitDirs` (its directories and the folders of
 * the skills the agent loads) and the temp folder become its `external_directory` allow list, every other folder is denied,
 * and a tool the step does not give (`edit`, `bash`) is denied.
 */

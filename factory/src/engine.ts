@@ -48,9 +48,9 @@ const PARALLEL_AGENTS = 10;
 const BUDGET_PAUSE_QUESTION = "q-budget-pause";
 const ENDED = new Set(["done", "stopped", "cancelled", "failed"]);
 
-/** The folders an agent with its own permissions may leave its workspace for: set only when the step lists its own directories. */
-function limitDirs(listed: string[], dirs: string[]): { limitDirs?: string[] } {
-  return listed.length > 0 ? { limitDirs: dirs } : {};
+/** The folders an agent with its own permissions may leave its workspace for: set only for an isolated step that lists its own directories. */
+function limitDirs(node: WorkflowNode, listed: string[], dirs: string[]): { limitDirs?: string[] } {
+  return node.isolate && listed.length > 0 ? { limitDirs: dirs } : {};
 }
 
 function workspace(run: Run): string {
@@ -828,7 +828,7 @@ Your previous reply was rejected: ${reason}. Reply again in full and follow the 
     const model = config.tiers[tier];
     this.event(run, "agent_started", { node: node.path, agentId: agent.id, tier });
     this.checkpoint(run);
-    const result = await executor({ model, prompt: this.prompt(run, node, agent), agent: agent.agentName, cwd: workspace(run), configDir: run.input?.agentConfigDir, tools: node.tools ?? ["read"], dirs: this.dirs(run, node, agent), ...limitDirs(this.listedDirs(run, node, agent), this.dirs(run, node, agent)) });
+    const result = await executor({ model, prompt: this.prompt(run, node, agent), agent: agent.agentName, cwd: workspace(run), configDir: run.input?.agentConfigDir, tools: node.tools ?? ["read"], dirs: this.dirs(run, node, agent), ...limitDirs(node, this.listedDirs(run, node, agent), this.dirs(run, node, agent)) });
     run.steps += 1;
     if (!result.ok) {
       failures.push(`${agent.id}: ${result.error}`);

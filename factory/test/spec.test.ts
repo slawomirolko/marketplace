@@ -71,6 +71,19 @@ test("workflow rejects two edges between the same nodes", () => {
   assert.ok(errors.some((e) => e.includes("more than one edge review->build")), errors.join("; "));
 });
 
+test("workflow accepts isolate only on an llm node that lists its own dirs", () => {
+  const workflow = read("valid", "workflow-feature.json");
+  const plan = workflow.nodes.find((node: { id: string }) => node.id === "plan");
+  Object.assign(plan, { isolate: true, dirs: ["/work"] });
+  assert.deepEqual(validate("workflow", workflow).errors, []);
+  delete plan.dirs;
+  assert.ok(validate("workflow", workflow).errors.some((e) => e.includes("node 'plan' sets isolate without dirs")));
+  const approve = workflow.nodes.find((node: { id: string }) => node.id === "approve-plan");
+  Object.assign(plan, { dirs: ["/work"] });
+  Object.assign(approve, { isolate: true });
+  assert.ok(validate("workflow", workflow).errors.some((e) => e.includes("node 'approve-plan' sets isolate but is not an llm node")));
+});
+
 test("usage record for a script step must cost exactly 0 and be measured", () => {
   const record = { ...read("valid", "usage-record-delegate.json"), kind: "script", tier: null, model: null, costUsd: 0.01, costSource: "measured", tokens: { input: 0, output: 0 } };
   assert.equal(validate("usage-record", record).valid, false);

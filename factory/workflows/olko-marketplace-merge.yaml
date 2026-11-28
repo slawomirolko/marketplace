@@ -27,6 +27,7 @@ nodes:
     agent: olko-marketplace-upstream
     tools: [read, edit]
     dirs: ["{{state.prepare.json.out}}"]
+    isolate: true
     parse: { json: [resolved, unsure, classified] }
     prompt: |
       Do the resolve step of olko-marketplace-upstream.
