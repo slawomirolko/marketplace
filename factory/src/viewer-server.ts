@@ -11,7 +11,9 @@ import { loadWatches, startWatches } from "./watch.ts";
 import { loadFactoryConfig } from "./config.ts";
 
 const settingsNote = homeEnvNote();
-if (settingsNote) console.error(settingsNote);
+if (settingsNote) {
+  console.error(settingsNote);
+}
 
 const port = Number(process.env.FACTORY_VIEWER_PORT ?? DEFAULT_VIEWER_PORT);
 const publicUrl = `http://127.0.0.1:${port}`;

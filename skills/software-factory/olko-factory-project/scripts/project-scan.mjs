@@ -11,6 +11,10 @@ const NAME = /^[a-z0-9][a-z0-9-]*$/;
 const DEFAULT_DEPTH = 40;
 /** Files a project may change without leaving the marketplace version: the adapter layer. */
 const ADAPTER_FILES = new Set(["project.md"]);
+/** The ref of a marketplace checkout without an origin remote: its own HEAD. */
+const LOCAL_REF = "HEAD";
+/** The harness of the skills and agents of a marketplace source checkout. */
+const SOURCE_HARNESS = "source";
 
 /** Where each harness keeps installed skills and agents, relative to the project root. */
 export const LOCATIONS = [
@@ -139,51 +143,91 @@ export function detectHarnesses(project) {
 }
 
 /** True when the project is a marketplace source checkout: it keeps skills under skills/<category>/ and lists them in registry.json. */
-export function isMarketplaceSource(project) {
+function isMarketplaceSource(project) {
   return fs.existsSync(path.join(project, "registry.json")) && fs.existsSync(path.join(project, "skills")) && fs.statSync(path.join(project, "skills")).isDirectory();
 }
 
 function skillArtifact(skillDir, name, harness, location) {
   const files = {};
-  for (const rel of listFiles(skillDir)) if (!ADAPTER_FILES.has(rel)) files[rel] = hash(portableText("skill", fs.readFileSync(path.join(skillDir, rel), "utf8")));
+  for (const relativePath of listFiles(skillDir)) {
+    if (!ADAPTER_FILES.has(relativePath)) {
+      files[relativePath] = hash(portableText("skill", fs.readFileSync(path.join(skillDir, relativePath), "utf8")));
+    }
+  }
   const meta = frontMatter(fs.readFileSync(path.join(skillDir, "SKILL.md"), "utf8"));
-  return { kind: "skill", name, harness, location, files, adapter: fs.existsSync(path.join(skillDir, "project.md")), model: null, requires: meta.uses.map((n) => `skill:${n}`) };
+  return { kind: "skill", name, harness, location, files, adapter: fs.existsSync(path.join(skillDir, "project.md")), model: null, requires: meta.uses.map((skillName) => `skill:${skillName}`) };
 }
 
 function agentArtifact(file, name, harness, location) {
   const text = fs.readFileSync(file, "utf8");
   const meta = frontMatter(text);
-  return { kind: "agent", name, harness, location, files: { [`${name}.md`]: hash(portableText("agent", text)) }, adapter: false, model: modelLine(text), requires: [...meta.skills.map((n) => `skill:${n}`), ...meta.tasks.map((n) => `agent:${n}`)] };
+  return { kind: "agent", name, harness, location, files: { [`${name}.md`]: hash(portableText("agent", text)) }, adapter: false, model: modelLine(text), requires: [...meta.skills.map((skillName) => `skill:${skillName}`), ...meta.tasks.map((agentName) => `agent:${agentName}`)] };
+}
+
+/** The skill in a skill folder entry, or null when the entry is not a named skill folder. */
+function skillEntryOf(dir, entry, harness, location) {
+  const skillDir = path.join(dir, entry.name);
+  if (!entry.isDirectory() || !NAME.test(entry.name) || !fs.existsSync(path.join(skillDir, "SKILL.md"))) {
+    return null;
+  }
+  return skillArtifact(skillDir, entry.name, harness, location);
+}
+
+/** The agent in an agent folder entry, or null when the entry is not a named Markdown file. */
+function agentEntryOf(dir, entry, harness, location) {
+  const name = entry.name.replace(/\.md$/, "");
+  if (!entry.isFile() || !entry.name.endsWith(".md") || !NAME.test(name)) {
+    return null;
+  }
+  return agentArtifact(path.join(dir, entry.name), name, harness, location);
 }
 
 /** The skills under skills/<category>/ and the agents under agents/opencode/ of a marketplace source checkout. */
-export function sourceArtifacts(project) {
-  if (!isMarketplaceSource(project)) return [];
+function sourceArtifacts(project) {
+  if (!isMarketplaceSource(project)) {
+    return [];
+  }
   const artifacts = [];
-  for (const category of fs.readdirSync(path.join(project, "skills"), { withFileTypes: true }).filter((e) => e.isDirectory())) {
+  for (const category of fs.readdirSync(path.join(project, "skills"), { withFileTypes: true }).filter((entry) => entry.isDirectory())) {
     const categoryDir = path.join(project, "skills", category.name);
     for (const entry of fs.readdirSync(categoryDir, { withFileTypes: true })) {
-      const skillDir = path.join(categoryDir, entry.name);
-      if (!entry.isDirectory() || !NAME.test(entry.name) || !fs.existsSync(path.join(skillDir, "SKILL.md"))) continue;
-      artifacts.push(skillArtifact(skillDir, entry.name, "source", `skills/${category.name}/${entry.name}`));
+      artifacts.push(skillEntryOf(categoryDir, entry, SOURCE_HARNESS, `skills/${category.name}/${entry.name}`));
     }
   }
   const agentsDir = path.join(project, "agents", "opencode");
   if (fs.existsSync(agentsDir)) {
     for (const entry of fs.readdirSync(agentsDir, { withFileTypes: true })) {
-      const name = entry.name.replace(/\.md$/, "");
-      if (!entry.isFile() || !entry.name.endsWith(".md") || !NAME.test(name)) continue;
-      artifacts.push(agentArtifact(path.join(agentsDir, entry.name), name, "source", `agents/opencode/${entry.name}`));
+      artifacts.push(agentEntryOf(agentsDir, entry, SOURCE_HARNESS, `agents/opencode/${entry.name}`));
     }
   }
-  return artifacts.sort((a, b) => a.location.localeCompare(b.location));
+  return artifacts.filter(Boolean).sort((a, b) => a.location.localeCompare(b.location));
+}
+
+/** The source skill or agent a marketplace file defines, or null for any other file. */
+function sourceEntryOf(file) {
+  if (matches(file, ["skills", null, null, "SKILL.md"])) {
+    return { kind: "skill", name: file.split("/")[2], source: path.posix.dirname(file) };
+  }
+  if (matches(file, ["agents", "opencode", null]) && file.endsWith(".md")) {
+    return { kind: "agent", name: file.split("/")[2].replace(/\.md$/, ""), source: file };
+  }
+  return null;
 }
 
 /** Source skills and agents at `ref` that the project checkout does not have: new on the remote. */
 function sourceOnlyOnRemote(marketplace, ref, have) {
   return treeFiles(marketplace, ref)
-    .map((f) => (matches(f, ["skills", null, null, "SKILL.md"]) ? { kind: "skill", name: f.split("/")[2], source: path.posix.dirname(f) } : matches(f, ["agents", "opencode", null]) && f.endsWith(".md") ? { kind: "agent", name: f.split("/")[2].replace(/\.md$/, ""), source: f } : null))
-    .filter((a) => a && NAME.test(a.name) && !have.has(a.source));
+    .map(sourceEntryOf)
+    .filter((entry) => entry && NAME.test(entry.name) && !have.has(entry.source));
+}
+
+/** The skill or agent of one entry in a harness folder, or null when the entry is neither. */
+function installedEntryOf(location, dir, entry) {
+  const where = `${location.dir}/${entry.name}`;
+  if (location.kind === "skill") {
+    return skillEntryOf(dir, entry, location.harness, where);
+  }
+  return agentEntryOf(dir, entry, location.harness, where);
 }
 
 /** Every skill and agent copy installed in the project, with the portable file hashes. */
@@ -191,20 +235,14 @@ export function installedArtifacts(project) {
   const artifacts = [];
   for (const location of LOCATIONS) {
     const dir = path.join(project, location.dir);
-    if (!fs.existsSync(dir)) continue;
+    if (!fs.existsSync(dir)) {
+      continue;
+    }
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (location.kind === "skill") {
-        const skillDir = path.join(dir, entry.name);
-        if (!entry.isDirectory() || !fs.existsSync(path.join(skillDir, "SKILL.md")) || !NAME.test(entry.name)) continue;
-        artifacts.push(skillArtifact(skillDir, entry.name, location.harness, `${location.dir}/${entry.name}`));
-      } else {
-        const name = entry.name.replace(/\.md$/, "");
-        if (!entry.isFile() || !entry.name.endsWith(".md") || !NAME.test(name)) continue;
-        artifacts.push(agentArtifact(path.join(dir, entry.name), name, location.harness, `${location.dir}/${entry.name}`));
-      }
+      artifacts.push(installedEntryOf(location, dir, entry));
     }
   }
-  return artifacts;
+  return artifacts.filter(Boolean);
 }
 
 const trees = new Map();
@@ -224,57 +262,92 @@ function treeFiles(marketplace, ref) {
   return trees.get(key);
 }
 
-/**
- * The marketplace ref the project is compared with: the remote default branch after a fetch, so the status
- * answers "is this the same as the remote". Falls back to HEAD when the checkout has no origin remote.
- */
-export function marketplaceRef(marketplace, { fetch = true } = {}) {
-  let remotes = [];
+const FETCH_TIMEOUT_MS = 120000;
+
+/** Fetches origin; returns the first line of the error when the fetch fails, else null. */
+function fetchOrigin(marketplace) {
   try {
-    remotes = git(marketplace, "remote").split("\n").filter(Boolean);
-  } catch {
-    return { ref: "HEAD", fetched: false, fetchError: null };
+    execFileSync("git", ["-C", marketplace, "fetch", "--quiet", "origin"], { stdio: ["ignore", "pipe", "pipe"], timeout: FETCH_TIMEOUT_MS });
+    return null;
+  } catch (error) {
+    return String(error instanceof Error && "stderr" in error ? error.stderr : error).trim().split("\n")[0] || "fetch failed";
   }
-  if (!remotes.includes("origin")) return { ref: "HEAD", fetched: false, fetchError: null };
-  let fetched = false;
-  let fetchError = null;
-  if (fetch) {
-    try {
-      execFileSync("git", ["-C", marketplace, "fetch", "--quiet", "origin"], { stdio: ["ignore", "pipe", "pipe"], timeout: 120000 });
-      fetched = true;
-    } catch (error) {
-      fetchError = String(error instanceof Error && "stderr" in error ? error.stderr : error).trim().split("\n")[0] || "fetch failed";
-    }
-  }
-  for (const candidate of [() => git(marketplace, "symbolic-ref", "--short", "refs/remotes/origin/HEAD"), () => (git(marketplace, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"), "origin/main")]) {
+}
+
+/** The default branch of origin: its symbolic HEAD, else origin/main, else null. */
+function originDefaultRef(marketplace) {
+  const candidates = [() => git(marketplace, "symbolic-ref", "--short", "refs/remotes/origin/HEAD"), () => (git(marketplace, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"), "origin/main")];
+  for (const candidate of candidates) {
     try {
       const ref = candidate();
-      if (ref) return { ref, fetched, fetchError };
+      if (ref) {
+        return ref;
+      }
     } catch {
       continue;
     }
   }
-  return { ref: "HEAD", fetched, fetchError };
+  return null;
+}
+
+/**
+ * The marketplace ref the project is compared with: the remote default branch after a fetch, so the status
+ * answers "is this the same as the remote". Falls back to HEAD when the checkout has no origin remote.
+ */
+function marketplaceRef(marketplace, { fetch = true } = {}) {
+  let remotes = [];
+  try {
+    remotes = git(marketplace, "remote").split("\n").filter(Boolean);
+  } catch {
+    return { ref: LOCAL_REF, fetched: false, fetchError: null };
+  }
+  if (!remotes.includes("origin")) {
+    return { ref: LOCAL_REF, fetched: false, fetchError: null };
+  }
+  const fetchError = fetch ? fetchOrigin(marketplace) : null;
+  return { ref: originDefaultRef(marketplace) ?? LOCAL_REF, fetched: fetch && fetchError === null, fetchError };
+}
+
+/** The paths at `ref` that hold an artifact: plain marketplace paths first, then plugin paths. */
+function candidatePaths(files, artifact) {
+  let found;
+  if (artifact.kind === "skill") {
+    found = files.filter((file) => matches(file, ["skills", null, artifact.name, "SKILL.md"]) || matches(file, ["plugins", null, "skills", artifact.name, "SKILL.md"])).map((file) => path.posix.dirname(file));
+  } else if (artifact.harness === "claude-code") {
+    found = files.filter((file) => matches(file, ["plugins", null, "agents", `${artifact.name}.md`]));
+  } else {
+    found = files.filter((file) => file === `agents/opencode/${artifact.name}.md`);
+  }
+  return found.sort((a, b) => Number(a.startsWith("plugins/")) - Number(b.startsWith("plugins/")) || a.localeCompare(b));
+}
+
+/** The git pathspec that finds an artifact in the marketplace history. */
+function historyPattern(artifact) {
+  if (artifact.kind === "skill") {
+    return `:(glob)**/skills/**/${artifact.name}/SKILL.md`;
+  }
+  if (artifact.harness === "claude-code") {
+    return `:(glob)plugins/*/agents/${artifact.name}.md`;
+  }
+  return `agents/opencode/${artifact.name}.md`;
 }
 
 /** The marketplace path of an artifact (a skill folder or an agent file), at `ref` or in its history. */
-export function marketplacePath(marketplace, artifact, ref = "HEAD") {
-  const files = treeFiles(marketplace, ref);
-  const candidates = (artifact.kind === "skill"
-    ? files.filter((f) => matches(f, ["skills", null, artifact.name, "SKILL.md"]) || matches(f, ["plugins", null, "skills", artifact.name, "SKILL.md"])).map((f) => path.posix.dirname(f))
-    : artifact.harness === "claude-code"
-      ? files.filter((f) => matches(f, ["plugins", null, "agents", `${artifact.name}.md`]))
-      : files.filter((f) => f === `agents/opencode/${artifact.name}.md`)).sort((a, b) => Number(a.startsWith("plugins/")) - Number(b.startsWith("plugins/")) || a.localeCompare(b));
-  if (candidates.length) return { path: candidates[0], present: true };
-  const pattern = artifact.kind === "skill" ? `:(glob)**/skills/**/${artifact.name}/SKILL.md` : artifact.harness === "claude-code" ? `:(glob)plugins/*/agents/${artifact.name}.md` : `agents/opencode/${artifact.name}.md`;
+export function marketplacePath(marketplace, artifact, ref = LOCAL_REF) {
+  const candidates = candidatePaths(treeFiles(marketplace, ref), artifact);
+  if (candidates.length) {
+    return { path: candidates[0], present: true };
+  }
   let last = "";
   try {
-    last = git(marketplace, "log", ref, "-n", "1", "--format=%H", "--name-only", "--", pattern);
+    last = git(marketplace, "log", ref, "-n", "1", "--format=%H", "--name-only", "--", historyPattern(artifact));
   } catch {
     last = "";
   }
   const file = last.split("\n").slice(1).find(Boolean);
-  if (!file) return null;
+  if (!file) {
+    return null;
+  }
   return { path: artifact.kind === "skill" ? path.posix.dirname(file) : file, present: false };
 }
 
@@ -308,7 +381,7 @@ function readBlobs(marketplace, ids) {
 }
 
 /** The last `depth` marketplace versions of a path: commit, date, front matter version (null without one) and portable file hashes. */
-export function marketplaceVersions(marketplace, kind, source, depth = DEFAULT_DEPTH, ref = "HEAD") {
+export function marketplaceVersions(marketplace, kind, source, depth = DEFAULT_DEPTH, ref = LOCAL_REF) {
   const log = git(marketplace, "log", ref, "-n", String(depth), "--format=%H %cs", "--", source);
   const commits = log ? log.split("\n").map((line) => ({ commit: line.split(" ")[0], date: line.split(" ")[1] })) : [];
   const trees = commits.map((c) => {
@@ -345,20 +418,28 @@ const short = (v) => v.commit.slice(0, 7);
 
 /** Compares one installed copy with the marketplace history of its source. Versions come from front matter; commits only tell versions apart. */
 export function classify(artifact, versions, present) {
-  if (!versions.length) return { state: "local-only", installed: null, current: null, files: [] };
+  if (!versions.length) {
+    return { state: "local-only", installed: null, current: null, files: [] };
+  }
   const head = versions[0];
   const atHead = { current: head.version, currentCommit: short(head) };
-  if (!present) return { state: "removed", installed: null, current: null, lastVersion: head.version, lastCommit: short(head), files: [] };
+  if (!present) {
+    return { state: "removed", installed: null, current: null, lastVersion: head.version, lastCommit: short(head), files: [] };
+  }
   const exact = versions.findIndex((v) => differingFiles(artifact.files, v.files).length === 0);
   if (exact === 0) {
     const adapted = artifact.adapter || (artifact.kind === "agent" && artifact.model !== head.model);
     return { state: adapted ? "adapted" : "current", installed: head.version, installedCommit: short(head), ...atHead, files: [] };
   }
-  if (exact > 0) return { state: "outdated", installed: versions[exact].version, installedCommit: short(versions[exact]), ...atHead, base: versions[exact].commit, files: differingFiles(artifact.files, head.files) };
+  if (exact > 0) {
+    return { state: "outdated", installed: versions[exact].version, installedCommit: short(versions[exact]), ...atHead, base: versions[exact].commit, files: differingFiles(artifact.files, head.files) };
+  }
   const ranked = versions.map((v) => ({ v, diff: differingFiles(artifact.files, v.files) })).sort((a, b) => a.diff.length - b.diff.length);
   const nearest = ranked[0];
   const shared = Object.keys(artifact.files).some((f) => artifact.files[f] === nearest.v.files[f]);
-  if (!shared) return { state: "unknown-base", installed: null, ...atHead, nearestVersion: nearest.v.version, nearestCommit: short(nearest.v), files: nearest.diff };
+  if (!shared) {
+    return { state: "unknown-base", installed: null, ...atHead, nearestVersion: nearest.v.version, nearestCommit: short(nearest.v), files: nearest.diff };
+  }
   return { state: "modified", installed: nearest.v.version, installedCommit: short(nearest.v), ...atHead, base: nearest.v.commit, upstreamMoved: nearest.v.commit !== head.commit, files: nearest.diff };
 }
 
@@ -388,7 +469,9 @@ function headOf(marketplace, ref) {
 
 /** The full status of one project, compared with the marketplace remote. */
 export function projectStatus({ project, marketplace, factory, depth = DEFAULT_DEPTH, fetch = true }) {
-  if (!fs.existsSync(project) || !fs.statSync(project).isDirectory()) throw new Error(`project ${project} is not a folder`);
+  if (!fs.existsSync(project) || !fs.statSync(project).isDirectory()) {
+    throw new Error(`project ${project} is not a folder`);
+  }
   const { ref, fetched, fetchError } = marketplaceRef(marketplace, { fetch });
   const workflows = workflowIndex(path.join(factory, "workflows"));
   const sources = sourceArtifacts(project);
@@ -401,19 +484,27 @@ export function projectStatus({ project, marketplace, factory, depth = DEFAULT_D
   });
   const have = new Set(installed.map((a) => `${a.kind}:${a.name}`));
   const required = new Map();
-  for (const a of installed) for (const id of a.requires) if (!have.has(id)) required.set(id, [...(required.get(id) ?? []), `${a.kind}:${a.name}`]);
+  for (const artifact of installed) {
+    for (const id of artifact.requires.filter((requiredId) => !have.has(requiredId))) {
+      required.set(id, [...(required.get(id) ?? []), `${artifact.kind}:${artifact.name}`]);
+    }
+  }
   for (const [id, requiredBy] of [...required].sort(([a], [b]) => a.localeCompare(b))) {
     const [kind, name] = id.split(":");
     const source = marketplacePath(marketplace, { kind, name, harness: "opencode" }, ref);
-    if (!source?.present) continue;
+    if (!source?.present) {
+      continue;
+    }
     artifacts.push({ id, kind, name, harness: null, location: null, source: source.path, state: "missing", installed: null, current: null, files: [], requiredBy: [...new Set(requiredBy)], workflows: workflows.get(name) ?? [] });
   }
   if (sources.length) {
     const ids = new Set(artifacts.map((a) => `${a.harness}:${a.id}`));
     for (const remote of sourceOnlyOnRemote(marketplace, ref, new Set(sources.map((s) => s.location)))) {
       const id = `${remote.kind}:${remote.name}`;
-      if (ids.has(`source:${id}`)) continue;
-      artifacts.push({ id, kind: remote.kind, name: remote.name, harness: "source", location: null, source: remote.source, state: "missing", installed: null, current: null, files: [], workflows: workflows.get(remote.name) ?? [] });
+      if (ids.has(`${SOURCE_HARNESS}:${id}`)) {
+        continue;
+      }
+      artifacts.push({ id, kind: remote.kind, name: remote.name, harness: SOURCE_HARNESS, location: null, source: remote.source, state: "missing", installed: null, current: null, files: [], workflows: workflows.get(remote.name) ?? [] });
     }
   }
   artifacts.sort((a, b) => STATES.indexOf(a.state) - STATES.indexOf(b.state) || a.id.localeCompare(b.id));

@@ -40,6 +40,10 @@ function withData(data: Partial<NonNullable<ProjectStatusView["data"]>>): Projec
   return { ...status, data: { ...status.data!, ...data } };
 }
 
+/** Keeps "Checking…" visible long enough to assert it. */
+const SLOW_STATUS_MS = 50;
+const remoteRef = "origin/main", installedCommit = "aaaaaaa", currentCommit = "bbbbbbb";
+
 type Posted = Record<string, string>;
 
 function serve(posted: Posted[] = [], statuses: Record<string, ProjectStatusView | null> = { "sample-app": status, "sample-web": null }, projects: ProjectList = list) {
@@ -115,7 +119,7 @@ describe("Projects", () => {
     server.use(
       http.get("/api/projects/:id/status", async () => {
         statusCalls += 1;
-        await new Promise((resolve) => setTimeout(resolve, 50)); // keeps "Checking…" visible long enough to assert it
+        await new Promise((resolve) => setTimeout(resolve, SLOW_STATUS_MS));
         return HttpResponse.json(status);
       }),
       http.get("/api/runs/:runId", ({ params }) => {
@@ -173,7 +177,7 @@ describe("Projects", () => {
     const callsBefore = listCalls;
     unmount();
     release();
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, SLOW_STATUS_MS));
     expect(listCalls).toBe(callsBefore);
   });
 
@@ -280,7 +284,7 @@ describe("Projects", () => {
       ...status,
       data: {
         head: "4034143aa",
-        ref: "origin/main",
+        ref: remoteRef,
         fetched: true,
         fetchError: null,
         harnesses: [],
@@ -310,7 +314,7 @@ describe("Projects", () => {
     { fetchError: "could not resolve host", shown: /compared with origin\/main 9f8e7d6 \(fetch failed: could not resolve host\)/ },
     { fetchError: null, shown: /compared with origin\/main 9f8e7d6 \(last fetch\)/ },
   ])("an unfetched remote ref says why: fetch error $fetchError", async ({ fetchError, shown }) => {
-    serve([], { "sample-app": withData({ ref: "origin/main", fetched: false, fetchError }) });
+    serve([], { "sample-app": withData({ ref: remoteRef, fetched: false, fetchError }) });
     render(<Projects onShowRuns={() => {}} />);
     expect(await screen.findByText(shown)).toBeInTheDocument();
   });
@@ -328,7 +332,7 @@ describe("Projects", () => {
   test("verdicts and actions by state", () => {
     expect(verdictOf(null)).toEqual({ level: "empty", title: "No marketplace skill or agent is installed in this project.", badge: "nothing installed" });
     expect(verdictOf({ current: 2, adapted: 1 })).toMatchObject({ level: "ok", badge: "in sync" });
-    expect(verdictOf({ current: 1 }, "origin/main").title).toBe("In sync with origin/main: 1 skills and agents, nothing to change.");
+    expect(verdictOf({ current: 1 }, remoteRef).title).toBe(`In sync with ${remoteRef}: 1 skills and agents, nothing to change.`);
     expect(verdictOf({ current: 1, outdated: 1 }, "HEAD").title).toBe("1 of 2 differ from the marketplace: 1 outdated.");
     expect(actionOf(artifact({ harness: "source", state: "current" }))).toBe("Nothing to do.");
     expect(actionOf(artifact({ harness: "source", state: "missing" }))).toMatch(/^Pull the remote/);
@@ -371,22 +375,22 @@ describe("Projects", () => {
     expect(versionText(artifact({ state: "unknown-base", nearestVersion: "0.9.0" }))).toBe("nearest 0.9.0");
     expect(versionText(artifact({ state: "removed", lastVersion: "0.8.0" }))).toBe("last 0.8.0");
     expect(versionText(artifact({ installed: null, current: null }))).toBe("–");
-    expect(versionText(artifact({ state: "outdated", installed: "1.0.0", installedCommit: "aaaaaaa", current: "1.1.0", currentCommit: "bbbbbbb" }))).toBe("1.0.0 → 1.1.0");
-    expect(versionText(artifact({ state: "outdated", installed: "1.0.0", installedCommit: "aaaaaaa", current: "1.0.0", currentCommit: "bbbbbbb" }))).toBe("1.0.0 (aaaaaaa) → 1.0.0 (bbbbbbb)");
-    expect(versionText(artifact({ state: "outdated", installed: null, installedCommit: "aaaaaaa", current: "1.0.0", currentCommit: "bbbbbbb" }))).toBe("commit aaaaaaa → 1.0.0 (bbbbbbb)");
-    expect(versionText(artifact({ state: "current", installed: null, installedCommit: "bbbbbbb", current: null, currentCommit: "bbbbbbb" }))).toBe("–");
+    expect(versionText(artifact({ state: "outdated", installed: "1.0.0", installedCommit, current: "1.1.0", currentCommit }))).toBe("1.0.0 → 1.1.0");
+    expect(versionText(artifact({ state: "outdated", installed: "1.0.0", installedCommit, current: "1.0.0", currentCommit }))).toBe(`1.0.0 (${installedCommit}) → 1.0.0 (${currentCommit})`);
+    expect(versionText(artifact({ state: "outdated", installed: null, installedCommit, current: "1.0.0", currentCommit }))).toBe(`commit ${installedCommit} → 1.0.0 (${currentCommit})`);
+    expect(versionText(artifact({ state: "current", installed: null, installedCommit: currentCommit, current: null, currentCommit }))).toBe("–");
     expect(versionText(artifact({ state: "removed", lastVersion: null, lastCommit: "ccccccc" }))).toBe("last commit ccccccc");
-    expect(versionText(artifact({ installed: "1.0.0", installedCommit: "aaaaaaa", current: "1.0.0" }))).toBe("1.0.0");
+    expect(versionText(artifact({ installed: "1.0.0", installedCommit, current: "1.0.0" }))).toBe("1.0.0");
   });
 
   test("remote name and fetch note", () => {
-    expect(remoteNameOf("origin/main")).toBe("origin/main");
+    expect(remoteNameOf(remoteRef)).toBe(remoteRef);
     expect(remoteNameOf("HEAD")).toBeNull();
     expect(remoteNameOf(undefined)).toBeNull();
-    expect(fetchNoteOf({ ref: "origin/main", fetched: false, fetchError: "offline" })).toBe(" (fetch failed: offline)");
-    expect(fetchNoteOf({ ref: "origin/main", fetched: false, fetchError: null })).toBe(" (last fetch)");
+    expect(fetchNoteOf({ ref: remoteRef, fetched: false, fetchError: "offline" })).toBe(" (fetch failed: offline)");
+    expect(fetchNoteOf({ ref: remoteRef, fetched: false, fetchError: null })).toBe(" (last fetch)");
     expect(fetchNoteOf({ ref: "HEAD", fetched: false, fetchError: null })).toBe("");
-    expect(fetchNoteOf({ ref: "origin/main", fetched: true, fetchError: null })).toBe("");
+    expect(fetchNoteOf({ ref: remoteRef, fetched: true, fetchError: null })).toBe("");
     expect(countsText({ missing: 2, current: 1, removed: 0 })).toBe("1 current · 2 missing");
     expect(countsText(null)).toBe("");
   });

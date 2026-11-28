@@ -108,7 +108,9 @@ function checkNote(projectId: string, text: string): string {
 }
 
 async function finishNote(projectId: string, runId: string, runStatus: string): Promise<string> {
-  if (runStatus !== "done") return checkNote(projectId, `${runStatus} (run ${runId}).`);
+  if (runStatus !== "done") {
+    return checkNote(projectId, `${runStatus} (run ${runId}).`);
+  }
   try {
     const view = await getJson<ProjectStatusView>(`/projects/${encodeURIComponent(projectId)}/status`);
     return checkNote(projectId, `finished: ${verdictOf(view.data?.counts, view.data?.ref).title}`);
@@ -117,35 +119,54 @@ async function finishNote(projectId: string, runId: string, runStatus: string): 
   }
 }
 
+/** The ref of a marketplace checkout without an origin remote. */
+const LOCAL_REF = "HEAD";
+/** The harness of the skills and agents of a marketplace source checkout. */
+const SOURCE_HARNESS = "source";
+
 /** The remote a status was compared with; null for a checkout without a remote, where the ref is plain `HEAD`. */
 export function remoteNameOf(ref: string | null | undefined): string | null {
-  return ref && ref !== "HEAD" ? ref : null;
+  return ref && ref !== LOCAL_REF ? ref : null;
 }
 
 /** The suffix of the "compared with" line: a failed fetch, or a comparison with what the last fetch left. */
 export function fetchNoteOf(data: Pick<ProjectStatusData, "ref" | "fetched" | "fetchError">): string {
-  if (data.fetchError) return ` (fetch failed: ${data.fetchError})`;
+  if (data.fetchError) {
+    return ` (fetch failed: ${data.fetchError})`;
+  }
   return data.fetched === false && remoteNameOf(data.ref) ? " (last fetch)" : "";
 }
 
 function sideText(version: string | null | undefined, commit: string | undefined, withCommit: boolean): string {
-  if (!version) return commit ? `commit ${commit}` : "–";
+  if (!version) {
+    return commit ? `commit ${commit}` : "–";
+  }
   return withCommit && commit ? `${version} (${commit})` : version;
 }
 
-function sameSide(a: ProjectArtifact): boolean {
-  if (a.installedCommit && a.currentCommit) return a.installedCommit === a.currentCommit;
-  return a.installed === a.current;
+function installedIsCurrent(artifact: ProjectArtifact): boolean {
+  if (artifact.installedCommit && artifact.currentCommit) {
+    return artifact.installedCommit === artifact.currentCommit;
+  }
+  return artifact.installed === artifact.current;
 }
 
 /** The version text of one artifact row: versions; a commit only where versions cannot tell two sides apart. */
-export function versionText(a: ProjectArtifact): string {
-  if (a.state === "unknown-base") return `nearest ${sideText(a.nearestVersion, a.nearestCommit, false)}`;
-  if (a.state === "removed") return `last ${sideText(a.lastVersion, a.lastCommit, false)}`;
-  if (!a.installed && !a.current && !a.installedCommit && !a.currentCommit) return "–";
-  if (sameSide(a)) return a.installed ?? "–";
-  const versionsAmbiguous = !a.installed || !a.current || a.installed === a.current;
-  return `${sideText(a.installed, a.installedCommit, versionsAmbiguous)} → ${sideText(a.current, a.currentCommit, versionsAmbiguous)}`;
+export function versionText(artifact: ProjectArtifact): string {
+  if (artifact.state === "unknown-base") {
+    return `nearest ${sideText(artifact.nearestVersion, artifact.nearestCommit, false)}`;
+  }
+  if (artifact.state === "removed") {
+    return `last ${sideText(artifact.lastVersion, artifact.lastCommit, false)}`;
+  }
+  if (!artifact.installed && !artifact.current && !artifact.installedCommit && !artifact.currentCommit) {
+    return "–";
+  }
+  if (installedIsCurrent(artifact)) {
+    return artifact.installed ?? "–";
+  }
+  const versionsAmbiguous = !artifact.installed || !artifact.current || artifact.installed === artifact.current;
+  return `${sideText(artifact.installed, artifact.installedCommit, versionsAmbiguous)} → ${sideText(artifact.current, artifact.currentCommit, versionsAmbiguous)}`;
 }
 
 /** Counts as one line, in state order, without zeros. */
@@ -166,16 +187,20 @@ export interface Verdict {
 export function verdictOf(counts: Record<string, number> | null | undefined, ref?: string | null): Verdict {
   const total = STATES.reduce((sum, s) => sum + (counts?.[s] ?? 0), 0);
   const remote = remoteNameOf(ref) ?? "the marketplace";
-  if (total === 0) return { level: "empty", title: "No marketplace skill or agent is installed in this project.", badge: "nothing installed" };
+  if (total === 0) {
+    return { level: "empty", title: "No marketplace skill or agent is installed in this project.", badge: "nothing installed" };
+  }
   const change = TO_CHANGE.filter((s) => counts?.[s]);
-  if (change.length === 0) return { level: "ok", title: `In sync with ${remote}: ${total} skills and agents, nothing to change.`, badge: "in sync" };
+  if (change.length === 0) {
+    return { level: "ok", title: `In sync with ${remote}: ${total} skills and agents, nothing to change.`, badge: "in sync" };
+  }
   const toChange = change.reduce((sum, s) => sum + (counts?.[s] ?? 0), 0);
   return { level: "change", title: `${toChange} of ${total} differ from ${remote}: ${change.map((s) => `${counts?.[s]} ${s}`).join(" · ")}.`, badge: `${toChange} to change` };
 }
 
 /** What to do with a skill or agent of a marketplace source checkout, compared with its remote. */
-function sourceActionOf(a: ProjectArtifact): string {
-  switch (a.state) {
+function sourceActionOf(artifact: ProjectArtifact): string {
+  switch (artifact.state) {
     case "outdated":
     case "missing":
     case "removed":
@@ -193,23 +218,27 @@ function sourceActionOf(a: ProjectArtifact): string {
 const SYNC_SKILL = "olko-marketplace-skill-sync";
 const UPSTREAM_SKILL = "olko-marketplace-upstream";
 
-function neededBy(a: ProjectArtifact): string {
-  return a.requiredBy?.length ? `; needed by ${a.requiredBy.join(", ")}` : "";
+function neededBy(artifact: ProjectArtifact): string {
+  return artifact.requiredBy?.length ? `; needed by ${artifact.requiredBy.join(", ")}` : "";
 }
 
 /** What to do with one skill or agent, by its state. */
-export function actionOf(a: ProjectArtifact): string {
-  if (a.harness === "source") return sourceActionOf(a);
-  switch (a.state) {
+export function actionOf(artifact: ProjectArtifact): string {
+  if (artifact.harness === SOURCE_HARNESS) {
+    return sourceActionOf(artifact);
+  }
+  switch (artifact.state) {
     case "outdated":
-      return `Update to ${a.current ?? "the marketplace version"} (${SYNC_SKILL}).`;
+      return `Update to ${artifact.current ?? "the marketplace version"} (${SYNC_SKILL}).`;
     case "modified":
-      if (a.upstreamMoved) return `Take the newer marketplace version into the local change, then send the change upstream (${UPSTREAM_SKILL}).`;
+      if (artifact.upstreamMoved) {
+        return `Take the newer marketplace version into the local change, then send the change upstream (${UPSTREAM_SKILL}).`;
+      }
       return `Send the local change upstream (${UPSTREAM_SKILL}) or reinstall the marketplace version.`;
     case "unknown-base":
       return "Compare by hand: it matches no marketplace version.";
     case "missing":
-      return `Install it (${SYNC_SKILL})${neededBy(a)}.`;
+      return `Install it (${SYNC_SKILL})${neededBy(artifact)}.`;
     case "removed":
       return "The marketplace dropped it: remove it from the project or keep it as a local copy.";
     case "local-only":
@@ -302,7 +331,9 @@ export function Projects({ onShowRuns, pollMs = POLL_MS }: { onShowRuns: (projec
         }
         for (const f of finished) finishedRuns.current.add(f.runId);
         const notes = await Promise.all(finished.map((f) => finishNote(f.projectId, f.runId, f.status)));
-        if (!mounted.current) return;
+        if (!mounted.current) {
+          return;
+        }
         setAnalyzing((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !finished.some((f) => f.projectId === id))));
         setNote(notes.join(" "));
         setStatusVersion((v) => v + 1);

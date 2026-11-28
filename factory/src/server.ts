@@ -14,7 +14,9 @@ import { createFactoryTools } from "./tools.ts";
 import { loadFactoryConfig } from "./config.ts";
 
 const settingsNote = homeEnvNote();
-if (settingsNote) console.error(settingsNote);
+if (settingsNote) {
+  console.error(settingsNote);
+}
 
 const PORT = Number(process.env.FACTORY_PORT ?? 7340);
 const HOST = process.env.FACTORY_HOST ?? "127.0.0.1";

@@ -9,7 +9,9 @@ import { createFactoryTools } from "./tools.ts";
 import { DEFAULT_VIEWER_PORT, VIEWER_HEALTH, defaultDataDir, registerDataSource } from "./paths.ts";
 
 const settingsNote = homeEnvNote();
-if (settingsNote) console.error(settingsNote);
+if (settingsNote) {
+  console.error(settingsNote);
+}
 
 const firstPort = Number(process.env.FACTORY_VIEWER_PORT ?? DEFAULT_VIEWER_PORT);
 const dataDir = defaultDataDir();

@@ -18,10 +18,14 @@ export function homeDataDir(): string {
 
 /** Device settings: KEY=value lines in the factory home's .env, never in a repository. Variables already set in the environment win. Returns the names it set. */
 export function loadHomeEnv(file = path.join(homeDataDir(), ".env")): string[] {
-  if (!fs.existsSync(file)) return [];
+  if (!fs.existsSync(file)) {
+    return [];
+  }
   const values = parseEnv(fs.readFileSync(file, "utf8"));
   const loaded = Object.keys(values).filter((name) => process.env[name] === undefined);
-  for (const name of loaded) process.env[name] = values[name];
+  for (const name of loaded) {
+    process.env[name] = values[name];
+  }
   return loaded;
 }
 

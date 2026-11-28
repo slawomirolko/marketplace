@@ -28,8 +28,12 @@ export function projectsOf(raw: { projects?: ProjectsConfig } | null | undefined
 
 /** FACTORY_STATUS_CLI names the CLI backend of the status workflow on this device; it replaces projects.statusBackend. */
 export function withStatusCli(projects: ProjectSettings, cli = process.env.FACTORY_STATUS_CLI): ProjectSettings {
-  if (!cli) return projects;
-  if (cli !== "claude" && cli !== "opencode") throw new Error("FACTORY_STATUS_CLI must be claude or opencode");
+  if (!cli) {
+    return projects;
+  }
+  if (cli !== "claude" && cli !== "opencode") {
+    throw new Error("FACTORY_STATUS_CLI must be claude or opencode");
+  }
   return { ...projects, statusBackend: { kind: "cli", cli: cli satisfies CliName } };
 }
 
