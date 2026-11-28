@@ -9,6 +9,7 @@ import tempfile
 import time
 import urllib.request
 from pathlib import Path
+from typing import Any, Iterator
 
 import pytest
 
@@ -38,27 +39,40 @@ def wait_for_health(url: str, process: subprocess.Popen, timeout_s: float = 30) 
     raise AssertionError("factory server did not answer /health")
 
 
+def gh_json(args: list[str]) -> Any:
+    """Runs gh with the arguments and parses its JSON output."""
+    return json.loads(subprocess.run(["gh", *args], check=True, capture_output=True, text=True).stdout)
+
+
 def pr_body() -> str:
-    out = subprocess.run(
-        ["gh", "pr", "view", str(REVIEW_PR), "--repo", REVIEW_REPO, "--json", "body"],
-        check=True, capture_output=True, text=True,
-    ).stdout
-    return json.loads(out)["body"]
+    return gh_json(["pr", "view", str(REVIEW_PR), "--repo", REVIEW_REPO, "--json", "body"])["body"]
 
 
-def pr_comment_count() -> int:
-    out = subprocess.run(
-        ["gh", "pr", "view", str(REVIEW_PR), "--repo", REVIEW_REPO, "--json", "comments"],
-        check=True, capture_output=True, text=True,
-    ).stdout
-    return len(json.loads(out)["comments"])
+def pr_comment_count(pr: int = REVIEW_PR) -> int:
+    return len(gh_json(["pr", "view", str(pr), "--repo", REVIEW_REPO, "--json", "comments"])["comments"])
+
+
+def clone(remote: str, destination: Path, depth: int | None = None) -> None:
+    """Clones a GitHub repository with gh, shallow when `depth` is given."""
+    shallow = ["--", "--depth", str(depth)] if depth else []
+    subprocess.run(["gh", "repo", "clone", remote, str(destination), *shallow], check=True, capture_output=True)
+
+
+def default_answer(allowed: list[str]) -> str:
+    """The answer to a question no rule covers: leave the item when the question allows it, else stop."""
+    return "leave" if "leave" in allowed else "stop"
 
 
 SERVER_TEMP = Path(os.path.realpath(tempfile.mkdtemp(prefix="factory-server-tmp-")))
+"""The temp folder of the factory server process (TEMP, TMP and TMPDIR point here).
+
+The tests share it with the server so they can list the agent temp folders the server creates
+(agent_temp_dirs) and check that a run removes them again.
+"""
 
 
 @pytest.fixture(scope="session")
-def factory_server():
+def factory_server() -> Iterator[dict]:
     port = free_port()
     data_dir = tempfile.mkdtemp(prefix="factory-py-")
     token = secrets.token_hex(24)
@@ -108,10 +122,6 @@ PLAN_FILE = "docs/yaml-migration-plan.md"
 FEEDBACK_PR = int(os.environ.get("FACTORY_FEEDBACK_PR", "74"))
 
 
-def gh_json(args: list[str]):
-    return json.loads(subprocess.run(["gh", *args], check=True, capture_output=True, text=True).stdout)
-
-
 @pytest.fixture(scope="session")
 async def plan_run(factory_server) -> ReviewRun:
     return await run_workflow(
@@ -126,7 +136,7 @@ async def plan_run(factory_server) -> ReviewRun:
 
 @pytest.fixture(scope="session")
 async def feedback_run(factory_server) -> ReviewRun:
-    comments_before = len(gh_json(["pr", "view", str(FEEDBACK_PR), "--repo", REVIEW_REPO, "--json", "comments"])["comments"])
+    comments_before = pr_comment_count(FEEDBACK_PR)
     run = await run_workflow(
         url=f"{factory_server['url']}/mcp",
         token=factory_server["token"],
@@ -136,7 +146,7 @@ async def feedback_run(factory_server) -> ReviewRun:
         answer=lambda question: "skip",
     )
     run.comments_before = comments_before
-    run.comments_after = len(gh_json(["pr", "view", str(FEEDBACK_PR), "--repo", REVIEW_REPO, "--json", "comments"])["comments"])
+    run.comments_after = pr_comment_count(FEEDBACK_PR)
     return run
 
 
@@ -146,6 +156,7 @@ MARKETPLACE_REMOTE = os.environ.get("FACTORY_SYNC_MARKETPLACE", "slawomirolko/ma
 
 
 def git(cwd: Path, *args: str) -> str:
+    """Runs git in `cwd` and returns its stripped output; raises when git fails."""
     return subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True, text=True).stdout.strip()
 
 
@@ -163,8 +174,8 @@ async def sync_run(factory_server) -> ReviewRun:
     assert SYNC_PROJECT, "set FACTORY_SYNC_PROJECT to the owner/name of a real project with .agents/skills and .opencode/agents"
     root = Path(os.path.realpath(tempfile.mkdtemp(prefix="factory-sync-")))
     project, marketplace = root / "project", root / "marketplace"
-    subprocess.run(["gh", "repo", "clone", SYNC_PROJECT, str(project), "--", "--depth", "1"], check=True, capture_output=True)
-    subprocess.run(["gh", "repo", "clone", MARKETPLACE_REMOTE, str(marketplace), "--", "--depth", "50"], check=True, capture_output=True)
+    clone(SYNC_PROJECT, project, 1)
+    clone(MARKETPLACE_REMOTE, marketplace, 50)
     before = marketplace_snapshot(marketplace)
     run = await run_workflow(
         url=f"{factory_server['url']}/mcp",
@@ -172,7 +183,7 @@ async def sync_run(factory_server) -> ReviewRun:
         workflow="olko-marketplace-skill-sync",
         goal="Sync project-local skills and agents to the marketplace",
         workflow_input={"project": str(project), "marketplace": str(marketplace), "artifacts": SYNC_ARTIFACTS},
-        answer=lambda question: "leave" if "leave" in (question.get("allowed") or []) else "stop",
+        answer=lambda question: default_answer(question.get("allowed") or []),
     )
     run.marketplace = marketplace
     run.marketplace_before = before
@@ -187,16 +198,26 @@ def remote_heads(path: Path) -> str:
     return git(path, "ls-remote", "--heads", "origin")
 
 
+SYNC_DECISION_PREFIX = "q-sync-"
+"""The id prefix of a per-artifact sync decision: `q-sync-<n>`."""
+
+
 def accept_first_decision(question: dict, accepted: list[str]) -> str:
+    """Accepts exactly one decision: the first per-artifact question that allows create or adopt-patch.
+
+    Every later decision is left, and the publish question is stopped, so the run changes at most one
+    artifact in the marketplace clone and never pushes. `accepted` collects the accepted question id.
+    """
     allowed = question.get("allowed") or []
-    if question["id"].startswith("q-sync-") and question["id"][7:].isdigit() and not accepted:
+    qid = question["id"]
+    if qid.startswith(SYNC_DECISION_PREFIX) and qid[len(SYNC_DECISION_PREFIX):].isdigit() and not accepted:
         choice = next((a for a in ("create", "adopt-patch") if a in allowed), "leave")
         if choice != "leave":
-            accepted.append(question["id"])
+            accepted.append(qid)
         return choice
-    if question["id"] == "q-sync-publish":
+    if qid == "q-sync-publish":
         return "stop"
-    return "leave" if "leave" in allowed else "stop"
+    return default_answer(allowed)
 
 
 @pytest.fixture(scope="session")
@@ -204,8 +225,8 @@ async def sync_apply_run(factory_server) -> ReviewRun:
     assert SYNC_PROJECT, "set FACTORY_SYNC_PROJECT to the owner/name of a real project with .agents/skills and .opencode/agents"
     root = Path(os.path.realpath(tempfile.mkdtemp(prefix="factory-sync-apply-")))
     project, marketplace = root / "project", root / "marketplace"
-    subprocess.run(["gh", "repo", "clone", SYNC_PROJECT, str(project), "--", "--depth", "1"], check=True, capture_output=True)
-    subprocess.run(["gh", "repo", "clone", MARKETPLACE_REMOTE, str(marketplace), "--", "--depth", "50"], check=True, capture_output=True)
+    clone(SYNC_PROJECT, project, 1)
+    clone(MARKETPLACE_REMOTE, marketplace, 50)
     before = {**marketplace_snapshot(marketplace), "remote": remote_heads(marketplace)}
     accepted: list[str] = []
     run = await run_workflow(
@@ -233,6 +254,7 @@ REAL_SYNC_HOME = Path(os.environ.get("OLKO_SYNC_HOME", Path.home() / ".olko-sync
 
 
 def leak_terms() -> list[str]:
+    """The private leak terms, lower case: `leakTerms` of the real sync targets file plus FACTORY_LEAK_TERMS."""
     targets = REAL_SYNC_HOME / "targets.json"
     terms = json.loads(targets.read_text(encoding="utf-8")).get("leakTerms", []) if targets.exists() else []
     return [t.lower() for t in terms + [t for t in os.environ.get("FACTORY_LEAK_TERMS", "").split(",") if t]]
@@ -247,6 +269,12 @@ def tree_hash(root: Path) -> str:
 
 
 def copy_user_store(destination: Path, terms: list[str]) -> list[str]:
+    """Copies the real user skills and agents into `destination`, except entries that hold a leak term.
+
+    An entry (a file, or a folder with all its files) is skipped when its name or any of its text
+    contains one of `terms`, so no private name reaches the test stores. Returns the skipped entries
+    as `<kind>/<name>`.
+    """
     skipped = []
     for kind in ("skills", "agents"):
         source = Path.home() / ".claude" / kind
@@ -272,8 +300,8 @@ def agent_temp_dirs() -> set[str]:
 async def claude_sync_run(factory_server) -> ReviewRun:
     root = Path(os.path.realpath(tempfile.mkdtemp(prefix="factory-claude-sync-")))
     target, olko, user, state = root / "target", root / "olko", root / "user", root / "state"
-    subprocess.run(["gh", "repo", "clone", CLAUDE_SYNC_TARGET, str(target), "--", "--depth", "50"], check=True, capture_output=True)
-    subprocess.run(["gh", "repo", "clone", MARKETPLACE_REMOTE, str(olko), "--", "--depth", "50"], check=True, capture_output=True)
+    clone(CLAUDE_SYNC_TARGET, target, 50)
+    clone(MARKETPLACE_REMOTE, olko, 50)
     skipped = copy_user_store(user, leak_terms())
     real_claude = {kind: tree_hash(Path.home() / ".claude" / kind) for kind in ("skills", "agents")}
     real_state = tree_hash(REAL_SYNC_HOME) if REAL_SYNC_HOME.exists() else ""
@@ -285,7 +313,7 @@ async def claude_sync_run(factory_server) -> ReviewRun:
         workflow="olko-claude-sync",
         goal="Sync skills and agents between a Claude marketplace, Olko and the user scope",
         workflow_input={"target": str(target), "targetName": "public-plugins", "olko": str(olko), "user": str(user), "stateDir": str(state), "artifacts": CLAUDE_SYNC_ARTIFACTS},
-        answer=lambda q: "none" if q["id"] == "q-claude-sync-leak" else "skip" if q["id"] == "q-claude-sync-consolidate" else "confirm" if q["id"].startswith("q-claude-sync-probable-") else "leave" if "leave" in (q.get("allowed") or []) else "stop",
+        answer=lambda q: "none" if q["id"] == "q-claude-sync-leak" else "skip" if q["id"] == "q-claude-sync-consolidate" else "confirm" if q["id"].startswith("q-claude-sync-probable-") else default_answer(q.get("allowed") or []),
     )
     run.stores = {"target": target, "olko": olko, "user": user, "state": state}
     run.stores_before = before
@@ -319,15 +347,15 @@ def claude_sync_apply_answer(question: dict, chosen: dict) -> str:
             return answer
     if qid.startswith("q-claude-sync-category-"):
         return allowed[0]
-    return "leave" if "leave" in allowed else "stop"
+    return default_answer(allowed)
 
 
 @pytest.fixture(scope="session")
 async def claude_sync_apply_run(factory_server) -> ReviewRun:
     root = Path(os.path.realpath(tempfile.mkdtemp(prefix="factory-claude-sync-apply-")))
     target, olko, user, state = root / "target", root / "olko", root / "user", root / "state"
-    subprocess.run(["gh", "repo", "clone", CLAUDE_SYNC_TARGET, str(target), "--", "--depth", "50"], check=True, capture_output=True)
-    subprocess.run(["gh", "repo", "clone", MARKETPLACE_REMOTE, str(olko), "--", "--depth", "50"], check=True, capture_output=True)
+    clone(CLAUDE_SYNC_TARGET, target, 50)
+    clone(MARKETPLACE_REMOTE, olko, 50)
     copy_user_store(user, leak_terms())
     before = {"target": marketplace_snapshot(target), "olko": {**marketplace_snapshot(olko), "remote": remote_heads(olko)}}
     user_before = {p.relative_to(user).as_posix(): p.read_bytes() for p in user.rglob("*") if p.is_file()}
@@ -379,7 +407,7 @@ def plan_answer(question: dict) -> str:
 async def plan_doc_run(factory_server) -> ReviewRun:
     root = Path(os.path.realpath(tempfile.mkdtemp(prefix="factory-plan-doc-")))
     project = root / "project"
-    subprocess.run(["gh", "repo", "clone", MARKETPLACE_REMOTE, str(project), "--", "--depth", "1"], check=True, capture_output=True)
+    clone(MARKETPLACE_REMOTE, project, 1)
     before_head = git(project, "rev-parse", "HEAD")
     run = await run_workflow(
         url=f"{factory_server['url']}/mcp",
@@ -497,7 +525,7 @@ def impl_answer(question: dict) -> str:
 async def impl_run(factory_server) -> ReviewRun:
     root = Path(os.path.realpath(tempfile.mkdtemp(prefix="factory-impl-")))
     project = root / "project"
-    subprocess.run(["gh", "repo", "clone", IMPL_REPO, str(project), "--", "--depth", "20"], check=True, capture_output=True)
+    clone(IMPL_REPO, project, 20)
     feature = project / "plans" / "features" / IMPL_FEATURE_ID
     (feature / "tasks").mkdir(parents=True)
     (feature / "implementation.md").write_text(IMPL_FEATURE_PLAN, encoding="utf-8")
@@ -515,8 +543,8 @@ async def impl_run(factory_server) -> ReviewRun:
     run.stores = {"project": project, "worktree": worktree, "task": feature / "tasks" / "T1-implementation.md"}
     run.stores_before = before
     run.stores_after = {"head": git(project, "rev-parse", "HEAD"), "tracked": git(project, "status", "--porcelain", "--untracked-files=no")}
-    porcelain = subprocess.run(["git", "-C", str(worktree), "status", "--porcelain", "--untracked-files=all"], check=True, capture_output=True, text=True).stdout if worktree.exists() else ""
-    run.changed_files = [line[3:] for line in porcelain.splitlines() if line.strip()]
+    porcelain = git(worktree, "status", "--porcelain", "--untracked-files=all") if worktree.exists() else ""
+    run.changed_files = [line.split(maxsplit=1)[1] for line in porcelain.splitlines() if line.strip()]
     print(json.dumps({"runId": run.run_id, "changed": run.changed_files, "costUsd": run.report["cost"]["costUsd"], "status": run.report["status"], "viewerUrl": run.viewer_url}))
     return run
 
@@ -538,7 +566,7 @@ def wfsync_answer(question: dict) -> str:
 async def wfsync_run(factory_server) -> ReviewRun:
     root = Path(os.path.realpath(tempfile.mkdtemp(prefix="factory-wfsync-")))
     marketplace = root / "marketplace"
-    subprocess.run(["gh", "repo", "clone", MARKETPLACE_REMOTE, str(marketplace)], check=True, capture_output=True)
+    clone(MARKETPLACE_REMOTE, marketplace)
     work = root / "wf"
     shutil.copytree(FACTORY_DIR / "workflows", work / "workflows")
     shutil.copy2(FACTORY_DIR / "workflows.lock.json", work / "workflows.lock.json")

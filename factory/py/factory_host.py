@@ -1,14 +1,35 @@
+"""LangGraph host for the skill factory, used by the Python integration tests.
+
+It drives one factory run over MCP: start, confirm the proposal, wait, answer each question
+through a LangGraph interrupt, and fetch the report and trace.
+"""
+
 import json
 import os
 from dataclasses import dataclass, field
 from typing import Any, Callable, TypedDict
 
-from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
 ENDED = {"done", "stopped", "cancelled", "failed"}
+"""Run statuses after which the run does not change any more."""
+
+WAIT_TIMEOUT_SEC = 50
+"""How long one factory_wait call blocks before the graph polls again."""
+
+RECURSION_LIMIT = 500
+"""LangGraph steps per invocation; every wait round is one step, so long runs need a high limit."""
+
+DEFAULT_TEST_MODEL = "claude-haiku-5-5"
+"""The model of every tier when FACTORY_TEST_MODEL is not set.
+
+The integration tests check the workflow, not the quality of the answers, so all tiers run one
+cheap model to keep the cost of a run low. Set FACTORY_TEST_MODEL to use another model.
+"""
+
+FAILURE_EVENTS = ("run_failed", "node_failed", "agent_failed")
 
 
 @dataclass
@@ -47,6 +68,11 @@ class HostState(TypedDict, total=False):
 
 
 def payload(result: Any) -> dict:
+    """The JSON object a factory tool returned.
+
+    A tool result with an `error` key is a failure, unless it also has a `runId`: then the run exists
+    and the error describes it (for example a failed step), so the caller reads it from the run.
+    """
     if isinstance(result, list):
         text = "".join(part.get("text", "") if isinstance(part, dict) else str(part) for part in result)
     else:
@@ -60,7 +86,23 @@ def payload(result: Any) -> dict:
     return data
 
 
-def build_graph(tools: dict, workflow: str, goal: str, workflow_input: dict):
+async def resume_until_done(app: Any, config: dict, resume_for: Callable[[dict], str]) -> tuple[dict, list[dict]]:
+    """Invokes the graph and resumes every interrupt with `resume_for(value)` until it ends.
+
+    Returns the final graph result and the interrupt values in the order they came.
+    """
+    interrupts: list[dict] = []
+    result = await app.ainvoke({}, config)
+    while "__interrupt__" in result:
+        value = result["__interrupt__"][0].value
+        interrupts.append(value)
+        result = await app.ainvoke(Command(resume=resume_for(value)), config)
+    return result, interrupts
+
+
+def build_graph(tools: dict, workflow: str, goal: str, workflow_input: dict) -> Any:
+    """The compiled host graph: start, ask_confirm, confirm, wait (loop), ask_user, report."""
+
     async def call(name: str, **args) -> dict:
         return payload(await tools[name].ainvoke(args))
 
@@ -75,11 +117,11 @@ def build_graph(tools: dict, workflow: str, goal: str, workflow_input: dict):
         return {}
 
     async def confirm(state: HostState) -> HostState:
-        model = os.environ.get("FACTORY_TEST_MODEL", "claude-haiku-5-5")
+        model = os.environ.get("FACTORY_TEST_MODEL", DEFAULT_TEST_MODEL)
         return {"status": await call("factory_confirm", runId=state["run_id"], overrides={"tierModels": {"low": model, "medium": model, "high": model}})}
 
     async def wait(state: HostState) -> HostState:
-        return {"status": await call("factory_wait", runId=state["run_id"], timeoutSec=50)}
+        return {"status": await call("factory_wait", runId=state["run_id"], timeoutSec=WAIT_TIMEOUT_SEC)}
 
     async def ask_user(state: HostState) -> HostState:
         question = state["status"]["pendingQuestion"]
@@ -111,24 +153,25 @@ def build_graph(tools: dict, workflow: str, goal: str, workflow_input: dict):
 
 
 async def run_workflow(url: str, token: str, workflow: str, goal: str, workflow_input: dict, answer: Callable[[dict], str]) -> ReviewRun:
+    """Runs one workflow to its end: confirms the proposal and answers each question with `answer(question)`.
+
+    Raises when the trace holds a failed run, node or agent. The MCP adapter is imported here, not at
+    module level, so langgraph_client.py can reuse this module in a venv without langchain-mcp-adapters.
+    """
+    from langchain_mcp_adapters.client import MultiServerMCPClient
+
     client = MultiServerMCPClient({"factory": {"transport": "streamable_http", "url": url, "headers": {"Authorization": f"Bearer {token}"}}})
     tools = {tool.name: tool for tool in await client.get_tools()}
     app = build_graph(tools, workflow, goal, workflow_input)
-    config = {"configurable": {"thread_id": goal}, "recursion_limit": 500}
-    interrupts: list[dict] = []
-    result = await app.ainvoke({}, config)
-    while "__interrupt__" in result:
-        value = result["__interrupt__"][0].value
-        interrupts.append(value)
-        resume = "yes" if value["kind"] == "confirm" else answer(value["question"])
-        result = await app.ainvoke(Command(resume=resume), config)
+    config = {"configurable": {"thread_id": goal}, "recursion_limit": RECURSION_LIMIT}
+    result, interrupts = await resume_until_done(app, config, lambda value: "yes" if value["kind"] == "confirm" else answer(value["question"]))
     run_id = result["run_id"]
     trace = payload(await tools["factory_trace"].ainvoke({"runId": run_id}))
     events = trace["events"]
-    failures = [e for e in events if e["type"] in ("run_failed", "node_failed", "agent_failed")]
+    failures = [event for event in events if event["type"] in FAILURE_EVENTS]
     if failures:
         raise RuntimeError(f"factory run {run_id} failed: {failures}")
-    merged = next((e for e in events if e["type"] == "node_completed" and e["node"].endswith("/merge")), None)
+    merged = next((event for event in events if event["type"] == "node_completed" and event["node"].endswith("/merge")), None)
     return ReviewRun(
         run_id=run_id,
         report=result["report"],

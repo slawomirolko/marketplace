@@ -168,7 +168,9 @@ factory/
   test/viewer.test.ts  viewer and per-node cost tests
   test/scenario.ts     MCP client scenario tests
   test/restart.ts      kill + restart resilience test
-  py/langgraph_client.py  LangGraph host (legacy and new LangChain MCP API)
+  py/factory_host.py      LangGraph host that the Python integration tests use
+  py/langgraph_client.py  container check: LangGraph host on the legacy and new LangChain MCP API
+  py/probe_new_api.py     container check: package versions and MCP adapter modules per venv
   docs/harness-check.md   manual check with real harnesses
   Dockerfile, run-tests.sh
 ```
